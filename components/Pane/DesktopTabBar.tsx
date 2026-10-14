@@ -17,8 +17,7 @@ import { PaneMenu } from "./PaneMenu";
 import { HostBadge } from "@/components/Hosts/HostBadge";
 import { usePaneBarSlots } from "./PaneBarSlots";
 import { ChatBookmarksButton } from "@/components/Bookmarks/ChatBookmarksButton";
-
-type ViewMode = "terminal" | "files" | "git" | "workers" | "log";
+import type { ViewMode } from "@/contexts/PaneContext";
 
 interface Tab {
   id: string;
@@ -172,6 +171,7 @@ export function DesktopTabBar({
         )}
         {session?.working_directory && (
           <PaneViewToggle
+            sessionId={session.id}
             viewMode={viewMode}
             isLocalSession={isLocalSession}
             isConductor={isConductor}

@@ -495,6 +495,35 @@ describe("done, by state", () => {
     expect(row(s.id).settled_at).not.toBeNull();
   });
 
+  it("keeps a removed worktree's ignored plan, the session wrote it", async () => {
+    const t = setup();
+    const s = t.session("planned");
+    const common = git(s.dir!, "rev-parse", "--git-common-dir");
+    fs.appendFileSync(
+      path.resolve(s.dir!, common, "info/exclude"),
+      "\n.agentos/\n"
+    );
+    fs.mkdirSync(path.join(s.dir!, ".agentos"));
+    fs.writeFileSync(path.join(s.dir!, ".agentos/plan.md"), "# Plan\n");
+    saveItem(s.id, {
+      id: "w1",
+      createdAt: 1,
+      kind: "tool",
+      name: "Write",
+      title: "Write",
+      status: "done",
+      input: { file_path: ".agentos/plan.md" },
+    });
+    const out = await doneSession(s.id, { by: "direct" });
+    expect(out.worktree?.action).toBe("removed");
+    expect(
+      fs.readFileSync(
+        path.join(process.env.AGENTOS_KEPT_DIR!, s.id, ".agentos/plan.md"),
+        "utf8"
+      )
+    ).toBe("# Plan\n");
+  });
+
   it("(c) keeps a worktree with unmerged commits or uncommitted changes, and says so", async () => {
     const t = setup();
     const a = t.session("wip", { commits: { "x.ts": "1\n", "y.ts": "2\n" } });

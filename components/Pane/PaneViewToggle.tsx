@@ -1,16 +1,24 @@
 "use client";
 
-import { FolderOpen, GitBranch, Home, ScrollText, Users } from "lucide-react";
+import {
+  FolderOpen,
+  GitBranch,
+  Home,
+  Package,
+  ScrollText,
+  Users,
+} from "lucide-react";
 import {
   Tooltip,
   TooltipContent,
   TooltipTrigger,
 } from "@/components/ui/tooltip";
 import { cn } from "@/lib/utils";
-
-type ViewMode = "terminal" | "files" | "git" | "workers" | "log";
+import type { ViewMode } from "@/contexts/PaneContext";
+import { useSessionArtifacts } from "@/data/session-artifacts";
 
 interface PaneViewToggleProps {
+  sessionId?: string;
   viewMode: ViewMode;
   isLocalSession: boolean;
   isConductor: boolean;
@@ -67,6 +75,7 @@ function ToggleButton({
 // Files, git and the shell drawer read this machine's disk, so a remote
 // session only gets the terminal (and workers).
 export function PaneViewToggle({
+  sessionId,
   viewMode,
   isLocalSession,
   isConductor,
@@ -78,6 +87,8 @@ export function PaneViewToggle({
   onGitDrawerToggle,
   onShellDrawerToggle,
 }: PaneViewToggleProps) {
+  // Counted only once the view has been opened: closed, it never fetches.
+  const artifacts = useSessionArtifacts(sessionId, false).data?.artifacts;
   return (
     <div className="bg-accent/50 flex shrink-0 items-center rounded-md p-0.5">
       <ToggleButton
@@ -112,6 +123,20 @@ export function PaneViewToggle({
             {">_"}
           </ToggleButton>
         </>
+      )}
+      {sessionId && (
+        <ToggleButton
+          label="Artifacts"
+          active={viewMode === "artifacts"}
+          onClick={() => onViewModeChange("artifacts")}
+        >
+          <Package className="h-3.5 w-3.5" />
+          {!!artifacts?.length && (
+            <span className="bg-primary text-primary-foreground absolute -top-1 -right-1 flex h-3.5 min-w-3.5 items-center justify-center rounded-full px-0.5 text-[9px] font-medium">
+              {artifacts.length}
+            </span>
+          )}
+        </ToggleButton>
       )}
       {hasLog && (
         <ToggleButton

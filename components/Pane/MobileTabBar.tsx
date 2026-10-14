@@ -28,6 +28,7 @@ import {
   TextSearch,
   Users,
   ScrollText,
+  Package,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { useAwayQuery } from "@/data/away";
@@ -38,13 +39,13 @@ import { HostBadge } from "@/components/Hosts/HostBadge";
 import { shareUiActions } from "@/stores/shareUi";
 import { MoveMenuItems } from "@/components/Tasks/MoveMenuItems";
 import { ChatBookmarksButton } from "@/components/Bookmarks/ChatBookmarksButton";
-
-type ViewMode = "terminal" | "files" | "git" | "workers" | "log";
+import type { ViewMode } from "@/contexts/PaneContext";
 
 interface ViewModeButtonProps {
   mode: ViewMode;
   currentMode: ViewMode;
   icon: LucideIcon;
+  label?: string;
   onClick: (mode: ViewMode) => void;
   badge?: React.ReactNode;
 }
@@ -53,11 +54,15 @@ function ViewModeButton({
   mode,
   currentMode,
   icon: Icon,
+  label,
   onClick,
   badge,
 }: ViewModeButtonProps) {
   return (
     <button
+      type="button"
+      aria-label={label}
+      aria-pressed={currentMode === mode}
       onClick={(e) => {
         e.stopPropagation();
         onClick(mode);
@@ -378,6 +383,13 @@ export function MobileTabBar({
               onClick={onViewModeChange}
             />
           )}
+          <ViewModeButton
+            mode="artifacts"
+            currentMode={viewMode}
+            icon={Package}
+            label="Artifacts"
+            onClick={onViewModeChange}
+          />
           {hasLog && (
             <ViewModeButton
               mode="log"

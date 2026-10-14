@@ -1,17 +1,33 @@
 import { NextResponse } from "next/server";
-import { listArtifacts } from "@/lib/artifacts/store";
+import { peerLinkOf } from "@/lib/hosts/peer-actions";
+import { collectArtifacts, getSession } from "@/lib/session-artifacts/collect";
+import { peerArtifacts } from "@/lib/session-artifacts/peer";
 
-// GET /api/sessions/[id]/artifacts - the pages this session's agent showed
+// GET /api/sessions/[id]/artifacts - everything the session made: its plan,
+// files, pages, images, job logs, PR, recipe run and log
 export async function GET(
   _request: Request,
   { params }: { params: Promise<{ id: string }> }
 ) {
   const { id } = await params;
-  const artifacts = listArtifacts(id).map((a) => ({
-    id: a.id,
-    title: a.title,
-    createdAt: a.created_at,
-    url: `/api/artifacts/${a.id}`,
-  }));
-  return NextResponse.json({ artifacts });
+  const session = getSession(id);
+  if (!session)
+    return NextResponse.json({ error: "Session not found" }, { status: 404 });
+  const link = peerLinkOf(session);
+  if (link) {
+    try {
+      return NextResponse.json({
+        artifacts: await peerArtifacts(link, id),
+        host: link.hostName,
+      });
+    } catch {
+      return NextResponse.json({
+        artifacts: [],
+        host: link.hostName,
+        unreachable: true,
+      });
+    }
+  }
+  const entries = await collectArtifacts(session);
+  return NextResponse.json({ artifacts: entries.map((e) => e.artifact) });
 }

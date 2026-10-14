@@ -11,6 +11,7 @@ import { git as runGit } from "../git-exec";
 import { mergePolicy } from "../tasks/merge-policy";
 import { getProject } from "../projects";
 import { deleteWorktree, isAgentOSWorktree } from "../worktrees";
+import { keepSessionFiles } from "../session-artifacts/collect";
 import { removalRunning, removalSettled } from "../worktree-removal";
 import { describeChanges, unsavedChanges } from "../worktree-placed";
 import { dropSnapshot, snapshotWorktree } from "../resurrect/snapshot";
@@ -234,6 +235,8 @@ export async function settleWorktree(
   }
   await snapshot;
   const path = session.worktree_path!;
+  // What it made that git doesn't hold (a plan, a mockup) outlives it.
+  if (session.id) await keepSessionFiles(session.id);
   await deleteWorktree(path, fate.repo, true).catch(() => {});
   if (fs.existsSync(path))
     return { action: "kept", why: "removing it failed", path };
