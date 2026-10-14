@@ -6,6 +6,8 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import type { Editor } from "@tiptap/core";
 import * as extensions from "./extensions";
 import * as serialize from "@/lib/chat/markdown/serialize";
+import { insertMarkdown } from "./insert";
+import { quoteInsert, markdownParagraphs } from "@/lib/chat/quote";
 import { useComposerEditor, type ComposerHandlers } from "./useComposerEditor";
 
 vi.mock("./extensions", async (original) => {
@@ -94,5 +96,27 @@ describe("useComposerEditor", () => {
       editor().commands.setContent("<p>hi</p>", { emitUpdate: true });
     });
     expect(last.text).toBe("hi");
+  });
+
+  it("quotes under an existing draft, caret after the quote", async () => {
+    await render();
+    await act(async () => last.setText("my draft"));
+    const q = quoteInsert("one\ntwo");
+    await act(async () =>
+      insertMarkdown(editor(), markdownParagraphs(q.text), q.append)
+    );
+    expect(last.text).toBe("my draft\n> one\n> two\n\n");
+    expect(editor().state.selection.from).toBe(
+      editor().state.doc.content.size - 1
+    );
+  });
+
+  it("quotes into an empty composer", async () => {
+    await render();
+    const q = quoteInsert("hi");
+    await act(async () =>
+      insertMarkdown(editor(), markdownParagraphs(q.text), q.append)
+    );
+    expect(last.text.startsWith("> hi")).toBe(true);
   });
 });

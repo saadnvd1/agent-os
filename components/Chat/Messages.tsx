@@ -1,6 +1,13 @@
 "use client";
 
-import { Check, ChevronRight, Circle, CircleDot, Sparkles } from "lucide-react";
+import {
+  Check,
+  ChevronRight,
+  Circle,
+  CircleDot,
+  Quote,
+  Sparkles,
+} from "lucide-react";
 import type { ChatItem } from "@/lib/chat/events";
 import { cn } from "@/lib/utils";
 import { leadingCommand } from "@/lib/chat/commands";
@@ -91,18 +98,33 @@ export function UserMessage({
   );
 }
 
-export function AssistantMessage({ item }: { item: Of<"assistant"> }) {
+export function AssistantMessage({
+  item,
+  onQuote,
+}: {
+  item: Of<"assistant">;
+  onQuote?: (text: string) => void;
+}) {
   return (
     <div className="group">
       <div data-quotable className={cn(item.streaming && "streaming-cursor")}>
         <Markdown text={item.text} streaming={item.streaming} />
       </div>
       {!item.streaming && (
-        <CopyButton
-          text={item.text}
-          label="Copy message"
-          className="-ml-1.5 opacity-40 group-hover:opacity-100 md:opacity-0"
-        />
+        <div className="-ml-1.5 flex items-center opacity-40 group-hover:opacity-100 md:opacity-0">
+          <CopyButton text={item.text} label="Copy message" />
+          {onQuote && (
+            <button
+              type="button"
+              aria-label="Quote message"
+              title="Quote"
+              onClick={() => onQuote(item.text)}
+              className="text-muted-foreground hover:text-foreground hover:bg-foreground/[0.06] flex h-9 w-9 items-center justify-center rounded-md md:h-7 md:w-7"
+            >
+              <Quote className="h-3.5 w-3.5" />
+            </button>
+          )}
+        </div>
       )}
     </div>
   );
