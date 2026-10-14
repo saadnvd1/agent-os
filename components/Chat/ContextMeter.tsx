@@ -13,7 +13,7 @@ import { cn } from "@/lib/utils";
 import { chatMeta, chatMetaActions } from "@/stores/chatMeta";
 
 const LEVEL_COLOR = {
-  ok: "text-primary",
+  ok: "text-foreground/40",
   warn: "text-amber-500",
   high: "text-destructive",
 } as const;
@@ -94,7 +94,7 @@ export function ContextMeter({
               className={cn(
                 "h-full rounded-full",
                 level === "ok"
-                  ? "bg-primary"
+                  ? "bg-foreground/40"
                   : level === "warn"
                     ? "bg-amber-500"
                     : "bg-destructive"

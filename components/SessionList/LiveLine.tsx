@@ -15,21 +15,17 @@ export interface LiveInput {
 
 // A status badge's pill; the failed need is red text alone.
 const PILL: Record<LiveTone, string> = {
-  blue: "bg-blue-500/15",
   amber: "bg-amber-500/15",
   red: "bg-red-500/15",
   green: "bg-green-500/15",
-  purple: "bg-purple-500/15",
   primary: "bg-primary/15",
   muted: "bg-muted",
 };
 
 const TONE: Record<LiveTone, string> = {
-  blue: "text-blue-700 dark:text-blue-400",
   amber: "text-amber-700 dark:text-amber-400",
   red: "text-red-700 dark:text-red-400",
   green: "text-green-700 dark:text-green-400",
-  purple: "text-purple-700 dark:text-purple-400",
   primary: "text-primary",
   muted: "text-muted-foreground",
 };

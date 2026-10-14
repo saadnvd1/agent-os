@@ -13,12 +13,12 @@ import {
 import { cn } from "@/lib/utils";
 
 const TONE: Record<PrStageName, string> = {
-  merged: "bg-purple-500/15 text-purple-700 dark:text-purple-400",
+  merged: "bg-green-500/15 text-green-700 dark:text-green-400",
   conflicts: "bg-amber-500/15 text-amber-700 dark:text-amber-400",
   "ci-failed": "bg-red-500/15 text-red-700 dark:text-red-400",
-  "ci-running": "bg-blue-500/15 text-blue-700 dark:text-blue-400",
-  "ci-settling": "bg-blue-500/15 text-blue-700 dark:text-blue-400",
-  "review-running": "bg-blue-500/15 text-blue-700 dark:text-blue-400",
+  "ci-running": "bg-foreground/[0.06] text-muted-foreground",
+  "ci-settling": "bg-foreground/[0.06] text-muted-foreground",
+  "review-running": "bg-foreground/[0.06] text-muted-foreground",
   "review-blocked": "bg-red-500/15 text-red-700 dark:text-red-400",
   waiting: "bg-amber-500/15 text-amber-700 dark:text-amber-400",
   armed: "bg-green-500/15 text-green-700 dark:text-green-400",

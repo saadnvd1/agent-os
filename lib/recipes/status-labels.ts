@@ -8,8 +8,8 @@ export const RUN_STATUS_LABELS: Record<
   { label: string; tone: Tone }
 > = {
   queued: { label: "Queued", tone: "muted" },
-  starting: { label: "Starting", tone: "primary" },
-  running: { label: "Running", tone: "primary" },
+  starting: { label: "Starting", tone: "muted" },
+  running: { label: "Running", tone: "muted" },
   succeeded: { label: "Succeeded", tone: "success" },
   failed: { label: "Failed", tone: "destructive" },
   blocked: { label: "Needs you", tone: "warning" },
