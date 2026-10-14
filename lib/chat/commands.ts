@@ -1,10 +1,14 @@
 import type { ChatCommand } from "./events";
 
-// The command being typed, if the message is still just "/something".
-// Agents only run a command that opens the message.
-export function slashQuery(text: string): string | null {
-  const m = /^\/(\S*)$/.exec(text);
-  return m ? m[1].toLowerCase() : null;
+// The /command being typed: a "/" at the start of a line or after whitespace,
+// then the partial name, right up to the caret. Not "a/b" or "http://x".
+// `start` is where the "/" sits in the text before the caret.
+export function slashQuery(
+  beforeCaret: string
+): { query: string; start: number } | null {
+  const m = /(^|\s)\/([^\s/]*)$/.exec(beforeCaret);
+  if (!m) return null;
+  return { query: m[2].toLowerCase(), start: m.index + m[1].length };
 }
 
 function isSubsequence(q: string, s: string): boolean {

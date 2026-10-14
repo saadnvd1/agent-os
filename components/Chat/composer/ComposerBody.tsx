@@ -163,7 +163,8 @@ export function ComposerBody({
     insertMarkdown(editor, content, insert.append);
   }, [insert, editor]);
 
-  const query = slashQuery(text);
+  const slash = slashQuery(caret.before);
+  const query = slash?.query ?? null;
   const mentions = useMentions(editor, caret, query === null, requestFiles);
   const matches = useMemo(() => {
     if (query === null) return [];
@@ -173,8 +174,9 @@ export function ComposerBody({
     ];
     return rankCommands(query, all);
   }, [query, commands, onSetModel]);
-  // One menu at a time: "/" commands at the start, "@" files at the caret.
-  const menuKey = query !== null ? `/${text}` : mentions.key;
+  // One menu at a time: "/" commands or "@" files at the caret.
+  const menuKey =
+    query !== null ? `/${caret.pos}:${caret.before}` : mentions.key;
   const menuOpen = menuKey !== null && dismissed !== menuKey;
   const options: MenuOption[] =
     query !== null
@@ -205,12 +207,18 @@ export function ComposerBody({
   );
 
   const pickCommand = (command: ChatCommand) => {
+    if (!editor || !slash) return;
+    // The "/" and what follows it, up to the caret.
+    const from = caret.pos - (caret.before.length - slash.start);
+    const chain = editor.chain().focus().deleteRange({ from, to: caret.pos });
     if (command === MODEL_COMMAND) {
-      setText("");
+      chain.run();
       setModelOpen(true);
       return;
     }
-    setText(insertCommand(command.name), true);
+    chain
+      .insertContent({ type: "text", text: insertCommand(command.name) })
+      .run();
   };
   const pick = (index: number) => {
     if (query !== null) {
