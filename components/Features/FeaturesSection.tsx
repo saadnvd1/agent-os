@@ -6,7 +6,7 @@ import { useFeaturesQuery, useReleasePiece } from "@/data/features";
 import type { FeatureView } from "@/lib/plans/view";
 import { duration, money } from "@/components/Recipes/format";
 import { sessionOpenActions } from "@/stores/sessionOpen";
-import { tasksUiActions } from "@/stores/tasksUi";
+import { inboxUiActions } from "@/stores/inboxUi";
 import { cn } from "@/lib/utils";
 
 function FeatureCard({ f }: { f: FeatureView }) {
@@ -66,7 +66,7 @@ function FeatureCard({ f }: { f: FeatureView }) {
                 className="text-primary -mr-2 flex min-h-11 items-center px-2"
                 onClick={() => {
                   sessionOpenActions.request(p.sessionId!);
-                  tasksUiActions.setPanelOpen(false);
+                  inboxUiActions.setOpen(false);
                 }}
               >
                 <ArrowUpRight className="h-3.5 w-3.5" />

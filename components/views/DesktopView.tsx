@@ -17,8 +17,6 @@ export function DesktopView({
   focusedActiveTab,
   showQuickSwitcher,
   setShowQuickSwitcher,
-  notificationSettings,
-  attachToSession,
   selectSession,
   openSessionInNewTab,
   handleNewSessionInProject,
@@ -61,15 +59,7 @@ export function DesktopView({
             leading={
               <SidebarToggle isPinned={isPinned} togglePin={togglePin} />
             }
-            trailing={
-              <DesktopAppActions
-                sessions={sessions}
-                sessionStatuses={sessionStatuses}
-                activeSession={activeSession}
-                notificationSettings={notificationSettings}
-                attachToSession={attachToSession}
-              />
-            }
+            trailing={<DesktopAppActions />}
           >
             <PaneLayout renderPane={renderPane} />
           </PaneBarSlotsProvider>

@@ -59,7 +59,7 @@ import { EventGroup } from "./EventTurns";
 import { useGoToItem } from "./useGoToItem";
 import { NeedsYouStrip } from "@/components/Orchestrator/NeedsYouStrip";
 import { useResolveQuestion } from "@/data/orchestrators";
-import { needsYouFocusActions } from "@/stores/needsYouFocus";
+import { needsYouFocus, needsYouFocusActions } from "@/stores/needsYouFocus";
 import { hrefWithSession } from "@/lib/session-url";
 import { isQuestionTool } from "@/lib/chat/turns";
 import { useViewport } from "@/hooks/useViewport";
@@ -560,6 +560,14 @@ export function ChatPanel({
   const [replyTo, setReplyTo] = useState<{ id: number; text: string } | null>(
     null
   );
+  // "Reply" on a question in the Inbox, once this is that orchestrator's chat.
+  const { reply: pendingReply } = useSnapshot(needsYouFocus);
+  useEffect(() => {
+    if (!pendingReply || pendingReply.workspaceId !== orchestratorOf) return;
+    setReplyTo({ id: pendingReply.id, text: pendingReply.text });
+    setInsert({ text: quoteMarkdown(pendingReply.text), at: Date.now() });
+    needsYouFocusActions.clearReply();
+  }, [pendingReply, orchestratorOf]);
   const find = useFind({
     foldEvents: !!orchestratorOf,
     search,

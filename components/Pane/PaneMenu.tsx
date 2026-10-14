@@ -2,12 +2,15 @@
 
 import { toast } from "sonner";
 import {
+  BookOpen,
+  Command,
   Copy,
   Link,
   MoreHorizontal,
   Share2,
   SplitSquareHorizontal,
   SplitSquareVertical,
+  Star,
   Unplug,
   X,
 } from "lucide-react";
@@ -18,15 +21,23 @@ import {
   DropdownMenuItem,
   DropdownMenuLabel,
   DropdownMenuSeparator,
+  DropdownMenuShortcut,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import { copySessionLink, writeClipboard } from "@/hooks/useCopyToClipboard";
 import type { Session } from "@/lib/db";
 import { shareUiActions } from "@/stores/shareUi";
+import { useSessionBookmarks } from "@/data/bookmarks";
+import { useDocsWorkspace } from "@/data/lumifyhub/docs";
+import { bookmarksUiActions } from "@/stores/bookmarksUi";
+import { docsUiActions } from "@/stores/docsUi";
+import { paletteActions } from "@/stores/palette";
 import { MoveMenuItems } from "@/components/Tasks/MoveMenuItems";
 
 interface PaneMenuProps {
   session: Session | null | undefined;
+  // The chat on show, for its bookmarks; null for a terminal or another view.
+  bookmarksSessionId?: string | null;
   canSplit: boolean;
   canClose: boolean;
   hasAttachedTmux: boolean;
@@ -40,6 +51,7 @@ interface PaneMenuProps {
 // the bar.
 export function PaneMenu({
   session,
+  bookmarksSessionId,
   canSplit,
   canClose,
   hasAttachedTmux,
@@ -48,6 +60,8 @@ export function PaneMenu({
   onClose,
   onDetach,
 }: PaneMenuProps) {
+  const { data: bookmarks = [] } = useSessionBookmarks(bookmarksSessionId);
+  const docs = useDocsWorkspace(session?.project_id);
   const copyId = async (id: string) => {
     try {
       await writeClipboard(id);
@@ -112,6 +126,29 @@ export function PaneMenu({
             />
           </>
         )}
+        {bookmarksSessionId && (
+          <DropdownMenuItem
+            onSelect={() => bookmarksUiActions.openChat(bookmarksSessionId)}
+          >
+            <Star className="h-4 w-4" />
+            Bookmarks
+            {bookmarks.length > 0 && (
+              <DropdownMenuShortcut>{bookmarks.length}</DropdownMenuShortcut>
+            )}
+          </DropdownMenuItem>
+        )}
+        <DropdownMenuItem onSelect={paletteActions.open}>
+          <Command className="h-4 w-4" />
+          Command palette
+          <DropdownMenuShortcut>⌘K</DropdownMenuShortcut>
+        </DropdownMenuItem>
+        {docs && (
+          <DropdownMenuItem onSelect={() => docsUiActions.open(docs.id)}>
+            <BookOpen className="h-4 w-4" />
+            Docs
+          </DropdownMenuItem>
+        )}
+        <DropdownMenuSeparator />
         {hasAttachedTmux && (
           <DropdownMenuItem onSelect={onDetach}>
             <Unplug className="h-4 w-4" />

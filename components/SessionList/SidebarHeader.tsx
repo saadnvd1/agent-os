@@ -31,11 +31,10 @@ import { Button } from "@/components/ui/button";
 import type { Workspace } from "@/lib/db";
 import { archivedUiActions } from "@/stores/archivedUi";
 import { bookmarksUiActions } from "@/stores/bookmarksUi";
-import { tasksUiActions } from "@/stores/tasksUi";
+import { inboxUiActions } from "@/stores/inboxUi";
 import { newDraft } from "@/stores/drafts";
 import { schedulesUiActions } from "@/stores/schedulesUi";
 import { recipesUiActions } from "@/stores/recipesUi";
-import { busUiActions } from "@/stores/busUi";
 import { settingsUiActions } from "@/stores/settingsUi";
 import { usageUiActions } from "@/stores/usageUi";
 import { WorkspaceSwitcher } from "./WorkspaceSwitcher";
@@ -99,7 +98,9 @@ export function SidebarHeader(props: SidebarHeaderProps) {
             </Button>
           }
           items={[
-            menuItem("Tasks", tasksUiActions.openPanel, { icon: ListTodo }),
+            menuItem("Tasks", () => inboxUiActions.open("tasks"), {
+              icon: ListTodo,
+            }),
             // Opens Settings > Schedules.
             menuItem("Schedules", () => schedulesUiActions.open(workspaceId), {
               icon: Clock,
@@ -115,7 +116,9 @@ export function SidebarHeader(props: SidebarHeaderProps) {
             menuItem("Recipes", () => recipesUiActions.open(workspaceId), {
               icon: ChefHat,
             }),
-            menuItem("Messages", busUiActions.open, { icon: MessagesSquare }),
+            menuItem("Messages", () => inboxUiActions.open("messages"), {
+              icon: MessagesSquare,
+            }),
             ...(props.onOpenDocs
               ? [menuItem("Docs", props.onOpenDocs, { icon: BookOpen })]
               : []),

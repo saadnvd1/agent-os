@@ -167,6 +167,7 @@ export function DesktopTabBar({
           <ChatBookmarksButton
             sessionId={bookmarksSessionId}
             className="h-7 min-w-7"
+            hideWhenEmpty
           />
         )}
         {session?.working_directory && (
@@ -187,6 +188,7 @@ export function DesktopTabBar({
         <div className="flex items-center">
           <PaneMenu
             session={session}
+            bookmarksSessionId={bookmarksSessionId}
             canSplit={canSplit}
             canClose={canClose}
             hasAttachedTmux={hasAttachedTmux}

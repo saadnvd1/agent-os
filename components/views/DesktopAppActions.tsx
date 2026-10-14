@@ -1,26 +1,15 @@
 "use client";
 
-import { Command, PanelLeft, PanelLeftClose, Plus } from "lucide-react";
+import { PanelLeft, PanelLeftClose, Plus } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import {
   Tooltip,
   TooltipContent,
   TooltipTrigger,
 } from "@/components/ui/tooltip";
-import { TasksButton } from "@/components/Tasks/TasksButton";
-import { MessagesButton } from "@/components/Bus/MessagesButton";
-import { DocsButton } from "@/components/LumifyHub/Docs/DocsButton";
-import { NotificationsMenu } from "@/components/NotificationsMenu";
-import type { ViewProps } from "./types";
+import { InboxButton } from "@/components/Inbox/InboxButton";
 import { newDraft } from "@/stores/drafts";
-import { paletteActions } from "@/stores/palette";
-import { useClock } from "@/hooks/useMinuteTick";
-import { inBell } from "@/lib/sidebar/shelves";
 import { DRAFT_KEYS } from "@/lib/drafts";
-
-// Labels collapse to icons when the pane bar carrying these is narrow
-// (a split), via the bar's container query.
-export const BAR_LABEL = "hidden @5xl/bar:inline";
 
 export function SidebarToggle({
   isPinned,
@@ -56,71 +45,29 @@ export function SidebarToggle({
   );
 }
 
-type AppActionsProps = Pick<
-  ViewProps,
-  | "sessions"
-  | "sessionStatuses"
-  | "activeSession"
-  | "notificationSettings"
-  | "attachToSession"
->;
-
-export function DesktopAppActions({
-  sessions,
-  sessionStatuses,
-  activeSession,
-  notificationSettings,
-  attachToSession,
-}: AppActionsProps) {
-  const now = useClock();
+export function DesktopAppActions() {
   return (
     <div
       className="flex shrink-0 items-center gap-0.5"
       onClick={(e) => e.stopPropagation()}
     >
+      <InboxButton />
       <Tooltip>
         <TooltipTrigger asChild>
           <Button
-            variant="ghost"
             size="icon-sm"
-            aria-label="Command palette"
-            className="h-7 w-7"
-            onClick={paletteActions.open}
+            aria-label="New session"
+            className="ml-1 h-7 w-7"
+            onClick={() => newDraft({ kind: "current" })}
           >
-            <Command className="h-4 w-4" />
+            <Plus className="h-4 w-4" />
           </Button>
         </TooltipTrigger>
         <TooltipContent>
-          <p>Command palette</p>
-          <p className="text-muted-foreground text-xs">⌘K</p>
+          <p>New session</p>
+          <p className="text-muted-foreground text-xs">{DRAFT_KEYS.current}</p>
         </TooltipContent>
       </Tooltip>
-      <NotificationsMenu
-        settings={notificationSettings}
-        waitingSessions={sessions
-          .filter((s) => inBell(s, sessionStatuses[s.id], now))
-          .map((s) => ({ id: s.id, name: s.name }))}
-        onSelectSession={(id) => {
-          const session = sessions.find((s) => s.id === id);
-          if (session) attachToSession(session);
-        }}
-      />
-      <MessagesButton labelClassName={BAR_LABEL} />
-      <TasksButton labelClassName={BAR_LABEL} />
-      <DocsButton
-        projectId={activeSession?.project_id}
-        labelClassName={BAR_LABEL}
-      />
-      <Button
-        size="sm"
-        aria-label="New session"
-        title={`New session (${DRAFT_KEYS.current})`}
-        className="ml-1 h-7 gap-1 px-2"
-        onClick={() => newDraft({ kind: "current" })}
-      >
-        <Plus className="h-4 w-4" />
-        <span className="hidden @3xl/bar:inline">New session</span>
-      </Button>
     </div>
   );
 }
