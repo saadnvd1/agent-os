@@ -1107,6 +1107,132 @@ describe("ChatHost background_task", () => {
   });
 });
 
+describe("ChatHost background frees the queue", () => {
+  const userTexts = (id: string) =>
+    listItems(id).flatMap((i) => (i.kind === "user" ? [i.text] : []));
+  const queueAll = async (
+    host: Awaited<ReturnType<typeof startHost>>["host"],
+    texts: string[]
+  ) => {
+    await host.handle({ type: "send", id: "u0", text: "long job" });
+    for (const [i, text] of texts.entries())
+      await host.handle({ type: "send", id: `q${i}`, text, queue: true });
+  };
+
+  it("sends one queued message when the step is backgrounded, mid-turn", async () => {
+    const { id, host, conversation, emitted } = await startHost();
+    await queueAll(host, ["first"]);
+    expect(listQueue(id).map((m) => m.text)).toEqual(["first"]);
+    await host.handle({
+      type: "background_task",
+      reqId: "b1",
+      toolUseId: "t1",
+    });
+    expect(conversation.send).toHaveBeenLastCalledWith("first", undefined);
+    expect(listQueue(id)).toEqual([]);
+    expect(host.state).toBe("running");
+    expect(conversation.interrupt).not.toHaveBeenCalled();
+    expect(emitted).toContainEqual({ type: "queue" });
+    expect(emitted).toContainEqual({
+      type: "background_result",
+      reqId: "b1",
+      ok: true,
+    });
+    host.close();
+  });
+
+  it("sends several in order, each once", async () => {
+    const { id, host, conversation } = await startHost();
+    await queueAll(host, ["a", "b", "c"]);
+    await host.handle({
+      type: "background_task",
+      reqId: "b1",
+      toolUseId: "t1",
+    });
+    expect(
+      (conversation.send.mock.calls as unknown[][]).map((c) => c[0])
+    ).toEqual(["long job", "a", "b", "c"]);
+    conversation.events.push({ type: "state", state: "idle" });
+    await tick();
+    expect(conversation.send).toHaveBeenCalledTimes(4);
+    expect(userTexts(id)).toEqual(["long job", "a", "b", "c"]);
+    host.close();
+  });
+
+  it("leaves the queue when nothing moved or it was refused", async () => {
+    const { id, host, conversation } = await startHost();
+    await queueAll(host, ["a"]);
+    await host.handle({
+      type: "background_task",
+      reqId: "b1",
+      toolUseId: "gone",
+    });
+    await host.handle({
+      type: "background_task",
+      reqId: "b2",
+      toolUseId: "boom",
+    });
+    expect(conversation.send).toHaveBeenCalledTimes(1);
+    expect(listQueue(id).map((m) => m.text)).toEqual(["a"]);
+    host.close();
+  });
+
+  it("leaves the rest to the turn boundary when the turn ended meanwhile", async () => {
+    const { id, host, conversation } = await startHost();
+    let release!: (ok: boolean) => void;
+    conversation.backgroundTask.mockImplementationOnce(
+      () => new Promise<boolean>((r) => (release = r))
+    );
+    await queueAll(host, ["a", "b"]);
+    conversation.events.push({ type: "turn_start" });
+    await tick();
+    const pending = host.handle({
+      type: "background_task",
+      reqId: "b1",
+      toolUseId: "t1",
+    });
+    conversation.events.push({ type: "state", state: "idle" });
+    await tick();
+    expect(conversation.send).toHaveBeenLastCalledWith("a", undefined);
+    conversation.events.push({ type: "turn_start" });
+    await tick();
+    release(true);
+    await pending;
+    expect(conversation.send).toHaveBeenCalledTimes(2);
+    expect(listQueue(id).map((m) => m.text)).toEqual(["b"]);
+    host.close();
+  });
+
+  it("keeps a held queue, a compaction's, and a retiring worker's", async () => {
+    const held = await startHost();
+    await queueAll(held.host, ["a"]);
+    getDb()
+      .prepare(`UPDATE sessions SET task_status = 'moving' WHERE id = ?`)
+      .run(held.id);
+    await held.host.handle({ type: "background_task", reqId: "b1" });
+    expect(held.conversation.send).toHaveBeenCalledTimes(1);
+    expect(listQueue(held.id)).toHaveLength(1);
+    held.host.close();
+
+    const compacting = await startHost();
+    await queueAll(compacting.host, ["a"]);
+    compacting.conversation.events.push({ type: "compacting", active: true });
+    await tick();
+    await compacting.host.handle({ type: "background_task", reqId: "b2" });
+    expect(compacting.conversation.send).toHaveBeenCalledTimes(1);
+    expect(listQueue(compacting.id)).toHaveLength(1);
+    compacting.host.close();
+
+    const retiring = await startHost();
+    await queueAll(retiring.host, ["a"]);
+    await retiring.host.handle({ type: "retire" });
+    await retiring.host.handle({ type: "background_task", reqId: "b3" });
+    expect(retiring.conversation.send).toHaveBeenCalledTimes(1);
+    expect(listQueue(retiring.id)).toHaveLength(1);
+    retiring.host.close();
+  });
+});
+
 describe("ChatHost suggestion", () => {
   const stored = (id: string) =>
     (

@@ -533,6 +533,26 @@ export class ChatHost {
     return true;
   }
 
+  // A blocking step moved to the background frees the agent: the turn goes
+  // on, and what's queued goes in now, in order, as a message sent mid-turn
+  // does, rather than wait for the turn to end. Only the turn it was asked
+  // in: one that ended meanwhile has sent its queue by the usual rules.
+  private sendQueuedMidTurn(turn: number): void {
+    if (
+      !this.busy() ||
+      this.turnsStarted !== turn ||
+      this.closed ||
+      this.handingOver() ||
+      this.compacting ||
+      this.compactingNow
+    )
+      return;
+    for (let next; (next = claimNext(this.session.id)); ) {
+      this.emit({ type: "queue" });
+      this.sendUser(next);
+    }
+  }
+
   private sendUser(
     m: {
       id: string;
@@ -769,7 +789,9 @@ export class ChatHost {
       case "background_task":
         try {
           if (!this.conversation.backgroundTask) throw new Error("unsupported");
+          const turn = this.turnsStarted;
           const ok = await this.conversation.backgroundTask(cmd.toolUseId);
+          if (ok) this.sendQueuedMidTurn(turn);
           this.emit({ type: "background_result", reqId: cmd.reqId, ok });
         } catch (error) {
           this.emit({
