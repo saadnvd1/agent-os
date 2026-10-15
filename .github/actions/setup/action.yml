@@ -7,6 +7,13 @@ runs:
     - uses: actions/setup-node@v4
       with:
         node-version: 22
-        cache: npm
-    - run: npm ci
+    # node_modules itself, not just npm's download cache: a hit skips npm ci
+    # and its native-module builds.
+    - id: modules
+      uses: actions/cache@v4
+      with:
+        path: node_modules
+        key: modules-${{ runner.os }}-${{ runner.arch }}-node22-${{ hashFiles('package-lock.json') }}
+    - if: steps.modules.outputs.cache-hit != 'true'
+      run: npm ci
       shell: bash
