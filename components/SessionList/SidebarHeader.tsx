@@ -39,7 +39,6 @@ import { settingsUiActions } from "@/stores/settingsUi";
 import { usageUiActions } from "@/stores/usageUi";
 import { WorkspaceSwitcher } from "./WorkspaceSwitcher";
 import { LoadGauge } from "./LoadGauge";
-import { HealthDot } from "@/components/Health/HealthDot";
 import { AwayToggle } from "@/components/Away/AwayToggle";
 import { NoApprovalsBadge } from "@/components/Approvals/NoApprovalsBadge";
 import { useSchedulesGlance } from "./useSchedulesGlance";
@@ -72,7 +71,6 @@ export function SidebarHeader(props: SidebarHeaderProps) {
           current={props.workspace}
         />
         <LoadGauge />
-        <HealthDot />
       </div>
       <div className="ml-auto flex shrink-0 items-center gap-0.5">
         <NoApprovalsBadge />
