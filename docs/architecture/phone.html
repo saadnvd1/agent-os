@@ -1,0 +1,685 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <meta name="color-scheme" content="light dark" />
+    <title>AgentOS · The phone and access</title>
+    <style>
+      /* arch:start */
+      :root {
+        color-scheme: light dark;
+        --bg: hsl(240 10% 95.5%);
+        --fg: hsl(240 12% 14%);
+        --card: hsl(0 0% 100%);
+        --mut: hsl(240 6% 42%);
+        --line: hsl(240 14% 86%);
+        --pri: hsl(262 83% 52%);
+        --pri-bg: hsl(252 40% 95%);
+        --ok: hsl(152 60% 28%);
+        --ok-bg: hsl(152 40% 92%);
+        --warn: hsl(30 90% 30%);
+        --warn-bg: hsl(38 90% 91%);
+        --bad: hsl(352 70% 42%);
+        --bad-bg: hsl(352 80% 95%);
+        --dot: hsl(240 12% 14% / 0.05);
+      }
+      @media (prefers-color-scheme: dark) {
+        :root {
+          --bg: hsl(240 18% 3.5%);
+          --fg: hsl(240 10% 93%);
+          --card: hsl(240 14% 6%);
+          --mut: hsl(240 6% 62%);
+          --line: hsl(240 10% 17%);
+          --pri: hsl(262 92% 72%);
+          --pri-bg: hsl(250 18% 13%);
+          --ok: hsl(160 60% 55%);
+          --ok-bg: hsl(160 30% 10%);
+          --warn: hsl(38 90% 62%);
+          --warn-bg: hsl(38 40% 11%);
+          --bad: hsl(352 85% 68%);
+          --bad-bg: hsl(352 40% 12%);
+          --dot: hsl(240 10% 93% / 0.05);
+        }
+      }
+      :root.dark {
+        color-scheme: dark;
+        --bg: hsl(240 18% 3.5%);
+        --fg: hsl(240 10% 93%);
+        --card: hsl(240 14% 6%);
+        --mut: hsl(240 6% 62%);
+        --line: hsl(240 10% 17%);
+        --pri: hsl(262 92% 72%);
+        --pri-bg: hsl(250 18% 13%);
+        --ok: hsl(160 60% 55%);
+        --ok-bg: hsl(160 30% 10%);
+        --warn: hsl(38 90% 62%);
+        --warn-bg: hsl(38 40% 11%);
+        --bad: hsl(352 85% 68%);
+        --bad-bg: hsl(352 40% 12%);
+        --dot: hsl(240 10% 93% / 0.05);
+      }
+      :root.light {
+        color-scheme: light;
+        --bg: hsl(240 10% 95.5%);
+        --fg: hsl(240 12% 14%);
+        --card: hsl(0 0% 100%);
+        --mut: hsl(240 6% 42%);
+        --line: hsl(240 14% 86%);
+        --pri: hsl(262 83% 52%);
+        --pri-bg: hsl(252 40% 95%);
+        --ok: hsl(152 60% 28%);
+        --ok-bg: hsl(152 40% 92%);
+        --warn: hsl(30 90% 30%);
+        --warn-bg: hsl(38 90% 91%);
+        --bad: hsl(352 70% 42%);
+        --bad-bg: hsl(352 80% 95%);
+        --dot: hsl(240 12% 14% / 0.05);
+      }
+      * {
+        box-sizing: border-box;
+      }
+      html {
+        -webkit-text-size-adjust: 100%;
+      }
+      body {
+        margin: 0;
+        background: var(--bg) radial-gradient(var(--dot) 1px, transparent 1px) 0
+          0/22px 22px;
+        color: var(--fg);
+        font:
+          15px/1.55 system-ui,
+          -apple-system,
+          "Segoe UI",
+          sans-serif;
+        -webkit-font-smoothing: antialiased;
+      }
+      main {
+        max-width: 1080px;
+        margin: 0 auto;
+        padding: 12px 16px 56px;
+      }
+      a {
+        color: var(--pri);
+        text-underline-offset: 3px;
+      }
+      code,
+      .mono {
+        font:
+          12.5px/1.4 ui-monospace,
+          SFMono-Regular,
+          Menlo,
+          monospace;
+      }
+      .back {
+        display: inline-flex;
+        align-items: center;
+        min-height: 44px;
+        font-size: 14px;
+      }
+      h1 {
+        margin: 4px 0 6px;
+        font-size: 26px;
+        line-height: 1.2;
+        letter-spacing: -0.01em;
+      }
+      h2 {
+        margin: 34px 0 10px;
+        font:
+          600 11px/1.2 ui-monospace,
+          SFMono-Regular,
+          Menlo,
+          monospace;
+        letter-spacing: 0.08em;
+        text-transform: uppercase;
+        color: var(--mut);
+      }
+      h4 {
+        margin: 0 0 4px;
+        font-size: 14px;
+      }
+      .lede {
+        margin: 0;
+        color: var(--mut);
+        max-width: 62ch;
+        font-size: 16px;
+      }
+      .sub {
+        margin: 6px 0 0;
+        color: var(--mut);
+        font-size: 13px;
+      }
+      figure {
+        margin: 0;
+      }
+      .flow {
+        display: flex;
+        flex-wrap: wrap;
+        align-items: stretch;
+        gap: 8px 0;
+        margin: 10px 0;
+        counter-reset: n;
+      }
+      .node {
+        position: relative;
+        flex: 1 1 150px;
+        max-width: 230px;
+        min-width: 130px;
+        background: var(--card);
+        border-radius: 12px;
+        padding: 10px 12px 10px 34px;
+        box-shadow: 0 0 0 1px var(--line);
+        counter-increment: n;
+      }
+      .node::before {
+        content: counter(n);
+        position: absolute;
+        left: 10px;
+        top: 11px;
+        width: 18px;
+        height: 18px;
+        border-radius: 9px;
+        background: var(--pri-bg);
+        color: var(--pri);
+        font:
+          600 11px/18px ui-monospace,
+          Menlo,
+          monospace;
+        text-align: center;
+      }
+      .node b {
+        display: block;
+        font-size: 14px;
+        line-height: 1.3;
+      }
+      .node span {
+        display: block;
+        margin-top: 2px;
+        font-size: 12.5px;
+        color: var(--mut);
+        line-height: 1.4;
+      }
+      .node.main {
+        box-shadow: 0 0 0 1.5px var(--pri);
+      }
+      .node.ok {
+        box-shadow: 0 0 0 1.5px var(--ok);
+      }
+      .node.wait {
+        box-shadow: 0 0 0 1.5px var(--warn);
+      }
+      .node.bad {
+        box-shadow: 0 0 0 1.5px var(--bad);
+      }
+      .node.ext {
+        background: transparent;
+        box-shadow: 0 0 0 1px var(--mut);
+        border-radius: 12px;
+      }
+      .arr {
+        flex: 0 0 auto;
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        justify-content: center;
+        min-width: 34px;
+        padding: 0 3px;
+        color: var(--mut);
+        font-size: 11px;
+        line-height: 1.2;
+        text-align: center;
+      }
+      .arr::before {
+        content: "\2192";
+        font-size: 18px;
+        color: var(--pri);
+      }
+      .arr i {
+        font-style: normal;
+        max-width: 92px;
+      }
+      .cap {
+        margin: 18px 0 0;
+        font-size: 13px;
+        color: var(--mut);
+      }
+      .cap b {
+        color: var(--fg);
+      }
+      .cases {
+        display: grid;
+        grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+        gap: 10px;
+        margin: 10px 0;
+      }
+      .case {
+        background: var(--card);
+        border-radius: 12px;
+        padding: 10px 12px;
+        box-shadow: 0 0 0 1px var(--line);
+      }
+      .case p {
+        margin: 0;
+        font-size: 13px;
+        color: var(--mut);
+      }
+      .case.ok {
+        box-shadow: 0 0 0 1.5px var(--ok);
+      }
+      .case.wait {
+        box-shadow: 0 0 0 1.5px var(--warn);
+      }
+      .case.bad {
+        box-shadow: 0 0 0 1.5px var(--bad);
+      }
+      .case.main {
+        box-shadow: 0 0 0 1.5px var(--pri);
+      }
+      .states {
+        display: grid;
+        grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
+        gap: 8px 16px;
+        margin: 0;
+        padding: 0;
+      }
+      .states div {
+        display: flex;
+        gap: 10px;
+        align-items: baseline;
+      }
+      .states dt {
+        flex: 0 0 auto;
+        padding: 1px 8px;
+        border-radius: 999px;
+        background: var(--pri-bg);
+        color: var(--pri);
+        font:
+          600 12px/1.6 ui-monospace,
+          Menlo,
+          monospace;
+      }
+      .states dt.ok {
+        background: var(--ok-bg);
+        color: var(--ok);
+      }
+      .states dt.wait {
+        background: var(--warn-bg);
+        color: var(--warn);
+      }
+      .states dt.bad {
+        background: var(--bad-bg);
+        color: var(--bad);
+      }
+      .states dd {
+        margin: 0;
+        font-size: 13.5px;
+        color: var(--mut);
+      }
+      .notes p {
+        margin: 0 0 10px;
+        max-width: 70ch;
+      }
+      ul.list {
+        margin: 0;
+        padding: 0;
+        list-style: none;
+        display: grid;
+        gap: 2px;
+      }
+      ul.list li {
+        padding: 6px 0;
+        border-top: 1px solid var(--line);
+        font-size: 14px;
+      }
+      ul.list li:first-child {
+        border-top: 0;
+      }
+      ul.list code {
+        color: var(--fg);
+        background: var(--pri-bg);
+        padding: 1px 6px;
+        border-radius: 6px;
+        word-break: break-all;
+      }
+      ul.list.docs a {
+        display: inline-block;
+        min-height: 24px;
+      }
+      ul.list small {
+        color: var(--mut);
+        font-size: 13px;
+      }
+      footer {
+        margin-top: 40px;
+        font-size: 12.5px;
+        color: var(--mut);
+      }
+      .bands {
+        display: grid;
+        gap: 0;
+        margin-top: 14px;
+      }
+      .band {
+        background: color-mix(in srgb, var(--card) 60%, transparent);
+        border-radius: 14px;
+        padding: 12px;
+        box-shadow: 0 0 0 1px var(--line);
+      }
+      .band > h3 {
+        margin: 0 0 8px;
+        font:
+          600 11px/1.2 ui-monospace,
+          Menlo,
+          monospace;
+        letter-spacing: 0.08em;
+        text-transform: uppercase;
+        color: var(--mut);
+      }
+      .boxes {
+        display: grid;
+        grid-template-columns: repeat(auto-fit, minmax(210px, 1fr));
+        gap: 8px;
+      }
+      a.box {
+        display: block;
+        min-height: 44px;
+        padding: 10px 12px;
+        background: var(--card);
+        border-radius: 12px;
+        box-shadow: 0 0 0 1px var(--line);
+        color: var(--fg);
+        text-decoration: none;
+      }
+      a.box:hover,
+      a.box:focus-visible {
+        box-shadow: 0 0 0 1.5px var(--pri);
+      }
+      a.box b {
+        display: block;
+        font-size: 14.5px;
+      }
+      a.box span {
+        display: block;
+        font-size: 12.5px;
+        color: var(--mut);
+        margin-top: 2px;
+      }
+      a.box em {
+        display: block;
+        font:
+          normal 11.5px/1.5 ui-monospace,
+          Menlo,
+          monospace;
+        color: var(--pri);
+        margin-top: 6px;
+      }
+      .down {
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        gap: 8px;
+        padding: 6px 0;
+        color: var(--mut);
+        font-size: 12px;
+        text-align: center;
+      }
+      .down::before {
+        content: "\2193";
+        font-size: 18px;
+        color: var(--pri);
+      }
+      .legend {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 6px 16px;
+        margin: 14px 0 0;
+        font-size: 12.5px;
+        color: var(--mut);
+      }
+      @media (max-width: 720px) {
+        main {
+          padding: 8px 14px 48px;
+        }
+        h1 {
+          font-size: 22px;
+        }
+        .flow {
+          flex-direction: column;
+          align-items: stretch;
+          gap: 0;
+        }
+        .node {
+          max-width: none;
+          flex: none;
+        }
+        .arr {
+          flex-direction: row;
+          gap: 8px;
+          min-height: 30px;
+        }
+        .arr::before {
+          content: "\2193";
+        }
+        .arr i {
+          max-width: none;
+        }
+      }
+      /* arch:end */
+    </style>
+  </head>
+  <body>
+    <main>
+      <a class="back" href="index.html">← All systems</a>
+      <header>
+        <h1>The phone and access</h1>
+        <p class="lede">
+          Who is let in, how a phone is paired, how it reaches your machine from
+          anywhere, and what reaches it back.
+        </p>
+      </header>
+      <section>
+        <h2>Who is trusted</h2>
+        <figure>
+          <div class="cases">
+            <div class="case ok">
+              <h4>This machine</h4>
+              <p>
+                Always trusted, if the request is addressed to localhost and
+                carries no proxy headers.
+              </p>
+            </div>
+            <div class="case ok">
+              <h4>Your tailnet</h4>
+              <p>Trusted by default; a setting asks for pairing there too.</p>
+            </div>
+            <div class="case wait">
+              <h4>Everything else</h4>
+              <p>
+                Wi-Fi, a proxy, Connect: needs a paired device's token on the
+                request and on the WebSocket upgrade.
+              </p>
+            </div>
+          </div>
+        </figure>
+      </section>
+      <section>
+        <h2>Pairing a phone</h2>
+        <figure>
+          <div class="flow">
+            <div class="node main">
+              <b>Add a device</b
+              ><span>On the machine: a one-time code, valid 10 minutes</span>
+            </div>
+            <div class="arr" aria-hidden="true"><i>on the phone</i></div>
+            <div class="node">
+              <b>Scan or type</b
+              ><span>The QR code, or the pair page and the code</span>
+            </div>
+            <div class="arr" aria-hidden="true"><i>exchanged</i></div>
+            <div class="node ok">
+              <b>Device token</b
+              ><span
+                >The phone keeps its own key; only a hash is stored here</span
+              >
+            </div>
+          </div>
+          <p class="cap">
+            Removing a device cuts its open terminals at once. A paired device
+            can use AgentOS but can't add devices or change access. An
+            app-paired phone can also be allowed to approve asks.
+          </p>
+        </figure>
+      </section>
+      <section>
+        <h2>Reaching your machine</h2>
+        <figure>
+          <div class="flow">
+            <div class="node main">
+              <b>Phone</b><span>The app or a browser</span>
+            </div>
+            <div class="arr" aria-hidden="true"><i>reaches</i></div>
+            <div class="node">
+              <b>Route</b
+              ><span
+                >Same network or tailnet directly; or Connect, a private address
+                that works from any network</span
+              >
+            </div>
+            <div class="arr" aria-hidden="true"><i>token checked</i></div>
+            <div class="node ok">
+              <b>AgentOS</b
+              ><span
+                >The chat, status and terminal sockets, and the HTTP API</span
+              >
+            </div>
+          </div>
+          <div class="flow">
+            <div class="node wait">
+              <b>Something needs you</b
+              ><span
+                >An ask, a plan, a review, a failing CI, a machine alert</span
+              >
+            </div>
+            <div class="arr" aria-hidden="true"><i>queued</i></div>
+            <div class="node">
+              <b>Push outbox</b
+              ><span>Kept in the database so a restart doesn't lose it</span>
+            </div>
+            <div class="arr" aria-hidden="true"><i>sent</i></div>
+            <div class="node">
+              <b>Connect relay</b
+              ><span>Sends to the phones that registered</span>
+            </div>
+            <div class="arr" aria-hidden="true"><i>pushed</i></div>
+            <div class="node main">
+              <b>Phone</b><span>Each phone picks its own categories</span>
+            </div>
+          </div>
+        </figure>
+      </section>
+      <section>
+        <h2>What a phone can send to an orchestrator</h2>
+        <figure>
+          <div class="flow">
+            <div class="node main">
+              <b>Shake report or shared item</b
+              ><span
+                >A screenshot, the last minute of logs, or something shared from
+                another app</span
+              >
+            </div>
+            <div class="arr" aria-hidden="true"><i>POST intake</i></div>
+            <div class="node">
+              <b>Intake</b
+              ><span>Saved beside the database, marked untrusted</span>
+            </div>
+            <div class="arr" aria-hidden="true"><i>delivered</i></div>
+            <div class="node ok">
+              <b>Orchestrator</b><span>Reads it as a message</span>
+            </div>
+          </div>
+        </figure>
+      </section>
+      <section>
+        <h2>Key states</h2>
+        <dl class="states">
+          <div>
+            <dt class="ok">trusted</dt>
+            <dd>This machine, or your tailnet.</dd>
+          </div>
+          <div>
+            <dt class="ok">paired</dt>
+            <dd>Holds a device token.</dd>
+          </div>
+          <div>
+            <dt class="wait">can approve</dt>
+            <dd>A paired device that may answer asks and switch Away.</dd>
+          </div>
+          <div>
+            <dt class="bad">unpaired</dt>
+            <dd>Refused.</dd>
+          </div>
+        </dl>
+      </section>
+      <section class="notes">
+        <h2>In plain words</h2>
+        <p>
+          Notifications are skipped while you have been using the computer in
+          the last few minutes, and with Away on everything except asks folds
+          into a digest. Browsers can't receive pushes from AgentOS; only the
+          app can.
+        </p>
+        <p>
+          Connect is for reach, not for trust: a request that arrives through it
+          still needs a paired device.
+        </p>
+      </section>
+      <section>
+        <h2>Key files</h2>
+        <ul class="list">
+          <li>
+            <code class="file">app/pair/page.tsx</code>
+            <small>the pairing page</small>
+          </li>
+          <li>
+            <code class="file">lib/connect/serve.ts</code>
+            <small>Connect on the machine</small>
+          </li>
+          <li>
+            <code class="file">lib/connect/control-api.ts</code>
+            <small>talking to the Connect service</small>
+          </li>
+          <li>
+            <code class="file">lib/notify/push/outbox.ts</code>
+            <small>the push outbox</small>
+          </li>
+          <li>
+            <code class="file">lib/notify/push/policy.ts</code>
+            <small>what is pushed, and when not</small>
+          </li>
+          <li>
+            <code class="file">lib/intake</code>
+            <small>what a phone sends to an orchestrator</small>
+          </li>
+          <li>
+            <code class="file">server.ts</code>
+            <small>the gate on every request and socket upgrade</small>
+          </li>
+        </ul>
+      </section>
+      <section>
+        <h2>Read more</h2>
+        <ul class="list docs">
+          <li>
+            <a href="../guides/phone.md">Using AgentOS from your phone</a>
+          </li>
+          <li><a href="../reference/security.md">Security</a></li>
+        </ul>
+      </section>
+      <footer>
+        Part of <a href="README.md">docs/architecture</a>. A pull request that
+        changes this system updates this page.
+      </footer>
+    </main>
+  </body>
+</html>

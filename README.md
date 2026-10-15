@@ -39,6 +39,7 @@ and check on all of it from your phone.
 
 - [Guides](docs/guides/README.md): [install](docs/guides/install.md), [phone](docs/guides/phone.md), [sessions](docs/guides/sessions.md), [chat](docs/guides/chat.md), [tasks](docs/guides/tasks.md), [schedules](docs/guides/schedules.md) and the [agent network](docs/guides/agent-network.md).
 - [Reference](docs/reference/README.md): how each part works in detail, from the orchestrator's gates to the development workflow.
+- [Architecture](docs/architecture/README.md): pictures of the systems and how they connect, one page each.
 
 ## Install
 

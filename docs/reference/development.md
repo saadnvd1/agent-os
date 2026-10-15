@@ -108,3 +108,13 @@ code health in `code-health/`;
 `AGENTOS_AUDITS_DIR` moves the root) and never in a repo. Settings → Audits
 (or ⌘K, "Session audits") lists every kind's markdown reports, newest first,
 and renders them.
+
+## Architecture pages
+
+`docs/architecture/` holds one self-contained HTML page per system, and an
+index showing how they connect ([README](../architecture/README.md)). A pull
+request that adds or changes a system updates its page there (and the index
+when it adds a system or a connection), in the same pull request.
+`scripts/architecture-docs.test.ts` fails on a broken link, a key file that
+no longer exists, a page that loads anything from outside, drift in the shared
+stylesheet block, or a merge gate the page doesn't show.

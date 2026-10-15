@@ -1,0 +1,657 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <meta name="color-scheme" content="light dark" />
+    <title>AgentOS · Schedules, reminders and recipes</title>
+    <style>
+      /* arch:start */
+      :root {
+        color-scheme: light dark;
+        --bg: hsl(240 10% 95.5%);
+        --fg: hsl(240 12% 14%);
+        --card: hsl(0 0% 100%);
+        --mut: hsl(240 6% 42%);
+        --line: hsl(240 14% 86%);
+        --pri: hsl(262 83% 52%);
+        --pri-bg: hsl(252 40% 95%);
+        --ok: hsl(152 60% 28%);
+        --ok-bg: hsl(152 40% 92%);
+        --warn: hsl(30 90% 30%);
+        --warn-bg: hsl(38 90% 91%);
+        --bad: hsl(352 70% 42%);
+        --bad-bg: hsl(352 80% 95%);
+        --dot: hsl(240 12% 14% / 0.05);
+      }
+      @media (prefers-color-scheme: dark) {
+        :root {
+          --bg: hsl(240 18% 3.5%);
+          --fg: hsl(240 10% 93%);
+          --card: hsl(240 14% 6%);
+          --mut: hsl(240 6% 62%);
+          --line: hsl(240 10% 17%);
+          --pri: hsl(262 92% 72%);
+          --pri-bg: hsl(250 18% 13%);
+          --ok: hsl(160 60% 55%);
+          --ok-bg: hsl(160 30% 10%);
+          --warn: hsl(38 90% 62%);
+          --warn-bg: hsl(38 40% 11%);
+          --bad: hsl(352 85% 68%);
+          --bad-bg: hsl(352 40% 12%);
+          --dot: hsl(240 10% 93% / 0.05);
+        }
+      }
+      :root.dark {
+        color-scheme: dark;
+        --bg: hsl(240 18% 3.5%);
+        --fg: hsl(240 10% 93%);
+        --card: hsl(240 14% 6%);
+        --mut: hsl(240 6% 62%);
+        --line: hsl(240 10% 17%);
+        --pri: hsl(262 92% 72%);
+        --pri-bg: hsl(250 18% 13%);
+        --ok: hsl(160 60% 55%);
+        --ok-bg: hsl(160 30% 10%);
+        --warn: hsl(38 90% 62%);
+        --warn-bg: hsl(38 40% 11%);
+        --bad: hsl(352 85% 68%);
+        --bad-bg: hsl(352 40% 12%);
+        --dot: hsl(240 10% 93% / 0.05);
+      }
+      :root.light {
+        color-scheme: light;
+        --bg: hsl(240 10% 95.5%);
+        --fg: hsl(240 12% 14%);
+        --card: hsl(0 0% 100%);
+        --mut: hsl(240 6% 42%);
+        --line: hsl(240 14% 86%);
+        --pri: hsl(262 83% 52%);
+        --pri-bg: hsl(252 40% 95%);
+        --ok: hsl(152 60% 28%);
+        --ok-bg: hsl(152 40% 92%);
+        --warn: hsl(30 90% 30%);
+        --warn-bg: hsl(38 90% 91%);
+        --bad: hsl(352 70% 42%);
+        --bad-bg: hsl(352 80% 95%);
+        --dot: hsl(240 12% 14% / 0.05);
+      }
+      * {
+        box-sizing: border-box;
+      }
+      html {
+        -webkit-text-size-adjust: 100%;
+      }
+      body {
+        margin: 0;
+        background: var(--bg) radial-gradient(var(--dot) 1px, transparent 1px) 0
+          0/22px 22px;
+        color: var(--fg);
+        font:
+          15px/1.55 system-ui,
+          -apple-system,
+          "Segoe UI",
+          sans-serif;
+        -webkit-font-smoothing: antialiased;
+      }
+      main {
+        max-width: 1080px;
+        margin: 0 auto;
+        padding: 12px 16px 56px;
+      }
+      a {
+        color: var(--pri);
+        text-underline-offset: 3px;
+      }
+      code,
+      .mono {
+        font:
+          12.5px/1.4 ui-monospace,
+          SFMono-Regular,
+          Menlo,
+          monospace;
+      }
+      .back {
+        display: inline-flex;
+        align-items: center;
+        min-height: 44px;
+        font-size: 14px;
+      }
+      h1 {
+        margin: 4px 0 6px;
+        font-size: 26px;
+        line-height: 1.2;
+        letter-spacing: -0.01em;
+      }
+      h2 {
+        margin: 34px 0 10px;
+        font:
+          600 11px/1.2 ui-monospace,
+          SFMono-Regular,
+          Menlo,
+          monospace;
+        letter-spacing: 0.08em;
+        text-transform: uppercase;
+        color: var(--mut);
+      }
+      h4 {
+        margin: 0 0 4px;
+        font-size: 14px;
+      }
+      .lede {
+        margin: 0;
+        color: var(--mut);
+        max-width: 62ch;
+        font-size: 16px;
+      }
+      .sub {
+        margin: 6px 0 0;
+        color: var(--mut);
+        font-size: 13px;
+      }
+      figure {
+        margin: 0;
+      }
+      .flow {
+        display: flex;
+        flex-wrap: wrap;
+        align-items: stretch;
+        gap: 8px 0;
+        margin: 10px 0;
+        counter-reset: n;
+      }
+      .node {
+        position: relative;
+        flex: 1 1 150px;
+        max-width: 230px;
+        min-width: 130px;
+        background: var(--card);
+        border-radius: 12px;
+        padding: 10px 12px 10px 34px;
+        box-shadow: 0 0 0 1px var(--line);
+        counter-increment: n;
+      }
+      .node::before {
+        content: counter(n);
+        position: absolute;
+        left: 10px;
+        top: 11px;
+        width: 18px;
+        height: 18px;
+        border-radius: 9px;
+        background: var(--pri-bg);
+        color: var(--pri);
+        font:
+          600 11px/18px ui-monospace,
+          Menlo,
+          monospace;
+        text-align: center;
+      }
+      .node b {
+        display: block;
+        font-size: 14px;
+        line-height: 1.3;
+      }
+      .node span {
+        display: block;
+        margin-top: 2px;
+        font-size: 12.5px;
+        color: var(--mut);
+        line-height: 1.4;
+      }
+      .node.main {
+        box-shadow: 0 0 0 1.5px var(--pri);
+      }
+      .node.ok {
+        box-shadow: 0 0 0 1.5px var(--ok);
+      }
+      .node.wait {
+        box-shadow: 0 0 0 1.5px var(--warn);
+      }
+      .node.bad {
+        box-shadow: 0 0 0 1.5px var(--bad);
+      }
+      .node.ext {
+        background: transparent;
+        box-shadow: 0 0 0 1px var(--mut);
+        border-radius: 12px;
+      }
+      .arr {
+        flex: 0 0 auto;
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        justify-content: center;
+        min-width: 34px;
+        padding: 0 3px;
+        color: var(--mut);
+        font-size: 11px;
+        line-height: 1.2;
+        text-align: center;
+      }
+      .arr::before {
+        content: "\2192";
+        font-size: 18px;
+        color: var(--pri);
+      }
+      .arr i {
+        font-style: normal;
+        max-width: 92px;
+      }
+      .cap {
+        margin: 18px 0 0;
+        font-size: 13px;
+        color: var(--mut);
+      }
+      .cap b {
+        color: var(--fg);
+      }
+      .cases {
+        display: grid;
+        grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+        gap: 10px;
+        margin: 10px 0;
+      }
+      .case {
+        background: var(--card);
+        border-radius: 12px;
+        padding: 10px 12px;
+        box-shadow: 0 0 0 1px var(--line);
+      }
+      .case p {
+        margin: 0;
+        font-size: 13px;
+        color: var(--mut);
+      }
+      .case.ok {
+        box-shadow: 0 0 0 1.5px var(--ok);
+      }
+      .case.wait {
+        box-shadow: 0 0 0 1.5px var(--warn);
+      }
+      .case.bad {
+        box-shadow: 0 0 0 1.5px var(--bad);
+      }
+      .case.main {
+        box-shadow: 0 0 0 1.5px var(--pri);
+      }
+      .states {
+        display: grid;
+        grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
+        gap: 8px 16px;
+        margin: 0;
+        padding: 0;
+      }
+      .states div {
+        display: flex;
+        gap: 10px;
+        align-items: baseline;
+      }
+      .states dt {
+        flex: 0 0 auto;
+        padding: 1px 8px;
+        border-radius: 999px;
+        background: var(--pri-bg);
+        color: var(--pri);
+        font:
+          600 12px/1.6 ui-monospace,
+          Menlo,
+          monospace;
+      }
+      .states dt.ok {
+        background: var(--ok-bg);
+        color: var(--ok);
+      }
+      .states dt.wait {
+        background: var(--warn-bg);
+        color: var(--warn);
+      }
+      .states dt.bad {
+        background: var(--bad-bg);
+        color: var(--bad);
+      }
+      .states dd {
+        margin: 0;
+        font-size: 13.5px;
+        color: var(--mut);
+      }
+      .notes p {
+        margin: 0 0 10px;
+        max-width: 70ch;
+      }
+      ul.list {
+        margin: 0;
+        padding: 0;
+        list-style: none;
+        display: grid;
+        gap: 2px;
+      }
+      ul.list li {
+        padding: 6px 0;
+        border-top: 1px solid var(--line);
+        font-size: 14px;
+      }
+      ul.list li:first-child {
+        border-top: 0;
+      }
+      ul.list code {
+        color: var(--fg);
+        background: var(--pri-bg);
+        padding: 1px 6px;
+        border-radius: 6px;
+        word-break: break-all;
+      }
+      ul.list.docs a {
+        display: inline-block;
+        min-height: 24px;
+      }
+      ul.list small {
+        color: var(--mut);
+        font-size: 13px;
+      }
+      footer {
+        margin-top: 40px;
+        font-size: 12.5px;
+        color: var(--mut);
+      }
+      .bands {
+        display: grid;
+        gap: 0;
+        margin-top: 14px;
+      }
+      .band {
+        background: color-mix(in srgb, var(--card) 60%, transparent);
+        border-radius: 14px;
+        padding: 12px;
+        box-shadow: 0 0 0 1px var(--line);
+      }
+      .band > h3 {
+        margin: 0 0 8px;
+        font:
+          600 11px/1.2 ui-monospace,
+          Menlo,
+          monospace;
+        letter-spacing: 0.08em;
+        text-transform: uppercase;
+        color: var(--mut);
+      }
+      .boxes {
+        display: grid;
+        grid-template-columns: repeat(auto-fit, minmax(210px, 1fr));
+        gap: 8px;
+      }
+      a.box {
+        display: block;
+        min-height: 44px;
+        padding: 10px 12px;
+        background: var(--card);
+        border-radius: 12px;
+        box-shadow: 0 0 0 1px var(--line);
+        color: var(--fg);
+        text-decoration: none;
+      }
+      a.box:hover,
+      a.box:focus-visible {
+        box-shadow: 0 0 0 1.5px var(--pri);
+      }
+      a.box b {
+        display: block;
+        font-size: 14.5px;
+      }
+      a.box span {
+        display: block;
+        font-size: 12.5px;
+        color: var(--mut);
+        margin-top: 2px;
+      }
+      a.box em {
+        display: block;
+        font:
+          normal 11.5px/1.5 ui-monospace,
+          Menlo,
+          monospace;
+        color: var(--pri);
+        margin-top: 6px;
+      }
+      .down {
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        gap: 8px;
+        padding: 6px 0;
+        color: var(--mut);
+        font-size: 12px;
+        text-align: center;
+      }
+      .down::before {
+        content: "\2193";
+        font-size: 18px;
+        color: var(--pri);
+      }
+      .legend {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 6px 16px;
+        margin: 14px 0 0;
+        font-size: 12.5px;
+        color: var(--mut);
+      }
+      @media (max-width: 720px) {
+        main {
+          padding: 8px 14px 48px;
+        }
+        h1 {
+          font-size: 22px;
+        }
+        .flow {
+          flex-direction: column;
+          align-items: stretch;
+          gap: 0;
+        }
+        .node {
+          max-width: none;
+          flex: none;
+        }
+        .arr {
+          flex-direction: row;
+          gap: 8px;
+          min-height: 30px;
+        }
+        .arr::before {
+          content: "\2193";
+        }
+        .arr i {
+          max-width: none;
+        }
+      }
+      /* arch:end */
+    </style>
+  </head>
+  <body>
+    <main>
+      <a class="back" href="index.html">← All systems</a>
+      <header>
+        <h1>Schedules, reminders and recipes</h1>
+        <p class="lede">
+          Start work or send a message on a timer, or save a job that comes up
+          again.
+        </p>
+      </header>
+      <section>
+        <h2>A tick</h2>
+        <figure>
+          <div class="flow">
+            <div class="node main">
+              <b>Once a minute</b
+              ><span>In the one server process that holds the lease</span>
+            </div>
+            <div class="arr" aria-hidden="true"><i>latest only</i></div>
+            <div class="node">
+              <b>Due slot</b
+              ><span
+                >Each enabled schedule's latest due slot, if nobody has run
+                it</span
+              >
+            </div>
+            <div class="arr" aria-hidden="true"><i>claim</i></div>
+            <div class="node">
+              <b>Claim</b
+              ><span
+                >Written to the database first, so a time never runs twice</span
+              >
+            </div>
+            <div class="arr" aria-hidden="true"><i>start</i></div>
+            <div class="node ok">
+              <b>Run</b><span>What the schedule is set to do</span>
+            </div>
+          </div>
+          <div class="cases">
+            <div class="case wait">
+              <h4>Skipped</h4>
+              <p>
+                While its previous task or session is still working, and while
+                the orchestrator is paused. Recorded with the reason.
+              </p>
+            </div>
+            <div class="case wait">
+              <h4>Braked</h4>
+              <p>
+                Task and session runs obey the orchestrator's brakes; a braked
+                run is tried again next minute.
+              </p>
+            </div>
+            <div class="case main">
+              <h4>Caught up</h4>
+              <p>
+                After downtime only the most recent missed run happens, once,
+                marked caught up.
+              </p>
+            </div>
+          </div>
+        </figure>
+      </section>
+      <section>
+        <h2>What a schedule can start</h2>
+        <figure>
+          <div class="cases">
+            <div class="case main">
+              <h4>Recipe (task or session)</h4>
+              <p>
+                A saved job run now: project, prompt and options. A schedule is
+                a recipe with a timer.
+              </p>
+            </div>
+            <div class="case">
+              <h4>Orchestrator</h4>
+              <p>
+                The prompt is posted to the workspace's orchestrator, marked as
+                a scheduled prompt so it never counts as an approval.
+              </p>
+            </div>
+            <div class="case">
+              <h4>Message</h4>
+              <p>
+                Sent to a chosen session the way <code>aos send</code> does, and
+                recorded as delivered, queued or failed.
+              </p>
+            </div>
+            <div class="case">
+              <h4>One-off</h4>
+              <p>
+                Once, at a time you pick. The orchestrator's
+                <code>remind_me</code> makes one for itself, at least 10 minutes
+                ahead, 20 pending at most.
+              </p>
+            </div>
+          </div>
+        </figure>
+      </section>
+      <section>
+        <h2>Key states</h2>
+        <dl class="states">
+          <div>
+            <dt class="ok">enabled</dt>
+            <dd>Checked every tick.</dd>
+          </div>
+          <div>
+            <dt class="wait">skipped</dt>
+            <dd>Not run this time; the reason is kept.</dd>
+          </div>
+          <div>
+            <dt class="">caught up</dt>
+            <dd>A missed run happened late, once.</dd>
+          </div>
+          <div>
+            <dt class="bad">failed</dt>
+            <dd>
+              Could not start; noted in the orchestrator's chat and on your
+              phone, once per streak.
+            </dd>
+          </div>
+          <div>
+            <dt class="">done</dt>
+            <dd>A one-off that has run.</dd>
+          </div>
+        </dl>
+      </section>
+      <section class="notes">
+        <h2>In plain words</h2>
+        <p>
+          A dev server runs no schedules unless told to, so a second copy never
+          doubles them. Removing a schedule keeps its history.
+        </p>
+        <p>
+          Recipes are also what the orchestrator's <code>run_recipe</code> runs.
+        </p>
+      </section>
+      <section>
+        <h2>Key files</h2>
+        <ul class="list">
+          <li>
+            <code class="file">lib/schedules/scheduler.ts</code>
+            <small>the ticker</small>
+          </li>
+          <li>
+            <code class="file">lib/schedules/run.ts</code>
+            <small>running one schedule</small>
+          </li>
+          <li>
+            <code class="file">lib/schedules/start.ts</code>
+            <small>starting tasks and sessions</small>
+          </li>
+          <li>
+            <code class="file">lib/schedules/cron.ts</code>
+            <small>cron times</small>
+          </li>
+          <li>
+            <code class="file">lib/recipes</code> <small>saved recipes</small>
+          </li>
+          <li>
+            <code class="file">lib/orchestrator/reminders.ts</code>
+            <small>the orchestrator's reminders</small>
+          </li>
+        </ul>
+      </section>
+      <section>
+        <h2>Read more</h2>
+        <ul class="list docs">
+          <li><a href="../guides/schedules.md">Schedules and recipes</a></li>
+          <li>
+            <a href="../decisions/2026-10-13-recipes-and-pieces.md"
+              >Decision: recipes and pieces</a
+            >
+          </li>
+          <li>
+            <a href="../decisions/2026-10-14-task-scheduling.md"
+              >Decision: task scheduling</a
+            >
+          </li>
+        </ul>
+      </section>
+      <footer>
+        Part of <a href="README.md">docs/architecture</a>. A pull request that
+        changes this system updates this page.
+      </footer>
+    </main>
+  </body>
+</html>

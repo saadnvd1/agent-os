@@ -284,3 +284,7 @@
 - A Haiku pre-filter before the Sonnet wake.
 - Load detection for linked machines, not just this one.
 - An idempotency key on `/api/bus/send` (deduped by the server) so `aos send` can also retry when the connection drops after the request was sent.
+
+## Architecture pages in the app
+
+- Serve `docs/architecture/*.html` from the install through a read-only route (an allowlist of the file names, the artifact page CSP, behind the device-token gate) with an entry in the nav, so the pages open in the app and links between them work. Today an agent can `html_render` a page into one chat's Artifacts panel, where each page is a separate artifact and the links between them don't resolve.
