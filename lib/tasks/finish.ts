@@ -55,6 +55,8 @@ async function cleanup(
     merged?: MergedAs;
     // The head the PR merged or closed at.
     prHead?: string | null;
+    // A drop of a task that never had a PR.
+    noPr?: boolean;
   } = {}
 ): Promise<void> {
   const keepRemoteBranch = opts.keepRemoteBranch ?? false;
@@ -76,6 +78,7 @@ async function cleanup(
       repo,
       branch: session.branch_name,
       prHead: opts.prHead,
+      noPr: opts.noPr,
       keep: [session.base_branch],
     });
   }
@@ -260,5 +263,5 @@ export async function dropTask(id: string): Promise<void> {
   ).run(id);
   syncTaskCardInBackground(session, "dropped", pr);
   await snapshot;
-  await cleanup(session, repo, { prHead: pr?.head });
+  await cleanup(session, repo, { prHead: pr?.head, noPr: !pr });
 }

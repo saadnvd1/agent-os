@@ -89,6 +89,13 @@ describe("deleteTaskBranch", () => {
     expect(calls).toEqual([]);
   });
 
+  it("deletes a never-PR'd rejected branch when told so, still not a base", async () => {
+    tip = "c".repeat(40);
+    expect(
+      (await deleteTaskBranch({ ...base, prHead: null, noPr: true })).deleted
+    ).toBe(true);
+  });
+
   it("treats an already-gone ref as fine, at lookup and at delete", async () => {
     tip = new Error("gh: Not Found (HTTP 404)");
     expect(await deleteTaskBranch(base)).toMatchObject({

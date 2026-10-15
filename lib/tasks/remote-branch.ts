@@ -19,6 +19,9 @@ export interface DeleteBranchOpts {
   // The head the PR merged or closed at; the branch goes only if it is still
   // exactly this commit.
   prHead: string | null | undefined;
+  // A dropped task that never opened a PR has no head to compare with: its
+  // branch is rejected work and goes whatever it holds.
+  noPr?: boolean;
   // owner/repo, when known; read from the checkout's origin otherwise.
   slug?: string | null;
   // Another open PR in the repo builds on this branch (decided by the caller
@@ -93,11 +96,12 @@ async function decide(o: DeleteBranchOpts): Promise<BranchDelete> {
     return { deleted: false, why: "a protected branch" };
   if (o.keep?.includes(branch))
     return { deleted: false, why: "it is a base branch" };
-  if (!prHead) return { deleted: false, why: "no PR head was recorded" };
+  if (!prHead && !o.noPr)
+    return { deleted: false, why: "no PR head was recorded" };
   if (o.hasChildren)
     return { deleted: false, why: "stacked cards still build on it" };
   const slug = o.slug ?? (await repoSlug(repo));
-  if (!slug) return deleteViaGit(repo, branch, prHead);
+  if (!slug) return deleteViaGit(repo, branch, prHead || null);
 
   const kids = await openChildren(repo, slug, branch);
   if (kids.length)
@@ -107,7 +111,7 @@ async function decide(o: DeleteBranchOpts): Promise<BranchDelete> {
     };
   const tip = await remoteTip(repo, slug, branch);
   if (!tip) return { deleted: false, why: "already gone" };
-  if (tip !== prHead)
+  if (prHead && tip !== prHead)
     return {
       deleted: false,
       why: `it moved to ${tip.slice(0, 7)} after the PR's ${prHead.slice(0, 7)}`,
@@ -129,7 +133,7 @@ async function decide(o: DeleteBranchOpts): Promise<BranchDelete> {
 async function deleteViaGit(
   repo: string,
   branch: string,
-  prHead: string
+  prHead: string | null
 ): Promise<BranchDelete> {
   const line = await git(
     repo,
@@ -138,7 +142,7 @@ async function deleteViaGit(
   );
   const tip = line.trim().split(/\s+/)[0];
   if (!tip) return { deleted: false, why: "already gone" };
-  if (tip !== prHead)
+  if (prHead && tip !== prHead)
     return {
       deleted: false,
       why: `it moved to ${tip.slice(0, 7)} after the PR's ${prHead.slice(0, 7)}`,
