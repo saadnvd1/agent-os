@@ -4,6 +4,7 @@ import {
   MAX_SENDS,
   SEND_TIMEOUT_MS,
   clientId,
+  compactsFirst,
   overSends,
   pendingReducer,
   toResend,
@@ -84,5 +85,27 @@ describe("pending sends", () => {
     s = pendingReducer(s, { type: "resent", id: "a", now: 9 });
     expect(s[0]).toMatchObject({ status: "sending", error: undefined, at: 9 });
     expect(pendingReducer(s, { type: "drop", id: "a" })).toEqual([]);
+  });
+});
+
+describe("compactsFirst", () => {
+  const send = { status: "accepted", compact: true } as const;
+  it("holds from accepted, before the first compacting event", () => {
+    expect(compactsFirst(send, { state: "idle", compacting: null })).toBe(true);
+  });
+  it("holds while compacting", () => {
+    expect(
+      compactsFirst(send, { state: "running", compacting: { since: 1 } })
+    ).toBe(true);
+  });
+  it("ends once compaction is done or was skipped", () => {
+    expect(compactsFirst(send, { state: "running", compacting: null })).toBe(
+      false
+    );
+  });
+  it("is not for normal or unaccepted sends", () => {
+    const chat = { state: "idle", compacting: null } as const;
+    expect(compactsFirst({ status: "accepted" }, chat)).toBe(false);
+    expect(compactsFirst({ ...send, status: "sending" }, chat)).toBe(false);
   });
 });

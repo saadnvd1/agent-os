@@ -21,6 +21,7 @@ import {
 } from "@/lib/chat/group";
 import type { ApprovalDecision, ChatItem } from "@/lib/chat/events";
 import { isFreshCommand, withFresh } from "@/lib/chat/commands";
+import { compactsFirst } from "@/lib/chat/pending";
 import { useFreshStart } from "@/data/sessions";
 import {
   escapeAction,
@@ -692,7 +693,7 @@ export function ChatPanel({
                         }}
                         pending={{
                           status: p.status,
-                          compacting: !!p.compact && !!compacting,
+                          compacting: compactsFirst(p, { state, compacting }),
                           error: p.error,
                           onRetry: () => retrySend(p.id),
                           onEdit: () => {
