@@ -93,3 +93,29 @@ describe("a sent message not in the chat yet", () => {
     expect(html).not.toContain("Not sent");
   });
 });
+
+describe("UserMessage code blocks", () => {
+  it("renders a fenced ts block with highlighted tokens, queued or sent", async () => {
+    const { PrismAsyncLight } = await import("react-syntax-highlighter");
+    const ts = (
+      await import("react-syntax-highlighter/dist/esm/languages/prism/typescript")
+    ).default;
+    await (
+      PrismAsyncLight as unknown as { preload: () => Promise<void> }
+    ).preload();
+    PrismAsyncLight.registerLanguage("typescript", ts);
+    const user = {
+      id: "u1",
+      kind: "user",
+      text: "try:\n\n```ts\nconst x: number = 1;\n```\n\nthanks",
+    } as never;
+    for (const pending of [undefined, { status: "sending" } as never]) {
+      const html = renderToStaticMarkup(
+        createElement(UserMessage, { item: user, pending })
+      );
+      expect(html).toMatch(/style="color:[^"]*">const<\/span>/);
+      expect(html).toContain("number");
+      expect(html).not.toContain("```");
+    }
+  });
+});

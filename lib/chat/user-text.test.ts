@@ -106,3 +106,13 @@ describe("splitProse", () => {
     expect(splitProse("plain")).toEqual([{ kind: "text", text: "plain" }]);
   });
 });
+
+describe("splitUserText spacing", () => {
+  it("drops the blank lines a block's own margin already covers", () => {
+    expect(splitUserText("a\n\n```ts\nx\n```\n\nb")).toEqual([
+      { kind: "text", text: "a" },
+      { kind: "code", code: "x", language: "ts" },
+      { kind: "text", text: "b" },
+    ]);
+  });
+});
