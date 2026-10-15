@@ -28,6 +28,7 @@ and check on all of it from your phone.
 - **Schedules and recipes.** Start work on a timer, or save a job that comes up again. [More](docs/guides/schedules.md)
 - **Plans in pieces and stacks.** A plan splits into several PRs only for a real reason; a board can run as stacked PRs. [More](docs/guides/tasks.md#plans-in-pieces)
 - **Machine load and status.** A load gauge, each session's share of CPU and memory, and Needs you, Working, In review and Done as it changes. [More](docs/guides/sessions.md)
+- **A health watcher.** Zero-token checks on the orchestrator's tick catch a red machine load, a held queue, a quiet background job, a restart loop, slow CI, a PR armed for hours and a piece started twice. Each trip wakes one short, tool-less Sonnet call that judges it and posts one line to the orchestrator; only a thing you alone can clear reaches your phone. Settings → Health lists what is open, the history, the notes on what normal looks like and the thresholds. Report only: it never acts. [More](docs/reference/health.md)
 - **Workspaces.** Group projects, finish work with Done, and get a log of every merged task. [More](docs/reference/workspaces.md)
 - **LumifyHub (optional).** Boards, cards and docs for a workspace, if you want them. [More](docs/lumifyhub.md)
 - **No approvals mode.** One switch in Settings that approves every ask, lets brakes and plan-only tasks through, and starts every agent with its permission prompts off; each approval it makes is logged. Off by default. [More](docs/reference/orchestrator.md#no-approvals-mode)

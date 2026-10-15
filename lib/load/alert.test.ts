@@ -75,9 +75,9 @@ vi.mock("../orchestrator/home", () => ({
 }));
 
 describe("raising the alert", () => {
-  it("goes to the phone and to every orchestrator that isn't archived", () => {
+  it("goes to every orchestrator that isn't archived, and not to the phone", () => {
     raiseAlert("Machine load red.");
-    expect(sent.phone).toEqual(["Machine load red."]);
+    expect(sent.phone).toEqual([]);
     expect(sent.to).toEqual(["live"]);
     // Shown in chat as a notice, not as Saad's message.
     expect(sent.origins[0]).toMatchObject({

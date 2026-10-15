@@ -15,6 +15,7 @@ export const SETTINGS_SECTIONS = [
   "recipes",
   "schedules",
   "audits",
+  "health",
   "setup",
   "updates",
   "experiments",

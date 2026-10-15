@@ -13,6 +13,8 @@ import { setStartGate } from "./lib/stacks/tick";
 import { stackStartGate } from "./lib/orchestrator/brakes";
 import { buildId } from "./lib/build";
 import { startOrchestratorWatcher } from "./lib/orchestrator/watcher";
+import { installErrorCounter } from "./lib/health/errors";
+import { recordBoot } from "./lib/health/boots";
 import { realDeps, schedulesEnabled, startScheduler } from "./lib/schedules";
 import { startSettling } from "./lib/recipes";
 import { startAutoArchive } from "./lib/done/auto-archive";
@@ -97,10 +99,19 @@ if (!demo) {
   installClaudeStatusHooks();
 }
 
+// Counts console.error from here on, for the health watcher's error check.
+installErrorCounter();
+
 const app = next({ dev, hostname, port });
 const handle = app.getRequestHandler();
 
 app.prepare().then(async () => {
+  // The health watcher counts restarts from this row.
+  try {
+    recordBoot();
+  } catch (error) {
+    console.error("Recording the boot failed:", error);
+  }
   // Before any request: merge approvals a restart cut off mid-merge go back.
   // Bookkeeping: a failure is logged and never stops the server starting.
   try {

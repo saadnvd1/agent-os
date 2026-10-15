@@ -21,6 +21,8 @@ import { raiseHeldAsks } from "./held-asks";
 import { rebaseConflicting } from "./rebase";
 import { wakeTasks } from "./pr-wake";
 import { awayTick } from "../away/run";
+import { healthTick } from "../health/tick";
+import { observeCi } from "../health/ci";
 
 // Asks that stopped needing Saad: their task or PR finished some other
 // way, or brakes lifted with nothing trying to start.
@@ -58,6 +60,11 @@ export async function diffWorkspace(
     now
   );
   mergePipeline(workspaceId, facts);
+  try {
+    observeCi(workspaceId, facts, now);
+  } catch (error) {
+    console.error("Health CI record:", error);
+  }
   const working =
     facts.some((f) => f.status === "running") ||
     stacks.some((s) => s.status === "running" || s.status === "landing") ||
@@ -114,6 +121,11 @@ async function tick(): Promise<void> {
       awayTick();
     } catch (error) {
       console.error("Away mode:", error);
+    }
+    try {
+      void healthTick();
+    } catch (error) {
+      console.error("Health tick:", error);
     }
     for (const orch of listOrchestrators()) {
       const workspaceId = orch.workspace_id;

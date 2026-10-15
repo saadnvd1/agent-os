@@ -190,18 +190,27 @@ export function queueEventOnce(
   key: string,
   subject: string | null,
   line: string,
-  now = Date.now()
+  now = Date.now(),
+  // Worth a message only alongside others, or after a long wait.
+  low = false
 ): boolean {
   return (
     db
       .prepare(
         `INSERT INTO orchestrator_events
            (workspace_id, key, subject, line, sticky, low, hits, created_at, delivered_at)
-         VALUES (?, ?, ?, ?, 1, 0, ?, ?, NULL)
+         VALUES (?, ?, ?, ?, 1, ?, ?, ?, NULL)
          ON CONFLICT(workspace_id, key) DO NOTHING`
       )
-      .run(workspaceId, `${ONCE}${key}`, subject, line, ARMED, iso(now))
-      .changes > 0
+      .run(
+        workspaceId,
+        `${ONCE}${key}`,
+        subject,
+        line,
+        low ? 1 : 0,
+        ARMED,
+        iso(now)
+      ).changes > 0
   );
 }
 

@@ -1,7 +1,8 @@
-// The one alert a sustained red load raises: to the phone, and to each
-// workspace orchestrator so it can tell its tasks to back off.
+// The one alert a sustained red load raises: to each workspace orchestrator
+// so it can tell its tasks to back off. It doesn't reach the phone: the
+// health watcher's load-red check does that, once, only if the load is
+// still red and a watcher finds the person has to act (lib/health).
 import { sendMessage } from "../bus";
-import { notifyPhone } from "../notify";
 import { listOrchestrators } from "../orchestrator/home";
 import type { LoadView } from "./monitor";
 
@@ -35,11 +36,6 @@ const BACK_OFF =
   "Ask your running tasks to use targeted tests and hold off on full suites, type checks and builds until it clears. Nothing has been stopped.";
 
 export function raiseAlert(text: string): void {
-  notifyPhone("load", text, {
-    category: "system",
-    key: `system:load:${Date.now()}`,
-    collapse: "system:load",
-  });
   for (const orch of listOrchestrators()) {
     if (orch.archived_at) continue;
     sendMessage({

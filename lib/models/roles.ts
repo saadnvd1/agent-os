@@ -14,6 +14,7 @@ export const MODEL_ROLES = [
   "scope",
   "interactive",
   "helper",
+  "watch",
 ] as const;
 
 export type ModelRole = (typeof MODEL_ROLES)[number];
@@ -41,6 +42,10 @@ export const ROLE_LABELS: Record<ModelRole, { label: string; hint: string }> = {
     label: "Chat & summary helpers",
     hint: "Titles, summaries and digests",
   },
+  watch: {
+    label: "Health watchers",
+    hint: "The short look at an anomaly the health checks raise",
+  },
 };
 
 export const ANTHROPIC = "anthropic";
@@ -57,6 +62,7 @@ export const DEFAULT_ROLE_MODELS: Record<ModelRole, string> = {
   scope: SONNET,
   interactive: OPUS,
   helper: HAIKU,
+  watch: SONNET,
 };
 
 // The roles that gate a task's merge: only Settings and its workspace pick

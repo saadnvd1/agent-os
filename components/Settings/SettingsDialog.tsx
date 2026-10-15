@@ -11,6 +11,7 @@ import {
   Clock,
   Cpu,
   GitMerge,
+  HeartPulse,
   LayoutGrid,
   Link2,
   ListChecks,
@@ -30,6 +31,7 @@ import {
 } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
 import { AuditsPanel } from "@/components/Audits/AuditsPanel";
+import { HealthPanel } from "@/components/Health/HealthPanel";
 import { DevicesPanel } from "@/components/Devices";
 import { GlobalMergeSection } from "@/components/Merge/GlobalMergeSection";
 import { ModelsSection } from "@/components/Models/ModelsSection";
@@ -105,6 +107,11 @@ export const SECTION_INFO: Record<
     hint: "Where sessions spent tokens and repeated work",
     icon: ClipboardList,
   },
+  health: {
+    label: "Health",
+    hint: "What the watchers caught, what normal looks like, thresholds",
+    icon: HeartPulse,
+  },
   setup: {
     label: "Setup & health",
     hint: "What this machine has, agents, first-run setup",
@@ -150,6 +157,8 @@ function SectionBody({
       return <SchedulesPanel />;
     case "audits":
       return <AuditsPanel />;
+    case "health":
+      return <HealthPanel />;
     case "setup":
       return <SetupSection />;
     case "updates":
