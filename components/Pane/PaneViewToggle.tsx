@@ -22,6 +22,8 @@ interface PaneViewToggleProps {
   isChat?: boolean;
   viewMode: ViewMode;
   isLocalSession: boolean;
+  // Local, and the folder is not known to be outside a git repository.
+  showGit: boolean;
   isConductor: boolean;
   // The task merged and has a log.
   hasLog?: boolean;
@@ -80,6 +82,7 @@ export function PaneViewToggle({
   isChat,
   viewMode,
   isLocalSession,
+  showGit,
   isConductor,
   hasLog,
   workerCount,
@@ -107,13 +110,15 @@ export function PaneViewToggle({
           >
             <FolderOpen className="h-3.5 w-3.5" />
           </ToggleButton>
-          <ToggleButton
-            label="Git"
-            active={gitDrawerOpen}
-            onClick={onGitDrawerToggle}
-          >
-            <GitBranch className="h-3.5 w-3.5" />
-          </ToggleButton>
+          {showGit && (
+            <ToggleButton
+              label="Git"
+              active={gitDrawerOpen}
+              onClick={onGitDrawerToggle}
+            >
+              <GitBranch className="h-3.5 w-3.5" />
+            </ToggleButton>
+          )}
           <ToggleButton
             label="Shell"
             active={shellDrawerOpen}

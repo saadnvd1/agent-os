@@ -41,6 +41,7 @@ interface DesktopTabBarProps {
   canClose: boolean;
   hasAttachedTmux: boolean;
   gitDrawerOpen: boolean;
+  showGit: boolean;
   shellDrawerOpen: boolean;
   onTabSwitch: (tabId: string) => void;
   onTabClose: (tabId: string) => void;
@@ -71,6 +72,7 @@ export function DesktopTabBar({
   canClose,
   hasAttachedTmux,
   gitDrawerOpen,
+  showGit,
   shellDrawerOpen,
   onTabSwitch,
   onTabClose,
@@ -179,6 +181,7 @@ export function DesktopTabBar({
             isConductor={isConductor}
             hasLog={hasLog}
             workerCount={workerCount}
+            showGit={showGit}
             gitDrawerOpen={gitDrawerOpen}
             shellDrawerOpen={shellDrawerOpen}
             onViewModeChange={onViewModeChange}

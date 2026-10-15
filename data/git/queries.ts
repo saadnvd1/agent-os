@@ -43,13 +43,26 @@ async function fetchGitCheck(path: string): Promise<GitCheck> {
   return res.json();
 }
 
-export function useGitCheck(path: string) {
+export function useGitCheck(
+  path: string,
+  options?: { enabled?: boolean; staleTime?: number }
+) {
   return useQuery({
     queryKey: gitKeys.check(path),
     queryFn: () => fetchGitCheck(path),
-    staleTime: 10000,
-    enabled: !!path && path !== "~",
+    staleTime: options?.staleTime ?? 10000,
+    enabled: !!path && path !== "~" && (options?.enabled ?? true),
   });
+}
+
+// Whether a folder is a git repository; undefined while it isn't known
+// (loading, disabled, or the check failed).
+export function useIsGitRepo(
+  path: string | undefined,
+  enabled: boolean
+): boolean | undefined {
+  const { data } = useGitCheck(path ?? "", { enabled, staleTime: 60000 });
+  return typeof data?.isGitRepo === "boolean" ? data.isGitRepo : undefined;
 }
 
 // --- Git Status ---
