@@ -40,6 +40,30 @@ describe("setupWorktree with agentos.json", () => {
     expect(fs.existsSync(path.join(worktree, ".env"))).toBe(false);
   });
 
+  it("copies a gitignored CLAUDE.md into the worktree, never over a tracked one", async () => {
+    const { source, worktree } = checkout(undefined, {
+      ".env.local": "e",
+      "CLAUDE.md": "private notes",
+    });
+    const result = await setupWorktree({
+      worktreePath: worktree,
+      sourcePath: source,
+      skipInstall: true,
+    });
+    expect(result.envFilesCopied).toEqual([".env.local", "CLAUDE.md"]);
+    expect(read(worktree, "CLAUDE.md")).toBe("private notes");
+
+    const tracked = checkout(undefined, { "CLAUDE.md": "main copy" });
+    fs.writeFileSync(path.join(tracked.worktree, "CLAUDE.md"), "committed");
+    const again = await setupWorktree({
+      worktreePath: tracked.worktree,
+      sourcePath: tracked.source,
+      skipInstall: true,
+    });
+    expect(again.envFilesCopied).toEqual([]);
+    expect(read(tracked.worktree, "CLAUDE.md")).toBe("committed");
+  });
+
   it("seeds build caches even when setup commands replace the install", async () => {
     const { source, worktree } = checkout(
       { setup: ["true"], caches: ["*.tsbuildinfo", ".next/cache"] },

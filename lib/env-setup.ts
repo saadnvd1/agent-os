@@ -40,16 +40,20 @@ export interface SetupResult {
   durationMs: number;
 }
 
+// A gitignored CLAUDE.md holds the project's private notes; a tracked one is
+// already in the worktree and is left alone.
+const PRIVATE_NOTES = "CLAUDE.md";
+
 /**
- * Find env files to copy (excludes .env.example)
+ * Find env files to copy (excludes .env.example), and the private notes
  */
 export function findEnvFiles(projectPath: string): string[] {
   try {
     const files = fs.readdirSync(projectPath);
     return files.filter(
       (f) =>
-        f.startsWith(".env") &&
-        !f.endsWith(".example") &&
+        ((f.startsWith(".env") && !f.endsWith(".example")) ||
+          f === PRIVATE_NOTES) &&
         fs.statSync(path.join(projectPath, f)).isFile()
     );
   } catch {
@@ -58,7 +62,7 @@ export function findEnvFiles(projectPath: string): string[] {
 }
 
 /**
- * Copy env files from source to worktree
+ * Copy env files (and the private CLAUDE.md) from source to worktree
  */
 export async function copyEnvFiles(
   sourcePath: string,
@@ -71,6 +75,7 @@ export async function copyEnvFiles(
     try {
       const src = path.join(sourcePath, file);
       const dest = path.join(worktreePath, file);
+      if (file === PRIVATE_NOTES && fs.existsSync(dest)) continue;
       await fs.promises.copyFile(src, dest);
       copied.push(file);
     } catch (error) {
