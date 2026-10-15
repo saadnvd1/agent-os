@@ -11,6 +11,7 @@ import {
 import type { MachineGroup } from "@/lib/sidebar/machines";
 import { sidebarUiActions } from "@/stores/sidebarUi";
 import { cn } from "@/lib/utils";
+import { usePendingCardSessions } from "@/data/learning-cards";
 import { SessionRow } from "./SessionRow";
 import { OrchestratorPinRow, OrchestratorStartRow } from "./OrchestratorPinRow";
 import { QueuedRow } from "./QueuedRow";
@@ -125,7 +126,14 @@ export function SessionShelves({
 }) {
   const shown = shelves.done.slice(0, doneLimit(donePages));
   const hidden = shelves.done.length - shown.length;
-  const summary = doneSummary(shelves.done).text;
+  const pendingCards = usePendingCardSessions();
+  const doneCards = shelves.done.reduce(
+    (n, r) => n + (pendingCards.get(r.session.id) ?? 0),
+    0
+  );
+  const summary =
+    doneSummary(shelves.done).text +
+    (doneCards ? ` · ${doneCards} card${doneCards > 1 ? "s" : ""}` : "");
   // Live work above, what's resting below a hairline.
   const live =
     shelves.orchestrators.length +

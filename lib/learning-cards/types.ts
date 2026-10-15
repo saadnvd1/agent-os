@@ -77,3 +77,26 @@ export interface Pair {
   before: string;
   after: string;
 }
+
+// A pending card as a list shows it, without the whole payload.
+export interface PendingCardView {
+  id: number;
+  sessionId: string;
+  sessionName: string;
+  workspaceId: string | null;
+  kind: CardKind;
+  // One line: the lesson, or the recipe's summary.
+  title: string;
+  destination: Destination | null;
+  createdAt: number;
+}
+
+const TITLE_MAX = 140;
+
+export function cardTitle(c: Pick<Card, "kind" | "payload">): string {
+  const p = c.payload as Partial<RecipePayload & LessonPayload>;
+  const raw =
+    c.kind === "lesson" ? p.lesson : p.summary || p.brief?.split("\n")[0];
+  const line = (raw ?? "").replace(/\s+/g, " ").trim();
+  return line.length > TITLE_MAX ? `${line.slice(0, TITLE_MAX)}…` : line;
+}

@@ -4,7 +4,7 @@
 import os from "os";
 import { runClaude, type ClaudeRunner } from "../orchestrator/claude-cli";
 import { getOrchestrator } from "../orchestrator/home";
-import { addNote } from "../orchestrator/notes";
+import { queueEventOnce } from "../orchestrator/events";
 import { untrusted, UNTRUSTED_RULE } from "../orchestrator/untrusted";
 import { isRemoteHost } from "../hosts";
 import { getProject } from "../projects";
@@ -17,7 +17,13 @@ import { readSession } from "./input";
 import { correctionPairs } from "./pairs";
 import { recipeSignals } from "./signals";
 import { insertCard } from "./store";
-import type { Destination, Pair, SessionInput } from "./types";
+import {
+  cardTitle,
+  type Card,
+  type Destination,
+  type Pair,
+  type SessionInput,
+} from "./types";
 
 const ID = "learning-cards" as const;
 const LESSON_MAX = 200;
@@ -136,7 +142,7 @@ export async function analyzeSession(
       detail: `signals: ${recipe.signals.join(",") || "none"}; pairs: ${pairs.length}`,
     });
 
-    let made = 0;
+    const made: Card[] = [];
     if (recipe.hit && input.workspaceId) {
       try {
         recipePrefill(sessionId);
@@ -153,15 +159,15 @@ export async function analyzeSession(
         if (
           (out as { repeatable?: unknown } | null)?.repeatable === true &&
           draft
-        )
-          made += insertCard({
+        ) {
+          const card = insertCard({
             sessionId,
             workspaceId: input.workspaceId,
             kind: "recipe",
             payload: { signals: recipe.signals, ...draft },
-          })
-            ? 1
-            : 0;
+          });
+          if (card) made.push(card);
+        }
       } catch (error) {
         console.warn("[learning-cards] recipe draft:", error);
       }
@@ -191,8 +197,8 @@ export async function analyzeSession(
           runner
         )) as Verdict | null;
         const ok = checkLesson(out, where);
-        if (ok)
-          made += insertCard({
+        if (ok) {
+          const card = insertCard({
             sessionId,
             workspaceId: input.workspaceId,
             kind: "lesson",
@@ -205,23 +211,24 @@ export async function analyzeSession(
               projectName: where.project?.name,
               pairs: pairs.length,
             },
-          })
-            ? 1
-            : 0;
+          });
+          if (card) made.push(card);
+        }
       } catch (error) {
         console.warn("[learning-cards] lesson:", error);
       }
     }
 
-    if (made && input.workspaceId && getOrchestrator(input.workspaceId))
-      addNote(
-        input.workspaceId,
-        `Learning card on ${input.name}: ${
-          made > 1
-            ? "save as a recipe and keep a lesson"
-            : "a suggestion to save or keep"
-        }? Open the session to decide.`
-      );
+    // One line per card, once: the key is the card, so a rerun or a restart
+    // tells the orchestrator nothing new.
+    if (input.workspaceId && getOrchestrator(input.workspaceId))
+      for (const card of made)
+        queueEventOnce(
+          input.workspaceId,
+          `learning-card:${card.id}`,
+          sessionId,
+          `Learning card on "${input.name.replace(/\s+/g, " ")}", waiting on Saad's Needs-you strip: ${untrusted("learning card", cardTitle(card))}`
+        );
   } finally {
     inFlight.delete(sessionId);
   }

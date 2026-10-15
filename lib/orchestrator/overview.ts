@@ -11,6 +11,7 @@ import { askBinding, openAsks, PRESENCE_KINDS } from "./asks";
 import type { OrchestratorOverview } from "./ask-view";
 import { getOrchestrator } from "./home";
 import { resolveStaleAsks } from "./ask-settle";
+import { pendingCards } from "../learning-cards";
 import { dismissedKeys, openQuestions } from "./questions";
 
 export type { AskView, OrchestratorOverview } from "./ask-view";
@@ -33,6 +34,7 @@ function inReview(workspaceId: string): number {
 }
 
 export function orchestratorOverview(): OrchestratorOverview[] {
+  const cards = pendingCards();
   return listWorkspaces().map((w) => {
     // Asks about work that finished elsewhere never reach Saad's list.
     resolveStaleAsks(w.id);
@@ -60,6 +62,7 @@ export function orchestratorOverview(): OrchestratorOverview[] {
       }),
       questions: openQuestions(w.id),
       dismissed: dismissedKeys(w.id),
+      cards: cards.filter((c) => c.workspaceId === w.id),
     };
   });
 }

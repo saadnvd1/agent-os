@@ -21,6 +21,28 @@ export function getCard(id: number): Card | null {
   return row ? toCard(row) : null;
 }
 
+export type PendingRow = Card & { session_name: string; ws: string | null };
+
+// Every pending card of a session that still exists, newest first.
+export function listPending(): PendingRow[] {
+  const rows = db
+    .prepare(
+      `SELECT lc.*, s.name AS session_name,
+              COALESCE(lc.workspace_id, s.workspace_id, p.workspace_id) AS ws
+       FROM learning_cards lc
+       JOIN sessions s ON s.id = lc.session_id
+       LEFT JOIN projects p ON p.id = s.project_id
+       WHERE lc.status = 'pending'
+       ORDER BY lc.created_at DESC, lc.id DESC`
+    )
+    .all() as (Row & { session_name: string; ws: string | null })[];
+  return rows.map((r) => ({
+    ...toCard(r),
+    session_name: r.session_name,
+    ws: r.ws,
+  }));
+}
+
 export function listCards(sessionId: string, status?: CardStatus): Card[] {
   const rows = db
     .prepare(
