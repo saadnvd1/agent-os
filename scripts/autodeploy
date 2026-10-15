@@ -1,8 +1,10 @@
 #!/usr/bin/env bash
 # Run every minute by serviceman on Saad's Mac: when origin/main moves,
 # redeploy the live instance and publish the same commit to npm. Runs in the
-# background. Chat turns live in workers and outlive the restart; reviews
-# and task setups don't, so the restart waits up to 10 minutes for them.
+# background. Chat turns (tasks' and orchestrators') live in workers and
+# outlive the restart, and an orchestrator's tool calls wait for the server to
+# return. Reviews and task setups are server jobs that run again after a
+# restart, so it waits up to 10 minutes for them rather than pay twice.
 #   sm add agentos-autodeploy "scripts/autodeploy" --cron "* * * * *"
 # Restarts are spaced AGENTOS_MIN_GAP seconds apart (an hour; 0 turns it
 # off): a head that lands inside the gap waits and is deployed, whatever it

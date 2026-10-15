@@ -5,7 +5,8 @@
  * every 15s while anything in the workspace is working, every 60s when not.
  */
 
-import { chatState, sendChat } from "../chat/runner";
+import { chatState, chatStateNow, sendChat } from "../chat/runner";
+import type { ChatState } from "../chat/events";
 import { getWorkspace } from "../workspaces";
 import { conditionsFor, recentlyMessaged, stackFacts } from "./conditions";
 import { deliverEvents } from "./deliver";
@@ -113,6 +114,18 @@ export function nextDiffAt(
   return Math.min(now + (working ? DIFF_BUSY_MS : DIFF_IDLE_MS), ...settles);
 }
 
+// Right after a restart nothing is attached yet, though the orchestrator's
+// worker may still be mid-turn: ask the worker, and count one that can't
+// be reached as busy for this tick.
+export async function deliveryTurn(
+  orchestratorId: string
+): Promise<ChatState | null> {
+  return (
+    chatState(orchestratorId) ??
+    (await chatStateNow(orchestratorId).catch(() => "running" as const))
+  );
+}
+
 async function tick(): Promise<void> {
   if (busy) return;
   busy = true;
@@ -136,7 +149,7 @@ async function tick(): Promise<void> {
         await deliverEvents({
           workspaceId,
           orchestratorId: orch.id,
-          turn: chatState(orch.id),
+          turn: await deliveryTurn(orch.id),
           send: sendChat,
         });
       } catch (error) {

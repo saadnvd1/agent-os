@@ -445,3 +445,33 @@ describe("listFiles", () => {
       }
     );
 });
+
+describe("an orchestrator mid-turn when AgentOS restarts", () => {
+  it("is never stopped, and events wait while it runs", async () => {
+    db.prepare(`DELETE FROM chat_queue`).run();
+    const id = session();
+    db.prepare(`UPDATE sessions SET role = 'orchestrator' WHERE id = ?`).run(
+      id
+    );
+    workers.running = [id];
+    workers.build = "an-older-build";
+    workers.state = "running";
+    const { deliveryTurn } = await import("../orchestrator/watcher");
+    try {
+      // Not attached yet: the watcher still sees a turn running.
+      expect(await deliveryTurn(id)).toBe("running");
+      await reattachChats();
+      const worker = workers.started.filter((w) => w.sessionId === id)[0];
+      const types = () =>
+        worker.commands.map((c) => (c as { type: string }).type);
+      for (const stop of ["interrupt", "send_now", "close"])
+        expect(types()).not.toContain(stop);
+      expect(await deliveryTurn(id)).toBe("running");
+    } finally {
+      workers.running = [];
+      workers.build = undefined;
+      workers.state = "idle";
+      registry.live.delete(id);
+    }
+  });
+});

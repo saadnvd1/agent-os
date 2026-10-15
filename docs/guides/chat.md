@@ -34,7 +34,10 @@ worker resumes the same conversation with this build's tools and sends them.
 An orchestrator fed events mid-turn picks up new tools this way with nobody
 restarting it. A turn whose worker did go away mid-step is resumed
 once, with a note telling the agent to check what it was doing, and a task's
-orchestrator hears about it. History is kept in AgentOS.
+orchestrator hears about it. An orchestrator's AgentOS tools are calls to the
+server, so a call made while it restarts waits (up to two minutes) for it to
+return; one the restart cut off after it was sent says so rather than repeat
+itself. History is kept in AgentOS.
 
 The composer formats markdown as you type: `code`, **bold**, _italic_, lists,
 `- [ ]` task lists, and ` ```ts ` fenced blocks with syntax highlighting.

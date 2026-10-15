@@ -2,7 +2,8 @@
  * The orchestrator chat's tools, as an in-process MCP server in its chat
  * worker. Each one asks the AgentOS server, which holds the live state
  * (chat activity, status, tasks) and enforces the workspace scope, brakes
- * and gates, and returns its text as is.
+ * and gates, and returns its text as is. While the server restarts a call
+ * waits for it (httpToolCaller).
  */
 
 import { createHash } from "crypto";
@@ -17,27 +18,90 @@ import { TOOL_SHAPES, TOOLS, type ToolName } from "./tool-schemas";
 
 type CallToolResult = Awaited<ReturnType<Parameters<typeof tool>[3]>>;
 
-export type ToolCaller = (tool: ToolName, args: object) => Promise<string>;
+export type ToolCaller = (
+  tool: ToolName,
+  args: object,
+  signal?: AbortSignal
+) => Promise<string>;
+
+// How long a call waits for a restarting server before it gives up. A
+// redeploy's server is back in well under this.
+export const RESTART_WAIT_MS = 120_000;
+const RETRY_FIRST_MS = 250;
+const RETRY_MAX_MS = 2000;
+
+const refused = (error: unknown) =>
+  (error as { cause?: { code?: string } } | null)?.cause?.code ===
+  "ECONNREFUSED";
+
+const sleep = (ms: number, signal?: AbortSignal) =>
+  new Promise<void>((resolve, reject) => {
+    if (signal?.aborted) return reject(signal.reason);
+    const timer = setTimeout(() => {
+      signal?.removeEventListener("abort", onAbort);
+      resolve();
+    }, ms);
+    const onAbort = () => {
+      clearTimeout(timer);
+      reject(signal?.reason);
+    };
+    signal?.addEventListener("abort", onAbort, { once: true });
+  });
 
 export const TOKEN_HEADER = "x-agentos-orchestrator";
 
+// A server that is down refused the connection and never saw the request,
+// so the call waits for it and goes again. One the restart cut off after it
+// was sent isn't repeated (start_task, send and the rest aren't safe to):
+// the agent is told to check first.
 export function httpToolCaller(
   baseUrl: string,
   workspaceId: string,
-  token: string
+  token: string,
+  waitMs = RESTART_WAIT_MS
 ): ToolCaller {
-  return async (name, args) => {
-    const res = await fetch(
-      `${baseUrl}/api/workspaces/${encodeURIComponent(workspaceId)}/orchestrator/tools`,
-      {
-        method: "POST",
-        headers: { "Content-Type": "application/json", [TOKEN_HEADER]: token },
-        body: JSON.stringify({ tool: name, args }),
+  const url = `${baseUrl}/api/workspaces/${encodeURIComponent(workspaceId)}/orchestrator/tools`;
+  return async (name, args, signal) => {
+    const deadline = Date.now() + waitMs;
+    let delay = RETRY_FIRST_MS;
+    let waiting = false;
+    for (;;) {
+      let res: Response;
+      try {
+        res = await fetch(url, {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            [TOKEN_HEADER]: token,
+          },
+          body: JSON.stringify({ tool: name, args }),
+          signal,
+        });
+      } catch (error) {
+        if (signal?.aborted) throw error;
+        if (!refused(error))
+          throw new Error(
+            `AgentOS restarted while ${name} ran, so it may or may not have taken effect. Check (sessions, read) before doing it again.`
+          );
+        if (Date.now() + delay > deadline)
+          throw new Error(
+            `AgentOS is restarting and didn't come back in time; try ${name} again shortly.`
+          );
+        if (!waiting)
+          console.error(`${name}: AgentOS is down; waiting for it to return`);
+        waiting = true;
+        await sleep(delay, signal);
+        delay = Math.min(delay * 2, RETRY_MAX_MS);
+        continue;
       }
-    );
-    const text = await res.text();
-    if (!res.ok) throw new Error(text || `AgentOS answered ${res.status}`);
-    return text;
+      const text = await res.text().catch(() => {
+        throw new Error(
+          `AgentOS restarted while ${name} ran, so it may or may not have taken effect. Check (sessions, read) before doing it again.`
+        );
+      });
+      if (!res.ok) throw new Error(text || `AgentOS answered ${res.status}`);
+      return text;
+    }
   };
 }
 
@@ -138,8 +202,12 @@ export function orchestratorTools(
     name: ORCHESTRATOR_SERVER,
     version: "1.0.0",
     tools: TOOLS.map((name) =>
-      tool(name, DESCRIPTIONS[name], TOOL_SHAPES[name], (args: object) =>
-        answer(call(name, args))
+      tool(
+        name,
+        DESCRIPTIONS[name],
+        TOOL_SHAPES[name],
+        (args: object, extra: unknown) =>
+          answer(call(name, args, (extra as { signal?: AbortSignal })?.signal))
       )
     ),
   });

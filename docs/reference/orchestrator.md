@@ -26,7 +26,7 @@ it may do on its own, and the lines that always come back to you as asks.
   workspace, or the project already at that path moves in from no workspace;
   folders that hold secrets and projects of another workspace are refused),
   `note`,
-  `rule_add`, `rule_remove`, `review`, `sign_off`, `arm`, `disarm`, `remind_me`, `reminders`, `cancel_reminder`, `ask_saad`, `question` and `resolve_question`. All are served in-process to its chat, refuse
+  `rule_add`, `rule_remove`, `review`, `sign_off`, `arm`, `disarm`, `remind_me`, `reminders`, `cancel_reminder`, `ask_saad`, `question` and `resolve_question`. All are served in-process to its chat (a call made while AgentOS restarts waits up to two minutes for it; one cut off mid-flight reports that and isn't repeated), refuse
   any target outside its workspace, and validate their arguments. The one
   exception is other orchestrators: `orchestrators` lists every workspace and
   whether it has one, and `message_orchestrator` messages another workspace's
