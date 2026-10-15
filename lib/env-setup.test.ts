@@ -40,6 +40,79 @@ describe("setupWorktree with agentos.json", () => {
     expect(fs.existsSync(path.join(worktree, ".env"))).toBe(false);
   });
 
+  describe("private CLAUDE.md", () => {
+    const git = (cwd: string, ...args: string[]) =>
+      execFileSync("git", args, { cwd, stdio: "pipe" });
+    function repo(gitignore: string, tracked = false) {
+      const { source, worktree } = checkout(undefined, {
+        "CLAUDE.md": "private notes",
+      });
+      git(worktree, "init", "-q");
+      git(worktree, "config", "user.email", "t@example.com");
+      git(worktree, "config", "user.name", "t");
+      fs.writeFileSync(path.join(worktree, ".gitignore"), gitignore);
+      if (tracked) {
+        fs.writeFileSync(path.join(worktree, "CLAUDE.md"), "committed");
+        git(worktree, "add", "-f", "CLAUDE.md");
+      }
+      return { source, worktree };
+    }
+    const run = (source: string, worktree: string) =>
+      setupWorktree({
+        worktreePath: worktree,
+        sourcePath: source,
+        skipInstall: true,
+      });
+
+    it("is copied when the worktree ignores it", async () => {
+      const { source, worktree } = repo("CLAUDE.md\n");
+      expect((await run(source, worktree)).envFilesCopied).toEqual([
+        "CLAUDE.md",
+      ]);
+      expect(read(worktree, "CLAUDE.md")).toBe("private notes");
+    });
+
+    it("is not copied over a tracked one", async () => {
+      const { source, worktree } = repo("CLAUDE.md\n", true);
+      expect((await run(source, worktree)).envFilesCopied).toEqual([]);
+      expect(read(worktree, "CLAUDE.md")).toBe("committed");
+    });
+
+    it("is not copied when it would be untracked but not ignored", async () => {
+      const { source, worktree } = repo("");
+      expect((await run(source, worktree)).envFilesCopied).toEqual([]);
+      expect(fs.existsSync(path.join(worktree, "CLAUDE.md"))).toBe(false);
+    });
+  });
+
+  it("never writes through a symlink at an env file's place", async () => {
+    const { source, worktree } = checkout(undefined, { ".env": "secret" });
+    const outside = path.join(tmp("aos-out-"), "target");
+    fs.symlinkSync(outside, path.join(worktree, ".env"));
+    await setupWorktree({
+      worktreePath: worktree,
+      sourcePath: source,
+      skipInstall: true,
+    });
+    expect(fs.existsSync(outside)).toBe(false);
+    expect(fs.lstatSync(path.join(worktree, ".env")).isSymbolicLink()).toBe(
+      false
+    );
+    expect(read(worktree, ".env")).toBe("secret");
+  });
+
+  it("leaves a dangling symlink at CLAUDE.md alone", async () => {
+    const { source, worktree } = checkout(undefined, { "CLAUDE.md": "n" });
+    const outside = path.join(tmp("aos-out-"), "target");
+    fs.symlinkSync(outside, path.join(worktree, "CLAUDE.md"));
+    await setupWorktree({
+      worktreePath: worktree,
+      sourcePath: source,
+      skipInstall: true,
+    });
+    expect(fs.existsSync(outside)).toBe(false);
+  });
+
   it("seeds build caches even when setup commands replace the install", async () => {
     const { source, worktree } = checkout(
       { setup: ["true"], caches: ["*.tsbuildinfo", ".next/cache"] },
