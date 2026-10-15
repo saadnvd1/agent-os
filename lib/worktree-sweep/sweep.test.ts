@@ -12,7 +12,7 @@ vi.mock("@/lib/worktrees", async (importOriginal) => ({
 const { db } = await import("@/lib/db");
 const { createProject } = await import("@/lib/projects");
 const { seedSession } = await import("@/lib/orchestrator/testing");
-const { setTask } = await import("@/lib/db/session-parts");
+const { setTask, updateSessionRow } = await import("@/lib/db/session-parts");
 const { sweep } = await import("./runSweep");
 const { recentRuns, sweptAt } = await import("./store");
 const { setGlobalSweepDays, setProjectSweepDays } = await import("./settings");
@@ -64,18 +64,15 @@ function setup() {
       merged_at: task === "merged" ? when : null,
       task_ended_at: task && task !== "merged" ? when : null,
     });
-    db.prepare(
-      `UPDATE sessions SET worktree_path = ?, working_directory = ?, base_branch = 'main',
-         updated_at = ?, archived_at = ?, pr_status = ?, pinned = ? WHERE id = ?`
-    ).run(
-      wt.dir,
-      wt.dir,
-      when,
-      opts.archived ? when : null,
-      opts.prStatus ?? null,
-      opts.pinned ? 1 : 0,
-      id
-    );
+    updateSessionRow(db, id, {
+      worktree_path: wt.dir,
+      working_directory: wt.dir,
+      base_branch: "main",
+      updated_at: when,
+      archived_at: opts.archived ? when : null,
+      pr_status: opts.prStatus ?? null,
+      pinned: opts.pinned ? 1 : 0,
+    });
     return { id, branch, dir: wt.dir };
   }
 
@@ -285,9 +282,7 @@ describe("sweeping settled sessions", () => {
     const t = setup();
     const s = t.session();
     const head = commitFile(s.dir, "squashed.txt", "x\n");
-    db.prepare(
-      `UPDATE sessions SET pr_number = 5, pr_status = 'merged' WHERE id = ?`
-    ).run(s.id);
+    updateSessionRow(db, s.id, { pr_number: 5, pr_status: "merged" });
     const deps = { ...t.deps(), prHead: async () => head };
     const { summary } = await sweep({}, deps);
     expect(summary.removed.map((x) => x.path)).toEqual([s.dir]);
