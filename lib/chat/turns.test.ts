@@ -2,7 +2,12 @@ import { describe, expect, it } from "vitest";
 import type { ChatItem, ChatOrigin } from "./events";
 import { groupTimeline, sameBlock } from "./group";
 import { locate } from "./find";
-import { activityOrigin, eventTurnAt, plainSummary } from "./turns";
+import {
+  activityOrigin,
+  eventTurnAt,
+  plainSummary,
+  questionSource,
+} from "./turns";
 
 type UserItem = Extract<ChatItem, { kind: "user" }>;
 
@@ -127,19 +132,23 @@ describe("eventTurnAt", () => {
     expect(eventTurnAt([event("e1"), error], 0)).toBeNull();
   });
 
-  it("flags a turn that asked a question", () => {
-    const q: ChatItem = {
-      id: "q",
-      kind: "tool",
-      name: "mcp__orchestrator__question",
-      title: "question",
-      input: {},
-      status: "done",
-      createdAt: 0,
-    };
-    expect(eventTurnAt([event("e1"), q, end("t")], 0)!.turn.hasQuestion).toBe(
-      true
-    );
+  it("never folds a turn that asked a question or an ask", () => {
+    for (const name of ["mcp__orchestrator__question", "ask_saad"]) {
+      const q: ChatItem = {
+        id: "q",
+        kind: "tool",
+        name,
+        title: "q",
+        input: {},
+        status: "done",
+        createdAt: 0,
+      };
+      expect(eventTurnAt([event("e1"), q, end("t")], 0)).toBeNull();
+      const blocks = groupTimeline([event("e1"), reply("a"), q, end("t")], {
+        foldEvents: true,
+      });
+      expect(blocks.some((b) => b.type === "events")).toBe(false);
+    }
   });
 });
 
@@ -201,5 +210,125 @@ describe("groupTimeline with foldEvents", () => {
     const where = locate(items, "a2", { foldEvents: true })!;
     expect(where.block).toBe("ev-e1");
     expect(where.open).toEqual(["events:ev-e1", "eventturn:e2"]);
+  });
+});
+
+describe("an event that arrives while a turn runs", () => {
+  const long = "I found a bigger problem first.\n\n1. A\n2. B\n\nPick one.";
+  const incident = (midTurn: boolean): ChatItem[] => [
+    user("ask", { text: "what is wrong?" }),
+    reply("answer", long),
+    {
+      ...event("load", { kind: "system", label: "Load monitor" }),
+      ...(midTurn ? { midTurn: true as const } : {}),
+    },
+    end("t1"),
+    reply("loadReply", "Told the tasks to hold off."),
+    end("t2"),
+  ];
+
+  for (const midTurn of [true, false])
+    it(`keeps the reader's reply whole and folds the event's own (midTurn ${midTurn})`, () => {
+      const blocks = groupTimeline(incident(midTurn), { foldEvents: true });
+      expect(blocks.map((b) => b.type)).toEqual([
+        "item",
+        "item",
+        "item",
+        "events",
+      ]);
+      expect(blocks[1]).toMatchObject({ item: { id: "answer" } });
+      const folded = blocks[3];
+      if (folded.type !== "events") throw new Error("expected events");
+      expect(folded.turns).toHaveLength(1);
+      expect(folded.turns[0].id).toBe("load");
+      expect(folded.turns[0].summary).toBe("Told the tasks to hold off.");
+      expect(folded.turns[0].replies.map((i) => i.id)).toEqual([
+        "loadReply",
+        "t2",
+      ]);
+    });
+
+  it("shows a still-running turn whole, with the event after it", () => {
+    const items = incident(true).slice(0, 3);
+    const blocks = groupTimeline(items, { foldEvents: true });
+    expect(blocks.map((b) => b.type)).toEqual(["item", "item", "events"]);
+  });
+
+  it("finds the reader's reply as a plain message", () => {
+    const where = locate(incident(true), "answer", { foldEvents: true });
+    expect(where?.open).toEqual([]);
+  });
+
+  it("keeps an event's turn whole when another event lands in it", () => {
+    const items = [
+      event("e1"),
+      reply("a1"),
+      event("e2", { label: "Two" }),
+      reply("a1b"),
+      end("t1"),
+      reply("a2"),
+      end("t2"),
+    ];
+    const [block] = groupTimeline(items, { foldEvents: true });
+    if (block.type !== "events") throw new Error("expected events");
+    expect(block.turns.map((t) => [t.id, t.replies.map((i) => i.id)])).toEqual([
+      ["e1", ["a1", "a1b", "t1"]],
+      ["e2", ["a2", "t2"]],
+    ]);
+  });
+});
+
+describe("questionSource", () => {
+  const q = (text: string): ChatItem => ({
+    id: "q",
+    kind: "tool",
+    name: "mcp__orchestrator__question",
+    title: "question",
+    input: { text },
+    status: "done",
+    createdAt: 0,
+  });
+  it("is the assistant message the question was asked in", () => {
+    expect(
+      questionSource([user("u"), reply("a"), q("Which?"), end("t")], "Which?")
+    ).toBe("a");
+  });
+  it("is the call itself without words, and null without a match", () => {
+    expect(questionSource([user("u"), q("Which?")], "Which?")).toBe("q");
+    expect(questionSource([user("u"), reply("a")], "Which?")).toBeNull();
+  });
+  it("does not reach into an earlier turn", () => {
+    expect(
+      questionSource([reply("old"), end("t0"), q("Which?")], "Which?")
+    ).toBe("q");
+  });
+});
+
+describe("events after a cut-off turn", () => {
+  it("each folds with its own reply, however the earlier turn ended", () => {
+    const sent = (id: string) => ({ ...event(id), midTurn: false });
+    const items: ChatItem[] = [
+      user("u", { midTurn: false }),
+      reply("a1"),
+      sent("R"),
+      reply("r1"),
+      end("end1"),
+      sent("E2"),
+      reply("r2"),
+      end("end2"),
+      sent("E3"),
+      reply("r3"),
+      end("end3"),
+    ];
+    const blocks = groupTimeline(items, { foldEvents: true });
+    const events = blocks.find((b) => b.type === "events");
+    if (events?.type !== "events") throw new Error("expected events");
+    expect(events.turns.map((t) => [t.id, t.replies.map((i) => i.id)])).toEqual(
+      [
+        ["R", ["r1", "end1"]],
+        ["E2", ["r2", "end2"]],
+        ["E3", ["r3", "end3"]],
+      ]
+    );
   });
 });

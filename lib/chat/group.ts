@@ -1,4 +1,5 @@
 import type { ChatItem } from "./events";
+import { readingOrder } from "./reading-order";
 import { eventTurnAt, type EventTurn } from "./turns";
 
 export type ToolItem = Extract<ChatItem, { kind: "tool" }>;
@@ -23,9 +24,10 @@ export const STANDALONE_TOOLS = new Set(["Skill", "Task", "Agent"]);
 // collapsible block, so a long turn reads as what was said, not every step.
 // Undone messages fold into one block behind the undo that took them back.
 export function groupTimeline(
-  items: ChatItem[],
+  all: ChatItem[],
   opts: GroupOptions = {}
 ): TimelineBlock[] {
+  const items = opts.foldEvents ? readingOrder(all) : all;
   const blocks: TimelineBlock[] = [];
   let tools: ToolItem[] = [];
   const flush = () => {

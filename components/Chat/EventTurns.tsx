@@ -1,7 +1,7 @@
 "use client";
 
 import type { ReactNode } from "react";
-import { ChevronRight, Loader2, MessageCircleQuestion } from "lucide-react";
+import { ChevronRight, Loader2 } from "lucide-react";
 import type { ChatItem } from "@/lib/chat/events";
 import type { EventTurn } from "@/lib/chat/turns";
 import { cn } from "@/lib/utils";
@@ -60,12 +60,6 @@ export function EventTurnRow({
         <span className="text-foreground/80 max-w-[40%] min-w-0 shrink-0 truncate font-medium">
           {turn.task}
         </span>
-        {turn.hasQuestion && (
-          <MessageCircleQuestion
-            className="h-3.5 w-3.5 shrink-0 text-amber-600 dark:text-amber-400"
-            aria-label="Asked a question"
-          />
-        )}
         <span className="min-w-0 flex-1 truncate">{turn.summary}</span>
         {turn.live && (
           <Loader2

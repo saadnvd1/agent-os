@@ -564,6 +564,8 @@ export class ChatHost {
     this.sent.add(m.id);
     this.currentTurn = m.id;
     this.hardStopAt = 0;
+    // A message sent now stops the turn and is read next: nothing waits.
+    const midTurn = this.busy() && !now;
     if (this.busy()) this.behind++;
     // Sent now, it stops the running turn, which still ends after this.
     if (!this.busy()) now = false;
@@ -599,6 +601,7 @@ export class ChatHost {
       peer: m.peer,
       origin: m.origin,
       tagged: true as const,
+      midTurn,
       createdAt: Date.now(),
       checkpoint,
     };
