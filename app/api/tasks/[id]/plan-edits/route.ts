@@ -1,3 +1,4 @@
+import { refuse } from "@/lib/tasks/contract/authorize";
 import { NextRequest, NextResponse } from "next/server";
 import { db, type Session } from "@/lib/db";
 import { notifyStatusChanged } from "@/lib/status/hub";
@@ -10,6 +11,8 @@ export async function PUT(
   { params }: { params: Promise<{ id: string }> }
 ) {
   const { id } = await params;
+  const refused = refuse(request, id, "open");
+  if (refused) return refused;
   const body = await request.json().catch(() => ({}));
   const ints = (v: unknown) =>
     Array.isArray(v)

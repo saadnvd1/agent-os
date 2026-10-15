@@ -7,7 +7,7 @@
 
 import { db, type Session, type StackItemStatus } from "../db";
 import { statusDetector } from "../status-detector";
-import { cleanRemoteText, hostLink } from "../hosts/remote-api";
+import { hostLink } from "../hosts/remote-api";
 import { peerStatus } from "../hosts/peer-sessions";
 import { chatCompacting, chatState } from "../chat/runner";
 import { chatActivityLine, chatStall, type Stall } from "../chat/activity";
@@ -18,14 +18,13 @@ import { sessionRowInfo } from "../session-meta";
 import { taskView, type TaskPR, type TaskState } from "../tasks";
 import { prFor, storedPR } from "../tasks/session";
 import { lastActiveOf } from "../tasks/last-active";
-import { hostTasks } from "../tasks/remote";
+import * as taskClient from "../tasks/contract/client";
 import { deriveTaskState } from "../tasks";
 import { waitingState } from "./task-state";
 import { commitTime, repoOf } from "./repo";
 import { CHECKLESS_MS, checklessFor, ciSettleIn } from "./task-state";
 import { repoHasCI } from "./repo-ci";
 import { markStatusDirty } from "../status/dirty";
-import { queueEvent } from "./events";
 
 export type FactStatus = "running" | "waiting" | "idle" | "dead";
 
@@ -271,7 +270,6 @@ async function remoteTaskFacts(
     prFor(s).catch(() => null),
     waitingState(s),
   ]);
-  await announceRemotePlan(workspaceId, s);
   const status = peerStatus(s.host_id, s.id) ?? "running";
   const state = deriveTaskState({
     taskStatus: "running",
@@ -288,34 +286,12 @@ async function remoteTaskFacts(
   };
 }
 
-// The plan-written line a held task stored on its machine (plan-step.ts),
-// once per distinct plan: the mirror keeps the last one it told about.
-async function announceRemotePlan(
-  workspaceId: string,
-  s: Session
-): Promise<void> {
-  const link = hostLink(s.host_id);
-  if (!link) return;
-  const view = await hostTasks(link)
-    .then(({ tasks }) => tasks.find((t) => t?.id === s.id))
-    .catch(() => undefined);
-  const note =
-    typeof view?.planNote === "string"
-      ? cleanRemoteText(view.planNote).slice(0, 2000)
-      : "";
-  if (!note || note === s.plan_note) return;
-  db.prepare(`UPDATE sessions SET plan_note = ? WHERE id = ?`).run(note, s.id);
-  queueEvent(workspaceId, `plan-done:${s.id}`, s.id, note);
-}
-
 // A task on another machine is as active as that machine says; one it can't
 // reach is taken as active just now, so nothing reads it as abandoned.
 async function lastActiveFor(s: Session): Promise<number> {
   const link = hostLink(s.host_id);
   if (!link) return lastActiveOf(s);
-  const view = await hostTasks(link)
-    .then(({ tasks }) => tasks.find((t) => t?.id === s.id))
-    .catch(() => undefined);
+  const view = await taskClient.view(link, s.id).catch(() => undefined);
   return typeof view?.lastActiveAt === "number"
     ? view.lastActiveAt
     : Date.now();

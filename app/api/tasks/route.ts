@@ -3,7 +3,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { createTask, listTasks, movedTasks } from "@/lib/tasks";
 import { stampPriority, startOrQueue } from "@/lib/tasks/queue";
 import { isPriority } from "@/lib/tasks/schedule-types";
-import { TASK_CAPABILITIES } from "@/lib/tasks/remote";
+import { TASK_CAPABILITIES } from "@/lib/tasks/contract/types";
 import { ensureProject, type ProjectRef } from "@/lib/tasks/project-ref";
 import { callingDevice } from "@/lib/security/device-me";
 import {

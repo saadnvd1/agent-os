@@ -128,8 +128,8 @@ export function tickQueue(): Promise<void> {
   tickState.ticking ??= (async () => {
     try {
       // Plans written on a linked machine, and approved plans coming here.
-      await import("./remote-plan")
-        .then((m) => m.syncRemotePlans())
+      await import("./contract/sync")
+        .then((m) => m.syncMirrors())
         .catch((error: unknown) => console.error("[queue] plans:", error));
       for (let i = 0; i < 3; i++) {
         if ((await tickOnce()) !== "stale") break;

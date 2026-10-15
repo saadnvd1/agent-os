@@ -1,6 +1,7 @@
 import { db, type Session } from "../db";
 import { endPauseOnFinish } from "./pause-hold";
-import { isMirror, remoteTaskAction } from "./remote";
+import { dropThere, mergeThere } from "./contract/actions";
+import { isMirror } from "./contract/start";
 import { deleteWorktree } from "../worktrees";
 import { settleWorktree, type MergedAs } from "../done/worktree";
 import {
@@ -141,7 +142,7 @@ export async function signOffTask(
   // Its own machine checks the gates and merges.
   // That machine's settings chose the method; null if it didn't say.
   if (isMirror(session))
-    return remoteTaskAction(session, "merge", opts.head, session.base_branch);
+    return mergeThere(session, opts.head, session.base_branch);
   const repo = projectPathFor(session);
   if (!repo) throw new Error("Task has no project");
   const refusal = signOffRefusal(id);
@@ -225,7 +226,7 @@ export async function dropTask(id: string): Promise<void> {
   if (session.task_status !== "running")
     throw new Error(`Task is already ${session.task_status}`);
   if (isMirror(session)) {
-    await remoteTaskAction(session, "drop");
+    await dropThere(session);
     return;
   }
   const repo = projectPathFor(session);

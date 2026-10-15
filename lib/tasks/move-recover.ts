@@ -8,38 +8,19 @@
 
 import { db, type Session } from "../db";
 import { hostIdNamed } from "../hosts";
-import { hostApi, hostLink, type HostLink } from "../hosts/remote-api";
+import { hostLink, type HostLink } from "../hosts/remote-api";
 import { getTaskSession } from "./session";
 import { markMoved, resumeTask } from "./move";
-import { forgetHostTasks, mirrorTask, unknownOutcome } from "./remote";
+import * as client from "./contract/client";
+import { mirrorTask } from "./contract/start";
 import { carryTaskState } from "./move-carry";
-
-/** POST, repeated when the outcome is unknown (the calls are idempotent). */
-export async function tell(
-  link: HostLink,
-  path: string,
-  body: object = {}
-): Promise<void> {
-  for (let i = 0; ; i++) {
-    try {
-      await hostApi(link, path, { body });
-      return;
-    } catch (err) {
-      if (!unknownOutcome(err) || i === 2) throw err;
-    }
-  }
-}
 
 /** The task a move from this session made there, or null. Throws if unsure. */
 export async function arrivedThere(
   link: HostLink,
   sessionId: string
 ): Promise<Session | null> {
-  const { session } = await hostApi<{ session: Session | null }>(
-    link,
-    `/api/tasks/arrived?from=${encodeURIComponent(sessionId)}`
-  );
-  return session;
+  return client.arrived(link, sessionId);
 }
 
 export function settleMovedOut(
@@ -53,7 +34,7 @@ export function settleMovedOut(
     mirrorTask(hostId, session.project_id, there);
     carryTaskState(session.id, there.id);
   })();
-  forgetHostTasks(hostId);
+  client.forget(hostId);
   return db
     .prepare(`SELECT * FROM sessions WHERE id = ?`)
     .get(there.id) as Session;

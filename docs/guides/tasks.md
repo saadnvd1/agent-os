@@ -164,6 +164,35 @@ step. `scope_change` on a queued task records the change on its brief at
 once. Removing it from the queue discards its held messages. The queue view,
 `aos queue` and the orchestrator's queue summary show how many are held.
 
+## Linked machines
+
+A task can run on a linked machine. That machine's AgentOS schedules and runs
+it; this machine keeps a mirror row (same id) so the sidebar lists it, and
+drives it through that machine's task API. Every call goes through one client
+(`lib/tasks/contract/client.ts`), the lifecycle being:
+
+| Step          | Call                                                               | Who may call it there           |
+| ------------- | ------------------------------------------------------------------ | ------------------------------- |
+| start         | `POST /api/tasks` (keyed, safe to retry)                           | any paired device               |
+| view          | `GET /api/tasks` (state, `moved`, capabilities)                    | any paired device               |
+| plan          | `GET /api/tasks/:id/plan`, `POST …/approve-plan`                   | the device that placed the plan |
+| message, read | `POST …/message`, `GET …/chat-tail`, `…/chat-facts`                | the holder                      |
+| pause, resume | `POST …/stop`, `POST …/resume`                                     | the holder                      |
+| finish        | `POST …/done` (no merge), `…/merge` (pinned to a commit), `…/drop` | the holder                      |
+| move          | `POST /api/tasks/import`, `…/:id/export`, `…/:id/moved`            | the holder                      |
+
+The **holder** is the device whose orchestrator started or moved the task
+there. A task nobody holds (one started there by a person) is open to any
+paired device, and this machine's own web UI sends no device, so mirror rows
+and tasks running here are never refused. A device that is not the holder gets
+a 403 with the same message from every route.
+
+One loop (`syncMirrors`, on the queue tick) reads each machine's list once and
+records what it says: finished or moved, a plan written there (copied to
+`plans/remote/<id>.md`), the plan note, and an approved plan on its way home.
+Opening the task list only reads. A machine that can't be reached leaves its
+mirrors as they were and shows the error on their rows.
+
 ## Stacks
 
 A project whose board is linked to LumifyHub can run the whole board as

@@ -603,7 +603,7 @@ export async function approvePlan(
   // On another machine, the plan was written there: this machine decides
   // where it is built, and the approval follows it.
   const ref = isRemoteHost(s.host_id)
-    ? await (await import("../tasks/remote-plan")).continueRemotePlan(s, text)
+    ? await (await import("../tasks/contract/plan")).continuePlanThere(s, text)
     : await startImplementing(s, "awaiting", send, text);
   if (!ref) throw new Error(`${s.name} isn't waiting for plan approval`);
   if (by === "no-approvals")
@@ -617,7 +617,7 @@ export async function approvePlan(
   return { ref, amendments: scopeChangesOf(s.id).length };
 }
 
-// A plan that moved here to be built (remote-plan.ts): implementation starts
+// A plan that moved here to be built (contract/plan.ts): implementation starts
 // on this machine, once, with the approval's change if it had one.
 export async function implementArrived(
   sessionId: string,

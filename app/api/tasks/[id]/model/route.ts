@@ -1,3 +1,4 @@
+import { refuse } from "@/lib/tasks/contract/authorize";
 import { NextRequest, NextResponse } from "next/server";
 import { resumeOnModel } from "@/lib/models/resume";
 
@@ -8,10 +9,13 @@ export async function POST(
   request: NextRequest,
   { params }: { params: Promise<{ id: string }> }
 ) {
+  const id = (await params).id;
+  const refused = refuse(request, id, "open");
+  if (refused) return refused;
   const { model, message } = await request.json().catch(() => ({}));
   try {
     const result = await resumeOnModel(
-      (await params).id,
+      id,
       model,
       typeof message === "string" && message.trim() ? message : undefined
     );

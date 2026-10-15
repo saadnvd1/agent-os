@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
+import { refuse } from "@/lib/tasks/contract/authorize";
 import { moveTask } from "@/lib/tasks";
 import { getProgress } from "@/lib/tasks/move-progress";
 
@@ -7,9 +8,12 @@ export async function POST(
   request: NextRequest,
   { params }: { params: Promise<{ id: string }> }
 ) {
+  const id = (await params).id;
+  const refused = refuse(request, id, "open");
+  if (refused) return refused;
   try {
     const { hostId } = await request.json();
-    const session = await moveTask((await params).id, String(hostId || ""));
+    const session = await moveTask(id, String(hostId || ""));
     return NextResponse.json({ session });
   } catch (error) {
     const message = error instanceof Error ? error.message : String(error);

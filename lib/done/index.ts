@@ -31,7 +31,7 @@ import { releasePorts } from "../ports";
 import { dropSessionDatabase } from "../project-config/database";
 import { doneOnPeer, peerSessionLink } from "../hosts/peer-actions";
 import { hostLink } from "../hosts/remote-api";
-import { doneHeldTask, isHeldRemote } from "../tasks/held-remote";
+import { doneHeldTask, isHeldRemote } from "../tasks/contract/held-calls";
 import { captureMergedTask } from "../session-logs";
 import { sessionEnded } from "../experiments/hooks";
 import { pushMerged } from "../notify/push/events";

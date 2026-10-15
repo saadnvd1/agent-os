@@ -8,12 +8,14 @@ import {
   it,
   vi,
 } from "vitest";
-import { db, type Session } from "../db";
-import { createHost } from "../hosts";
-import { saveHostLink } from "../hosts/remote-api";
-import { createTask, dropTask, listTasks, signOffTask } from "./index";
-import { forgetHostTasks, TASK_CAPABILITIES } from "./remote";
-import { json, row, setupMoveRepo, type MoveFixture } from "./move-testing";
+import { db, type Session } from "../../db";
+import { createHost } from "../../hosts";
+import { saveHostLink } from "../../hosts/remote-api";
+import { createTask, dropTask, listTasks, signOffTask } from "../index";
+import { forget as forgetHostTasks } from "./client";
+import { TASK_CAPABILITIES } from "./types";
+import { syncMirrors } from "./sync";
+import { json, row, setupMoveRepo, type MoveFixture } from "../move-testing";
 
 const fetchMock = vi.fn();
 let f: MoveFixture;
@@ -257,6 +259,8 @@ describe("following it", () => {
       })
     );
     const mine = (await listTasks()).filter((t) => t.hostId === hostId);
+    expect(row(merged.id!).task_status).toBe("running");
+    await syncMirrors();
     expect(mine.find((t) => t.id === live.id)).toMatchObject({
       state: "review",
       hostName: "devbox",
@@ -386,8 +390,8 @@ it("refuses another id that names a session that isn't a task", async () => {
 });
 
 it("a remote start from inside a plain task keeps the mirror unheld: no relay, parent recorded", async () => {
-  const { seedSession } = await import("../orchestrator/testing");
-  const { isHeldRemote } = await import("./held-remote");
+  const { seedSession } = await import("../../orchestrator/testing");
+  const { isHeldRemote } = await import("./held-calls");
   const caller = seedSession({
     projectId: f.projectId,
     name: "caller",

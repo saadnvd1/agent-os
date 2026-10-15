@@ -1,4 +1,5 @@
-import { NextResponse } from "next/server";
+import { refuse } from "@/lib/tasks/contract/authorize";
+import { NextRequest, NextResponse } from "next/server";
 import { setPriority } from "@/lib/tasks/queue";
 import { isPriority } from "@/lib/tasks/schedule-types";
 
@@ -9,6 +10,8 @@ export async function PATCH(
   { params }: { params: Promise<{ id: string }> }
 ) {
   const { id } = await params;
+  const refused = refuse(request as NextRequest, id, "open");
+  if (refused) return refused;
   const body = (await request.json().catch(() => null)) as {
     priority?: unknown;
   } | null;

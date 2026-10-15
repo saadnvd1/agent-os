@@ -66,8 +66,8 @@ vi.mock("../status-detector", () => ({
     paneProcess: () => undefined,
   },
 }));
-vi.mock("./remote", async (importOriginal) => ({
-  ...(await importOriginal<typeof import("./remote")>()),
+vi.mock("./contract/start", async (importOriginal) => ({
+  ...(await importOriginal<typeof import("./contract/start")>()),
   startRemoteTask: async (
     hostId: string,
     _p: unknown,
@@ -82,8 +82,8 @@ vi.mock("./remote", async (importOriginal) => ({
     return db.prepare(`SELECT * FROM sessions WHERE id = ?`).get(opts.id);
   },
 }));
-vi.mock("./remote-views", () => ({
-  remoteTaskViews: async (rows: Session[]) =>
+vi.mock("./contract/views", () => ({
+  mirrorViews: async (rows: Session[]) =>
     rows.map((s) => ({
       id: s.id,
       name: s.name,

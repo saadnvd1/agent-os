@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { db, queries, type Session } from "@/lib/db";
 import { taskDiff } from "@/lib/tasks/diff";
 import { LoopError, localTask } from "@/lib/tasks/loop-error";
-import { isMirror } from "@/lib/tasks/remote";
+import { isMirror } from "@/lib/tasks/contract/start";
 
 // GET /api/tasks/:id/diff - the task's whole change, base to head: a file
 // list with status and line counts; with ?file=<path>, that file's patch.

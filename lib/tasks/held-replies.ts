@@ -8,7 +8,8 @@
 
 import { db, type Session } from "../db";
 import { sendMessage } from "../bus";
-import { hostApi, type HostLink } from "../hosts/remote-api";
+import type { HostLink } from "../hosts/remote-api";
+import * as client from "./contract/client";
 
 const PULL_EVERY_MS = 5000;
 const MISSING_FOR_MS = 10 * 60 * 1000;
@@ -27,7 +28,7 @@ interface Pulled {
   body: string;
 }
 
-// Held means an orchestrator started it, as isHeldRemote reads it.
+// Held means an orchestrator started it, as isHeldRemote reads it (contract/held-calls.ts).
 const HELD_BY = `started_by IN (SELECT id FROM sessions WHERE role = 'orchestrator')`;
 
 const heldMirror = (hostId: string, id: string) =>
@@ -58,11 +59,7 @@ export async function pullHeldReplies(link: HostLink): Promise<number> {
   try {
     let messages: Pulled[];
     try {
-      const res = await hostApi<{ messages?: unknown }>(
-        link,
-        "/api/tasks/held-replies",
-        { timeout: 8000 }
-      );
+      const res = await client.replies(link);
       messages = (Array.isArray(res.messages) ? res.messages : []).filter(
         (m): m is Pulled =>
           !!m &&
@@ -98,10 +95,7 @@ export async function pullHeldReplies(link: HostLink): Promise<number> {
       }
     }
     if (handled.length)
-      await hostApi(link, "/api/tasks/held-replies", {
-        body: { ids: handled },
-        timeout: 8000,
-      }).catch(() => undefined);
+      await client.ackReplies(link, handled).catch(() => undefined);
     return delivered;
   } finally {
     busy.delete(hostId);

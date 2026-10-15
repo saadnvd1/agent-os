@@ -59,8 +59,8 @@ import { finishTaskStart } from "./start";
 import { isRemoteHost } from "../hosts";
 import { DEFAULT_START_VIEW, type StartView } from "../sessions/launch";
 import { viewOf } from "./move-targets";
-import { isMirror, startRemoteTask } from "./remote";
-import { remoteTaskViews } from "./remote-views";
+import { isMirror, startRemoteTask } from "./contract/start";
+import { mirrorViews } from "./contract/views";
 import { chatStateNow } from "../chat/runner";
 import { saidSinceLastMessage } from "../chat/store";
 
@@ -258,7 +258,7 @@ async function startTask(
     if (opts.planOnly && view !== "chat")
       throw new Error("A plan-only task needs a chat, not a terminal");
     // The plan step is this machine's to run and decide: it plans there,
-    // stops, and what follows is chosen here (remote-plan.ts).
+    // stops, and what follows is chosen here (contract/plan.ts).
     const planned =
       !!(opts.plan || opts.planOnly) &&
       taskRouting(
@@ -280,7 +280,7 @@ async function startTask(
         ? { only: !!opts.planOnly, reason: opts.planReason?.trim() || null }
         : undefined,
     });
-    // The mirror's started_by stays orchestrator-only: a held-remote task is
+    // The mirror's started_by stays orchestrator-only: a held task on a linked machine is
     // relayed, stopped and answered through it. A plain calling task is its
     // parent and started_via only.
     recordStart(session.id, {
@@ -544,7 +544,7 @@ export async function listTasks(): Promise<TaskView[]> {
   const sessions = taskSessions(false);
   const [local, remote] = await Promise.all([
     Promise.all(sessions.filter((s) => !isMirror(s)).map(taskView)),
-    remoteTaskViews(sessions.filter(isMirror)),
+    mirrorViews(sessions.filter(isMirror)),
   ]);
   const costs = taskCosts(local.map((t) => t.id));
   for (const t of local) {

@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { db, queries, type Session } from "@/lib/db";
 import { taskChecks } from "@/lib/tasks/checks-view";
 import { LoopError, localTask } from "@/lib/tasks/loop-error";
-import { isMirror } from "@/lib/tasks/remote";
+import { isMirror } from "@/lib/tasks/contract/start";
 
 // GET /api/tasks/:id/checks - the PR head's checks, the tail of a failing
 // job's log, and the review gate's verdict on the head. ?log=0 leaves the

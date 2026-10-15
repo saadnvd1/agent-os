@@ -1,9 +1,8 @@
+import { refuse } from "@/lib/tasks/contract/authorize";
 import fs from "fs/promises";
 import path from "path";
 import { NextRequest, NextResponse } from "next/server";
 import { db, type Session } from "@/lib/db";
-import { callingDevice } from "@/lib/security/device-me";
-import { heldRefusal, planWaitRefusal } from "@/lib/tasks/held";
 import { MAX_PLAN_BYTES } from "@/lib/tasks/move-bundle";
 import { PLAN_FILE } from "@/lib/models/plan-step";
 import { expandHome } from "@/lib/tasks/session";
@@ -15,9 +14,8 @@ export async function GET(
   { params }: { params: Promise<{ id: string }> }
 ) {
   const id = (await params).id;
-  const device = callingDevice(request);
-  const refusal = heldRefusal(id, device) ?? planWaitRefusal(id, device);
-  if (refusal) return NextResponse.json({ error: refusal }, { status: 403 });
+  const refused = refuse(request, id, "plan");
+  if (refused) return refused;
   const s = db
     .prepare(`SELECT plan_phase, worktree_path FROM sessions WHERE id = ?`)
     .get(id) as Pick<Session, "plan_phase" | "worktree_path"> | undefined;

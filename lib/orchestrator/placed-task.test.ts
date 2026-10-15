@@ -30,8 +30,9 @@ vi.mock("@/lib/tasks/pr-poll", () => ({
 
 const TOKEN = "device-token";
 const { db } = await import("@/lib/db");
-const { forgetHostTasks, startRemoteTask } = await import("@/lib/tasks/remote");
-const { isHeldRemote } = await import("@/lib/tasks/held-remote");
+const { forget: forgetHostTasks } = await import("@/lib/tasks/contract/client");
+const { startRemoteTask } = await import("@/lib/tasks/contract/start");
+const { isHeldRemote } = await import("@/lib/tasks/contract/held-calls");
 const { readSession } = await import("./read");
 const { waitingState } = await import("./task-state");
 const { sendMessage } = await import("@/lib/bus");
