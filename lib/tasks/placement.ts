@@ -12,12 +12,8 @@ import path from "path";
 import { db } from "../db";
 import { loadProjectConfig } from "../project-config";
 import { MACHINE_NEEDS } from "../project-config/schema";
-import {
-  machineHold,
-  type Candidate,
-  type Hold,
-  type MachineView,
-} from "./schedule";
+import { machineHold, placeable, type MachineView } from "./holds";
+import type { Candidate } from "./schedule";
 
 export type Need = (typeof MACHINE_NEEDS)[number];
 export type NeedsSource = "task" | "brief" | "config" | "inferred" | "none";
@@ -176,13 +172,6 @@ export interface Placement {
   why: string;
 }
 
-const LOAD_HOLDS = new Set<Hold["code"]>([
-  "load_red",
-  "load_amber",
-  "needs",
-  "heavy",
-]);
-
 // True when the home machine's load or needs rule this start out, which is
 // the only time a linked machine is worth asking.
 export const wantsPlacing = (
@@ -192,7 +181,7 @@ export const wantsPlacing = (
 ): boolean => {
   if (c.remote || home.reading) return false;
   const hold = machineHold(c, home, now);
-  return !!hold && LOAD_HOLDS.has(hold.code);
+  return !!hold && placeable(hold);
 };
 
 // Null: start it at home (or hold it there for a reason placing doesn't

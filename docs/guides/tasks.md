@@ -82,6 +82,18 @@ bonus for a paused task that is due to resume. Ties go to the earlier one. A
 row says why it waits: `#2 of 5 · Urgent`, `Waiting: this machine load red`,
 `Waiting: after any running task (…)`. `aos queue` lists the line.
 
+Every reason a task waits is a **hold**, listed in one fixed order: `after`,
+`after any`, the orchestrator's Pause, the usage window, needs (a Mac), load
+red, load amber, simulator, start spacing, and last the slot limit. The row
+shows the first that applies; a task with none starts. A paused task due to
+resume, and a first-task's hand-off back to this machine, ask the same
+checks, so they say the same words. Most clear by themselves; a Pause and a
+missing Mac don't. The code is `lib/tasks/holds.ts` (the list and the
+texts) and `lib/tasks/hold-checks.ts` (the ones that read the database); the
+queue itself is split into `queue-rows`, `queue-view`, `queue-candidates`,
+`queue-placement`, `queue-start` and `queue-tick`. Why:
+[docs/decisions/2026-10-15-one-hold-model.md](https://github.com/saadnvd1/agent-os/blob/main/docs/decisions/2026-10-15-one-hold-model.md).
+
 - **Machine load.** The load monitor feeds a start gate: starts are held while
   the machine is red and allowed again only after it has stayed out of red for
   two minutes. On amber only `blocking` and `urgent` work starts. At most one

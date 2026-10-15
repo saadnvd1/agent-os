@@ -15,7 +15,7 @@ import { db, type Session } from "../db";
 import { isRemoteHost } from "../hosts";
 import { peerSource } from "../hosts/peer-load";
 import { hostApi, hostLink, requireHostLink } from "../hosts/remote-api";
-import { LOCAL, localView, machineCapabilities } from "../load/machines";
+import { LOCAL, machineCapabilities } from "../load/machines";
 import { noApprovalsOn, recordAutoApproval } from "../approvals/no-approvals";
 import { implementArrived, planNoteFor } from "../models/plan-step";
 import { sessionWorkspace } from "../models/resolve";
@@ -26,10 +26,10 @@ import { getProject } from "../projects";
 import { planFor, splitOf } from "../plans/features";
 import { forgetHostTasks, hostTasks } from "./remote";
 import { moveTask } from "./move-flow";
-import { heavyNeeds, meetsNeeds, needsOf } from "./placement";
+import { meetsNeeds, needsOf } from "./placement";
 import { remotePlanPath } from "./remote-plan-path";
 import { DEFAULT_PRIORITY, isPriority } from "./schedule-types";
-import { machineHold } from "./schedule";
+import { localHolds } from "./hold-checks";
 import { expandHome } from "./session";
 import { orchestratorOf } from "./starter";
 
@@ -239,17 +239,14 @@ export async function handoffHome(
     projectPath: expandHome(project.working_directory),
     prompt: s.task_prompt ?? "",
   });
-  const hold = machineHold(
+  const holds = localHolds(
     {
-      heavy: heavyNeeds(needs),
-      needsUnmet: !meetsNeeds(needs, machineCapabilities()),
-      remote: false,
+      needs,
       priority: isPriority(s.priority) ? s.priority : DEFAULT_PRIORITY,
     },
-    localView(now),
     now
   );
-  if (hold) return false;
+  if (holds.length) return false;
   handingOff.add(id);
   try {
     const message = s.plan_handoff_message ?? undefined;

@@ -13,59 +13,33 @@ import {
   PRIORITY_LABEL,
   type Priority,
   type QueueExplainView,
-  type WaitCode,
 } from "./schedule-types";
+import {
+  PRIORITY_POINTS,
+  holdsFor,
+  type Hold,
+  type MachineView,
+} from "./holds";
 
 export { PRIORITIES, DEFAULT_PRIORITY } from "./schedule-types";
 export type { Priority, WaitCode } from "./schedule-types";
+export {
+  AMBER_MIN_PRIORITY,
+  HEAVY_START_GAP_MS,
+  LOAD_SETTLE_MS,
+  PRIORITY_POINTS,
+  START_GAP_MS,
+  machineHold,
+  slotText,
+  type Hold,
+  type MachineLevel,
+  type MachineView,
+} from "./holds";
 
-export const PRIORITY_POINTS: Record<Priority, number> = {
-  urgent: 400,
-  blocking: 300,
-  normal: 200,
-  background: 100,
-};
 export const AGE_POINTS_PER_MIN = 0.5;
 // Reached after five hours of waiting.
 export const AGE_CAP = 150;
 export const RESUME_BONUS = 150;
-// Out of red this long before automatic starts resume.
-export const LOAD_SETTLE_MS = 120_000;
-// On amber, only this priority and above start.
-export const AMBER_MIN_PRIORITY: Priority = "blocking";
-// Between automatic starts on one machine.
-export const START_GAP_MS = 60_000;
-// Between starts of tasks that boot a simulator.
-export const HEAVY_START_GAP_MS = 5 * 60_000;
-
-export type MachineLevel = "green" | "amber" | "red";
-
-// What the machine a candidate would start on looks like right now.
-export interface MachineView {
-  // Shown in hold texts, e.g. "this machine".
-  label: string;
-  // False: no load holds at all (AGENTOS_LOAD=off).
-  enabled: boolean;
-  // No sample read yet since AgentOS started.
-  reading: boolean;
-  level: MachineLevel;
-  // Not red, and calm for LOAD_SETTLE_MS since it last was.
-  settled: boolean;
-  // Seconds of calm still needed, when not settled and not red.
-  settleLeftMs: number;
-  booted: number;
-  maxBooted: number;
-  // Heavy tasks started within HEAVY_START_GAP_MS that hold no lease yet.
-  heavyStarting: number;
-  lastAutoStartAt: number | null;
-  lastHeavyStartAt: number | null;
-}
-
-export interface Hold {
-  code: WaitCode;
-  text: string;
-}
-
 export interface Candidate {
   id: string;
   kind: "start" | "resume";
@@ -88,7 +62,7 @@ export interface Candidate {
   // `after X` hold, from the caller (it needs the database).
   before: Hold | null;
   // Orchestrator Pause and the usage window, which hold after `after`.
-  auto: Hold | null;
+  auto: Hold | readonly Hold[] | null;
   // "After any": its set, the ones that have finished, the ones other waiters
   // already used, and whether it was already released (a retry).
   any: {
@@ -110,6 +84,8 @@ export interface Plan {
   // The finish an "after any" waiter takes, by candidate id (null: none left).
   consume: Map<string, string | null>;
   explain: Map<string, QueueExplainView>;
+  // Every hold on each candidate, in order (empty: it starts).
+  holds: Map<string, Hold[]>;
 }
 
 export function scoreParts(
@@ -124,75 +100,6 @@ export function scoreParts(
   return { priority, age, resume, score: priority + age + resume };
 }
 
-const priorityRank = (p: Priority) => PRIORITY_POINTS[p] ?? 0;
-
-const seconds = (ms: number) => Math.max(1, Math.ceil(ms / 1000));
-
-// The machine holds, in order. Null: it may start here now.
-export function machineHold(
-  c: Pick<Candidate, "heavy" | "needsUnmet" | "remote" | "priority"> &
-    Partial<Pick<Candidate, "planOnly">>,
-  m: MachineView,
-  now: number
-): Hold | null {
-  if (c.remote || c.planOnly) return null;
-  if (c.needsUnmet) return { code: "needs", text: `Waiting: needs a Mac` };
-  if (!m.enabled) return null;
-  if (m.reading)
-    return { code: "load_red", text: "Waiting: reading machine load" };
-  if (m.level === "red")
-    return { code: "load_red", text: `Waiting: ${m.label} load red` };
-  if (!m.settled)
-    return {
-      code: "load_red",
-      text: `Waiting: ${m.label} load was red; calm for ${seconds(m.settleLeftMs)}s more`,
-    };
-  if (
-    m.level === "amber" &&
-    priorityRank(c.priority) < priorityRank(AMBER_MIN_PRIORITY)
-  )
-    return {
-      code: "load_amber",
-      text: `Waiting: ${m.label} load amber; ${c.priority} work starts on green`,
-    };
-  if (c.heavy) {
-    if (m.level !== "green")
-      return {
-        code: "heavy",
-        text: `Waiting: ${m.label} load amber; simulator work starts on green`,
-      };
-    if (m.heavyStarting > 0)
-      return {
-        code: "heavy",
-        text: `Waiting: a simulator is booting on ${m.label}`,
-      };
-    if (m.booted >= m.maxBooted)
-      return {
-        code: "heavy",
-        text: `Waiting: ${m.booted} of ${m.maxBooted} simulators in use`,
-      };
-    if (
-      m.lastHeavyStartAt !== null &&
-      now - m.lastHeavyStartAt < HEAVY_START_GAP_MS
-    )
-      return {
-        code: "heavy",
-        text: `Waiting: a simulator task just started on ${m.label} (next in ${seconds(HEAVY_START_GAP_MS - (now - m.lastHeavyStartAt))}s)`,
-      };
-  }
-  if (m.lastAutoStartAt !== null && now - m.lastAutoStartAt < START_GAP_MS)
-    return {
-      code: "spacing",
-      text: `Waiting: spacing starts (next in ${seconds(START_GAP_MS - (now - m.lastAutoStartAt))}s)`,
-    };
-  return null;
-}
-
-export function slotText(rank: number, of: number, priority: Priority): string {
-  const word = priority === DEFAULT_PRIORITY ? "" : ` · ${priority}`;
-  return `#${rank} of ${of}${word}`;
-}
-
 export function priorityWord(priority: Priority): string {
   return PRIORITY_LABEL[priority];
 }
@@ -204,7 +111,12 @@ export function planStarts(
   machine: MachineView,
   now: number
 ): Plan {
-  const plan: Plan = { start: [], consume: new Map(), explain: new Map() };
+  const plan: Plan = {
+    start: [],
+    consume: new Map(),
+    explain: new Map(),
+    holds: new Map(),
+  };
   const m: MachineView = { ...machine };
   const byGroup = new Map<string, Candidate[]>();
   for (const c of candidates)
@@ -218,26 +130,27 @@ export function planStarts(
     const scored = list
       .map((c) => ({ c, ...scoreParts(c, now) }))
       .sort((a, b) => b.score - a.score || a.c.position - b.c.position);
-    scored.forEach(({ c, score, priority: _p }, index) => {
-      const rank = index + 1;
-      const hold = holdOf(c);
-      const view = (h: Hold | null): QueueExplainView => ({
-        code: h?.code ?? null,
-        text: h?.text ?? null,
+    scored.forEach(({ c, score }, index) => {
+      const holds = holdsFor(c, {
+        machine: m,
+        now,
+        used,
+        inFlight,
+        limit: group.limit,
+        rank: index + 1,
+        of: scored.length,
+      });
+      const hold = holds[0] ?? null;
+      plan.holds.set(c.id, holds);
+      plan.explain.set(c.id, {
+        code: hold?.code ?? null,
+        text: hold?.text ?? null,
         score: Math.round(score * 10) / 10,
-        rank,
+        rank: index + 1,
         of: scored.length,
         priority: c.priority,
       });
-      if (hold) return void plan.explain.set(c.id, view(hold));
-      if (!c.planOnly && inFlight >= group.limit)
-        return void plan.explain.set(
-          c.id,
-          view({
-            code: "slot",
-            text: slotText(rank, scored.length, c.priority),
-          })
-        );
+      if (hold) return;
       // Passed every hold: it starts.
       if (c.any && !c.any.released) {
         const free = c.any.finished.find((id) => !used.has(id)) ?? null;
@@ -253,23 +166,7 @@ export function planStarts(
         }
       }
       plan.start.push(c.id);
-      plan.explain.set(c.id, view(null));
     });
   }
   return plan;
-
-  function holdOf(c: Candidate): Hold | null {
-    if (c.before) return c.before;
-    if (c.any && !c.any.released) {
-      const free = c.any.finished.some((id) => !used.has(id));
-      const spent =
-        c.any.ids.length > 0 && c.any.finished.length === c.any.ids.length;
-      if (!free && !spent)
-        return {
-          code: "after_any",
-          text: `Waiting: after any running task (${c.any.label})`,
-        };
-    }
-    return c.auto ?? machineHold(c, m, now);
-  }
 }

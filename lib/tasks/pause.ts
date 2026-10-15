@@ -34,9 +34,7 @@ import { openBySubject, workSubject } from "../orchestrator/asks";
 import { queueEventOnce } from "../orchestrator/events";
 import { isPaused } from "../orchestrator/pause";
 import { isMerging } from "./finish";
-import { autoHold } from "./auto-hold";
-import { localView } from "../load/machines";
-import { machineHold } from "./schedule";
+import { loadHoldFor, resumeHoldFor } from "./hold-checks";
 import {
   continuePrompt,
   durationText,
@@ -395,34 +393,7 @@ export function requestResume(sessionId: string, actor: PauseBy): void {
     );
 }
 
-// Why this machine's load rules out starting an agent now, or null. Only a
-// red (or still settling) machine holds a resume; amber doesn't.
-export function loadHoldFor(s: Session): string | null {
-  const project = s.project_id ? getProject(s.project_id) : null;
-  if (!project || isRemoteHost(s.host_id ?? project.host_id)) return null;
-  const hold = machineHold(
-    {
-      heavy: false,
-      needsUnmet: false,
-      remote: false,
-      priority: DEFAULT_PRIORITY,
-    },
-    localView(),
-    Date.now()
-  );
-  return hold?.code === "load_red" ? hold.text.replace(/^Waiting: /, "") : null;
-}
-
-// Why a resume this actor asked for must wait: this machine's load, and for
-// the orchestrator also what holds its own starts (it is paused, or the
-// usage window). Saad's own resume skips the second.
-export function resumeHoldFor(s: Session, actor: PauseBy): string | null {
-  const load = loadHoldFor(s);
-  if (load) return load;
-  if (actor !== "orchestrator") return null;
-  const ws = s.project_id ? getProject(s.project_id)?.workspace_id : null;
-  return autoHold(ws ?? null)?.text.replace(/^Waiting: /, "") ?? null;
-}
+export { loadHoldFor, resumeHoldFor };
 
 export function setPauseNote(sessionId: string, note: string | null): void {
   db.prepare(
