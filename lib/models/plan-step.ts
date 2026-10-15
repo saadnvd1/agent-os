@@ -24,6 +24,7 @@ import { addNote } from "../orchestrator/notes";
 import { amendBrief, scopeChangesOf } from "../orchestrator/amendments";
 import { PIECES_PROMPT, foldedBrief, pieceBrief } from "../plans/pieces";
 import { orchestratorOf } from "../tasks/starter";
+import { refreshBase } from "../tasks/refresh-base";
 import {
   createFeature,
   ownPieceOf,
@@ -57,7 +58,8 @@ export const PLAN_BACKGROUND_WAIT_MS = 20 * 60 * 1000;
 export function implementPrompt(
   planned: boolean,
   amendment?: string,
-  piece?: string
+  piece?: string,
+  baseNote?: string
 ): string {
   const where = ` Work only in this task's repository; if part of the work belongs in another repository, say so in your final message instead of doing it there.`;
   const base = piece
@@ -65,9 +67,10 @@ export function implementPrompt(
     : planned
       ? `The plan is in \`${PLAN_FILE}\`. Implement it now, finishing the task as its instructions above say. Where the plan turns out wrong, do what's right and say so.${where}`
       : `No plan was written to \`${PLAN_FILE}\`. Plan briefly, then implement the task, finishing it as its instructions above say.`;
-  return amendment
+  const full = amendment
     ? `${base}\n\nThe plan was approved with this change, which is now part of the task's scope:\n${amendment}`
     : base;
+  return baseNote ? `${full}\n\n${baseNote}` : full;
 }
 
 // The worktree's plan folder, kept out of git by its own .gitignore.
@@ -230,6 +233,17 @@ async function startImplementing(
   });
   const id = implementMessageId(sessionId);
   const planText = readPlan(s);
+  // The branch was cut when the task was created; the plan may have waited.
+  const fresh = await refreshBase({
+    name: s.name,
+    worktree: s.worktree_path,
+    branch: s.branch_name,
+    base: s.base_branch,
+  });
+  const baseNote = fresh.moved
+    ? undefined
+    : fresh.note &&
+      `Note: ${fresh.note}. Rebase onto the latest base before you open the PR.`;
   let split = planText ? splitOf(s, planText) : null;
   const workspaceId = sessionWorkspace(s);
   // Approved despite pieces that couldn't be registered: built as one piece,
@@ -286,7 +300,8 @@ async function startImplementing(
       text: implementPrompt(
         fs.existsSync(path.join(s.worktree_path!, PLAN_FILE)),
         note,
-        piece
+        piece,
+        baseNote
       ),
       origin: { kind: "decision", label: "Plan step" },
     });
