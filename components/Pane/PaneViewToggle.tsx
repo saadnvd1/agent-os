@@ -18,6 +18,8 @@ import type { ViewMode } from "@/contexts/PaneContext";
 
 interface PaneViewToggleProps {
   sessionId?: string;
+  // The session runs as a chat, so its main view is the chat, not a terminal.
+  isChat?: boolean;
   viewMode: ViewMode;
   isLocalSession: boolean;
   isConductor: boolean;
@@ -75,6 +77,7 @@ function ToggleButton({
 // session only gets the terminal (and workers).
 export function PaneViewToggle({
   sessionId,
+  isChat,
   viewMode,
   isLocalSession,
   isConductor,
@@ -89,7 +92,7 @@ export function PaneViewToggle({
   return (
     <div className="bg-accent/50 flex shrink-0 items-center rounded-md p-0.5">
       <ToggleButton
-        label="Terminal"
+        label={isChat ? "Chat" : "Terminal"}
         active={viewMode === "terminal"}
         onClick={() => onViewModeChange("terminal")}
       >
