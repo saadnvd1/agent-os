@@ -24,6 +24,7 @@ import { addNote } from "../orchestrator/notes";
 import { amendBrief, scopeChangesOf } from "../orchestrator/amendments";
 import { PIECES_PROMPT, foldedBrief, pieceBrief } from "../plans/pieces";
 import { orchestratorOf } from "../tasks/starter";
+import { isRemoteHost } from "../hosts";
 import { refreshBase } from "../tasks/refresh-base";
 import {
   createFeature,
@@ -121,8 +122,35 @@ function piecesLine(r: NonNullable<ReturnType<typeof planFor>>): string {
   return `${r.pieces.length} pieces${folded}: ${parts.join("; ")}`;
 }
 
+// The "plan written" line for a task: where the plan is, what comes next,
+// its first lines and how it split. `file` is where this machine can read it.
+export function planNoteFor(
+  s: Session,
+  file: string,
+  next: string,
+  again = "",
+  after = ""
+): string {
+  let head = `Task "${s.name}": no plan file was written${again}; ${next}${after}.`;
+  try {
+    const text = fs.readFileSync(file, "utf8");
+    const summary = planSummary(text);
+    head = `Task "${s.name}": plan written to ${file}; ${next}.`;
+    if (summary.length) head += `\n${summary.map((l) => `- ${l}`).join("\n")}`;
+    const pieces = planFor(s, text);
+    if (pieces && pieces.pieces.length > 1) head += `\n${piecesLine(pieces)}`;
+    if (pieces?.folded.length)
+      head += `\nPlan listed ${pieces.listed} pieces, building ${pieces.pieces.length}: ${pieces.folded.map((f) => `${f.name} folded (${f.why})`).join("; ")}`;
+  } catch {
+    // No plan file: the line says so.
+  }
+  return head;
+}
+
 // Tells the orchestrator that started a task its plan is written, once.
 function announcePlan(s: Session, ref: string | null, retried = false): void {
+  // The machine that placed it announces the plan, from its own copy.
+  if (s.plan_waits_for_caller) return;
   if (!orchestratorOf(s.started_by) && !s.held_by_device) return;
   const workspaceId = sessionWorkspace(s);
   // A task held for another machine's orchestrator can't reach it: the line
@@ -134,18 +162,7 @@ function announcePlan(s: Session, ref: string | null, retried = false): void {
     ? `implementing on ${ref}`
     : "waiting for approval, not implementing (approve_plan to go ahead, drop to reject)";
   const again = retried ? " (asked once more for it first)" : "";
-  let head = `Task "${s.name}": no plan file was written${again}; ${next}${ref ? " anyway" : ""}.`;
-  try {
-    const summary = planSummary(fs.readFileSync(file, "utf8"));
-    head = `Task "${s.name}": plan written to ${file}; ${next}.`;
-    if (summary.length) head += `\n${summary.map((l) => `- ${l}`).join("\n")}`;
-    const pieces = planFor(s, fs.readFileSync(file, "utf8"));
-    if (pieces && pieces.pieces.length > 1) head += `\n${piecesLine(pieces)}`;
-    if (pieces?.folded.length)
-      head += `\nPlan listed ${pieces.listed} pieces, building ${pieces.pieces.length}: ${pieces.folded.map((f) => `${f.name} folded (${f.why})`).join("; ")}`;
-  } catch {
-    // No plan file: the line says so.
-  }
+  const head = planNoteFor(s, file, next, again, ref ? " anyway" : "");
   if (s.held_by_device) {
     db.prepare(`UPDATE sessions SET plan_note = ? WHERE id = ?`).run(
       head,
@@ -244,7 +261,10 @@ async function startImplementing(
     ? undefined
     : fresh.note &&
       `Note: ${fresh.note}. Rebase onto the latest base before you open the PR.`;
-  let split = planText ? splitOf(s, planText) : null;
+  // A plan another machine placed here was checked there, against its
+  // projects; this one's workspace doesn't know them.
+  let split =
+    planText && !s.plan_waits_for_caller ? splitOf(s, planText) : null;
   const workspaceId = sessionWorkspace(s);
   // Approved despite pieces that couldn't be registered: built as one piece,
   // and told so, rather than guessing which repository each belongs to.
@@ -441,9 +461,12 @@ export async function handoffAfterPlan(
   forget(sessionId);
   // No approvals mode doesn't stop at the plan to wait for one. Pieces that
   // couldn't be registered always do: building on a guess is the bug.
-  const auto = !!s.plan_only && noApprovalsOn();
+  const auto = !!s.plan_only && noApprovalsOn() && !s.plan_waits_for_caller;
   const planText = readPlan(s);
-  const pieceErrors = (planText ? splitOf(s, planText)?.errors : null) ?? [];
+  const pieceErrors =
+    (planText && !s.plan_waits_for_caller
+      ? splitOf(s, planText)?.errors
+      : null) ?? [];
   if ((!s.plan_only || auto) && !pieceErrors.length) {
     const ref = await startImplementing(
       s,
@@ -482,14 +505,17 @@ export async function handoffAfterPlan(
       s.id,
       `Plan of "${s.name}": couldn't register its pieces: ${pieceErrors.join("; ")}. It is held, not building. Message the task to fix the plan, or approve_plan to build it as one piece.`
     );
+  // The machine that placed a plan sends its own push.
   try {
-    const text = readPlan(s);
-    const planned = text ? planFor(s, text) : null;
-    (await import("../notify/push/events")).pushPlanAwaiting(
-      s.id,
-      s.name,
-      planned?.pieces.length ?? 1
-    );
+    if (!s.plan_waits_for_caller) {
+      const text = readPlan(s);
+      const planned = text ? planFor(s, text) : null;
+      (await import("../notify/push/events")).pushPlanAwaiting(
+        s.id,
+        s.name,
+        planned?.pieces.length ?? 1
+      );
+    }
   } catch (e) {
     console.error("plan push failed:", e);
   }
@@ -560,9 +586,12 @@ export async function approvePlan(
     );
   const text = message?.trim() || undefined;
   const workspaceId = sessionWorkspace(s);
+  // A plan another machine placed here is approved by that machine, which
+  // keeps the brief its review reads.
+  const placedHere = !!s.plan_waits_for_caller && !isRemoteHost(s.host_id);
   // Every approval is on the brief, so the review judges the PR as the
   // implementation of the plan, not as plan-only work.
-  if (workspaceId) {
+  if (workspaceId && !placedHere) {
     if (text) {
       amendBrief(workspaceId, s.id, text);
       addNote(
@@ -571,7 +600,11 @@ export async function approvePlan(
       );
     } else amendBrief(workspaceId, s.id, APPROVAL_TEXT[by], "approval");
   }
-  const ref = await startImplementing(s, "awaiting", send, text);
+  // On another machine, the plan was written there: this machine decides
+  // where it is built, and the approval follows it.
+  const ref = isRemoteHost(s.host_id)
+    ? await (await import("../tasks/remote-plan")).continueRemotePlan(s, text)
+    : await startImplementing(s, "awaiting", send, text);
   if (!ref) throw new Error(`${s.name} isn't waiting for plan approval`);
   if (by === "no-approvals")
     recordAutoApproval({
@@ -582,4 +615,22 @@ export async function approvePlan(
       detail: "already waiting when the mode was turned on",
     });
   return { ref, amendments: scopeChangesOf(s.id).length };
+}
+
+// A plan that moved here to be built (remote-plan.ts): implementation starts
+// on this machine, once, with the approval's change if it had one.
+export async function implementArrived(
+  sessionId: string,
+  message?: string
+): Promise<string | null> {
+  const s = getSession(sessionId);
+  if (!s || s.plan_phase !== "awaiting" || s.task_status !== "running")
+    throw new Error(`${s?.name ?? "That task"} isn't waiting for a plan`);
+  const { sendQueuedNow } = await import("../chat/runner");
+  return startImplementing(
+    s,
+    "awaiting",
+    (id, m) => sendQueuedNow(id, m),
+    message
+  );
 }

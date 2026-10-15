@@ -133,3 +133,23 @@ export function holdExisting(
   holdFor(id, device, held);
   return true;
 }
+
+/**
+ * A plan another machine placed here is read and approved by that machine
+ * only: it decides where the task is built. Null for any other task.
+ */
+export function planWaitRefusal(
+  id: string,
+  device: string | null | undefined
+): string | null {
+  const s = db
+    .prepare(
+      `SELECT plan_waits_for_caller, started_by_device FROM sessions WHERE id = ?`
+    )
+    .get(id) as
+    | Pick<Session, "plan_waits_for_caller" | "started_by_device">
+    | undefined;
+  if (!s?.plan_waits_for_caller) return null;
+  if (device && device === s.started_by_device) return null;
+  return "The machine that placed this plan decides it; approve it from there";
+}

@@ -57,6 +57,10 @@ export interface TaskBundle {
   // What a task started by an orchestrator carries besides its work; absent
   // for any other task, or from a machine that predates these moves.
   orchestrated?: OrchestratedBundle;
+  // A plan written and waiting for the machine that placed it (it is moving
+  // there to be built): the plan file, which is never in git. The arriving
+  // machine runs no turn; the approval that follows starts one.
+  planWait?: { file: string | null };
 }
 
 export interface OrchestratedBundle {
@@ -70,7 +74,7 @@ export interface OrchestratedBundle {
   // machine without that provider refuses the task rather than change it.
   modelProvider: string | null;
   modelOverrides: string | null;
-  planPhase: "planning" | "implementing" | null;
+  planPhase: "planning" | "awaiting" | "implementing" | null;
   // .agentos/plan.md, which is never in git.
   planFile: string | null;
   // The orchestrator that holds the task (its id and name on the machine
@@ -153,7 +157,7 @@ function validateChat(c: ChatBundle): ChatBundle {
   return { ...c, plan: !!c.plan };
 }
 
-const PHASES = ["planning", "implementing"];
+const PHASES = ["planning", "awaiting", "implementing"];
 
 export function validateOrchestrated(
   o: OrchestratedBundle
@@ -196,6 +200,16 @@ export function validateOrchestrated(
   };
 }
 
+function validatePlanWait(w: unknown): TaskBundle["planWait"] {
+  if (w === undefined || w === null) return undefined;
+  const file = (w as { file?: unknown }).file;
+  if (typeof w !== "object" || !(file === null || isStr(file)))
+    throw new Error("Bad plan");
+  if ((file?.length ?? 0) > MAX_PLAN_BYTES)
+    throw new Error("The plan is too large to move");
+  return { file };
+}
+
 export function validateBundle(b: TaskBundle): TaskBundle {
   if (!b || typeof b !== "object") throw new Error("No task to import");
   if (!isSessionId(b.moveId)) throw new Error("Bad move id");
@@ -228,6 +242,7 @@ export function validateBundle(b: TaskBundle): TaskBundle {
     orchestrated: b.orchestrated
       ? validateOrchestrated(b.orchestrated)
       : undefined,
+    planWait: validatePlanWait(b.planWait),
     chat: b.chat ? validateChat(b.chat) : undefined,
     name: b.name.slice(0, 200),
     from: String(b.from || "another machine")

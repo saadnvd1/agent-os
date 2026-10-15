@@ -173,6 +173,9 @@ export async function createTask(opts: {
   held?: { device: string; orchestrated: OrchestratedBundle };
   // The paired device that sent this keyed start: the only one that may hold it later.
   startedByDevice?: string | null;
+  // Another machine placed this plan here and decides what follows it: the
+  // task plans, then waits for that machine (implies planOnly).
+  planWaits?: boolean;
 }): Promise<Session> {
   if (opts.id) {
     const existing = queries.getSession(db).get(opts.id) as Session | undefined;
@@ -244,12 +247,27 @@ async function startTask(
       throw new Error(`${agentLabel(agent)} tasks run on this machine for now`);
   }
   if (isRemoteHost(hostId)) {
-    if (opts.planOnly)
-      throw new Error("A plan-only task runs on this machine for now");
     if (opts.base || opts.cardId)
       throw new Error(
         "Stacked and card tasks run on this machine only for now"
       );
+    if (opts.planOnly && opts.plan === false)
+      throw new Error(
+        "planOnly implies plan; it can't be combined with plan false"
+      );
+    if (opts.planOnly && view !== "chat")
+      throw new Error("A plan-only task needs a chat, not a terminal");
+    // The plan step is this machine's to run and decide: it plans there,
+    // stops, and what follows is chosen here (remote-plan.ts).
+    const planned =
+      !!(opts.plan || opts.planOnly) &&
+      taskRouting(
+        project.workspace_id,
+        view,
+        opts.model,
+        opts.plan,
+        opts.planOnly
+      ).plan;
     const session = await startRemoteTask(hostId, project, {
       id,
       prompt,
@@ -258,6 +276,9 @@ async function startTask(
       baseBranch: opts.baseBranch,
       view,
       startedBy: opts.startedBy,
+      plan: planned
+        ? { only: !!opts.planOnly, reason: opts.planReason?.trim() || null }
+        : undefined,
     });
     // The mirror's started_by stays orchestrator-only: a held-remote task is
     // relayed, stopped and answered through it. A plain calling task is its
@@ -347,7 +368,7 @@ async function startTask(
     db.prepare(
       `UPDATE sessions SET task_prompt = ?, task_brief = ?, task_status = 'running', setup_status = 'running', name_source = ?, view = ?,
          model_provider = ?, model_overrides = ?, plan_phase = ?, plan_only = ?,
-         plan_decided = ?, plan_reason = ? WHERE id = ?`
+         plan_decided = ?, plan_reason = ?, plan_waits_for_caller = ? WHERE id = ?`
     ).run(
       prompt,
       buildTaskBrief({
@@ -366,6 +387,7 @@ async function startTask(
       routing.planOnly ? 1 : null,
       routing.planOnly ? 1 : opts.plan === undefined ? null : opts.plan ? 1 : 0,
       opts.planReason?.trim() || null,
+      routing.planOnly && opts.planWaits ? 1 : null,
       id
     );
     recordStart(id, {

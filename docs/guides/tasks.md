@@ -98,8 +98,17 @@ row says why it waits: `#2 of 5 · Urgent`, `Waiting: this machine load red`,
   its load at `GET /api/load`; the queue asks linked machines every 15 s while
   work is waiting, and a reading older than a minute counts as red. Work that
   needs a Mac never leaves it, and a task already running is never moved.
-  Plan-only, plan-first, pinned and non-Claude tasks stay on this machine
-  and wait; the hold says why.
+  Pinned and non-Claude tasks stay on this machine and wait; the hold says
+  why.
+- **Plan-first tasks.** A plan-only or plan-first task may plan on a linked
+  machine that has room, since planning only reads code. That machine plans
+  and stops; this one copies the plan to `plans/remote/<id>.md` (the path the
+  orchestrator reads), announces it once, and decides what follows: approval
+  goes to the machine that planned it, unless the task needs a Mac this
+  machine has and that one lacks, or its plan is in pieces (they register
+  here). Those move here with the ordinary task move once this machine is free,
+  then implement. No extra model runs; a linked machine needs the
+  `remote-plan` capability (an older version keeps the task here).
 - **After any.** `after: "any"` consumes one finish: three waiters and one
   finish start one of them.
 - **Usage window.** Only while the orchestrator's brakes are on.

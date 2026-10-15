@@ -17,6 +17,8 @@ import {
   type TaskPlan,
 } from "./loop-types";
 import { expandHome } from "./session";
+import { isRemoteHost } from "../hosts";
+import { remotePlanPath } from "./remote-plan-path";
 
 const TITLE_MAX = 120;
 
@@ -131,7 +133,10 @@ export function taskPlan(session: Session): TaskPlan | null {
     };
 
   if (phase && session.worktree_path) {
-    const file = path.join(expandHome(session.worktree_path), PLAN_FILE);
+    // A plan written on a linked machine is read from the copy kept here.
+    const file = isRemoteHost(session.host_id)
+      ? remotePlanPath(session.id)
+      : path.join(expandHome(session.worktree_path), PLAN_FILE);
     const text = readHead(file, PLAN_TEXT_MAX);
     if (text !== null || phase === "planning") {
       const body = text ?? "";
@@ -141,13 +146,16 @@ export function taskPlan(session: Session): TaskPlan | null {
         status:
           phase === "planning"
             ? "writing"
-            : phase === "awaiting"
+            : phase === "awaiting" || phase === "handoff"
               ? "ready"
               : "approved",
         source: "step",
         title: planTitle(body),
         path: text !== null ? PLAN_FILE : null,
-        pieces: phase === "awaiting" ? piecesView(session, file) : null,
+        pieces:
+          phase === "awaiting" || phase === "handoff"
+            ? piecesView(session, file)
+            : null,
         ...capped(body),
       };
     }

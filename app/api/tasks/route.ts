@@ -46,6 +46,7 @@ export async function POST(request: NextRequest) {
       plan,
       plan_reason,
       plan_only,
+      plan_waits,
       priority,
       machine,
       orchestrated,
@@ -76,7 +77,7 @@ export async function POST(request: NextRequest) {
           ? model
           : (parseOverride(model) ?? undefined),
       plan: typeof plan === "boolean" ? plan : undefined,
-      planOnly: plan_only === true ? true : undefined,
+      planOnly: plan_only === true || plan_waits === true ? true : undefined,
       planReason:
         typeof plan_reason === "string" && plan_reason.trim()
           ? plan_reason.trim().slice(0, 200)
@@ -107,6 +108,8 @@ export async function POST(request: NextRequest) {
         id,
         ...opts,
         held,
+        // Another machine's plan stops for it to decide what follows.
+        planWaits: plan_waits === true && !!device ? true : undefined,
         startedVia: "remote",
         startedByDevice: device ?? undefined,
       });

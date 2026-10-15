@@ -138,8 +138,6 @@ export function unplaceable(r: {
   host_id: string | null;
 }): string | null {
   if (r.host_id) return "it was pinned to a machine";
-  if (r.plan_only) return "plan-only tasks run on this machine";
-  if (r.plan) return "plan-first tasks run on this machine";
   if (r.agent_type && r.agent_type !== "claude")
     return "only Claude tasks run on another machine";
   if (r.model_overrides) return "per-role models run on this machine";
@@ -153,10 +151,23 @@ export interface PeerOption {
   capabilities: string[];
   // It can hold an orchestrator's task (false: an older AgentOS). Unset: yes.
   holds?: boolean;
+  // It can run a plan step that stops for this machine (false: an older
+  // AgentOS). Unset: yes.
+  plans?: boolean;
   // The project exists there (projectMachines said null).
   hasProject: boolean;
   loadPerCore: number;
 }
+
+// A start that plans first: the plan phase only reads code, so it needs no
+// simulator or Mac, and the plan-only skip of load holds doesn't apply to
+// where it goes, only to whether it may wait. The candidate as a plan phase
+// sees it.
+export const asPlanPhase = <
+  T extends Pick<Candidate, "heavy" | "needsUnmet" | "planOnly">,
+>(
+  c: T
+): T => ({ ...c, heavy: false, needsUnmet: false, planOnly: false });
 
 export interface Placement {
   hostId: string;

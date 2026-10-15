@@ -118,9 +118,10 @@ async function arrive(
   };
   stepProgress(bundle.moveId, "conversation");
   // The plan is never in git: it comes in the bundle.
-  if (orch?.planFile != null) {
+  const planFile = bundle.planWait?.file ?? orch?.planFile ?? null;
+  if (planFile != null) {
     preparePlanDir(worktreePath);
-    fs.writeFileSync(path.join(worktreePath, PLAN_FILE), orch.planFile);
+    fs.writeFileSync(path.join(worktreePath, PLAN_FILE), planFile);
   }
   if (claude && paths) {
     await writeTranscript(
@@ -169,6 +170,10 @@ async function arrive(
          claude_session_id = ?, moved_from = ? WHERE id = ?`
     ).run(bundle.prompt, brief, claude?.sessionId ?? null, bundle.moveId, id);
     if (bundle.chat) unpackChat(id, bundle.chat, paths);
+    if (bundle.planWait)
+      db.prepare(
+        `UPDATE sessions SET plan_phase = 'awaiting' WHERE id = ?`
+      ).run(id);
     if (orch) {
       db.prepare(
         `UPDATE sessions SET plan_phase = ?, task_since = ? WHERE id = ?`
@@ -205,7 +210,10 @@ async function arrive(
     }
     const note = arrivalNote(bundle, worktreePath, os.hostname());
     const prompt = claude ? note : `${bundle.prompt}\n\n${note}`;
-    if (bundle.chat) {
+    if (bundle.planWait) {
+      // Waiting on its plan's approval: nothing runs until the message that
+      // implements it, which resumes the carried conversation.
+    } else if (bundle.chat) {
       // Its worker starts on the carried conversation, takes the note
       // first, then what was queued.
       await sendChat(id, {

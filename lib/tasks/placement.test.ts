@@ -4,6 +4,7 @@ import path from "path";
 import { afterEach, describe, expect, it } from "vitest";
 import type { MachineView } from "./schedule";
 import {
+  asPlanPhase,
   heavyNeeds,
   inferNeeds,
   meetsNeeds,
@@ -223,7 +224,7 @@ describe("what a task needs", () => {
     expect(heavyNeeds(["mac"])).toBe(false);
   });
 
-  it("keeps plan-only, plan-first, pinned and non-claude tasks at home", () => {
+  it("places plan-only and plan-first tasks, keeping pinned and non-claude ones at home", () => {
     const base = {
       plan_only: null,
       plan: null,
@@ -232,9 +233,29 @@ describe("what a task needs", () => {
       host_id: null,
     };
     expect(unplaceable(base)).toBeNull();
-    expect(unplaceable({ ...base, plan_only: 1 })).toMatch(/plan-only/);
-    expect(unplaceable({ ...base, plan: 1 })).toMatch(/plan-first/);
+    expect(unplaceable({ ...base, plan_only: 1 })).toBeNull();
+    expect(unplaceable({ ...base, plan: 1 })).toBeNull();
+    expect(unplaceable({ ...base, plan: 1, model_overrides: "{}" })).toMatch(
+      /per-role/
+    );
     expect(unplaceable({ ...base, host_id: "h" })).toMatch(/pinned/);
     expect(unplaceable({ ...base, agent_type: "codex" })).toMatch(/Claude/);
+  });
+});
+
+describe("the plan phase of a start", () => {
+  it("needs no simulator, no Mac and no plan-only skip: only load rules it out", () => {
+    const heavy = {
+      heavy: true,
+      needsUnmet: true,
+      remote: false,
+      priority: "normal" as const,
+      planOnly: true,
+    };
+    expect(asPlanPhase(heavy)).toMatchObject({
+      heavy: false,
+      needsUnmet: false,
+      planOnly: false,
+    });
   });
 });

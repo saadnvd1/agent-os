@@ -20,7 +20,7 @@ export interface Session {
   model_overrides?: string | null;
   // A task's plan step: planning on the planning model, then implementing.
   // 'awaiting': a plan-only task's plan is written; it waits for approval.
-  plan_phase?: "planning" | "awaiting" | "implementing" | null;
+  plan_phase?: "planning" | "awaiting" | "handoff" | "implementing" | null;
   plan_only?: number | null;
   // The orchestrator session that started this one; null for a person.
   started_by?: string | null;
@@ -156,6 +156,11 @@ export interface Session {
   held_for_name?: string | null;
   // A held task's "plan written" line, for its orchestrator to read.
   plan_note?: string | null;
+  // The task's plan stops for the machine that placed it here to decide what
+  // comes next (1); on that machine's mirror, the approval's message waits for
+  // the move home.
+  plan_waits_for_caller?: number | null;
+  plan_handoff_message?: string | null;
   // Orchestration fields
   conductor_session_id: string | null;
   worker_task: string | null;

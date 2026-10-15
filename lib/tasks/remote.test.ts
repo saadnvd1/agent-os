@@ -90,6 +90,73 @@ describe("starting a task on a linked machine", () => {
     });
   });
 
+  it("sends a plan as plan-only for this machine to decide, and mirrors the plan state", async () => {
+    const r = remoteSession();
+    fetchMock
+      .mockResolvedValueOnce(list([]))
+      .mockResolvedValueOnce(json({ session: r }, 201));
+    await createTask({
+      startedVia: "person",
+      projectId: f.projectId,
+      prompt: "do x",
+      hostId,
+      plan: true,
+      planOnly: true,
+      planReason: "big",
+    });
+    const body = JSON.parse(fetchMock.mock.calls[1][1].body);
+    expect(body).toMatchObject({
+      plan: true,
+      plan_only: true,
+      plan_waits: true,
+      plan_reason: "big",
+    });
+    expect(row(r.id!)).toMatchObject({
+      plan_phase: "planning",
+      plan_only: 1,
+      plan_waits_for_caller: 1,
+      plan_reason: "big",
+    });
+  });
+
+  it("refuses a plan for a machine whose AgentOS can't wait for this one", async () => {
+    fetchMock.mockResolvedValueOnce(
+      json({ tasks: [], moved: [], capabilities: [] })
+    );
+    await expect(
+      createTask({
+        startedVia: "person",
+        projectId: f.projectId,
+        prompt: "do x",
+        hostId,
+        planOnly: true,
+      })
+    ).rejects.toThrow(/can't plan a plan step yet/);
+  });
+
+  it("refuses planOnly with plan false, or in a terminal, as at home", async () => {
+    await expect(
+      createTask({
+        startedVia: "person",
+        projectId: f.projectId,
+        prompt: "do x",
+        hostId,
+        planOnly: true,
+        plan: false,
+      })
+    ).rejects.toThrow(/planOnly implies plan/);
+    await expect(
+      createTask({
+        startedVia: "person",
+        projectId: f.projectId,
+        prompt: "do x",
+        hostId,
+        planOnly: true,
+        view: "terminal",
+      })
+    ).rejects.toThrow(/needs a chat/);
+  });
+
   it("asks once more with the same id when it can't tell whether it started", async () => {
     const r = remoteSession();
     fetchMock

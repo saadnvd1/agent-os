@@ -60,6 +60,7 @@ import {
   needsFromSetting,
   needsOf,
   parseNeeds,
+  asPlanPhase,
   place,
   unplaceable,
   wantsPlacing,
@@ -87,6 +88,7 @@ import {
 } from "./pause";
 import { orchestratorOf, type StartVia } from "./starter";
 import { claimPiece } from "../plans/claim";
+import { usesGitCrypt } from "../worktree-add";
 
 export type QueueStatus =
   | "queued"
@@ -854,6 +856,13 @@ const usedFinishes = (): string[] =>
       .all() as { id: string }[]
   ).map((x) => x.id);
 
+// A plan placed elsewhere may have to come back here to be built, and a
+// git-crypt repository never leaves this machine (the key stays here).
+function placementBarred(r: Pick<QueueRow, "project_id">): boolean {
+  const project = getProject(r.project_id);
+  return !project || usesGitCrypt(expandHome(project.working_directory));
+}
+
 function candidateOf(
   r: QueueRowWithWorkspace,
   used: string[]
@@ -924,6 +933,7 @@ async function peerOptions(
   // Whether each machine can hold an orchestrator's task (an older AgentOS
   // can't, and would fail its start); unreadable counts as no.
   const holds = new Map<string, boolean>();
+  const plans = new Map<string, boolean>();
   await Promise.all(
     hostIds.map(async (hostId) => {
       const link = hostLink(hostId);
@@ -933,6 +943,7 @@ async function peerOptions(
             .catch(() => [])
         : [];
       holds.set(hostId, caps.includes("held-start"));
+      plans.set(hostId, caps.includes("remote-plan"));
     })
   );
   const perProject = new Map<string, Record<string, string | null>>();
@@ -957,6 +968,7 @@ async function peerOptions(
           view: viewOf(src, now),
           capabilities: src.capabilities,
           holds: holds.get(hostId) ?? false,
+          plans: plans.get(hostId) ?? false,
           hasProject: can[hostId] === null,
           loadPerCore: reading ? reading.load1 / reading.cores : 99,
         };
@@ -1019,13 +1031,21 @@ export async function tickOnce(now = Date.now()): Promise<"stale" | void> {
   // linked machine, best score first, one per machine per look.
   const placements = new Map<string, Placement>();
   const home = localView(now);
-  const toPlace = candidates.filter(
-    (c) =>
-      c.kind === "start" &&
-      !c.remote &&
-      !unplaceable(row(c.id)!) &&
-      wantsPlacing(c, home, now)
-  );
+  // A start that plans first goes by its plan phase: it needs no Mac or
+  // simulator, and a plan-only one that no machine can take starts here
+  // as ever (it never waits on load).
+  const plansFirst = (r: QueueRow) => !!(r.plan || r.plan_only);
+  const asked = (c: Candidate) => {
+    const r = row(c.id)!;
+    return plansFirst(r) ? asPlanPhase(c) : c;
+  };
+  const toPlace = candidates.filter((c) => {
+    if (c.kind !== "start" || c.remote) return false;
+    const r = row(c.id)!;
+    if (unplaceable(r)) return false;
+    if (plansFirst(r) && placementBarred(r)) return false;
+    return wantsPlacing(asked(c), home, now);
+  });
   if (toPlace.length) {
     const before = lineSignature();
     const peers = await peerOptions(
@@ -1042,12 +1062,20 @@ export async function tickOnce(now = Date.now()): Promise<"stale" | void> {
         a.position - b.position
     )) {
       const r = rows.find((x) => x.id === c.id)!;
+      const plan = plansFirst(r);
       const options = (peers.get(r.project_id) ?? []).filter(
         (p) =>
           !taken.has(p.hostId) &&
-          (!orchestratorOf(r.started_by) || p.holds !== false)
+          (!orchestratorOf(r.started_by) || p.holds !== false) &&
+          (!plan || p.plans)
       );
-      const spot = place(c, home, options, built.get(c.id)!.needs, now);
+      const spot = place(
+        asked(c),
+        home,
+        options,
+        plan ? [] : built.get(c.id)!.needs,
+        now
+      );
       if (!spot) continue;
       taken.add(spot.hostId);
       placements.set(c.id, spot);
@@ -1176,6 +1204,10 @@ const tickState = (g.__agentosQueueTick ??= { ticking: null });
 export function tickQueue(): Promise<void> {
   tickState.ticking ??= (async () => {
     try {
+      // Plans written on a linked machine, and approved plans coming here.
+      await import("./remote-plan")
+        .then((m) => m.syncRemotePlans())
+        .catch((error: unknown) => console.error("[queue] plans:", error));
       for (let i = 0; i < 3; i++) {
         if ((await tickOnce()) !== "stale") break;
       }
