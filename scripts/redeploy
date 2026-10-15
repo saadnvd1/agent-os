@@ -39,14 +39,16 @@ if [ -n "${AGENTOS_RESTART:-}" ]; then
   echo "::phase restarting"
   eval "$AGENTOS_RESTART"
   port="${PORT:-3011}"
-  for _ in $(seq 1 40); do
+  # Startup runs migrations, and one that copies the database first took 4.5
+  # minutes on a loaded Mac; a 40s wait called that a failure while it worked.
+  for _ in $(seq 1 "${AGENTOS_UP_WAIT:-600}"); do
     if [ "$(curl -s -o /dev/null -w '%{http_code}' "http://127.0.0.1:$port/")" = 200 ]; then
       echo "AgentOS is up on $port"
       exit 0
     fi
     sleep 1
   done
-  echo "AgentOS did not come back on $port; scripts/redeploy --rollback puts the last build back" >&2
+  echo "AgentOS did not come back on $port within ${AGENTOS_UP_WAIT:-600}s; scripts/redeploy --rollback puts the last build back" >&2
   exit 1
 fi
 echo "Built. Restart your AgentOS server to run it."

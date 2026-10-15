@@ -36,6 +36,10 @@ server runs (`GET /api/busy`, loopback or tailnet only) to finish, for up to
 cuts off anyway runs again when the server starts, and its verdict arrives
 as usual.
 
+After the restart, `scripts/redeploy` waits up to 10 minutes
+(`AGENTOS_UP_WAIT`, seconds) for the server to answer, because startup runs
+migrations and one that backs up the database can take minutes.
+
 Restarts are also spaced `AGENTOS_MIN_GAP` seconds apart (default 600; 0 turns
 it off). A merge that lands inside the gap isn't dropped: the checkout stays
 as it was, and the newest head deploys on the first run after the gap ends.
