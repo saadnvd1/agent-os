@@ -18,7 +18,7 @@ import { getDefaultBranch, slugify } from "../git";
 import { currentBranch, git, revParse } from "../git-exec";
 import { isRemoteHost } from "../hosts";
 import { createWorktree, deleteWorktree } from "../worktrees";
-import { PROTECTED_BRANCHES } from "../tasks/finish";
+import { PROTECTED_BRANCHES } from "../tasks/remote-branch";
 import { run } from "../tasks/gh";
 import { ATTRIBUTION, renderedLines } from "../tasks/code-review";
 import { expandHome, forgetPR, prFor, projectPathFor } from "../tasks/session";
