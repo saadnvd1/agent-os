@@ -12,6 +12,7 @@ export { queries, sessionListColumns } from "./queries";
 export * from "./lumifyhub";
 export * from "./lumifyhub-docs";
 export * from "./stacks";
+export * from "./session-parts";
 
 const DB_PATH = dbPath();
 const LOCK_PATH = DB_PATH + ".init-lock";

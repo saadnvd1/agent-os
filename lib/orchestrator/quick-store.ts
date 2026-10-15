@@ -9,7 +9,7 @@ export function quickWorktrees(orchestratorId: string): string[] {
   return (
     db
       .prepare(
-        `SELECT worktree_path AS dir FROM sessions
+        `SELECT worktree_path AS dir FROM session_rows
           WHERE quick_of = ? AND task_status = 'running'
             AND worktree_path IS NOT NULL AND worktree_path != ''`
       )

@@ -24,7 +24,7 @@ export function getOrchestrator(workspaceId: string): Session | null {
   return (
     (db
       .prepare(
-        `SELECT * FROM sessions WHERE role = 'orchestrator' AND workspace_id = ?`
+        `SELECT * FROM session_rows WHERE role = 'orchestrator' AND workspace_id = ?`
       )
       .get(workspaceId) as Session | undefined) ?? null
   );
@@ -32,7 +32,7 @@ export function getOrchestrator(workspaceId: string): Session | null {
 
 export function listOrchestrators(): Session[] {
   return db
-    .prepare(`SELECT * FROM sessions WHERE role = 'orchestrator'`)
+    .prepare(`SELECT * FROM session_rows WHERE role = 'orchestrator'`)
     .all() as Session[];
 }
 

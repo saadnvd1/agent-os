@@ -225,7 +225,7 @@ export function taskOutcomes(ids: string[]): Map<string, TaskOutcome> {
   const marks = ids.map(() => "?").join(",");
   const tasks = db
     .prepare(
-      `SELECT id, task_status, plan_decided FROM sessions
+      `SELECT id, task_status, plan_decided FROM session_rows
        WHERE id IN (${marks}) AND task_status IS NOT NULL`
     )
     .all(...ids) as {

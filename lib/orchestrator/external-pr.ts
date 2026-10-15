@@ -94,7 +94,7 @@ const unique = (repos: WorkspaceRepo[]) => [
 function tasksWithPR(workspaceId: string, ref: PRRef): WorkspaceTask[] {
   const rows = db
     .prepare(
-      `SELECT s.*, p.name AS project_name FROM sessions s
+      `SELECT s.*, p.name AS project_name FROM session_rows s
        JOIN projects p ON p.id = s.project_id
        WHERE p.workspace_id = ? AND s.pr_number = ? AND s.task_status IS NOT NULL
        ORDER BY s.created_at DESC`
@@ -125,7 +125,7 @@ async function ownerOf(
     .prepare(
       `SELECT s.*, p.name AS project_name, p.workspace_id AS owner_workspace,
          p.working_directory AS project_dir, p.host_id AS project_host
-       FROM sessions s JOIN projects p ON p.id = s.project_id
+       FROM session_rows s JOIN projects p ON p.id = s.project_id
        WHERE s.task_status IS NOT NULL
          AND (s.pr_number = ? OR (s.branch_name = ? AND s.task_status IN ('running', 'moving', 'moved')))
        ORDER BY s.created_at DESC`

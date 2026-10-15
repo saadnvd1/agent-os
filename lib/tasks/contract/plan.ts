@@ -35,11 +35,12 @@ import { DEFAULT_PRIORITY, isPriority } from "../schedule-types";
 import { localHolds } from "../hold-checks";
 import { expandHome } from "../session";
 import { orchestratorOf } from "../starter";
+import { setPlan } from "../../db/session-parts";
 
 export { remotePlanPath };
 
 const getSession = (id: string) =>
-  db.prepare(`SELECT * FROM sessions WHERE id = ?`).get(id) as
+  db.prepare(`SELECT * FROM session_rows WHERE id = ?`).get(id) as
     | Session
     | undefined;
 
@@ -95,11 +96,12 @@ export async function planWritten(
   const link = hostLink(s.host_id);
   if (!link || !view?.planReady) return;
   const text = await client.plan(link, s.id);
-  const claimed = db
-    .prepare(
-      `UPDATE sessions SET plan_phase = 'awaiting' WHERE id = ? AND plan_phase = 'planning'`
-    )
-    .run(s.id).changes;
+  const claimed = setPlan(
+    db,
+    s.id,
+    { plan_phase: "awaiting" },
+    { plan_phase: "planning" }
+  );
   if (!claimed) return;
   if (text !== null) {
     await fs.mkdir(path.dirname(remotePlanPath(s.id)), { recursive: true });
@@ -121,7 +123,7 @@ export async function planWritten(
         ? "moving here to implement once this machine is free"
         : "waiting for approval, not implementing (approve_plan to go ahead, drop to reject)";
   const note = planNoteFor(fresh, remotePlanPath(s.id), next);
-  db.prepare(`UPDATE sessions SET plan_note = ? WHERE id = ?`).run(note, s.id);
+  setPlan(db, s.id, { plan_note: note });
   const workspaceId = sessionWorkspace(fresh);
   if (orchestratorOf(fresh.started_by) && workspaceId) {
     queueEvent(workspaceId, `plan-done:${s.id}`, s.id, note);
@@ -169,16 +171,21 @@ export async function continuePlanThere(
   const split = checkedSplit(s, await readCopy(s.id));
   if (implementTarget(s, split) === "there") {
     const out = await client.approvePlan(link, s.id, message);
-    db.prepare(
-      `UPDATE sessions SET plan_phase = 'implementing' WHERE id = ? AND plan_phase = 'awaiting'`
-    ).run(s.id);
+    setPlan(
+      db,
+      s.id,
+      { plan_phase: "implementing" },
+      { plan_phase: "awaiting" }
+    );
     client.forget(link.hostId);
     return out.model ?? link.hostName;
   }
-  db.prepare(
-    `UPDATE sessions SET plan_phase = 'handoff', plan_handoff_message = ?
-     WHERE id = ? AND plan_phase = 'awaiting'`
-  ).run(message ?? null, s.id);
+  setPlan(
+    db,
+    s.id,
+    { plan_phase: "handoff", plan_handoff_message: message ?? null },
+    { plan_phase: "awaiting" }
+  );
   const workspaceId = sessionWorkspace(s);
   if (orchestratorOf(s.started_by) && workspaceId)
     queueEvent(
@@ -200,9 +207,7 @@ export async function finishArrival(
   message?: string
 ): Promise<boolean> {
   await implementArrived(id, message || undefined);
-  db.prepare(
-    `UPDATE sessions SET plan_handoff_message = NULL WHERE id = ?`
-  ).run(id);
+  setPlan(db, id, { plan_handoff_message: null });
   return true;
 }
 
@@ -253,9 +258,10 @@ export async function handoffHome(
     const arrived = await moveTask(id, LOCAL);
     // The arrived row keeps the pending hand-off until implementing has
     // started, so a restart in between is picked up by syncMirrors.
-    db.prepare(
-      `UPDATE sessions SET plan_edits = COALESCE(?, plan_edits), plan_handoff_message = ? WHERE id = ?`
-    ).run(edits, message ?? "", arrived.id);
+    setPlan(db, arrived.id, {
+      plan_edits: edits ?? undefined,
+      plan_handoff_message: message ?? "",
+    });
     handingOff.add(arrived.id);
     try {
       return await finishArrival(arrived.id, message);

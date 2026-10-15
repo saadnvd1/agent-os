@@ -4,6 +4,7 @@
 
 import path from "path";
 import { db } from "../db";
+import { setPlacement } from "../db/session-parts";
 
 export type StartVia =
   | "session"
@@ -59,7 +60,7 @@ export function callerSession(input: {
   const cwd = path.resolve(input.cwd);
   const rows = db
     .prepare(
-      `SELECT id, role, worktree_path FROM sessions
+      `SELECT id, role, worktree_path FROM session_rows
        WHERE worktree_path IS NOT NULL AND archived_at IS NULL
          AND task_status IS NOT NULL
          AND (host_id IS NULL OR host_id = 'local')`
@@ -111,14 +112,10 @@ export function orchestratorOf(startedBy: string | null | undefined) {
 }
 
 export function recordStart(id: string, s: Starter): void {
-  db.prepare(
-    `UPDATE sessions SET started_by = ?, parent_session_id = (SELECT id FROM sessions WHERE id = ?), started_via = ?,
-       started_by_device = COALESCE(?, started_by_device) WHERE id = ?`
-  ).run(
-    s.startedBy,
-    s.parentSessionId,
-    s.startedVia,
-    s.startedByDevice ?? null,
-    id
-  );
+  db.transaction(() => {
+    db.prepare(
+      `UPDATE sessions SET started_by = ?, parent_session_id = (SELECT id FROM sessions WHERE id = ?), started_via = ? WHERE id = ?`
+    ).run(s.startedBy, s.parentSessionId, s.startedVia, id);
+    setPlacement(db, id, { started_by_device: s.startedByDevice ?? undefined });
+  })();
 }

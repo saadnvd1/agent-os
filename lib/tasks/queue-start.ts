@@ -27,6 +27,7 @@ import {
   type QueueRow,
   type StartOutcome,
 } from "./queue-types";
+import { setPlacement, setTask } from "../db/session-parts";
 
 // Tells the orchestrator that queued it that it started.
 export function announce(
@@ -205,7 +206,8 @@ function stampStarted(r: QueueRow, placed: Placement | null): void {
   const priority =
     r.priority && r.priority !== DEFAULT_PRIORITY ? r.priority : null;
   if (!note && !priority) return;
-  db.prepare(
-    `UPDATE sessions SET priority = COALESCE(?, priority), placed_note = COALESCE(?, placed_note) WHERE id = ?`
-  ).run(priority, note, r.id);
+  db.transaction(() => {
+    setTask(db, r.id, { priority: priority ?? undefined });
+    setPlacement(db, r.id, { placed_note: note ?? undefined });
+  })();
 }

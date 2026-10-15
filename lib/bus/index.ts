@@ -43,7 +43,7 @@ export interface Peer {
 function liveSessions(): Session[] {
   return db
     .prepare(
-      `SELECT * FROM sessions WHERE (task_status IS NULL OR task_status = 'running')
+      `SELECT * FROM session_rows WHERE (task_status IS NULL OR task_status = 'running')
          AND archived_at IS NULL
        ORDER BY updated_at DESC`
     )
@@ -63,7 +63,7 @@ function candidates(sessions: Session[]): Candidate[] {
 
 const sessionById = (id: string | null | undefined) =>
   id
-    ? (db.prepare(`SELECT * FROM sessions WHERE id = ?`).get(id) as
+    ? (db.prepare(`SELECT * FROM session_rows WHERE id = ?`).get(id) as
         | Session
         | undefined)
     : undefined;

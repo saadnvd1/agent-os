@@ -44,7 +44,7 @@ export function toPlanCards(
 function runningTasks(boardId: string): Map<string, string> {
   const rows = db
     .prepare(
-      `SELECT id, lh_card_id FROM sessions
+      `SELECT id, lh_card_id FROM session_rows
        WHERE lh_board_id = ? AND lh_card_id IS NOT NULL AND task_status = 'running'`
     )
     .all(boardId) as Array<{ id: string; lh_card_id: string }>;

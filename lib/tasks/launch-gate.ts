@@ -9,7 +9,7 @@ import { db } from "../db";
 export function launchPending(sessionId: string): boolean {
   const row = db
     .prepare(
-      `SELECT 1 FROM sessions WHERE id = ? AND task_status = 'running'
+      `SELECT 1 FROM session_rows WHERE id = ? AND task_status = 'running'
          AND setup_status IN ('running', 'held')`
     )
     .get(sessionId);

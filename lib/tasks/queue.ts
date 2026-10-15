@@ -66,6 +66,7 @@ export type {
   QueuedTaskView,
   StartOutcome,
 } from "./queue-types";
+import { setTask } from "../db/session-parts";
 export { afterMet, hasFinished, resolveAfter, slotState } from "./queue-rows";
 export { findQueued, listQueue, queuedView } from "./queue-view";
 export { tickOnce, tickQueue, tickQueueSoon } from "./queue-tick";
@@ -260,11 +261,18 @@ export function setPriority(id: string, priority: Priority): void {
       `UPDATE task_queue SET priority = ? WHERE id = ? AND status IN ('queued', 'failed')`
     )
     .run(priority, id).changes;
-  const running = db
-    .prepare(
-      `UPDATE sessions SET priority = ? WHERE id = ? AND task_status IS NOT NULL AND archived_at IS NULL`
-    )
-    .run(priority === DEFAULT_PRIORITY ? null : priority, id).changes;
+  const running = db.transaction(() => {
+    const live = db
+      .prepare(
+        `SELECT 1 FROM session_rows WHERE id = ? AND task_status IS NOT NULL AND archived_at IS NULL`
+      )
+      .get(id);
+    return live
+      ? setTask(db, id, {
+          priority: priority === DEFAULT_PRIORITY ? null : priority,
+        })
+      : false;
+  })();
   if (!queued && !running) throw new Error("No such queued or running task");
   tickQueueSoon();
 }
@@ -272,7 +280,7 @@ export function setPriority(id: string, priority: Priority): void {
 // A task started directly (never queued) keeps the priority it was given.
 export function stampPriority(id: string, priority: Priority | undefined) {
   if (!priority || priority === DEFAULT_PRIORITY) return;
-  db.prepare(`UPDATE sessions SET priority = ? WHERE id = ?`).run(priority, id);
+  setTask(db, id, { priority });
 }
 
 export function removeQueued(id: string): void {

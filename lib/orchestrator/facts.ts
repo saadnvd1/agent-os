@@ -84,7 +84,7 @@ export function workspaceSessions(
 ): (Session & { project_name: string })[] {
   return db
     .prepare(
-      `SELECT s.*, p.name AS project_name FROM sessions s
+      `SELECT s.*, p.name AS project_name FROM session_rows s
        JOIN projects p ON p.id = s.project_id
        WHERE p.workspace_id = ? AND s.role IS NULL AND s.archived_at IS NULL
          -- A linked machine's own sessions are its orchestrator's to run.

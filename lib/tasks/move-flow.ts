@@ -24,6 +24,7 @@ import {
   startProgress,
   stepProgress,
 } from "./move-progress";
+import { setTask } from "../db/session-parts";
 
 const LIVE = new Set(["running", "moving"]);
 
@@ -128,10 +129,12 @@ async function moveOut(session: Session, hostId: string): Promise<Session> {
 }
 
 function mirrorRunning(id: string): void {
-  db.prepare(
-    `UPDATE sessions SET task_status = 'running', moved_to = NULL
-       WHERE id = ? AND task_status = 'moving'`
-  ).run(id);
+  setTask(
+    db,
+    id,
+    { task_status: "running", moved_to: null },
+    { task_status: "moving" }
+  );
 }
 
 async function moveIn(mirror: Session): Promise<Session> {
@@ -143,10 +146,12 @@ async function moveIn(mirror: Session): Promise<Session> {
   if (!here) {
     // Moving, so nothing reads the mirror as a task to judge, or sign off,
     // while it leaves (a refusal below puts it back).
-    db.prepare(
-      `UPDATE sessions SET task_status = 'moving', moved_to = 'this machine'
-         WHERE id = ? AND task_status = 'running'`
-    ).run(mirror.id);
+    setTask(
+      db,
+      mirror.id,
+      { task_status: "moving", moved_to: "this machine" },
+      { task_status: "running" }
+    );
     // That machine resumes the agent itself if its half fails there.
     stepProgress(mirror.id, "export");
     let bundle: TaskBundle;
@@ -187,6 +192,6 @@ async function moveIn(mirror: Session): Promise<Session> {
   );
   client.forget(link.hostId);
   return db
-    .prepare(`SELECT * FROM sessions WHERE id = ?`)
+    .prepare(`SELECT * FROM session_rows WHERE id = ?`)
     .get(here.id) as Session;
 }

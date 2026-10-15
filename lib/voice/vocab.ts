@@ -44,7 +44,7 @@ export function vocabFor(workspaceId: string): string[] {
     workspaceId
   );
   const sessions = names(
-    `SELECT s.name FROM sessions s
+    `SELECT s.name FROM session_rows s
      JOIN projects p ON p.id = s.project_id
      WHERE p.workspace_id = ?
        AND (s.task_status IS NULL OR s.task_status NOT IN ('merged','dropped','done','moved'))

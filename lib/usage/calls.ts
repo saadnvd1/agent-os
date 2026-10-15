@@ -97,7 +97,7 @@ export function sessionContext(sessionId: string): SessionContext {
   const s = db
     .prepare(
       `SELECT name, workspace_id, project_id, model_provider, role, task_status,
-         plan_phase, started_by FROM sessions WHERE id = ?`
+         plan_phase, started_by FROM session_rows WHERE id = ?`
     )
     .get(sessionId) as
     | {

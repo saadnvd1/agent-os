@@ -439,7 +439,7 @@ export async function resurrect(
   if (!reason.trim()) throw new Error("Say why it's restored");
   const id = resolveEnded(ref, { workspaceId });
   const row = db
-    .prepare(`SELECT task_status, archived_at FROM sessions WHERE id = ?`)
+    .prepare(`SELECT task_status, archived_at FROM session_rows WHERE id = ?`)
     .get(id) as { task_status: string | null; archived_at: string | null };
   const task =
     row.task_status === "dropped" ||

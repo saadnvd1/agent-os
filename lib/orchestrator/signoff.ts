@@ -331,7 +331,9 @@ export async function refundIfRefused(
     await merge();
   } catch (e) {
     const merged = db
-      .prepare(`SELECT 1 FROM sessions WHERE id = ? AND task_status = 'merged'`)
+      .prepare(
+        `SELECT 1 FROM session_rows WHERE id = ? AND task_status = 'merged'`
+      )
       .get(taskId);
     if (approval && !merged) refundApproval(approval);
     throw e;

@@ -30,7 +30,7 @@ export function listPending(): PendingRow[] {
       `SELECT lc.*, s.name AS session_name,
               COALESCE(lc.workspace_id, s.workspace_id, p.workspace_id) AS ws
        FROM learning_cards lc
-       JOIN sessions s ON s.id = lc.session_id
+       JOIN session_rows s ON s.id = lc.session_id
        LEFT JOIN projects p ON p.id = s.project_id
        WHERE lc.status = 'pending'
        ORDER BY lc.created_at DESC, lc.id DESC`

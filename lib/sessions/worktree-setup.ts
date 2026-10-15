@@ -175,7 +175,8 @@ export function failInterruptedSetups(): number {
            THEN COALESCE((SELECT working_directory FROM projects WHERE id = sessions.project_id), working_directory)
            ELSE working_directory END,
          setup_error = 'AgentOS restarted before setup finished. Your message is still queued: send it when you are ready.'
-       WHERE setup_status = 'running' AND task_status IS NULL`
+       WHERE setup_status = 'running'
+         AND id IN (SELECT id FROM session_rows WHERE task_status IS NULL)`
     )
     .run().changes;
 }

@@ -2,6 +2,7 @@
 // can hold a message for it without loading the pause machinery.
 
 import { db, type TaskPause } from "../db";
+import { setPause } from "../db/session-parts";
 
 export interface PauseHold {
   pauseId: number;
@@ -11,7 +12,7 @@ export interface PauseHold {
 export function pauseHoldOf(sessionId: string): PauseHold | null {
   const row = db
     .prepare(
-      `SELECT pause_id, paused_until FROM sessions
+      `SELECT pause_id, paused_until FROM session_rows
        WHERE id = ? AND pause_state IN ('pausing', 'paused') AND pause_id IS NOT NULL`
     )
     .get(sessionId) as
@@ -45,10 +46,17 @@ export function endPause(
       `UPDATE task_pauses SET state = 'ended', ended_at = datetime('now'), end_reason = ?
        WHERE id = ? AND state != 'ended'`
     ).run(reason, row.id);
-    db.prepare(
-      `UPDATE sessions SET pause_state = NULL, paused_until = NULL, pause_id = NULL, pause_note = NULL
-       WHERE id = ? AND pause_id = ?`
-    ).run(row.session_id, row.id);
+    setPause(
+      db,
+      row.session_id,
+      {
+        pause_state: null,
+        paused_until: null,
+        pause_id: null,
+        pause_note: null,
+      },
+      { pause_id: row.id }
+    );
   })();
 }
 

@@ -25,7 +25,7 @@ async function stackedBase(
   item: StackItemRow
 ) {
   const session = db
-    .prepare(`SELECT * FROM sessions WHERE id = ?`)
+    .prepare(`SELECT * FROM session_rows WHERE id = ?`)
     .get(parent.session_id) as Session | undefined;
   const branch = session?.branch_name;
   if (!branch) throw new Error(`${itemName(parent)} has no branch to stack on`);
@@ -52,7 +52,7 @@ async function stackedBase(
 export function existingTask(cardId: string): string | null {
   const row = db
     .prepare(
-      `SELECT id FROM sessions WHERE lh_card_id = ? AND task_status = 'running'
+      `SELECT id FROM session_rows WHERE lh_card_id = ? AND task_status = 'running'
        ORDER BY created_at DESC LIMIT 1`
     )
     .get(cardId) as { id: string } | undefined;

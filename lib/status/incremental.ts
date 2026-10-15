@@ -60,7 +60,7 @@ export function resetStatusCaches(): void {
 function loadRows(dirty: Set<string>): void {
   const rows = getDb()
     .prepare(
-      `SELECT s.*, p.workspace_id AS project_workspace_id FROM sessions s
+      `SELECT s.*, p.workspace_id AS project_workspace_id FROM session_rows s
          LEFT JOIN projects p ON p.id = s.project_id
         WHERE s.archived_at IS NULL`
     )

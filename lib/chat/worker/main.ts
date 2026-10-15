@@ -30,7 +30,7 @@ async function main(sessionId: string) {
   const { ChatHost } = await import("./host");
 
   const row = db
-    .prepare(`SELECT * FROM sessions WHERE id = ?`)
+    .prepare(`SELECT * FROM session_rows WHERE id = ?`)
     .get(sessionId) as Session | undefined;
   if (!row) {
     console.error(`No session ${sessionId}`);

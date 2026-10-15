@@ -44,7 +44,7 @@ function workspaceTasks(workspaceId: string): TaskRow[] {
   return db
     .prepare(
       `SELECT s.id, s.task_status, s.pr_status, s.pr_url, s.pr_number
-       FROM sessions s JOIN projects p ON p.id = s.project_id
+       FROM session_rows s JOIN projects p ON p.id = s.project_id
        WHERE p.workspace_id = ? AND s.task_status IS NOT NULL`
     )
     .all(workspaceId) as TaskRow[];

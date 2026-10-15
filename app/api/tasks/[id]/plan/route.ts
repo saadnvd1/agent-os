@@ -17,7 +17,7 @@ export async function GET(
   const refused = refuse(request, id, "plan");
   if (refused) return refused;
   const s = db
-    .prepare(`SELECT plan_phase, worktree_path FROM sessions WHERE id = ?`)
+    .prepare(`SELECT plan_phase, worktree_path FROM session_rows WHERE id = ?`)
     .get(id) as Pick<Session, "plan_phase" | "worktree_path"> | undefined;
   if (!s?.worktree_path)
     return NextResponse.json({ error: "No such task" }, { status: 404 });

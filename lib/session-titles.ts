@@ -283,7 +283,7 @@ export function titleChatFromMessage(
 ): Promise<void> | void {
   const s = db
     .prepare(
-      `SELECT name, name_source, working_directory, task_prompt FROM sessions WHERE id = ?`
+      `SELECT name, name_source, working_directory, task_prompt FROM session_rows WHERE id = ?`
     )
     .get(sessionId) as
     | {

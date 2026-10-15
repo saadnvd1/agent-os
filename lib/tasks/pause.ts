@@ -50,6 +50,7 @@ import {
   type PauseView,
   type Priority,
 } from "./schedule-types";
+import { setPause } from "../db/session-parts";
 
 export class PauseRefused extends Error {}
 
@@ -72,7 +73,7 @@ const nudge = () =>
   void import("./queue").then((q) => q.tickQueueSoon()).catch(() => undefined);
 
 const sessionOf = (id: string) =>
-  db.prepare(`SELECT * FROM sessions WHERE id = ?`).get(id) as
+  db.prepare(`SELECT * FROM session_rows WHERE id = ?`).get(id) as
     | Session
     | undefined;
 
@@ -165,10 +166,9 @@ export function requestPause(sessionId: string, req: PauseRequest): TaskPause {
       until ? toSqliteTime(until) : null,
       existing.id
     );
-    db.prepare(`UPDATE sessions SET paused_until = ? WHERE id = ?`).run(
-      until ? toSqliteTime(until) : null,
-      sessionId
-    );
+    setPause(db, sessionId, {
+      paused_until: until ? toSqliteTime(until) : null,
+    });
     // "Pause now" takes over: the first driver is superseded, not raced.
     drive(sessionId, existing.id, mode === "now");
     return pauseRow(existing.id)!;
@@ -190,9 +190,11 @@ export function requestPause(sessionId: string, req: PauseRequest): TaskPause {
         until ? toSqliteTime(until) : null
       ).lastInsertRowid
   );
-  db.prepare(
-    `UPDATE sessions SET pause_state = 'pausing', paused_until = ?, pause_id = ? WHERE id = ?`
-  ).run(until ? toSqliteTime(until) : null, id, sessionId);
+  setPause(db, sessionId, {
+    pause_state: "pausing",
+    paused_until: until ? toSqliteTime(until) : null,
+    pause_id: id,
+  });
   drive(sessionId, id);
   return pauseRow(id)!;
 }
@@ -307,10 +309,7 @@ function markPaused(sessionId: string, pauseId: number): void {
          WHERE id = ? AND state = 'pausing'`
       )
       .run(pauseId).changes;
-    if (n)
-      db.prepare(`UPDATE sessions SET pause_state = 'paused' WHERE id = ?`).run(
-        sessionId
-      );
+    if (n) setPause(db, sessionId, { pause_state: "paused" });
     return n;
   })();
   if (!changed) return;
@@ -359,10 +358,7 @@ export function setResumeTime(sessionId: string, until: Date | null): void {
     db.prepare(
       `UPDATE task_pauses SET until_at = ?, resume_requested_at = NULL WHERE id = ? AND state IN ('pausing','paused')`
     ).run(value, row.id);
-    db.prepare(`UPDATE sessions SET paused_until = ? WHERE id = ?`).run(
-      value,
-      sessionId
-    );
+    setPause(db, sessionId, { paused_until: value });
   })();
 }
 
@@ -396,9 +392,11 @@ export function requestResume(sessionId: string, actor: PauseBy): void {
 export { loadHoldFor, resumeHoldFor };
 
 export function setPauseNote(sessionId: string, note: string | null): void {
-  db.prepare(
-    `UPDATE sessions SET pause_note = ? WHERE id = ? AND pause_state = 'paused' AND COALESCE(pause_note, '') != COALESCE(?, '')`
-  ).run(note, sessionId, note);
+  const row = db
+    .prepare(`SELECT pause_note FROM session_rows WHERE id = ?`)
+    .get(sessionId) as { pause_note: string | null } | undefined;
+  if ((row?.pause_note ?? "") === (note ?? "")) return;
+  setPause(db, sessionId, { pause_note: note }, { pause_state: "paused" });
 }
 
 export type ResumeOutcome =
@@ -453,7 +451,7 @@ export function dueResumes(): DueResume[] {
     .prepare(
       `SELECT p.id AS pause_id, p.session_id, p.by_kind, p.until_at, p.resume_requested_at, p.resume_by_kind,
               s.project_id, s.priority
-       FROM task_pauses p JOIN sessions s ON s.id = p.session_id
+       FROM task_pauses p JOIN session_rows s ON s.id = p.session_id
        WHERE p.state = 'paused' AND p.resume_requested_at IS NOT NULL
          AND s.task_status IN ('running') AND s.archived_at IS NULL`
     )
@@ -583,9 +581,7 @@ export async function claimResume(
         }),
         Date.now()
       );
-    db.prepare(
-      `UPDATE sessions SET pause_state = 'resuming', pause_note = NULL WHERE id = ?`
-    ).run(sessionId);
+    setPause(db, sessionId, { pause_state: "resuming", pause_note: null });
     return true;
   })();
   if (!claimed) return "gone";

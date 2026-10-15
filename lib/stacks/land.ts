@@ -67,7 +67,7 @@ export const LAND_DEFAULTS: LandDeps = {
 
 const sessionOf = (id: string | null) =>
   (id
-    ? db.prepare(`SELECT * FROM sessions WHERE id = ?`).get(id)
+    ? db.prepare(`SELECT * FROM session_rows WHERE id = ?`).get(id)
     : undefined) as Session | undefined;
 
 class Stop extends Error {}

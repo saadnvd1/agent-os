@@ -28,7 +28,7 @@ async function gitStatus(cwd: string): Promise<string> {
 export async function compactContext(sessionId: string): Promise<string> {
   const session = db
     .prepare(
-      `SELECT working_directory, task_prompt, role FROM sessions WHERE id = ?`
+      `SELECT working_directory, task_prompt, role FROM session_rows WHERE id = ?`
     )
     .get(sessionId) as
     | Pick<Session, "working_directory" | "task_prompt" | "role">

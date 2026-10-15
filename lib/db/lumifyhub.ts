@@ -1,4 +1,5 @@
 import type Database from "better-sqlite3";
+import { setTask } from "./session-parts";
 
 // The one LumifyHub account this AgentOS is connected to. The token never
 // leaves the server: callers that talk to the UI map this to a status.
@@ -118,23 +119,21 @@ export const lumifyhubQueries = {
     sessionId: string,
     card: { cardId: string; boardId: string; list: string }
   ) =>
-    db
-      .prepare(
-        `UPDATE sessions SET lh_card_id = ?, lh_board_id = ?, lh_card_list = ? WHERE id = ?`
-      )
-      .run(card.cardId, card.boardId, card.list, sessionId),
+    setTask(db, sessionId, {
+      lh_card_id: card.cardId,
+      lh_board_id: card.boardId,
+      lh_card_list: card.list,
+    }),
 
   setTaskCardList: (db: Database.Database, sessionId: string, list: string) =>
-    db
-      .prepare(`UPDATE sessions SET lh_card_list = ? WHERE id = ?`)
-      .run(list, sessionId),
+    setTask(db, sessionId, { lh_card_list: list }),
 
   linkedCardIds: (db: Database.Database, boardId: string) =>
     new Set(
       (
         db
           .prepare(
-            `SELECT lh_card_id FROM sessions WHERE lh_board_id = ? AND lh_card_id IS NOT NULL`
+            `SELECT lh_card_id FROM session_rows WHERE lh_board_id = ? AND lh_card_id IS NOT NULL`
           )
           .all(boardId) as { lh_card_id: string }[]
       ).map((r) => r.lh_card_id)

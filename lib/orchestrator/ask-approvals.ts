@@ -76,7 +76,7 @@ export function releaseInterruptedClaims(): number {
       `UPDATE orchestrator_asks SET used_at = NULL
        WHERE status = 'approved' AND used_at IS NOT NULL
          AND COALESCE(answer, '') != 'approve (void)'
-         AND (subject IN (SELECT 'task:' || id FROM sessions WHERE task_status = 'running')
+         AND (subject IN (SELECT 'task:' || id FROM session_rows WHERE task_status = 'running')
            -- A PR no task owns: a merge that happened can't happen again.
            OR subject LIKE 'pr:%')`
     )

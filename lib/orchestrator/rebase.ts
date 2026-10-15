@@ -39,6 +39,7 @@ import { statusOf, type SessionFacts } from "./facts";
 import { isPaused } from "./pause";
 import { repoOf } from "./repo";
 import { reviewAt, taskReviewTarget } from "./review";
+import { setPr } from "../db/session-parts";
 
 const short = (sha: string) => sha.slice(0, 7);
 
@@ -72,7 +73,7 @@ const defaults: RebaseDeps = {
 const tried = new Map<string, string>();
 
 const sessionRow = (id: string) =>
-  db.prepare(`SELECT * FROM sessions WHERE id = ?`).get(id) as
+  db.prepare(`SELECT * FROM session_rows WHERE id = ?`).get(id) as
     | Session
     | undefined;
 
@@ -207,9 +208,10 @@ async function rebaseOne(
     },
     { from: pr.head, to, unpushed: false }
   );
-  db.prepare(
-    `UPDATE sessions SET rebased_from = ?, rebased_to = ? WHERE id = ?`
-  ).run(heads.restacked_from, heads.restacked_to, task.id);
+  setPr(db, task.id, {
+    rebased_from: heads.restacked_from,
+    rebased_to: heads.restacked_to,
+  });
   // Only the task's own branch, and only if origin still has the head
   // that was judged. --no-verify: CI runs on the PR.
   const pushed = await git(
@@ -225,9 +227,7 @@ async function rebaseOne(
   );
   if (pushed !== null) {
     console.error(`Pushing ${task.name}'s rebase:`, pushed);
-    db.prepare(
-      `UPDATE sessions SET rebased_from = ?, rebased_to = ? WHERE id = ?`
-    ).run(...before, task.id);
+    setPr(db, task.id, { rebased_from: before[0], rebased_to: before[1] });
     return askToRebase(
       workspaceId,
       task,
@@ -362,10 +362,7 @@ async function askToRebase(
   deps: RebaseDeps
 ): Promise<void> {
   // Claimed first: a restart mid-send doesn't ask twice.
-  db.prepare(`UPDATE sessions SET rebase_asked_head = ? WHERE id = ?`).run(
-    pr.head,
-    task.id
-  );
+  setPr(db, task.id, { rebase_asked_head: pr.head });
   // A quick change has no agent to ask: it's the orchestrator's to redo.
   if (task.quick_of) {
     queueEvent(

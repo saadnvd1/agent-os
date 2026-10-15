@@ -123,7 +123,7 @@ function armed(): ArmedFact[] {
     db
       .prepare(
         `SELECT s.id, s.name, s.merge_armed_at, s.pr_number, p.workspace_id
-         FROM sessions s LEFT JOIN projects p ON p.id = s.project_id
+         FROM session_rows s LEFT JOIN projects p ON p.id = s.project_id
          WHERE s.merge_armed_at IS NOT NULL AND s.archived_at IS NULL
            AND COALESCE(s.task_status, 'running') = 'running'`
       )

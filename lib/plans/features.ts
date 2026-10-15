@@ -160,7 +160,7 @@ export function pieceOfSession(sessionId: string): FeaturePiece | undefined {
 export function prOf(p: FeaturePiece): number | null {
   if (!p.session_id) return null;
   const s = db
-    .prepare(`SELECT pr_number, project_id FROM sessions WHERE id = ?`)
+    .prepare(`SELECT pr_number, project_id FROM session_rows WHERE id = ?`)
     .get(p.session_id) as
     | { pr_number: number | null; project_id: string | null }
     | undefined;

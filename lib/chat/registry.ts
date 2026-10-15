@@ -112,9 +112,9 @@ export function emit(sessionId: string, m: ChatServerMessage): void {
 }
 
 export function getSession(sessionId: string): Session {
-  const s = db.prepare(`SELECT * FROM sessions WHERE id = ?`).get(sessionId) as
-    | Session
-    | undefined;
+  const s = db
+    .prepare(`SELECT * FROM session_rows WHERE id = ?`)
+    .get(sessionId) as Session | undefined;
   if (!s) throw new Error("Session not found");
   return s;
 }

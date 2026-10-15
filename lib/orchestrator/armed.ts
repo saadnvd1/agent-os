@@ -28,6 +28,7 @@ import { review } from "./review";
 import { judge, mergeJudged } from "./signoff";
 import { workspaceTask } from "./targets";
 import { markStatusDirty } from "../status/dirty";
+import { setPr } from "../db/session-parts";
 
 // Judged again at least this often, for what the fingerprint can't see.
 export const ARMED_RECHECK_MS = 5 * 60 * 1000;
@@ -35,10 +36,18 @@ export const ARMED_RECHECK_MS = 5 * 60 * 1000;
 const short = (sha: string) => sha.slice(0, 7);
 
 export function setArmed(sessionId: string, armed: boolean): void {
-  db.prepare(
-    `UPDATE sessions SET merge_armed_at = ${armed ? "COALESCE(merge_armed_at, datetime('now'))" : "NULL"},
-       merge_armed_seen = NULL WHERE id = ?`
-  ).run(sessionId);
+  db.transaction(() => {
+    const row = db
+      .prepare(`SELECT merge_armed_at FROM session_rows WHERE id = ?`)
+      .get(sessionId) as { merge_armed_at: string | null } | undefined;
+    setPr(db, sessionId, {
+      merge_armed_at: !armed
+        ? null
+        : (row?.merge_armed_at ??
+          new Date().toISOString().slice(0, 19).replace("T", " ")),
+      merge_armed_seen: null,
+    });
+  })();
   looked.delete(sessionId);
   markStatusDirty(sessionId);
   notifyStatusChanged();
@@ -57,7 +66,7 @@ export function armingWorkspace(task: Session): string | null {
 function armedTasks(workspaceId: string): Session[] {
   return db
     .prepare(
-      `SELECT s.* FROM sessions s JOIN projects p ON p.id = s.project_id
+      `SELECT s.* FROM session_rows s JOIN projects p ON p.id = s.project_id
        WHERE p.workspace_id = ? AND s.merge_armed_at IS NOT NULL
          AND s.task_status = 'running' AND s.peer_mirror = 0
          AND s.held_by_device IS NULL`
@@ -70,7 +79,7 @@ function armedTasks(workspaceId: string): Session[] {
 function stillArmed(workspaceId: string, taskId: string): boolean {
   if (isPaused(workspaceId)) return false;
   const row = db
-    .prepare(`SELECT merge_armed_at FROM sessions WHERE id = ?`)
+    .prepare(`SELECT merge_armed_at FROM session_rows WHERE id = ?`)
     .get(taskId) as { merge_armed_at: string | null } | undefined;
   return !!row?.merge_armed_at;
 }
@@ -255,11 +264,7 @@ async function mergeOne(
   if (counted.ok) return merge(workspaceId, task, counted, deps);
   const toSaad = holdingEscalations(task.id).length > 0;
   if (toSaad) setArmed(task.id, false);
-  else
-    db.prepare(`UPDATE sessions SET merge_armed_seen = ? WHERE id = ?`).run(
-      seen,
-      task.id
-    );
+  else setPr(db, task.id, { merge_armed_seen: seen });
   event(
     workspaceId,
     task,
@@ -283,10 +288,7 @@ async function merge(
     const why = error instanceof Error ? error.message : String(error);
     const seen = `${verdict.sha}:merge:${why}`;
     if (task.merge_armed_seen === seen) return;
-    db.prepare(`UPDATE sessions SET merge_armed_seen = ? WHERE id = ?`).run(
-      seen,
-      task.id
-    );
+    setPr(db, task.id, { merge_armed_seen: seen });
     event(
       workspaceId,
       task,

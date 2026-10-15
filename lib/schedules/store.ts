@@ -163,7 +163,7 @@ export function findSchedule(ref: string): Schedule {
 
 export function getSessionRow(id: string): Session | null {
   return (
-    (db.prepare(`SELECT * FROM sessions WHERE id = ?`).get(id) as
+    (db.prepare(`SELECT * FROM session_rows WHERE id = ?`).get(id) as
       | Session
       | undefined) ?? null
   );

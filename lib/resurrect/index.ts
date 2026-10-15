@@ -44,6 +44,7 @@ import { launchClaude } from "../agents/launch";
 import { PLAN_FILE, preparePlanDir } from "../models/plan-step";
 import { planFromTranscript } from "./plan";
 import { dropSnapshot, restoreWorktree, type RestoredAs } from "./snapshot";
+import { setPr, setTask } from "../db/session-parts";
 
 export interface ResurrectOptions {
   // The paired device asking: a task held for another machine's orchestrator
@@ -161,9 +162,12 @@ async function onItsMachine(s: Session): Promise<ResurrectOutcome> {
         `/api/sessions/${encodeURIComponent(s.id)}/resurrect`,
         { body: {}, timeout: 120_000 }
       );
-      db.prepare(
-        `UPDATE sessions SET task_status = 'running' WHERE id = ? AND task_status IN ('dropped', 'done')`
-      ).run(s.id);
+      setTask(
+        db,
+        s.id,
+        { task_status: "running" },
+        { task_status: ["dropped", "done"] }
+      );
       forgetHostTasks(link.hostId);
       return outcome(
         s,
@@ -176,7 +180,7 @@ async function onItsMachine(s: Session): Promise<ResurrectOutcome> {
   }
   const before = db
     .prepare(
-      `SELECT * FROM sessions WHERE host_id = 'local' AND task_status = 'moved'
+      `SELECT * FROM session_rows WHERE host_id = 'local' AND task_status = 'moved'
          AND project_id IS ? AND branch_name IS ? ORDER BY updated_at DESC LIMIT 1`
     )
     .get(s.project_id, s.branch_name) as Session | undefined;
@@ -221,7 +225,7 @@ async function restoreTask(
   if (s.branch_name) {
     const busy = db
       .prepare(
-        `SELECT name FROM sessions WHERE project_id = ? AND branch_name = ? AND id != ?
+        `SELECT name FROM session_rows WHERE project_id = ? AND branch_name = ? AND id != ?
            AND task_status IN ('running', 'moving') AND host_id = 'local'`
       )
       .get(project.id, s.branch_name, s.id) as { name: string } | undefined;
@@ -242,11 +246,12 @@ async function restoreTask(
   if (inFlight.has(s.id))
     throw new Error(`${s.name} is being restored already.`);
   inFlight.add(s.id);
-  const claimed = db
-    .prepare(
-      `UPDATE sessions SET task_status = 'running', task_ended_at = NULL WHERE id = ? AND task_status = ?`
-    )
-    .run(s.id, prev).changes;
+  const claimed = setTask(
+    db,
+    s.id,
+    { task_status: "running", task_ended_at: null },
+    { task_status: prev }
+  );
   if (!claimed) {
     inFlight.delete(s.id);
     throw new Error(`${s.name} is being restored already.`);
@@ -254,9 +259,7 @@ async function restoreTask(
   try {
     return await bringBack(s, prev, repo, oldCwd, pr);
   } catch (err) {
-    db.prepare(
-      `UPDATE sessions SET task_status = ? WHERE id = ? AND task_status = 'running'`
-    ).run(prev, s.id);
+    setTask(db, s.id, { task_status: prev }, { task_status: "running" });
     throw err;
   } finally {
     inFlight.delete(s.id);
@@ -314,10 +317,11 @@ async function bringBack(
   if (!restored) {
     // Nothing to make a worktree from: the conversation alone, in the project.
     db.prepare(
-      `UPDATE sessions SET task_status = NULL, task_ended_at = NULL, worktree_path = NULL,
+      `UPDATE sessions SET worktree_path = NULL,
          working_directory = ?, settled_at = NULL, snoozed_until = NULL, snoozed_at = NULL,
          archived_at = NULL, active_at = datetime('now') WHERE id = ?`
     ).run(cwd, s.id);
+    setTask(db, s.id, { task_status: null, task_ended_at: null });
     notes.push(
       "its branch and worktree were gone, so only the conversation came back, in the project folder"
     );
@@ -339,9 +343,7 @@ async function bringBack(
     try {
       await gitPush(restored.path, ["-u", "origin", s.branch_name!]);
       await run("gh", ["pr", "reopen", String(pr.number)], repo);
-      db.prepare(`UPDATE sessions SET pr_status = 'open' WHERE id = ?`).run(
-        s.id
-      );
+      setPr(db, s.id, { pr_status: "open" });
       reopened = pr.number;
     } catch (err) {
       notes.push(

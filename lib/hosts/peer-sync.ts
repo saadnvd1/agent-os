@@ -6,37 +6,45 @@
  * go there (peer-actions.ts).
  */
 
-import { db, queries, type Project } from "../db";
+import { db, queries, type Project, type Session } from "../db";
 import { isValidAgentType } from "../providers";
 import { projectMatcher } from "./discover";
 import type { PeerSession } from "./peer-sessions";
+import { setPlacement, setPr } from "../db/session-parts";
 
 export function insertMirror(
   peer: PeerSession,
   projectId: string | null
 ): void {
-  db.prepare(
-    `INSERT INTO sessions (id, name, tmux_name, working_directory, model, group_path,
-       agent_type, project_id, host_id, view, name_source, pr_url, pr_number,
-       pr_status, updated_at, peer_mirror)
-     VALUES (?, ?, ?, ?, ?, 'sessions', ?, ?, ?, ?, 'user', ?, ?, ?,
-       COALESCE(?, datetime('now')), 1)
-     ON CONFLICT(id) DO NOTHING`
-  ).run(
-    peer.id,
-    peer.name,
-    peer.tmuxName || `${peer.agentType}-${peer.id}`,
-    peer.path || "~",
-    peer.model,
-    isValidAgentType(peer.agentType) ? peer.agentType : "shell",
-    projectId,
-    peer.hostId,
-    peer.view,
-    peer.prUrl,
-    peer.prNumber,
-    peer.prStatus,
-    peer.updatedAt
-  );
+  db.transaction(() => {
+    const inserted = db
+      .prepare(
+        `INSERT INTO sessions (id, name, tmux_name, working_directory, model, group_path,
+           agent_type, project_id, host_id, view, name_source, updated_at)
+         VALUES (?, ?, ?, ?, ?, 'sessions', ?, ?, ?, ?, 'user',
+           COALESCE(?, datetime('now')))
+         ON CONFLICT(id) DO NOTHING`
+      )
+      .run(
+        peer.id,
+        peer.name,
+        peer.tmuxName || `${peer.agentType}-${peer.id}`,
+        peer.path || "~",
+        peer.model,
+        isValidAgentType(peer.agentType) ? peer.agentType : "shell",
+        projectId,
+        peer.hostId,
+        peer.view,
+        peer.updatedAt
+      );
+    if (!inserted.changes) return;
+    setPr(db, peer.id, {
+      pr_url: peer.prUrl,
+      pr_number: peer.prNumber,
+      pr_status: peer.prStatus as Session["pr_status"],
+    });
+    setPlacement(db, peer.id, { peer_mirror: 1 });
+  })();
 }
 
 // One listing mirrors at most this many: a listing is another machine's
@@ -71,17 +79,46 @@ export function syncPeerMirrors(
   );
   // That machine lists the id, so it's its session: a row mirrored on open
   // before this column existed is marked too.
-  const update = db.prepare(
-    `UPDATE sessions SET name = ?, view = ?, tmux_name = ?, project_id = ?,
-       pr_url = ?, pr_number = ?, pr_status = ?,
-       updated_at = COALESCE(?, updated_at), peer_mirror = 1
-     WHERE id = ? AND host_id = ? AND task_prompt IS NULL
-       AND NOT (name IS ? AND view IS ? AND tmux_name IS ? AND project_id IS ?
-         AND pr_url IS ? AND pr_number IS ? AND pr_status IS ?
-         AND updated_at IS COALESCE(?, updated_at) AND peer_mirror = 1)`
+  const current = db.prepare(
+    `SELECT name, view, tmux_name, project_id, pr_url, pr_number, pr_status,
+       updated_at, peer_mirror
+       FROM session_rows WHERE id = ? AND host_id = ? AND task_prompt IS NULL`
   );
+  const touch = db.prepare(
+    `UPDATE sessions SET name = ?, view = ?, tmux_name = ?, project_id = ?,
+       updated_at = COALESCE(?, updated_at) WHERE id = ?`
+  );
+  const update = (
+    peer: PeerSession,
+    fields: (string | number | null)[]
+  ): void => {
+    const [name, view, tmuxName, projectId, prUrl, prNumber, prStatus, at] =
+      fields;
+    const cur = current.get(peer.id, hostId) as
+      | Record<string, string | number | null>
+      | undefined;
+    if (!cur) return;
+    const same =
+      cur.name === name &&
+      cur.view === view &&
+      cur.tmux_name === tmuxName &&
+      cur.project_id === projectId &&
+      cur.pr_url === prUrl &&
+      cur.pr_number === prNumber &&
+      cur.pr_status === prStatus &&
+      cur.updated_at === (at ?? cur.updated_at) &&
+      cur.peer_mirror === 1;
+    if (same) return;
+    touch.run(name, view, tmuxName, projectId, at, peer.id);
+    setPr(db, peer.id, {
+      pr_url: prUrl as string | null,
+      pr_number: prNumber as number | null,
+      pr_status: prStatus as Session["pr_status"],
+    });
+    setPlacement(db, peer.id, { peer_mirror: 1 });
+  };
   const mirrors = db.prepare(
-    `SELECT id FROM sessions WHERE host_id = ? AND peer_mirror = 1
+    `SELECT id FROM session_rows WHERE host_id = ? AND peer_mirror = 1
        AND task_prompt IS NULL AND archived_at IS NULL
        AND created_at < datetime(?, 'unixepoch')`
   );
@@ -112,7 +149,7 @@ export function syncPeerMirrors(
         peer.prStatus,
         peer.updatedAt,
       ];
-      update.run(...fields, peer.id, hostId, ...fields);
+      update(peer, fields);
     }
     if (!complete) return;
     const now = new Set(listed.map((p) => p.id));

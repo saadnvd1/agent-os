@@ -110,7 +110,7 @@ export function getSetup(sessionId: string): SetupView | null {
 function savedSetup(sessionId: string): string | null {
   const row = db
     .prepare(
-      `SELECT setup_status FROM sessions WHERE id = ? AND task_status IS NULL`
+      `SELECT setup_status FROM session_rows WHERE id = ? AND task_status IS NULL`
     )
     .get(sessionId) as { setup_status: string | null } | undefined;
   return row?.setup_status ?? null;

@@ -36,6 +36,7 @@ import {
   latestSessionId,
   readTranscript,
 } from "./transcript";
+import { setTask } from "../db/session-parts";
 
 export * from "./move-bundle";
 
@@ -88,13 +89,13 @@ async function pushOwnBranch(cwd: string, branch: string): Promise<void> {
  * arrived, and then it would run on both.
  */
 function claimMoving(id: string, to: string): { fresh: boolean } {
-  const fresh = db
-    .prepare(
-      `UPDATE sessions SET task_status = 'moving', moved_to = ?
-         WHERE id = ? AND task_status = 'running'`
-    )
-    .run(to, id);
-  if (fresh.changes === 1) return { fresh: true };
+  const fresh = setTask(
+    db,
+    id,
+    { task_status: "moving", moved_to: to },
+    { task_status: "running" }
+  );
+  if (fresh) return { fresh: true };
   const { task_status, moved_to } = getTaskSession(id);
   if (task_status === "moving" && moved_to === to) return { fresh: false };
   throw new Error(
@@ -250,12 +251,12 @@ export async function exportOrResume(
 }
 
 export function markMoved(id: string, to: string): void {
-  const moved = db
-    .prepare(
-      `UPDATE sessions SET task_status = 'moved', moved_to = ?
-       WHERE id = ? AND task_status IN ('running', 'moving')`
-    )
-    .run(to, id).changes;
+  const moved = setTask(
+    db,
+    id,
+    { task_status: "moved", moved_to: to },
+    { task_status: ["running", "moving"] }
+  );
   // It goes on there with a copy of its own.
   if (moved) void dropSessionDatabase(id);
 }
@@ -269,25 +270,24 @@ export function markMoved(id: string, to: string): void {
  */
 export async function resumeTask(id: string, note?: string): Promise<void> {
   if (exporting.has(id)) throw new Error("It's moving right now");
-  const claimed = db
-    .prepare(
-      `UPDATE sessions SET task_status = 'running' WHERE id = ? AND task_status = 'moving'`
-    )
-    .run(id);
+  const claimed = setTask(
+    db,
+    id,
+    { task_status: "running" },
+    { task_status: "moving" }
+  );
   const session = getTaskSession(id);
-  if (claimed.changes !== 1) {
+  if (!claimed) {
     if (session.task_status === "running") return;
     throw new Error(`Task is already ${session.task_status}`);
   }
   try {
     await relaunch(session, note);
   } catch (err) {
-    db.prepare(
-      `UPDATE sessions SET task_status = 'moving' WHERE id = ? AND task_status = 'running'`
-    ).run(id);
+    setTask(db, id, { task_status: "moving" }, { task_status: "running" });
     throw err;
   }
-  db.prepare(`UPDATE sessions SET moved_to = NULL WHERE id = ?`).run(id);
+  setTask(db, id, { moved_to: null });
 }
 
 async function relaunch(session: Session, note?: string): Promise<void> {

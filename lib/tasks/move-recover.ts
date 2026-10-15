@@ -36,7 +36,7 @@ export function settleMovedOut(
   })();
   client.forget(hostId);
   return db
-    .prepare(`SELECT * FROM sessions WHERE id = ?`)
+    .prepare(`SELECT * FROM session_rows WHERE id = ?`)
     .get(there.id) as Session;
 }
 

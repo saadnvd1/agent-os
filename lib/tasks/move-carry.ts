@@ -10,6 +10,7 @@
 import type Database from "better-sqlite3";
 import { db } from "../db";
 import { orchestratorOf } from "./starter";
+import { fillMissing } from "../db/session-parts";
 
 // table, column, and how the id sits in it: the whole value, `task:<id>`, or
 // the tail of a `<condition>:<id>` key.
@@ -100,15 +101,22 @@ export function carryTaskState(
         .run(fromId.length, toId, `%:${fromId}`);
   }
   const from = handle
-    .prepare(`SELECT * FROM sessions WHERE id = ?`)
+    .prepare(`SELECT * FROM session_rows WHERE id = ?`)
     .get(fromId) as Record<string, unknown> | undefined;
   if (!from) return;
-  const sets = [...CARRIED_COLUMNS, "task_since"]
-    .map((c) => `${c} = COALESCE(${c}, @${c})`)
-    .join(", ");
-  handle.prepare(`UPDATE sessions SET ${sets} WHERE id = @id`).run({
+  const carried = {
     ...orchestrationOf(from),
     task_since: (from.task_since as string | null) ?? from.created_at ?? null,
-    id: toId,
-  });
+  } as Record<string, string | number | null>;
+  handle
+    .prepare(
+      `UPDATE sessions SET started_by = COALESCE(started_by, @started_by),
+         model_provider = COALESCE(model_provider, @model_provider) WHERE id = @id`
+    )
+    .run({
+      started_by: carried.started_by,
+      model_provider: carried.model_provider,
+      id: toId,
+    });
+  fillMissing(handle, toId, carried);
 }

@@ -34,7 +34,7 @@ const HELD_BY = `started_by IN (SELECT id FROM sessions WHERE role = 'orchestrat
 const heldMirror = (hostId: string, id: string) =>
   db
     .prepare(
-      `SELECT * FROM sessions WHERE id = ? AND host_id = ?
+      `SELECT * FROM session_rows WHERE id = ? AND host_id = ?
          AND ${HELD_BY} AND task_status IN ('running', 'moving')`
     )
     .get(id, hostId) as Session | undefined;
@@ -42,7 +42,7 @@ const heldMirror = (hostId: string, id: string) =>
 export function hasHeldMirrors(hostId: string): boolean {
   return !!db
     .prepare(
-      `SELECT 1 FROM sessions WHERE host_id = ? AND ${HELD_BY}
+      `SELECT 1 FROM session_rows WHERE host_id = ? AND ${HELD_BY}
          AND task_prompt IS NOT NULL AND task_status IN ('running', 'moving')`
     )
     .get(hostId);

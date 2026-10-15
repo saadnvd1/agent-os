@@ -32,7 +32,9 @@ export function callerRefusal(
 ): Refusal | null {
   if (rule === "holder") {
     const task = db
-      .prepare(`SELECT held_by_device, held_from FROM sessions WHERE id = ?`)
+      .prepare(
+        `SELECT held_by_device, held_from FROM session_rows WHERE id = ?`
+      )
       .get(id) as Pick<Session, "held_by_device" | "held_from"> | undefined;
     if (!task?.held_by_device)
       return { status: 404, error: "No such held task" };
@@ -66,7 +68,7 @@ export async function taskRoute(
   const id = (await params).id;
   const refused = refuse(request, id, rule);
   if (refused) return refused;
-  const task = db.prepare(`SELECT * FROM sessions WHERE id = ?`).get(id) as
+  const task = db.prepare(`SELECT * FROM session_rows WHERE id = ?`).get(id) as
     | Session
     | undefined;
   if (!task)

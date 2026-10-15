@@ -34,7 +34,7 @@ export async function followAskHeads(
     )
       continue;
     const task = db
-      .prepare(`SELECT * FROM sessions WHERE id = ?`)
+      .prepare(`SELECT * FROM session_rows WHERE id = ?`)
       .get(f!.id) as Session | undefined;
     if (!task || hostLink(task.host_id)) continue;
     try {

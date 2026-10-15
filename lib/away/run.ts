@@ -69,7 +69,7 @@ function orchestrated(): { workspaceId: string; orchestratorId: string }[] {
 }
 
 const sessionRow = (id: string) =>
-  db.prepare(`SELECT * FROM sessions WHERE id = ?`).get(id) as
+  db.prepare(`SELECT * FROM session_rows WHERE id = ?`).get(id) as
     | Session
     | undefined;
 
@@ -330,7 +330,7 @@ async function checkDeploys(
   const found: DeployFinding[] = [];
   const merged = db
     .prepare(
-      `SELECT s.* FROM sessions s JOIN projects p ON p.id = s.project_id
+      `SELECT s.* FROM session_rows s JOIN projects p ON p.id = s.project_id
        WHERE p.workspace_id = ? AND s.task_status = 'merged' AND s.merged_at >= ?
          AND NOT EXISTS (SELECT 1 FROM away_actions a
            WHERE a.away_id = ? AND a.key = 'deploy:' || s.id)`

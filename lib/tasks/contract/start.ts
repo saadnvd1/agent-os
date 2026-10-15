@@ -12,6 +12,7 @@ import { projectRef } from "../project-ref";
 import { orchestratorOf } from "../starter";
 import type { TaskStatus } from "../state";
 import * as client from "./client";
+import { setPlan, setTask, startTaskClock } from "../../db/session-parts";
 
 export function isMirror(session: Session): boolean {
   return isRemoteHost(session.host_id);
@@ -23,34 +24,43 @@ export function mirrorTask(
   remote: Session,
   startedBy?: string | null
 ): void {
-  db.prepare(
-    `INSERT INTO sessions (id, name, tmux_name, working_directory, model, group_path,
-       agent_type, auto_approve, project_id, host_id, worktree_path, branch_name,
-       base_branch, task_prompt, task_status, name_source, view)
-     VALUES (?, ?, ?, ?, ?, 'sessions', 'claude', 1, ?, ?, ?, ?, ?, ?, 'running', 'user', ?)
-     ON CONFLICT(id) DO NOTHING`
-  ).run(
-    remote.id,
-    remote.name,
-    remote.tmux_name,
-    remote.working_directory,
-    remote.model,
-    projectId,
-    hostId,
-    remote.worktree_path,
-    remote.branch_name,
-    remote.base_branch,
-    remote.task_prompt,
-    // As that machine runs it: one that predates chat tasks says terminal.
-    remote.view === "chat" ? "chat" : "terminal"
-  );
-  // What carryTaskState gives a moved task's mirror: the orchestrator that
-  // holds it, and when it began (so its PR is judged from then).
-  if (startedBy)
-    db.prepare(
-      `UPDATE sessions SET started_by = COALESCE(started_by, ?),
-         task_since = COALESCE(task_since, created_at) WHERE id = ?`
-    ).run(startedBy, remote.id);
+  db.transaction(() => {
+    const inserted = db
+      .prepare(
+        `INSERT INTO sessions (id, name, tmux_name, working_directory, model, group_path,
+           agent_type, auto_approve, project_id, host_id, worktree_path, branch_name,
+           base_branch, name_source, view)
+         VALUES (?, ?, ?, ?, ?, 'sessions', 'claude', 1, ?, ?, ?, ?, ?, 'user', ?)
+         ON CONFLICT(id) DO NOTHING`
+      )
+      .run(
+        remote.id,
+        remote.name,
+        remote.tmux_name,
+        remote.working_directory,
+        remote.model,
+        projectId,
+        hostId,
+        remote.worktree_path,
+        remote.branch_name,
+        remote.base_branch,
+        // As that machine runs it: one that predates chat tasks says terminal.
+        remote.view === "chat" ? "chat" : "terminal"
+      );
+    if (inserted.changes)
+      setTask(db, remote.id, {
+        task_prompt: remote.task_prompt,
+        task_status: "running",
+      });
+    // What carryTaskState gives a moved task's mirror: the orchestrator that
+    // holds it, and when it began (so its PR is judged from then).
+    if (startedBy) {
+      db.prepare(
+        `UPDATE sessions SET started_by = COALESCE(started_by, ?) WHERE id = ?`
+      ).run(startedBy, remote.id);
+      startTaskClock(db, remote.id);
+    }
+  })();
 }
 
 export async function startRemoteTask(
@@ -94,18 +104,19 @@ export async function startRemoteTask(
   });
   mirrorTask(hostId, project.id, session, startedBy);
   if (plan)
-    db.prepare(
-      `UPDATE sessions SET plan_phase = 'planning', plan_only = ?, plan_decided = 1,
-         plan_reason = ?, plan_waits_for_caller = 1 WHERE id = ?`
-    ).run(plan.only ? 1 : null, plan.reason, session.id);
+    setPlan(db, session.id, {
+      plan_phase: "planning",
+      plan_only: plan.only ? 1 : null,
+      plan_decided: 1,
+      plan_reason: plan.reason,
+      plan_waits_for_caller: 1,
+    });
   client.forget(hostId);
   return db
-    .prepare(`SELECT * FROM sessions WHERE id = ?`)
+    .prepare(`SELECT * FROM session_rows WHERE id = ?`)
     .get(session.id) as Session;
 }
 
 export function setMirrorStatus(id: string, status: TaskStatus): void {
-  db.prepare(
-    `UPDATE sessions SET task_status = ? WHERE id = ? AND task_status = 'running'`
-  ).run(status, id);
+  setTask(db, id, { task_status: status }, { task_status: "running" });
 }

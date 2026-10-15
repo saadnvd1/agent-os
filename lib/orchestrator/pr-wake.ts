@@ -41,6 +41,7 @@ import type { SessionFacts } from "./facts";
 import { isPaused } from "./pause";
 import { repoOf } from "./repo";
 import { untrusted, UNTRUSTED_RULE } from "./untrusted";
+import { setPr } from "../db/session-parts";
 
 export const COMMENT_WAKE_CAP = 10;
 // A first look at a PR this young takes its whole history as new.
@@ -93,7 +94,7 @@ const polled = new Map<string, number>();
 const failures = new Map<string, number>();
 
 const sessionRow = (id: string) =>
-  db.prepare(`SELECT * FROM sessions WHERE id = ?`).get(id) as
+  db.prepare(`SELECT * FROM session_rows WHERE id = ?`).get(id) as
     | Session
     | undefined;
 
@@ -350,10 +351,7 @@ function watchSince(task: Session, print: Fingerprint, now: number): string {
     Number.isFinite(created) && now - created < YOUNG_PR_MS
       ? new Date(created).toISOString()
       : new Date(now).toISOString();
-  db.prepare(`UPDATE sessions SET pr_wake_since = ? WHERE id = ?`).run(
-    since,
-    task.id
-  );
+  setPr(db, task.id, { pr_wake_since: since });
   task.pr_wake_since = since;
   return since;
 }

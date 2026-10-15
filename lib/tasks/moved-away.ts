@@ -12,7 +12,7 @@ import { settleWorktree, type WorktreeFate } from "../done/worktree";
 import { archiveSession } from "../done/archive";
 
 export async function cleanUpMovedAway(id: string): Promise<WorktreeFate> {
-  const s = db.prepare(`SELECT * FROM sessions WHERE id = ?`).get(id) as
+  const s = db.prepare(`SELECT * FROM session_rows WHERE id = ?`).get(id) as
     | Session
     | undefined;
   if (!s || s.task_status !== "moved" || !s.held_by_device)

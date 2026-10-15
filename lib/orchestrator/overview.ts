@@ -25,7 +25,7 @@ function inReview(workspaceId: string): number {
   return (
     db
       .prepare(
-        `SELECT COUNT(*) AS n FROM sessions s JOIN projects p ON p.id = s.project_id
+        `SELECT COUNT(*) AS n FROM session_rows s JOIN projects p ON p.id = s.project_id
          WHERE p.workspace_id = ? AND s.role IS NULL
            AND s.task_status = 'running' AND s.pr_status = 'open'`
       )

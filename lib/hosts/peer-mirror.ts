@@ -16,7 +16,7 @@ export async function mirrorPeerSession(
   sessionId: string
 ): Promise<Session> {
   const existing = db
-    .prepare(`SELECT * FROM sessions WHERE id = ?`)
+    .prepare(`SELECT * FROM session_rows WHERE id = ?`)
     .get(sessionId) as Session | undefined;
   if (existing) {
     if (existing.host_id !== hostId)
@@ -43,6 +43,6 @@ export async function mirrorPeerSession(
     )
   );
   return db
-    .prepare(`SELECT * FROM sessions WHERE id = ?`)
+    .prepare(`SELECT * FROM session_rows WHERE id = ?`)
     .get(peer.id) as Session;
 }

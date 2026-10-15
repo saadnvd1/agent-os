@@ -39,7 +39,7 @@ export function mergedSince(
   return (
     db
       .prepare(
-        `SELECT id, name, pr_number, task_prompt, updated_at FROM sessions
+        `SELECT id, name, pr_number, task_prompt, updated_at FROM session_rows
          WHERE project_id = ? AND task_status = 'merged'
            AND updated_at >= datetime(?)`
       )
