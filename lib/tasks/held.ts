@@ -8,6 +8,7 @@
 import { orchestratorOf } from "./starter";
 import os from "os";
 import { db, type Session } from "../db";
+import { isRemoteHost } from "../hosts";
 import type { OrchestratedBundle } from "./move-bundle";
 
 export function holderRefusal(
@@ -144,12 +145,14 @@ export function planWaitRefusal(
 ): string | null {
   const s = db
     .prepare(
-      `SELECT plan_waits_for_caller, started_by_device FROM sessions WHERE id = ?`
+      `SELECT plan_waits_for_caller, started_by_device, host_id FROM sessions WHERE id = ?`
     )
     .get(id) as
-    | Pick<Session, "plan_waits_for_caller" | "started_by_device">
+    | Pick<Session, "plan_waits_for_caller" | "started_by_device" | "host_id">
     | undefined;
   if (!s?.plan_waits_for_caller) return null;
+  // The placing machine's own mirror of the plan: its people decide it.
+  if (isRemoteHost(s.host_id)) return null;
   if (device && device === s.started_by_device) return null;
   return "The machine that placed this plan decides it; approve it from there";
 }

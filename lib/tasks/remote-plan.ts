@@ -20,6 +20,8 @@ import { noApprovalsOn, recordAutoApproval } from "../approvals/no-approvals";
 import { implementArrived, planNoteFor } from "../models/plan-step";
 import { sessionWorkspace } from "../models/resolve";
 import { queueEvent } from "../orchestrator/events";
+import { brakesOn } from "../orchestrator/brakes";
+import { isPaused } from "../orchestrator/pause";
 import { getProject } from "../projects";
 import { planFor, splitOf } from "../plans/features";
 import { forgetHostTasks, hostTasks } from "./remote";
@@ -197,6 +199,20 @@ export async function continueRemotePlan(
 
 const handingOff = new Set<string>();
 
+async function finishArrival(id: string, message?: string): Promise<boolean> {
+  await implementArrived(id, message || undefined);
+  db.prepare(
+    `UPDATE sessions SET plan_handoff_message = NULL WHERE id = ?`
+  ).run(id);
+  return true;
+}
+
+// Fired, not awaited: a move takes minutes and the queue tick must not wait.
+function fire(id: string, run: () => Promise<unknown>) {
+  if (handingOff.has(id)) return;
+  void run().catch((e) => console.error(`Moving ${id} here failed:`, e));
+}
+
 /**
  * Moves an approved plan's task here, when this machine can take it, and
  * starts implementing. False while the machine is loaded (tried again on the
@@ -212,6 +228,12 @@ export async function handoffHome(
   if (handingOff.has(id)) return false;
   const project = s.project_id ? getProject(s.project_id) : null;
   if (!project) return false;
+  // What an orchestrator started stays under its Pause and brakes.
+  const workspaceId = sessionWorkspace(s);
+  if (workspaceId && orchestratorOf(s.started_by)) {
+    if (isPaused(workspaceId)) return false;
+    if ((await brakesOn(workspaceId)).length) return false;
+  }
   const { needs } = needsOf({
     projectId: project.id,
     projectPath: expandHome(project.working_directory),
@@ -233,13 +255,17 @@ export async function handoffHome(
     const message = s.plan_handoff_message ?? undefined;
     const edits = s.plan_edits ?? null;
     const arrived = await moveTask(id, LOCAL);
-    if (edits)
-      db.prepare(`UPDATE sessions SET plan_edits = ? WHERE id = ?`).run(
-        edits,
-        arrived.id
-      );
-    await implementArrived(arrived.id, message);
-    return true;
+    // The arrived row keeps the pending hand-off until implementing has
+    // started, so a restart in between is picked up by syncRemotePlans.
+    db.prepare(
+      `UPDATE sessions SET plan_edits = COALESCE(?, plan_edits), plan_handoff_message = ? WHERE id = ?`
+    ).run(edits, message ?? "", arrived.id);
+    handingOff.add(arrived.id);
+    try {
+      return await finishArrival(arrived.id, message);
+    } finally {
+      handingOff.delete(arrived.id);
+    }
   } finally {
     handingOff.delete(id);
   }
@@ -258,9 +284,28 @@ export async function syncRemotePlans(): Promise<void> {
     if (!isRemoteHost(s.host_id)) continue;
     try {
       if (s.plan_phase === "planning") await planWritten(s);
-      else await handoffHome(s.id);
+      else fire(s.id, () => handoffHome(s.id));
     } catch (e) {
       console.error(`Plan on ${s.host_id} for ${s.id} failed:`, e);
     }
+  }
+  // A task that arrived but never began implementing (a restart between).
+  const arrived = db
+    .prepare(
+      `SELECT id, plan_handoff_message FROM sessions
+       WHERE plan_phase = 'awaiting' AND plan_handoff_message IS NOT NULL
+         AND task_status = 'running' AND archived_at IS NULL AND peer_mirror IS NOT 1`
+    )
+    .all() as { id: string; plan_handoff_message: string }[];
+  for (const a of arrived) {
+    if (isRemoteHost(getSession(a.id)?.host_id)) continue;
+    fire(a.id, async () => {
+      handingOff.add(a.id);
+      try {
+        await finishArrival(a.id, a.plan_handoff_message);
+      } finally {
+        handingOff.delete(a.id);
+      }
+    });
   }
 }

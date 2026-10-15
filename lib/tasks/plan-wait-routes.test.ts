@@ -1,5 +1,14 @@
 import { NextRequest } from "next/server";
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
+
+const approvedNow = vi.hoisted(() => [] as string[]);
+vi.mock("@/lib/models/plan-step", async (orig) => ({
+  ...(await orig<typeof import("@/lib/models/plan-step")>()),
+  approvePlanNow: async (id: string) => {
+    approvedNow.push(id);
+    return { ref: "x" };
+  },
+}));
 import { randomUUID } from "crypto";
 
 const { db } = await import("@/lib/db");
@@ -8,6 +17,7 @@ const { GET: planRoute } = await import("@/app/api/tasks/[id]/plan/route");
 const { POST: approve } =
   await import("@/app/api/tasks/[id]/approve-plan/route");
 const { planWaitRefusal } = await import("./held");
+const { createHost } = await import("@/lib/hosts");
 
 function task(waits: boolean) {
   const id = randomUUID();
@@ -40,5 +50,29 @@ describe("a plan that waits for the machine that placed it", () => {
     const id = task(true);
     expect((await approve(req("dev-b"), ctx(id))).status).toBe(403);
     expect((await planRoute(req("dev-b"), ctx(id))).status).toBe(403);
+  });
+});
+
+describe("the machine that placed the plan", () => {
+  it("is not refused on its own mirror, from its UI or any device", async () => {
+    const host = createHost("peer", "u@peer");
+    const id = task(true);
+    db.prepare(
+      `UPDATE sessions SET host_id = ?, started_by_device = NULL WHERE id = ?`
+    ).run(host.id, id);
+    expect(planWaitRefusal(id, null)).toBeNull();
+    expect(planWaitRefusal(id, "dev-b")).toBeNull();
+    expect((await approve(req(), ctx(id))).status).not.toBe(403);
+  });
+
+  it("sweeping no-approvals on leaves a plan placed here for the placing machine", async () => {
+    const theirs = task(true);
+    const { switchNoApprovals } = await import("@/lib/approvals/enable");
+    await switchNoApprovals(true);
+    try {
+      expect(approvedNow).not.toContain(theirs);
+    } finally {
+      await switchNoApprovals(false);
+    }
   });
 });

@@ -17,6 +17,7 @@ import { createProject } from "../projects";
 import { createWorkspace, setProjectWorkspace } from "../workspaces";
 import { seedOrchestrator } from "../orchestrator/testing";
 import { pendingEvents } from "../orchestrator/events";
+import { setPaused } from "../orchestrator/pause";
 import type { MachineView } from "./schedule";
 import { json, row, setupMoveRepo, type MoveFixture } from "./move-testing";
 
@@ -77,7 +78,8 @@ vi.mock("@/lib/notify/push/events", async (importOriginal) => ({
 
 const { mirrorTask, forgetHostTasks, TASK_CAPABILITIES } =
   await import("./remote");
-const { syncRemotePlans, remotePlanPath } = await import("./remote-plan");
+const { syncRemotePlans, remotePlanPath, handoffHome } =
+  await import("./remote-plan");
 const { approvePlan } = await import("../models/plan-step");
 
 let f: MoveFixture;
@@ -261,8 +263,8 @@ describe("a plan written on a linked machine", () => {
     // Calm again: the next look moves it and starts the build.
     machine = greenView();
     await syncRemotePlans();
+    await vi.waitFor(() => expect(implemented).toHaveLength(1));
     expect(moved).toEqual([{ id, to: "local" }]);
-    expect(implemented).toHaveLength(1);
     expect(implemented[0].id).not.toBe(id);
     expect(approvals()).toEqual([]);
   });
@@ -315,8 +317,53 @@ describe("a plan written on a linked machine", () => {
     expect(row(id).plan_handoff_message).toBe("also cover b");
     machine = greenView();
     await syncRemotePlans();
+    await vi.waitFor(() => expect(implemented).toHaveLength(1));
     expect(implemented).toEqual([
       { id: expect.any(String), message: "also cover b" },
     ]);
+  });
+
+  it("stays put while the orchestrator is paused", async () => {
+    fs.mkdirSync(path.join(f.repo, "ios", "App.xcodeproj"), {
+      recursive: true,
+    });
+    const id = mirror({ orchestrated: true });
+    listing([id]);
+    machine = { ...greenView(), level: "red", settled: false };
+    await syncRemotePlans();
+    machine = greenView();
+    setPaused(workspaceId, true);
+    try {
+      await handoffHome(id);
+      expect(moved).toEqual([]);
+    } finally {
+      setPaused(workspaceId, false);
+    }
+    await handoffHome(id);
+    expect(moved).toHaveLength(1);
+  });
+
+  it("finishes implementing a task that arrived but never started, after a restart", async () => {
+    const arrived = randomUUID();
+    db.prepare(
+      `INSERT INTO sessions (id, name, tmux_name, working_directory, task_status, plan_phase, plan_handoff_message)
+       VALUES (?, 'arrived', ?, '/tmp', 'running', 'awaiting', 'also cover b')`
+    ).run(arrived, `claude-${arrived}`);
+    await syncRemotePlans();
+    await vi.waitFor(() => expect(implemented).toHaveLength(1));
+    expect(implemented[0]).toEqual({ id: arrived, message: "also cover b" });
+    await vi.waitFor(() =>
+      expect(row(arrived).plan_handoff_message).toBeNull()
+    );
+  });
+
+  it("leaves the arrived hand-off marker until implementing has started", async () => {
+    const id = mirror();
+    db.prepare(`UPDATE sessions SET plan_phase = 'handoff' WHERE id = ?`).run(
+      id
+    );
+    await handoffHome(id);
+    expect(implemented).toHaveLength(1);
+    expect(row(implemented[0].id).plan_handoff_message).toBeNull();
   });
 });

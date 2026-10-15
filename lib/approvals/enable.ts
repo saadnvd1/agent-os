@@ -2,6 +2,7 @@
 // brings what already exists in line with it.
 
 import { db } from "../db";
+import { isRemoteHost } from "../hosts";
 import { reapplyChatModes } from "../chat/settings";
 import { approvePlanNow } from "../models/plan-step";
 import { autoApproveAsk, type AskRow } from "../orchestrator/asks";
@@ -28,10 +29,16 @@ async function sweep(): Promise<void> {
   }
   const plans = db
     .prepare(
-      `SELECT id FROM sessions WHERE plan_phase = 'awaiting' AND task_status = 'running'`
+      `SELECT id, host_id, plan_waits_for_caller FROM sessions WHERE plan_phase = 'awaiting' AND task_status = 'running'`
     )
-    .all() as { id: string }[];
+    .all() as {
+    id: string;
+    host_id: string;
+    plan_waits_for_caller: number | null;
+  }[];
   for (const p of plans) {
+    // A plan placed here by another machine is that machine's to decide.
+    if (p.plan_waits_for_caller && !isRemoteHost(p.host_id)) continue;
     try {
       await approvePlanNow(p.id, undefined, "no-approvals");
     } catch (e) {
