@@ -2,18 +2,66 @@
 # The full guard, the same run locally and in CI:
 #   scripts/check            banned terms, typecheck, lint, format, tests
 #   scripts/check --build    ...and a production build, held to its JS budget
+# CI runs the same groups as parallel jobs:
+#   --only static,test,build   run just these groups (static = migrations,
+#                              terms, typecheck, lint, format)
+#   --parallel                 run typecheck, lint and format at once
+#   -- <args>                  passed to `vitest run` (e.g. --shard=1/3)
 set -euo pipefail
 cd "$(dirname "$0")/.."
 
+usage() { sed -n '2,10p' "$0" | sed 's/^# \{0,1\}//' >&2; exit 2; }
+
+groups="static,test" parallel=0 vitest_args=()
+while [ $# -gt 0 ]; do
+  case "$1" in
+    --build) groups="$groups,build" ;;
+    --only) [ $# -ge 2 ] || usage; groups="$2"; shift ;;
+    --parallel) parallel=1 ;;
+    --) shift; vitest_args=("$@"); break ;;
+    *) usage ;;
+  esac
+  shift
+done
+for g in ${groups//,/ }; do
+  case "$g" in static|test|build) ;; *) usage ;; esac
+done
+has() { [[ ",$groups," == *",$1,"* ]]; }
+
 step() { printf '\n▸ %s\n' "$1"; }
 
-step "migrations"; node scripts/gen-migrations-index.mjs && node scripts/gen-migrations-index.mjs --check
-step "terms";     npx tsx scripts/hooks/banned-terms.ts --tree
-step "typecheck"; npx tsc --noEmit
-step "lint";      npx eslint . --max-warnings=40
-step "format";    npx prettier --check . --log-level warn
-step "test";      npx vitest run
-if [ "${1:-}" = "--build" ]; then
+if has static; then
+  step "migrations"; node scripts/gen-migrations-index.mjs && node scripts/gen-migrations-index.mjs --check
+  step "terms";     npx tsx scripts/hooks/banned-terms.ts --tree
+  if [ "$parallel" = 1 ]; then
+    out=$(mktemp -d); trap 'rm -rf "$out"' EXIT
+    pids=()
+    npx tsc --noEmit >"$out/typecheck" 2>&1 & pids+=($!)
+    npx eslint . --max-warnings=40 --concurrency=auto >"$out/lint" 2>&1 & pids+=($!)
+    npx prettier --check . --log-level warn >"$out/format" 2>&1 & pids+=($!)
+    failed=()
+    names=(typecheck lint format)
+    for i in 0 1 2; do
+      wait "${pids[$i]}" || failed+=("${names[$i]}")
+      step "${names[$i]}"; cat "$out/${names[$i]}"
+    done
+    if [ ${#failed[@]} -gt 0 ]; then
+      printf '\n✗ failed: %s\n' "${failed[*]}" >&2
+      exit 1
+    fi
+  else
+    step "typecheck"; npx tsc --noEmit
+    step "lint";      npx eslint . --max-warnings=40 --concurrency=auto
+    step "format";    npx prettier --check . --log-level warn
+  fi
+fi
+if has test; then
+  step "test";      npx vitest run ${vitest_args[@]+"${vitest_args[@]}"}
+fi
+if has build; then
+  # The build imports the generated migrations index, so it needs it even
+  # when the static group (which checks it) did not run.
+  step "migrations"; node scripts/gen-migrations-index.mjs
   step "build";   npx next build
   step "bundle";  node scripts/check-bundle.mjs
 fi
