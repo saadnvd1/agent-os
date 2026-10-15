@@ -13,6 +13,7 @@ import {
   askUp,
   commit,
   db,
+  updateSessionRow,
   ensureOrchestrator,
   failingCI,
   failureOf,
@@ -57,7 +58,7 @@ describe("sign_off", () => {
       ["pr", "merge", "7", "--squash", "--match-head-commit", t.sha],
     ]);
     const row = db
-      .prepare(`SELECT task_status FROM sessions WHERE id = ?`)
+      .prepare(`SELECT task_status FROM session_rows WHERE id = ?`)
       .get(t.task);
     expect(row).toEqual({ task_status: "merged" });
     expect(listNotes(t.w).at(-1)?.text).toMatch(/Merged add-a \(PR #7/);
@@ -103,7 +104,9 @@ describe("sign_off", () => {
     try {
       await expect(t.signOff()).resolves.toMatch(/Merged add-a/);
       expect(
-        db.prepare(`SELECT task_status FROM sessions WHERE id = ?`).get(t.task)
+        db
+          .prepare(`SELECT task_status FROM session_rows WHERE id = ?`)
+          .get(t.task)
       ).toEqual({ task_status: "merged" });
       expect(logged.mock.calls.flat().join(" ")).toMatch(/closing stale asks/);
     } finally {
@@ -283,9 +286,7 @@ describe("sign_off", () => {
     await deps.beforeMerge(t.task);
     await expect(
       refundIfRefused(t.task, ask.id, async () => {
-        db.prepare(
-          `UPDATE sessions SET task_status = 'merged' WHERE id = ?`
-        ).run(t.task);
+        updateSessionRow(db, t.task, { task_status: "merged" });
         throw new Error("restack failed");
       })
     ).rejects.toThrow(/restack failed/);
@@ -565,9 +566,7 @@ describe("sign_off", () => {
 
     it("drops the hold when the task is no longer running", async () => {
       const t = await escalated();
-      db.prepare(
-        `UPDATE sessions SET task_status = 'dropped' WHERE id = ?`
-      ).run(t.task);
+      updateSessionRow(db, t.task, { task_status: "dropped" });
       await askUp(t.w, t.task);
       expect(openAsks(t.w)).toEqual([]);
       expect(failureOf(t.task, "ci")?.ask_held_at).toBeNull();

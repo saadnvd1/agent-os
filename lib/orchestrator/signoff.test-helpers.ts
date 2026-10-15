@@ -85,7 +85,7 @@ vi.mock("@/lib/status-detector", () => ({
   },
 }));
 
-export const { db, stackQueries } = await import("@/lib/db");
+export const { db, stackQueries, updateSessionRow } = await import("@/lib/db");
 export const { createProject } = await import("@/lib/projects");
 export const { createWorkspace, setProjectWorkspace } =
   await import("@/lib/workspaces");
@@ -237,9 +237,12 @@ export function setup(
     task: true,
     branch: "feature/t",
   });
-  db.prepare(
-    `UPDATE sessions SET base_branch = 'main', task_prompt = 'Add a', lh_card_id = ?, pr_number = 7 WHERE id = ?`
-  ).run(opts.card ? "card-1" : null, task);
+  updateSessionRow(db, task, {
+    base_branch: "main",
+    task_prompt: "Add a",
+    lh_card_id: opts.card ? "card-1" : null,
+    pr_number: 7,
+  });
   S.pr = {
     number: 7,
     url: "https://github.com/o/r/pull/7",
