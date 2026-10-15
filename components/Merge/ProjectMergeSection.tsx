@@ -5,6 +5,7 @@ import {
   useUpdateProjectMergeSettings,
 } from "@/data/merge";
 import { MergeSettingsFields } from "./MergeSettingsFields";
+import { ProjectSweepSection } from "./WorktreeSweepSection";
 
 // A project's own merge settings, saved as they change. Unset ones inherit
 // from agentos.json, then the global settings.
@@ -42,6 +43,7 @@ export function ProjectMergeSection({
         <p className="text-destructive text-sm">{update.error.message}</p>
       )}
       <p className="text-muted-foreground text-xs">Saved as you change them.</p>
+      <ProjectSweepSection projectId={projectId} />
     </div>
   );
 }

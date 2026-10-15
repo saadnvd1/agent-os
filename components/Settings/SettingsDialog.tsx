@@ -59,7 +59,7 @@ export const SECTION_INFO: Record<
 > = {
   merging: {
     label: "Merging",
-    hint: "Approval, merge method, branch clean-up",
+    hint: "Approval, merge method, branch and worktree clean-up",
     icon: GitMerge,
   },
   approvals: {

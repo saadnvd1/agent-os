@@ -279,3 +279,19 @@ a session record that session, found by its id or, without one, by the
 worktree the command runs in. Every plan approval, a plain Approve included,
 is written to the task's brief, so its review judges the PR as the
 implementation of the plan.
+
+## Worktree clean-up by age
+
+A server job runs every 6 hours on each machine and removes the worktree of a
+session that settled (merged, dropped, done or archived) more than N days ago:
+N is 7 by default, set in Settings > Merging, overridden per project in Project
+Settings, and 0 turns it off. It leaves a session that is running, waiting for
+you, has an open PR or a terminal open in its folder, and anything with
+uncommitted changes or commits that no remote branch, merged PR or upstream
+patch holds, each logged with its reason. Folders in the worktrees folder that
+no session owns are removed the same way. The branch and the conversation stay:
+restoring a swept session recreates the worktree from its branch, or says its
+worktree was cleaned up and brings back the conversation alone. Health >
+Clean-up lists every run (removed, space freed, skipped and why), and **Dry
+run** shows what the next one would remove. Only production servers run it
+(`AGENTOS_WORKTREE_SWEEP=1` turns it on elsewhere, `0` off).
