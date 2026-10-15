@@ -4,7 +4,7 @@
 # background. Chat turns live in workers and outlive the restart; reviews
 # and task setups don't, so the restart waits up to 10 minutes for them.
 #   sm add agentos-autodeploy "scripts/autodeploy" --cron "* * * * *"
-# Restarts are spaced AGENTOS_MIN_GAP seconds apart (10 minutes; 0 turns it
+# Restarts are spaced AGENTOS_MIN_GAP seconds apart (an hour; 0 turns it
 # off): a head that lands inside the gap waits and is deployed, whatever it
 # has become by then, when the gap ends. A commit message with [deploy-now]
 # (in any commit the deploy would take) skips the gap. Each hold logs one line:
@@ -52,7 +52,7 @@ fi
 # Restarts kill simulator starts and reviews in flight, so they are spaced
 # apart. The head isn't recorded as deployed while it waits, so it (or a
 # newer one) goes out as soon as the gap is over; nothing is dropped.
-gap="${AGENTOS_MIN_GAP:-600}"
+gap="${AGENTOS_MIN_GAP:-3600}"
 if [ "$head" != "$deployed" ] && [ "$gap" -gt 0 ]; then
   last=$(cat "$state/restarted" 2>/dev/null || echo 0)
   left=$(( last + gap - $(date +%s) ))
