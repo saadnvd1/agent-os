@@ -11,6 +11,7 @@
 
 import fs from "fs";
 import { getDefaultBranch } from "../git";
+import { git, gitOk } from "../git-exec";
 import { restackBranch, outputOf, type Runner } from "../stacks/git";
 import { run } from "./gh";
 
@@ -25,13 +26,8 @@ export interface RefreshTarget {
   base: string | null;
 }
 
-const text = async (runner: Runner, args: string[], cwd: string) =>
-  (await runner("git", args, cwd)).trim();
-const ok = (runner: Runner, args: string[], cwd: string) =>
-  runner("git", args, cwd).then(
-    () => true,
-    () => false
-  );
+const text = async (args: string[], cwd: string) =>
+  (await git(cwd, args)).trim();
 
 // `note` is set when the base moved but the branch couldn't follow it, for
 // the implement prompt. The caller guarantees the agent is idle.
@@ -44,21 +40,20 @@ export async function refreshBase(
   try {
     const base = t.base || (await getDefaultBranch(wt));
     const target = `origin/${base}`;
-    await runner("git", ["fetch", "origin", base], wt);
-    const tip = await text(runner, ["rev-parse", "--verify", target], wt);
-    const head = await text(runner, ["rev-parse", "HEAD"], wt);
-    if (await ok(runner, ["merge-base", "--is-ancestor", tip, head], wt))
+    await git(wt, ["fetch", "origin", base], { timeout: 120000 });
+    const tip = await text(["rev-parse", "--verify", target], wt);
+    const head = await text(["rev-parse", "HEAD"], wt);
+    if (await gitOk(wt, ["merge-base", "--is-ancestor", tip, head]))
       return { moved: false };
-    const mergeBase = await text(runner, ["merge-base", tip, head], wt);
+    const mergeBase = await text(["merge-base", tip, head], wt);
     const moved = `${base} moved on after this branch was created`;
     if (head === mergeBase) {
       const tracked = await text(
-        runner,
         ["status", "--porcelain", "--untracked-files=no"],
         wt
       );
       if (!tracked) {
-        await runner("git", ["reset", "--hard", tip], wt);
+        await git(wt, ["reset", "--hard", tip]);
         return { moved: true, how: "reset" };
       }
     }

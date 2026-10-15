@@ -8,11 +8,11 @@ import {
 import { tmpdir } from "os";
 import { join } from "path";
 import { beforeEach, describe, expect, it } from "vitest";
-import { run } from "./gh";
+import { git as gitIn } from "../git-exec";
 import { refreshBase } from "./refresh-base";
 
 const git = async (cwd: string, ...args: string[]) =>
-  (await run("git", args, cwd)).trim();
+  (await gitIn(cwd, args)).trim();
 
 let root: string;
 let repo: string;
