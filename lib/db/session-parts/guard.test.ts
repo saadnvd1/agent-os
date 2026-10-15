@@ -11,7 +11,7 @@ const MOVED_RE = new RegExp(`\\b(${MOVED.join("|")})\\b`);
 // Seed and fixture code writes the legacy columns on purpose: the triggers
 // that keep a build without this split working carry those writes over.
 const SKIP =
-  /^lib\/db\/(migrations|session-parts)\/|\.test\.tsx?$|testing\.ts$|test-fixtures|__fixtures__|^scripts\/screenshots\//;
+  /^lib\/db\/(migrations|session-parts)\/|\.test(-helpers)?\.tsx?$|testing\.ts$|test-fixtures|__fixtures__|^scripts\/screenshots\//;
 
 // Statements the scan reads as touching moved columns on sessions that do not.
 const ALLOWED: Record<string, string> = {
