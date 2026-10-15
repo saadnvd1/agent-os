@@ -8,6 +8,7 @@
 
 import * as fs from "fs";
 import * as path from "path";
+import { gitOk } from "./git-exec";
 import { bringDependencies, runCommand } from "./worktree-deps";
 import { inside, realExisting } from "./worktree-deps/paths";
 import { seedBuildCaches } from "./worktree-deps/caches";
@@ -40,8 +41,8 @@ export interface SetupResult {
   durationMs: number;
 }
 
-// A gitignored CLAUDE.md holds the project's private notes; a tracked one is
-// already in the worktree and is left alone.
+// A gitignored CLAUDE.md holds the project's private notes. Only one the
+// worktree confirms is ignored is copied: any other would be committable.
 const PRIVATE_NOTES = "CLAUDE.md";
 
 /**
@@ -75,7 +76,14 @@ export async function copyEnvFiles(
     try {
       const src = path.join(sourcePath, file);
       const dest = path.join(worktreePath, file);
-      if (file === PRIVATE_NOTES && fs.existsSync(dest)) continue;
+      const there = await fs.promises.lstat(dest).catch(() => null);
+      if (file === PRIVATE_NOTES) {
+        if (there || !(await gitOk(worktreePath, ["check-ignore", "-q", file])))
+          continue;
+      } else if (there?.isSymbolicLink()) {
+        // Never written through: a committed link could point outside.
+        await fs.promises.unlink(dest);
+      }
       await fs.promises.copyFile(src, dest);
       copied.push(file);
     } catch (error) {
