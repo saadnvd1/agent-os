@@ -1,4 +1,4 @@
-import type { ChatImage } from "./events";
+import type { ChatImage, ChatState } from "./events";
 
 // A message the composer sent that isn't in the chat or its queue yet. It
 // shows as a bubble at once, and stays (as failed, with Retry) if it never
@@ -112,6 +112,18 @@ export function pendingReducer(
     }
   }
 }
+
+// A compact-first send reads "Compacting first" from the server accepting it
+// until compaction is over. The chat is idle in that gap (compaction starts
+// it running), so idle means it hasn't begun; running with no compaction
+// means it finished, or the server decided not to compact.
+export const compactsFirst = (
+  p: Pick<PendingSend, "status" | "compact">,
+  chat: { state: ChatState; compacting: unknown }
+) =>
+  !!p.compact &&
+  p.status === "accepted" &&
+  (!!chat.compacting || chat.state === "idle");
 
 // What a new socket sends again: anything not failed and not over its sends.
 // Safe to repeat: the server drops an id already in the chat or its queue.
