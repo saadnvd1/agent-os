@@ -78,7 +78,7 @@ export function staleLabel(s: Staleness): string {
 }
 
 // Whether the composer's send compacts first: the chip was showing and the
-// reader didn't pick "Send as-is". A slash command goes as typed.
+// reader didn't pick "Skip once". A slash command goes as typed.
 export function composerCompacts(
   text: string,
   context: ChatContext | null | undefined,

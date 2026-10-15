@@ -93,8 +93,8 @@ turns AgentOS catches what it didn't: a chat over its 150k threshold is compacte
 before the next message, and so is one idle past its prompt cache (5 minutes
 or an hour, read from the agent's own usage), whose next message would
 re-read the whole conversation at the cache-write price. A chip above the
-composer says "Idle 47m · 412k context · Compact first?": Send compacts and
-then sends, **Send as-is** skips it for that one message. Messages nobody is
+composer says "Idle 47m · 412k context · Compacts when you send": Send compacts
+and then sends, **Skip once** skips it for that one message. Messages nobody is
 typing (the orchestrator's `send`, AgentOS events and wakes, `aos send`,
 schedules) compact first on their own, only between turns, and the chat
 shows one quiet line with the context before and after. An orchestrator
