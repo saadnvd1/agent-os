@@ -50,12 +50,16 @@ describe("AssistantMessage quote action", () => {
 
 describe("a sent message not in the chat yet", () => {
   const user = { id: "user-c-1", kind: "user", text: "An article" } as never;
-  const render = (status: "sending" | "accepted" | "failed") =>
+  const render = (
+    status: "sending" | "accepted" | "failed",
+    compacting?: boolean
+  ) =>
     renderToStaticMarkup(
       createElement(UserMessage, {
         item: user,
         pending: {
           status,
+          compacting,
           error: "connection lost",
           onRetry: vi.fn(),
           onEdit: vi.fn(),
@@ -68,6 +72,9 @@ describe("a sent message not in the chat yet", () => {
     expect(render("sending")).toContain("opacity-60");
     expect(render("sending")).toContain("Sending");
     expect(render("accepted")).toContain("Starting the agent");
+    expect(render("accepted", true)).toContain("Compacting first");
+    expect(render("accepted", true)).not.toContain("Starting the agent");
+    expect(render("sending", true)).toContain("Sending");
   });
 
   it("says a failed one wasn't sent, with Retry and Edit", () => {

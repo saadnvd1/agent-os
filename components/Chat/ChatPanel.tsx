@@ -692,6 +692,7 @@ export function ChatPanel({
                         }}
                         pending={{
                           status: p.status,
+                          compacting: !!p.compact && !!compacting,
                           error: p.error,
                           onRetry: () => retrySend(p.id),
                           onEdit: () => {

@@ -98,6 +98,8 @@ const UserText = memo(function UserText({ text }: { text: string }) {
 // A sent message not in the chat yet (lib/chat/pending).
 export interface PendingStatus {
   status: PendingSend["status"];
+  // The chat is compacting for this send (its real state, not a guess).
+  compacting?: boolean;
   error?: string;
   onRetry: () => void;
   onEdit: () => void;
@@ -141,7 +143,11 @@ function SendStatus({ pending }: { pending: PendingStatus }) {
       className="text-muted-foreground status-late flex items-center gap-1.5 font-mono text-[11px]"
     >
       <span className="status-live bg-muted-foreground h-1.5 w-1.5 rounded-full" />
-      {pending.status === "accepted" ? "Starting the agent" : "Sending"}
+      {pending.status !== "accepted"
+        ? "Sending"
+        : pending.compacting
+          ? "Compacting first"
+          : "Starting the agent"}
     </div>
   );
 }
