@@ -1,4 +1,4 @@
-import fs from "fs";
+import fs from "fs/promises";
 import path from "path";
 import { NextRequest, NextResponse } from "next/server";
 import { db, type Session } from "@/lib/db";
@@ -25,7 +25,7 @@ export async function GET(
     return NextResponse.json({ error: "No such task" }, { status: 404 });
   let text: string | null = null;
   try {
-    const read = fs.readFileSync(
+    const read = await fs.readFile(
       path.join(expandHome(s.worktree_path), PLAN_FILE),
       "utf8"
     );
