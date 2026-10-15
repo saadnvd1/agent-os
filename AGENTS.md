@@ -22,6 +22,6 @@ Every agent working in this repo follows these. Each rule has its reason.
 ## Standards
 
 - Conventional commits; run the typecheck after each phase.
-- Database migrations are appended with an incrementing `id`; never modify an existing one.
+- Database migrations: one new file per migration in `lib/db/migrations/`, named `<YYYYMMDDTHHMM>_<snake_name>.ts` with a fresh UTC timestamp (see the README there). Never edit a migration that has shipped; keep each `up` safe to run twice.
 - Tasks don't review their own work: the independent review of the PR's exact head commit at merge time is the one review. Fix the blocking findings it sends back.
 - Never mention other products in code or docs.

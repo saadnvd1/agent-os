@@ -24,6 +24,8 @@ root. Every field is optional:
 }
 ```
 
+Without `copy`, a new worktree gets every root `.env*` (not `*.example`) and the main checkout's gitignored `CLAUDE.md`. With a `copy` list, only what it names is copied, so a project that wants its private notes in worktrees must name `CLAUDE.md` in it.
+
 `caches` lists build caches seeded into each new worktree from the main
 checkout, so its first typecheck or build starts warm; `*` is allowed in the
 last segment (`*.tsbuildinfo`) and `[]` turns seeding off. Without it a Node
