@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from "vitest";
-import { db } from "@/lib/db";
+import { db, updateSessionRow } from "@/lib/db";
 import { seedSession, seedWorkspace } from "./testing";
 
 process.env.AGENTOS_LOAD = "off";
@@ -28,7 +28,7 @@ const { requestPause } = await import("@/lib/tasks/pause");
 const settle = () => new Promise((r) => setTimeout(r, 20));
 const pauseState = (id: string) =>
   (
-    db.prepare(`SELECT pause_state FROM sessions WHERE id = ?`).get(id) as {
+    db.prepare(`SELECT pause_state FROM session_rows WHERE id = ?`).get(id) as {
       pause_state: string | null;
     }
   ).pause_state;
@@ -80,9 +80,7 @@ describe("the scheduling tools", () => {
     await expect(
       runTool(t.workspace.id, "resume_task", { task: t.id })
     ).rejects.toThrow(/isn't paused/);
-    db.prepare(`UPDATE sessions SET plan_phase = 'awaiting' WHERE id = ?`).run(
-      t.id
-    );
+    updateSessionRow(db, t.id, { plan_phase: "awaiting" });
     await expect(
       runTool(t.workspace.id, "pause_task", {
         task: t.id,
@@ -126,7 +124,7 @@ describe("the scheduling tools", () => {
       priority: "blocking",
     });
     expect(
-      db.prepare(`SELECT priority FROM sessions WHERE id = ?`).get(t.id)
+      db.prepare(`SELECT priority FROM session_rows WHERE id = ?`).get(t.id)
     ).toEqual({ priority: "blocking" });
   });
 

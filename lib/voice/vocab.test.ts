@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { db } from "@/lib/db";
+import { db, updateSessionRow } from "@/lib/db";
 import { seedSession, seedWorkspace } from "@/lib/orchestrator/testing";
 import { createProject } from "@/lib/projects";
 import { createWorkspace, setProjectWorkspace } from "@/lib/workspaces";
@@ -64,9 +64,7 @@ describe("vocabFor", () => {
       name: "old-merged",
       task: true,
     });
-    db.prepare(`UPDATE sessions SET task_status = 'merged' WHERE id = ?`).run(
-      done
-    );
+    updateSessionRow(db, done, { task_status: "merged" });
     const phrases = vocabFor(workspace.id);
     expect(phrases).toContain("Other");
     expect(phrases).not.toContain("secret project");

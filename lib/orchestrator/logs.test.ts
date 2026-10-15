@@ -8,7 +8,7 @@ vi.mock("../tasks/gh", async (orig) => ({
   run: vi.fn().mockRejectedValue(new Error("no gh")),
 }));
 
-import { db } from "../db";
+import { db, updateSessionRow } from "../db";
 import {
   captureMergedTask,
   resetSessionLogState,
@@ -19,10 +19,14 @@ import { seedWorkspace } from "./testing";
 
 function logged(name: string, merged: string, pr: number) {
   const w = seedWorkspace();
-  db.prepare(
-    `UPDATE sessions SET name = ?, task_prompt = ?, task_status = 'merged',
-       pr_status = 'merged', pr_number = ?, merged_at = ? WHERE id = ?`
-  ).run(name, `Brief for ${name}`, pr, merged, w.task);
+  updateSessionRow(db, w.task, {
+    name,
+    task_prompt: `Brief for ${name}`,
+    task_status: "merged",
+    pr_status: "merged",
+    pr_number: pr,
+    merged_at: merged,
+  });
   setLogFolder(w.api.id, fs.mkdtempSync(path.join(os.tmpdir(), "orch-logs-")));
   return w;
 }

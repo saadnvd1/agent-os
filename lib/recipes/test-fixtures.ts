@@ -2,7 +2,7 @@
 // them, and a session standing in for a run's.
 
 import { randomUUID } from "crypto";
-import { db } from "../db";
+import { db, updateSessionRow } from "../db";
 import { createProject } from "../projects";
 import { createWorkspace, setProjectWorkspace } from "../workspaces";
 import { createRecipe } from "./store";
@@ -43,7 +43,6 @@ export function makeSession(
   db.prepare(
     `INSERT INTO sessions (id, name, tmux_name, working_directory, view) VALUES (?, 's', ?, '/tmp', 'chat')`
   ).run(id, `claude-${id}`);
-  for (const [k, v] of Object.entries(fields))
-    db.prepare(`UPDATE sessions SET ${k} = ? WHERE id = ?`).run(v, id);
+  updateSessionRow(db, id, fields);
   return id;
 }

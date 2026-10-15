@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import { db } from "../db";
+import { db, updateSessionRow } from "../db";
 import { createProject } from "../projects";
 import { seedSession } from "../orchestrator/testing";
 
@@ -107,9 +107,11 @@ describe("with simctl mocked", () => {
 
   const seed = (status: string) => {
     const id = seedSession({ projectId: project, name: "t", task: true });
-    db.prepare(
-      `UPDATE sessions SET task_status = ?, branch_name = 'feature/x', worktree_path = ? WHERE id = ?`
-    ).run(status, "/wt/" + id, id);
+    updateSessionRow(db, id, {
+      task_status: status,
+      branch_name: "feature/x",
+      worktree_path: "/wt/" + id,
+    });
     return id;
   };
 

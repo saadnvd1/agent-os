@@ -33,7 +33,7 @@ vi.mock("./build", async (orig) => {
   return { ...real, buildLogMarkdown: vi.fn(real.buildLogMarkdown) };
 });
 
-import { db } from "../db";
+import { db, updateSessionRow } from "../db";
 import { saveItem, flushItems } from "../chat/store";
 import { amendBrief } from "../orchestrator/amendments";
 import { seedWorkspace } from "../orchestrator/testing";
@@ -58,12 +58,16 @@ function mergedTask(over: { status?: string; plan?: string | null } = {}) {
     fs.mkdirSync(path.join(worktree, ".agentos"));
     fs.writeFileSync(path.join(worktree, ".agentos", "plan.md"), over.plan);
   }
-  db.prepare(
-    `UPDATE sessions SET task_prompt = 'Add auth', task_status = ?, pr_status = 'merged',
-       pr_number = 7, pr_url = 'https://github.com/acme/api/pull/7',
-       worktree_path = ?, created_at = '2026-10-12 09:00:00', merged_at = ?
-     WHERE id = ?`
-  ).run(over.status ?? "merged", worktree, MERGED, id);
+  updateSessionRow(db, id, {
+    task_prompt: "Add auth",
+    task_status: over.status ?? "merged",
+    pr_status: "merged",
+    pr_number: 7,
+    pr_url: "https://github.com/acme/api/pull/7",
+    worktree_path: worktree,
+    created_at: "2026-10-12 09:00:00",
+    merged_at: MERGED,
+  });
   setLogFolder(w.api.id, path.join(dir, id));
   return { ...w, id, worktree };
 }
@@ -148,17 +152,11 @@ describe("captureMergedTask", () => {
 
   it("writes nothing for a dropped, unmerged or plain session", async () => {
     const dropped = mergedTask({ status: "dropped" });
-    db.prepare(`UPDATE sessions SET pr_status = 'closed' WHERE id = ?`).run(
-      dropped.id
-    );
+    updateSessionRow(db, dropped.id, { pr_status: "closed" });
     const open = mergedTask({ status: "running" });
-    db.prepare(`UPDATE sessions SET pr_status = 'open' WHERE id = ?`).run(
-      open.id
-    );
+    updateSessionRow(db, open.id, { pr_status: "open" });
     const plain = mergedTask();
-    db.prepare(`UPDATE sessions SET task_prompt = NULL WHERE id = ?`).run(
-      plain.id
-    );
+    updateSessionRow(db, plain.id, { task_prompt: null });
     await Promise.all(
       [dropped, open, plain].map((t) => captureMergedTask(t.id))
     );
@@ -178,7 +176,7 @@ describe("captureMergedTask", () => {
     expect(error).toHaveBeenCalled();
     // The merge itself is untouched.
     expect(
-      db.prepare(`SELECT task_status FROM sessions WHERE id = ?`).get(t.id)
+      db.prepare(`SELECT task_status FROM session_rows WHERE id = ?`).get(t.id)
     ).toEqual({ task_status: "merged" });
     await captureMergedTask(t.id);
     expect(getLog(t.id)).not.toBeNull();
@@ -249,16 +247,17 @@ describe("merged time and rewrite", () => {
     );
 
     const b = mergedTask();
-    db.prepare(`UPDATE sessions SET merged_at = NULL WHERE id = ?`).run(b.id);
+    updateSessionRow(db, b.id, { merged_at: null });
     await captureMergedTask(b.id);
     const md = getLog(b.id)!.markdown;
     expect(md).toContain("**Merged:** 2026-10-13 01:02 UTC");
     expect(md).toContain(`\`${"a".repeat(40)}\``);
 
     const c = mergedTask();
-    db.prepare(
-      `UPDATE sessions SET merged_at = NULL, updated_at = '2026-10-20 00:00:00' WHERE id = ?`
-    ).run(c.id);
+    updateSessionRow(db, c.id, {
+      merged_at: null,
+      updated_at: "2026-10-20 00:00:00",
+    });
     modelCalls.gh.mockResolvedValue(ghJson(null));
     await captureMergedTask(c.id);
     const unknown = getLog(c.id)!.markdown;

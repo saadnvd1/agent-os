@@ -1,6 +1,6 @@
 import { randomUUID } from "crypto";
 import { describe, expect, it, vi } from "vitest";
-import { db } from "@/lib/db";
+import { db, updateSessionRow } from "@/lib/db";
 import {
   seedOrchestrator,
   seedSession,
@@ -80,12 +80,14 @@ const deps = () => {
   };
 };
 
+const sqlNow = () => new Date().toISOString().slice(0, 19).replace("T", " ");
+
 const merge = (id: string) =>
-  db
-    .prepare(
-      `UPDATE sessions SET task_status = 'merged', pr_number = 7, merged_at = datetime('now') WHERE id = ?`
-    )
-    .run(id);
+  updateSessionRow(db, id, {
+    task_status: "merged",
+    pr_number: 7,
+    merged_at: sqlNow(),
+  });
 
 describe("a claimed piece", () => {
   it("doesn't start again when the piece before it merges", async () => {

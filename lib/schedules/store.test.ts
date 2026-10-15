@@ -1,6 +1,6 @@
 import { randomUUID } from "crypto";
 import { describe, expect, it } from "vitest";
-import { db } from "../db";
+import { db, updateSessionRow } from "../db";
 import { createProject } from "../projects";
 import { createWorkspace, setProjectWorkspace } from "../workspaces";
 import { nextRunAt } from "./scheduler";
@@ -140,9 +140,7 @@ describe("createSchedule", () => {
       workspace_id: ws.id,
     });
     expect(targetProblem(s)).toBeNull();
-    db.prepare(`UPDATE sessions SET task_status = 'merged' WHERE id = ?`).run(
-      sid
-    );
+    updateSessionRow(db, sid, { task_status: "merged" });
     expect(targetProblem(s)).toBe("session finished");
   });
 

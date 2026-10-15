@@ -145,7 +145,7 @@ describe("asks", () => {
   it("approves a gate escalation at its commit, so sign_off can merge it once", () => {
     const t = workspace();
     const task = db
-      .prepare(`SELECT * FROM sessions WHERE id = ?`)
+      .prepare(`SELECT * FROM session_rows WHERE id = ?`)
       .get(t.task) as import("@/lib/db").Session;
     const sha = "b".repeat(40);
     setNoApprovals(true);

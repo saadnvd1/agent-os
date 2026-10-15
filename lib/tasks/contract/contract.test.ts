@@ -112,7 +112,7 @@ vi.mock("@/lib/tasks/import", async (orig) => ({
 }));
 vi.mock("@/lib/tasks/moved-away", () => ({ cleanUpMovedAway: async () => {} }));
 
-const { db } = await import("@/lib/db");
+const { db, insertSessionRow, updateSessionRow } = await import("@/lib/db");
 const { createSchema } = await import("@/lib/db/schema");
 const { runMigrations } = await import("@/lib/db/migrations");
 const { runOnMachine } = await import("@/lib/db/machine-scope");
@@ -192,33 +192,30 @@ function onBox<T>(fn: () => T): T {
 const boxRow = (id: string) =>
   onBox(
     () =>
-      boxDb.prepare(`SELECT * FROM sessions WHERE id = ?`).get(id) as Record<
-        string,
-        unknown
-      >
+      boxDb
+        .prepare(`SELECT * FROM session_rows WHERE id = ?`)
+        .get(id) as Record<string, unknown>
   );
 
 function boxTask(
   extra: { held?: boolean; started?: boolean; plan?: boolean } = {}
 ) {
   const id = randomUUID();
-  boxDb
-    .prepare(
-      `INSERT INTO sessions (id, name, tmux_name, working_directory, worktree_path,
-         view, task_status, task_prompt, held_by_device, held_from,
-         started_by_device, plan_phase, plan_waits_for_caller)
-       VALUES (?, 'on the box', ?, '/tmp', ?, 'chat', 'running', 'do x', ?, ?, ?, ?, ?)`
-    )
-    .run(
-      id,
-      `claude-${id}`,
-      planDir,
-      extra.held === false ? null : "dev-mac",
-      extra.held === false ? null : "the Mac",
-      extra.started === false ? null : "dev-mac",
-      extra.plan ? "awaiting" : null,
-      extra.plan ? 1 : null
-    );
+  insertSessionRow(boxDb, {
+    id,
+    name: "on the box",
+    tmux_name: `claude-${id}`,
+    working_directory: "/tmp",
+    worktree_path: planDir,
+    view: "chat",
+    task_status: "running",
+    task_prompt: "do x",
+    held_by_device: extra.held === false ? null : "dev-mac",
+    held_from: extra.held === false ? null : "the Mac",
+    started_by_device: extra.started === false ? null : "dev-mac",
+    plan_phase: extra.plan ? "awaiting" : null,
+    plan_waits_for_caller: extra.plan ? 1 : null,
+  });
   return id;
 }
 
@@ -403,11 +400,18 @@ describe("this machine's own web UI, which sends no device", () => {
 
   function localRow(mirror: boolean) {
     const id = randomUUID();
-    db.prepare(
-      `INSERT INTO sessions (id, name, tmux_name, working_directory, view,
-         task_status, task_prompt, host_id, plan_phase, plan_waits_for_caller)
-       VALUES (?, 't', ?, '/tmp', 'chat', 'running', 'x', ?, 'awaiting', ?)`
-    ).run(id, `claude-${id}`, mirror ? hostId : "local", mirror ? 1 : null);
+    insertSessionRow(db, {
+      id,
+      name: "t",
+      tmux_name: `claude-${id}`,
+      working_directory: "/tmp",
+      view: "chat",
+      task_status: "running",
+      task_prompt: "x",
+      host_id: mirror ? hostId : "local",
+      plan_phase: "awaiting",
+      plan_waits_for_caller: mirror ? 1 : null,
+    });
     return id;
   }
 
@@ -469,18 +473,18 @@ describe("the sync loop", () => {
       task_prompt: "x",
     } as never);
     onBox(() =>
-      boxDb
-        .prepare(
-          `UPDATE sessions SET task_status = 'moved', moved_to = 'the Mac', host_id = 'local' WHERE id = ?`
-        )
-        .run(gone)
+      updateSessionRow(boxDb, gone, {
+        task_status: "moved",
+        moved_to: "the Mac",
+        host_id: "local",
+      })
     );
     client.forget(hostId);
     await syncMirrors();
     expect(
       (
         db
-          .prepare(`SELECT task_status FROM sessions WHERE id = ?`)
+          .prepare(`SELECT task_status FROM session_rows WHERE id = ?`)
           .get(gone) as {
           task_status: string;
         }

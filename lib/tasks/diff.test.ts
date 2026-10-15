@@ -4,7 +4,7 @@ import os from "os";
 import path from "path";
 import { NextRequest } from "next/server";
 import { afterAll, beforeAll, describe, expect, it, vi } from "vitest";
-import { db, type Session } from "../db";
+import { db, updateSessionRow, type Session } from "../db";
 import { TRUST_HEADER } from "../security/auth";
 import { seedSession, seedWorkspace } from "../orchestrator/testing";
 
@@ -30,7 +30,7 @@ let id: string;
 let secret: string;
 
 const session = () =>
-  db.prepare(`SELECT * FROM sessions WHERE id = ?`).get(id) as Session;
+  db.prepare(`SELECT * FROM session_rows WHERE id = ?`).get(id) as Session;
 const get = (idArg: string, query = "", trust = "device") =>
   route.GET(
     new NextRequest(`http://localhost/api/tasks/${idArg}/diff${query}`, {
@@ -164,9 +164,10 @@ describe("task diff", () => {
   it("reads the PR through gh when there is no worktree", async () => {
     const { app } = seedWorkspace();
     const pid = seedSession({ projectId: app.id, name: "pr-only", task: true });
-    db.prepare(
-      `UPDATE sessions SET pr_number = 7, pr_url = 'https://github.com/o/r/pull/7' WHERE id = ?`
-    ).run(pid);
+    updateSessionRow(db, pid, {
+      pr_number: 7,
+      pr_url: "https://github.com/o/r/pull/7",
+    });
     db.prepare(`UPDATE projects SET working_directory = ? WHERE id = ?`).run(
       repo,
       app.id

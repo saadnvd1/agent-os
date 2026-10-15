@@ -408,7 +408,7 @@ it("a remote start from inside a plain task keeps the mirror unheld: no relay, p
     startedVia: "session",
   });
   const mirror = db
-    .prepare(`SELECT * FROM sessions WHERE id = ?`)
+    .prepare(`SELECT * FROM session_rows WHERE id = ?`)
     .get(r.id!) as Session;
   expect(mirror).toMatchObject({
     started_by: null,

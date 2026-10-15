@@ -23,7 +23,7 @@ vi.mock("../worktrees", async (orig) => ({
 vi.mock("../env-setup", () => ({ setupWorktree: vi.fn(async () => ({})) }));
 vi.mock("../agents/launch", () => ({ launchClaude: vi.fn(async () => {}) }));
 
-import { db } from "../db";
+import { db, updateSessionRow } from "../db";
 import { seedOrchestrator } from "../orchestrator/testing";
 import { createHost } from "../hosts";
 import { saveHostLink } from "../hosts/remote-api";
@@ -58,11 +58,14 @@ const PLAN = "# Plan\n- change the thing\n";
 async function orchestratedTask(branch: string) {
   const t = await seedTask(branch);
   seedOrchestrator("orch-1");
-  db.prepare(
-    `UPDATE sessions SET started_by = 'orch-1', model_overrides = 'anthropic/x',
-       plan_decided = 1, plan_reason = 'big', merge_armed_at = 'then', pr_number = 7
-     WHERE id = ?`
-  ).run(t.id);
+  updateSessionRow(db, t.id, {
+    started_by: "orch-1",
+    model_overrides: "anthropic/x",
+    plan_decided: 1,
+    plan_reason: "big",
+    merge_armed_at: "then",
+    pr_number: 7,
+  });
   db.prepare(
     `INSERT INTO orchestrator_starts (workspace_id, kind, target, created_at) VALUES (?, 'task', ?, datetime('now'))`
   ).run(workspaceId, t.id);
@@ -348,7 +351,7 @@ describe("the machine an orchestrator's task lands on", () => {
     );
     expect(
       db
-        .prepare(`SELECT COUNT(*) n FROM sessions WHERE moved_from = ?`)
+        .prepare(`SELECT COUNT(*) n FROM session_rows WHERE moved_from = ?`)
         .get(bundle.moveId)
     ).toEqual({ n: 0 });
   });

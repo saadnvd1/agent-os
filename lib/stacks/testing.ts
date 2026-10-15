@@ -1,7 +1,12 @@
 // Test fixtures: a project, task sessions and a stack in the test database.
 
 import { randomUUID } from "crypto";
-import { db, stackQueries as q, type StackItemStatus } from "../db";
+import {
+  db,
+  insertSessionRow,
+  stackQueries as q,
+  type StackItemStatus,
+} from "../db";
 import { createProject } from "../projects";
 
 export interface SeedItem {
@@ -28,22 +33,18 @@ export function seedStack(repo: string, specs: SeedItem[]) {
     if (!s.branch) continue;
     const id = randomUUID();
     sessions.set(s.key, id);
-    db.prepare(
-      `INSERT INTO sessions (id, name, tmux_name, working_directory, project_id, task_status,
-         branch_name, worktree_path, base_branch, pr_number)
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
-    ).run(
+    insertSessionRow(db, {
       id,
-      s.key,
-      `claude-${id}`,
-      s.worktree ?? repo,
-      project.id,
-      s.status === "merged" ? "merged" : "running",
-      s.branch,
-      s.worktree ?? null,
-      s.baseBranch ?? null,
-      s.pr ?? null
-    );
+      name: s.key,
+      tmux_name: `claude-${id}`,
+      working_directory: s.worktree ?? repo,
+      project_id: project.id,
+      task_status: s.status === "merged" ? "merged" : "running",
+      branch_name: s.branch,
+      worktree_path: s.worktree ?? null,
+      base_branch: s.baseBranch ?? null,
+      pr_number: s.pr ?? null,
+    });
   }
   q.create(
     db,

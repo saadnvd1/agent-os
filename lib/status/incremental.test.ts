@@ -20,7 +20,7 @@ vi.mock("@/lib/status-detector", async (importOriginal) => ({
   },
 }));
 
-const { getDb } = await import("@/lib/db");
+const { getDb, updateSessionRow } = await import("@/lib/db");
 const { seedSession, seedWorkspace } =
   await import("@/lib/orchestrator/testing");
 const { putCheck } = await import("@/lib/orchestrator/checks");
@@ -111,9 +111,7 @@ beforeEach(async () => {
       view: "chat",
       task: true,
     });
-    db.prepare(
-      `UPDATE sessions SET pr_number = 7, pr_status = 'open' WHERE id = ?`
-    ).run(id);
+    updateSessionRow(db, id, { pr_number: 7, pr_status: "open" });
     return id;
   });
   resetStatusCaches();

@@ -11,6 +11,7 @@ import {
   armedDeps,
   commit,
   db,
+  updateSessionRow,
   escalate,
   events,
   failureOf,
@@ -122,7 +123,7 @@ describe("arm", () => {
     const t = setup();
     const row = () =>
       db
-        .prepare(`SELECT * FROM sessions WHERE id = ?`)
+        .prepare(`SELECT * FROM session_rows WHERE id = ?`)
         .get(t.task) as Parameters<typeof armTask>[0];
     escalate(t.w, { id: t.task, name: "add-a" }, "ci", "why", "url", t.sha);
     await expect(runTool(t.w, "arm", { task: "add-a" })).rejects.toThrow(
@@ -134,18 +135,16 @@ describe("arm", () => {
     db.prepare(`DELETE FROM orchestrator_asks WHERE subject = ?`).run(
       `task:${t.task}`
     );
-    db.prepare(`UPDATE sessions SET peer_mirror = 1 WHERE id = ?`).run(t.task);
+    updateSessionRow(db, t.task, { peer_mirror: 1 });
     expect(() => armTask(row())).toThrow(/linked machine/);
-    db.prepare(`UPDATE sessions SET peer_mirror = 0 WHERE id = ?`).run(t.task);
+    updateSessionRow(db, t.task, { peer_mirror: 0 });
     db.prepare(
       `UPDATE projects SET workspace_id = NULL WHERE id = (SELECT project_id FROM sessions WHERE id = ?)`
     ).run(t.task);
     expect(() => armTask(row())).toThrow(
       /isn't in a workspace with an orchestrator/
     );
-    db.prepare(`UPDATE sessions SET task_status = 'merged' WHERE id = ?`).run(
-      t.task
-    );
+    updateSessionRow(db, t.task, { task_status: "merged" });
     expect(() => armTask(row())).toThrow(/is already merged/);
     expect(armedAt(t.task)).toBeNull();
   });
@@ -471,7 +470,7 @@ describe("automatic rebase", () => {
       expect.stringMatching(/git reset --keep origin\/feature\/t/),
     ]);
     const row = db
-      .prepare(`SELECT rebased_from, rebased_to FROM sessions WHERE id = ?`)
+      .prepare(`SELECT rebased_from, rebased_to FROM session_rows WHERE id = ?`)
       .get(t.task);
     expect(row).toEqual({ rebased_from: t.sha, rebased_to: head });
   });
@@ -547,7 +546,9 @@ describe("automatic rebase", () => {
       expect(events(t.w)).toEqual([]);
       expect(
         db
-          .prepare(`SELECT rebased_from, rebased_to FROM sessions WHERE id = ?`)
+          .prepare(
+            `SELECT rebased_from, rebased_to FROM session_rows WHERE id = ?`
+          )
           .get(t.task)
       ).toEqual({ rebased_from: null, rebased_to: null });
       setPaused(t.w, false);
@@ -586,9 +587,7 @@ describe("automatic rebase", () => {
 
   it("puts the rebase record back when the push is refused, and keeps git's words out of the message", async () => {
     const t = setup();
-    db.prepare(
-      `UPDATE sessions SET rebased_from = 'aaa', rebased_to = 'bbb' WHERE id = ?`
-    ).run(t.task);
+    updateSessionRow(db, t.task, { rebased_from: "aaa", rebased_to: "bbb" });
     t.moveMain("src/c.ts", "export const c = 1;\n");
     S.pr = { ...S.pr!, mergeable: "CONFLICTING" };
     const r = rebaseDeps();
@@ -601,7 +600,9 @@ describe("automatic rebase", () => {
     await rebaseConflicting(t.w, t.facts(), r.deps);
     expect(
       db
-        .prepare(`SELECT rebased_from, rebased_to FROM sessions WHERE id = ?`)
+        .prepare(
+          `SELECT rebased_from, rebased_to FROM session_rows WHERE id = ?`
+        )
         .get(t.task)
     ).toEqual({ rebased_from: "aaa", rebased_to: "bbb" });
     expect(r.sent[0]).not.toMatch(/rejected|stale info|src\/d\.ts/);

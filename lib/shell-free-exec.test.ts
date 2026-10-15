@@ -107,7 +107,7 @@ vi.mock("child_process", async (original) => {
   return { ...mocked, default: mocked };
 });
 
-const { db, queries } = await import("@/lib/db");
+const { db, queries, insertSessionRow } = await import("@/lib/db");
 const { endTmuxScript } = await import("@/lib/tmux/end");
 type DevServer = import("@/lib/db").DevServer;
 const { createHost } = await import("@/lib/hosts");
@@ -135,10 +135,7 @@ function addSession(fields: Record<string, unknown> = {}): string {
     agent_type: "claude",
     ...fields,
   };
-  const keys = Object.keys(row);
-  db.prepare(
-    `INSERT INTO sessions (${keys.join(", ")}) VALUES (${keys.map(() => "?").join(", ")})`
-  ).run(...Object.values(row));
+  insertSessionRow(db, row as Parameters<typeof insertSessionRow>[1]);
   return id;
 }
 

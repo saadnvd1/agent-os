@@ -11,7 +11,7 @@ vi.mock("@/lib/models/plan-step", async (orig) => ({
 }));
 import { randomUUID } from "crypto";
 
-const { db } = await import("@/lib/db");
+const { db, insertSessionRow, updateSessionRow } = await import("@/lib/db");
 const { DEVICE_HEADER } = await import("@/lib/security/auth");
 const { GET: planRoute } = await import("@/app/api/tasks/[id]/plan/route");
 const { POST: approve } =
@@ -21,10 +21,16 @@ const { createHost } = await import("@/lib/hosts");
 
 function task(waits: boolean) {
   const id = randomUUID();
-  db.prepare(
-    `INSERT INTO sessions (id, name, tmux_name, working_directory, task_status, plan_phase, plan_waits_for_caller, started_by_device)
-     VALUES (?, 't', ?, '/tmp', 'running', 'awaiting', ?, 'dev-a')`
-  ).run(id, `claude-${id}`, waits ? 1 : null);
+  insertSessionRow(db, {
+    id,
+    name: "t",
+    tmux_name: `claude-${id}`,
+    working_directory: "/tmp",
+    task_status: "running",
+    plan_phase: "awaiting",
+    plan_waits_for_caller: waits ? 1 : null,
+    started_by_device: "dev-a",
+  });
   return id;
 }
 const req = (device?: string) =>
@@ -57,9 +63,7 @@ describe("the machine that placed the plan", () => {
   it("is not refused on its own mirror, from its UI or any device", async () => {
     const host = createHost("peer", "u@peer");
     const id = task(true);
-    db.prepare(
-      `UPDATE sessions SET host_id = ?, started_by_device = NULL WHERE id = ?`
-    ).run(host.id, id);
+    updateSessionRow(db, id, { host_id: host.id, started_by_device: null });
     expect(planWaitRefusal(id, null)).toBeNull();
     expect(planWaitRefusal(id, "dev-b")).toBeNull();
     expect((await approve(req(), ctx(id))).status).not.toBe(403);

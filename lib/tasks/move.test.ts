@@ -26,7 +26,7 @@ vi.mock("../project-config/database", async (orig) => ({
   dropSessionDatabase: vi.fn(async () => {}),
 }));
 
-import { db } from "../db";
+import { db, insertSessionRow, updateSessionRow } from "../db";
 import { createHost } from "../hosts";
 import { launchClaude } from "../agents/launch";
 import { setupWorktree } from "../env-setup";
@@ -99,9 +99,7 @@ describe("leaving", () => {
     const { id, cwd } = await seedTask("feature/amended");
     await exportTask(id, "box");
     markMoved(id, "box");
-    db.prepare(
-      `UPDATE sessions SET task_status = 'running', moved_to = NULL WHERE id = ?`
-    ).run(id);
+    updateSessionRow(db, id, { task_status: "running", moved_to: null });
     // The agent folds the pushed wip commit into its own.
     git(cwd, "commit", "-q", "--amend", "-m", "feat: the real change");
     await expect(exportTask(id, "box")).resolves.toMatchObject({ moveId: id });
@@ -119,9 +117,7 @@ describe("leaving", () => {
     git(other, "commit", "-q", "-m", "theirs");
     git(other, "push", "-q", "origin", "feature/amended");
     git(f.repo, "fetch", "-q", "origin");
-    db.prepare(
-      `UPDATE sessions SET task_status = 'running', moved_to = NULL WHERE id = ?`
-    ).run(id);
+    updateSessionRow(db, id, { task_status: "running", moved_to: null });
     git(cwd, "commit", "-q", "--amend", "-m", "feat: reworded again");
     await expect(exportTask(id, "box")).rejects.toThrow(/stale info|rejected/);
     git(f.repo, "fetch", "-q", "origin");
@@ -286,7 +282,7 @@ describe("arriving", () => {
     await expect(importTask(bundle)).rejects.toThrow(/no tmux/);
     expect(rowAtDrop).toBe(1);
     const left = db
-      .prepare(`SELECT COUNT(*) AS n FROM sessions WHERE moved_from = ?`)
+      .prepare(`SELECT COUNT(*) AS n FROM session_rows WHERE moved_from = ?`)
       .get(id) as { n: number };
     expect(left.n).toBe(0);
     await expect(importTask(bundle)).resolves.toMatchObject({
@@ -307,10 +303,16 @@ describe("arriving", () => {
     const bundle = await exportTask(id, "box");
     markMoved(id, "box");
     const hostId = createHost("mirror-host", "alice@mirror").id;
-    db.prepare(
-      `INSERT INTO sessions (id, name, tmux_name, working_directory, project_id, task_status, branch_name, host_id)
-       VALUES (?, 'm', 'claude-m', '/home/x', ?, 'running', 'feature/mirrored', ?)`
-    ).run(randomUUID(), f.projectId, hostId);
+    insertSessionRow(db, {
+      id: randomUUID(),
+      name: "m",
+      tmux_name: "claude-m",
+      working_directory: "/home/x",
+      project_id: f.projectId,
+      task_status: "running",
+      branch_name: "feature/mirrored",
+      host_id: hostId,
+    });
     await expect(importTask(bundle)).resolves.toMatchObject({
       task_status: "running",
     });

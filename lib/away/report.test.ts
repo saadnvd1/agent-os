@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { db } from "../db";
+import { db, updateSessionRow } from "../db";
 import { seedSession, seedWorkspace } from "../orchestrator/testing";
 import { createWorkspace } from "../workspaces";
 import {
@@ -46,16 +46,15 @@ describe("the While you were away report", () => {
     const id = awayRow(now - HOUR, now + 60_000);
 
     // Merged while away (the trigger stamps merged_at), with its deploy.
-    db.prepare(
-      `UPDATE sessions SET pr_number = 42, pr_url = 'https://github.com/o/r/pull/42' WHERE id = ?`
-    ).run(s.task);
-    db.prepare(`UPDATE sessions SET task_status = 'merged' WHERE id = ?`).run(
-      s.task
-    );
+    updateSessionRow(db, s.task, {
+      pr_number: 42,
+      pr_url: "https://github.com/o/r/pull/42",
+    });
+    updateSessionRow(db, s.task, { task_status: "merged" });
     expect(
       (
         db
-          .prepare(`SELECT merged_at FROM sessions WHERE id = ?`)
+          .prepare(`SELECT merged_at FROM session_rows WHERE id = ?`)
           .get(s.task) as {
           merged_at: string | null;
         }
@@ -76,9 +75,10 @@ describe("the While you were away report", () => {
       name: "old-fix",
       task: true,
     });
-    db.prepare(
-      `UPDATE sessions SET task_status = 'merged', merged_at = ? WHERE id = ?`
-    ).run(toSql(now - 2 * HOUR), before);
+    updateSessionRow(db, before, {
+      task_status: "merged",
+      merged_at: toSql(now - 2 * HOUR),
+    });
 
     // In flight: a PR the review blocked (the sweep ran its review again),
     // one with no PR flagged twice, and one the sweep never touched.
@@ -87,7 +87,7 @@ describe("the While you were away report", () => {
       name: "add-billing",
       task: true,
     });
-    db.prepare(`UPDATE sessions SET pr_number = 43 WHERE id = ?`).run(blocked);
+    updateSessionRow(db, blocked, { pr_number: 43 });
     db.prepare(
       `INSERT INTO orchestrator_checks (workspace_id, session_id, sha, kind, status) VALUES (?, ?, 'bbbbbbb222', 'review', 'block')`
     ).run(w, blocked);
@@ -122,9 +122,7 @@ describe("the While you were away report", () => {
     const empty = createWorkspace("quiet").id;
     // Away never reached this one (its orchestrator was idle): not reported.
     const unreached = seedWorkspace();
-    db.prepare(`UPDATE sessions SET task_status = 'merged' WHERE id = ?`).run(
-      unreached.task
-    );
+    updateSessionRow(db, unreached.task, { task_status: "merged" });
     const r = buildAwayReport(getAway(id)!, () => true, new Set([w, empty]));
     expect(mine(r, empty)).toBeUndefined();
     expect(mine(r, unreached.workspace.id)).toBeUndefined();
@@ -205,18 +203,15 @@ describe("the While you were away report", () => {
       name: "on-app",
       task: true,
     });
-    db.prepare(
-      `UPDATE sessions SET task_status = 'merged' WHERE id IN (?, ?)`
-    ).run(checked, plain);
+    for (const id of [checked, plain])
+      updateSessionRow(db, id, { task_status: "merged" });
     // Ended without a merge in it.
     const dropped = seedSession({
       projectId: s.api.id,
       name: "gave-up",
       task: true,
     });
-    db.prepare(`UPDATE sessions SET task_status = 'dropped' WHERE id = ?`).run(
-      dropped
-    );
+    updateSessionRow(db, dropped, { task_status: "dropped" });
     const r = buildAwayReport(
       getAway(id)!,
       (p) => p === s.api.id,

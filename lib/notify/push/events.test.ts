@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import { db } from "../../db";
+import { db, insertSessionRow } from "../../db";
 
 const relaySend = vi.fn();
 vi.mock("./relay", () => ({
@@ -120,9 +120,13 @@ describe("each event's category", () => {
 
   it("a plan ready for approval is review, and opens the task when it is one", async () => {
     pairPhone();
-    db.prepare(
-      `INSERT INTO sessions (id, name, tmux_name, working_directory, task_status) VALUES ('plan-task', 'p', 'p1', '/tmp', 'running')`
-    ).run();
+    insertSessionRow(db, {
+      id: "plan-task",
+      name: "p",
+      tmux_name: "p1",
+      working_directory: "/tmp",
+      task_status: "running",
+    });
     db.prepare(
       `INSERT INTO sessions (id, name, tmux_name, working_directory) VALUES ('plan-chat', 'c', 'c1', '/tmp')`
     ).run();

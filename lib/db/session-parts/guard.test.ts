@@ -8,10 +8,11 @@ const ROOT = join(__dirname, "../../..");
 const MOVED = Object.values(PART_COLUMNS).flat() as string[];
 const MOVED_RE = new RegExp(`\\b(${MOVED.join("|")})\\b`);
 
-// Seed and fixture code writes the legacy columns on purpose: the triggers
-// that keep a build without this split working carry those writes over.
+// The moved columns are gone from sessions (migration 20261015T1830). Only
+// migrations, and tests that build a database as it was before them, name
+// them on sessions.
 const SKIP =
-  /^lib\/db\/(migrations|session-parts)\/|\.test(-helpers)?\.tsx?$|testing\.ts$|test-fixtures|__fixtures__|^scripts\/screenshots\//;
+  /^lib\/db\/(migrations|session-parts)\/|^lib\/db\/[\w-]*migrations?\.test\.ts$|^lib\/db\/schedules-move\.test\.ts$/;
 
 // Statements the scan reads as touching moved columns on sessions that do not.
 const ALLOWED: Record<string, string> = {
@@ -25,10 +26,14 @@ const TOUCHES_SESSIONS =
 const STAR = /\bSELECT\s+(DISTINCT\s+)?(\w+\.)?\*|\b\w+\.\*/i;
 
 function violations(): string[] {
-  const files = execFileSync("git", ["ls-files", "*.ts", "*.tsx"], {
-    cwd: ROOT,
-    encoding: "utf8",
-  })
+  const files = execFileSync(
+    "git",
+    ["ls-files", "*.ts", "*.tsx", "*.js", "*.mjs", "*.sh"],
+    {
+      cwd: ROOT,
+      encoding: "utf8",
+    }
+  )
     .split("\n")
     .filter((f) => f && !SKIP.test(f) && !(f in ALLOWED));
   const found: string[] = [];

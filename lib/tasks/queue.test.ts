@@ -2,7 +2,7 @@ import { randomUUID } from "crypto";
 import { NextRequest } from "next/server";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import type { Session } from "@/lib/db";
-import { db } from "@/lib/db";
+import { db, insertSessionRow, updateSessionRow } from "@/lib/db";
 import { changeWatcher } from "@/lib/db/changes";
 import {
   seedOrchestrator,
@@ -48,10 +48,15 @@ vi.mock("@/lib/tasks", async (importOriginal) => ({
     startedPlanOnly.set(o.prompt, !!o.planOnly);
     startedOn.set(o.prompt, o.hostId);
     if (o.prompt.startsWith("fail")) throw new Error("no worktree");
-    db.prepare(
-      `INSERT INTO sessions (id, name, tmux_name, working_directory, project_id, task_status, branch_name)
-       VALUES (?, ?, ?, '/tmp', ?, 'running', 'feature/x')`
-    ).run(o.id, o.prompt, `claude-${o.id}`, o.projectId);
+    insertSessionRow(db, {
+      id: o.id as string,
+      name: o.prompt,
+      tmux_name: `claude-${o.id}`,
+      working_directory: "/tmp",
+      project_id: o.projectId,
+      task_status: "running",
+      branch_name: "feature/x",
+    });
     // The row is written, then the agent's launch fails.
     if (o.prompt.startsWith("half")) throw new Error("agent did not launch");
     return {
@@ -154,9 +159,7 @@ const {
 } = await import("./queue");
 
 const finish = (id: string, status = "merged") =>
-  db
-    .prepare(`UPDATE sessions SET task_status = ? WHERE id = ?`)
-    .run(status, id);
+  updateSessionRow(db, id, { task_status: status });
 
 const statusOf = (id: string) =>
   (
@@ -333,9 +336,7 @@ describe("the task queue", () => {
 
   it("after any doesn't wait on a running task whose PR is already closed", async () => {
     const t = setup(null);
-    db.prepare(`UPDATE sessions SET pr_status = 'closed' WHERE id = ?`).run(
-      t.task
-    );
+    updateSessionRow(db, t.task, { pr_status: "closed" });
     expect(
       queueIfNeeded({
         startedVia: "person",
@@ -354,9 +355,7 @@ describe("the task queue", () => {
     await tick();
     expect(started).toEqual([]);
     // The other one's PR closing frees a waiting row too.
-    db.prepare(`UPDATE sessions SET pr_status = 'merged' WHERE id = ?`).run(
-      live
-    );
+    updateSessionRow(db, live, { pr_status: "merged" });
     await tick();
     expect(started.map((s) => s.prompt)).toEqual(["y"]);
     expect(statusOf(q.id)).toBe("started");
@@ -850,7 +849,7 @@ describe("priority and score", () => {
     const t = setup(null);
     setPriority(t.task, "blocking");
     expect(
-      db.prepare(`SELECT priority FROM sessions WHERE id = ?`).get(t.task)
+      db.prepare(`SELECT priority FROM session_rows WHERE id = ?`).get(t.task)
     ).toEqual({ priority: "blocking" });
   });
 
@@ -863,9 +862,7 @@ describe("priority and score", () => {
     })!;
     await tick();
     expect(started).toEqual([]);
-    db.prepare(`UPDATE sessions SET pause_state = 'paused' WHERE id = ?`).run(
-      t.task
-    );
+    updateSessionRow(db, t.task, { pause_state: "paused" });
     await tick();
     expect(started.map((s) => s.prompt)).toEqual(["next"]);
     expect(statusOf(q.id)).toBe("started");
@@ -1086,7 +1083,7 @@ describe("placement on a linked machine", () => {
     expect(startedOn.get("move out")).toBe("box");
     expect(statusOf(q.id)).toBe("started");
     expect(
-      db.prepare(`SELECT placed_note FROM sessions WHERE id = ?`).get(q.id)
+      db.prepare(`SELECT placed_note FROM session_rows WHERE id = ?`).get(q.id)
     ).toEqual({ placed_note: "Started on box · this machine load red" });
   });
 
@@ -1157,7 +1154,7 @@ describe("placement on a linked machine", () => {
     expect(startedOn.get("plan first")).toBe("box");
     expect(statusOf(q.id)).toBe("started");
     expect(
-      db.prepare(`SELECT placed_note FROM sessions WHERE id = ?`).get(q.id)
+      db.prepare(`SELECT placed_note FROM session_rows WHERE id = ?`).get(q.id)
     ).toEqual({ placed_note: "Started on box · this machine load red" });
   });
 
@@ -1364,9 +1361,7 @@ describe("now on a direct start", () => {
 describe("a plan-only task and the running-task limit", () => {
   it("doesn't count while its plan waits for approval", () => {
     const t = setup(1);
-    db.prepare(
-      `UPDATE sessions SET plan_only = 1, plan_phase = 'awaiting' WHERE id = ?`
-    ).run(t.task);
+    updateSessionRow(db, t.task, { plan_only: 1, plan_phase: "awaiting" });
     expect(
       queueIfNeeded({
         startedVia: "person",
@@ -1374,9 +1369,7 @@ describe("a plan-only task and the running-task limit", () => {
         prompt: "next",
       })
     ).toBeNull();
-    db.prepare(
-      `UPDATE sessions SET plan_phase = 'implementing' WHERE id = ?`
-    ).run(t.task);
+    updateSessionRow(db, t.task, { plan_phase: "implementing" });
     expect(
       queueIfNeeded({
         startedVia: "person",

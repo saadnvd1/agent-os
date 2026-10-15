@@ -2,6 +2,9 @@
 
 Date: 2026-10-15
 
+Status: the old columns were dropped the same day (see "Follow-up" below);
+the mirror and the sync triggers described here are gone.
+
 ## Decision
 
 `sessions` had 95 columns grown over 101 migrations: plans, holds, pauses,
@@ -73,24 +76,46 @@ contract's views are built from `session_rows`, which has exactly the old shape
 row, key order included). An older build that writes the old columns is carried
 into the tables by the triggers; an older build never reads the new ones.
 
-## Follow-up: drop the old columns (needs approval, destructive)
+## Follow-up: drop the old columns (done, 2026-10-15)
 
-A separate task, after every linked machine runs a build with this migration
-for a full deploy:
+Saad approved the destructive step on 2026-10-15 ("do this immediately, just
+do a full cutover"). Migration `20261015T1830_drop_moved_session_columns`:
 
-1. Move the tests and fixtures that seed or assert these columns on `sessions`
-   (about 90 files) onto the session-parts module.
-2. Delete the mirror `UPDATE` in `write.ts`, then the sync triggers
-   (`session_*_from_sessions_*`), and move the `merged_at`/`task_ended_at`
-   stamping from the `sessions` triggers to triggers on `session_tasks`.
-3. Rebuild `session_rows` without the old columns' source (same output).
-4. Drop the 42 columns and the indexes on them (`idx_sessions_task_status`,
-   `idx_sessions_moved_from`, `idx_sessions_quick_of`; their replacements are on
-   `session_tasks`). SQLite needs `ALTER TABLE ... DROP COLUMN` per column or a
-   table rebuild; either is irreversible, hence the approval.
-5. Candidates after that: a `session_chat` table for the nine `chat_*` columns
-   (chat workers must be on the new writers first), and the conductor columns
-   if nothing reads them.
+1. Takes a full copy of the database first (`VACUUM INTO`
+   `~/.agent-os/backups/agent-os-<UTC time>-<pid>-drop-moved-session-columns.db`,
+   `lib/db/backup.ts`), checks the copy holds every session, and throws before
+   any change if it can't. A database with no sessions has nothing these columns
+   could lose and takes no copy (every fresh test database).
+2. Back-fills every value still only on `sessions` into its table (a missing
+   part row is inserted; a null part column takes the `sessions` value). A value
+   already in a table wins: tables were written first.
+3. Drops the sync triggers (`session_*_from_sessions_ins`/`_upd`) and the
+   `sessions_merged_at`/`sessions_task_ended_at` triggers, and stamps
+   `merged_at`/`task_ended_at` from triggers on `session_tasks`, on update and
+   on the insert a first status write makes. The `_from_sessions_del` triggers
+   stay: they copy nothing and clean up if foreign keys are ever off.
+4. Drops `idx_sessions_task_status`, `idx_sessions_moved_from`,
+   `idx_sessions_quick_of` and the 42 columns (`ALTER TABLE ... DROP COLUMN`;
+   a table rebuild would cascade-delete every part row), then rebuilds
+   `session_rows` with the same output columns in the same order, now ordered
+   by `SESSION_ROW_COLUMNS` rather than the table.
+
+The whole change runs in one immediate transaction that re-reads the columns
+after taking the lock, so a second process opening the same database does
+nothing. `writePart` no longer mirrors; tests, fixtures and seeds write a flat
+row with `insertSessionRow`/`updateSessionRow` (`lib/db/session-parts/rows.ts`),
+and `guard.test.ts` now scans them too, plus `.js`, `.mjs` and `.sh`, leaving
+out only migrations and the tests that build a database as it was before them.
+
+Compatibility after the drop: a linked machine on an older build talks to this
+one over the HTTP API, whose payloads come from `session_rows` and are
+unchanged. Code that still writes an old column directly (a chat worker that
+has not restarted since the deploy before #368) now fails that statement; no
+build since #368 does.
+
+Next candidates, not done here (in `ideas.md`): a `session_chat` table for the
+nine `chat_*` columns (chat workers must be on the new writers first), and the
+conductor columns if nothing reads them.
 
 ## Alternatives considered
 

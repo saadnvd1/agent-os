@@ -22,7 +22,7 @@ vi.mock("../chat/runner", () => ({
   },
 }));
 
-import { db, type Session } from "../db";
+import { db, insertSessionRow, type Session } from "../db";
 import { createProject } from "../projects";
 import { listQueue } from "../chat/queued";
 import { saveItem } from "../chat/store";
@@ -51,7 +51,7 @@ function makeRepo(): string {
 }
 
 const row = (id: string) =>
-  db.prepare(`SELECT * FROM sessions WHERE id = ?`).get(id) as Session;
+  db.prepare(`SELECT * FROM session_rows WHERE id = ?`).get(id) as Session;
 
 async function until(check: () => boolean, ms = 10_000) {
   const end = Date.now() + ms;
@@ -160,10 +160,14 @@ describe("launchSession (a draft's first send)", () => {
       launchSession({ id: "../x", agentType: "claude" })
     ).rejects.toThrow(/Bad session id/);
     const task = "0a1b2c3d-4e5f-4a6b-8c7d-8e9f0a1b2c3d";
-    db.prepare(
-      `INSERT INTO sessions (id, name, tmux_name, working_directory, task_prompt, task_status)
-       VALUES (?, 't', 'claude-t', '~', 'do it', 'running')`
-    ).run(task);
+    insertSessionRow(db, {
+      id: task,
+      name: "t",
+      tmux_name: "claude-t",
+      working_directory: "~",
+      task_prompt: "do it",
+      task_status: "running",
+    });
     await expect(
       launchSession({ id: task, agentType: "claude" })
     ).rejects.toThrow(/taken/);
@@ -345,14 +349,19 @@ describe("launchSession (a draft's first send)", () => {
   });
 
   it("holds a queue whose setup failed or was cut off, until it's sent by hand", () => {
-    db.prepare(
-      `INSERT INTO sessions (id, name, working_directory, setup_status, task_status)
-       VALUES ('held', 'held', '/tmp', 'failed', NULL),
-              ('busy', 'busy', '/tmp', 'running', NULL),
-              ('fine', 'fine', '/tmp', 'ok', NULL),
-              ('plain', 'plain', '/tmp', NULL, NULL),
-              ('task', 'task', '/tmp', 'failed', 'running')`
-    ).run();
+    const seed = (id: string, setup: string | null, task: string | null) =>
+      insertSessionRow(db, {
+        id,
+        name: id,
+        working_directory: "/tmp",
+        setup_status: setup,
+        task_status: task,
+      });
+    seed("held", "failed", null);
+    seed("busy", "running", null);
+    seed("fine", "ok", null);
+    seed("plain", null, null);
+    seed("task", "failed", "running");
     // Set up fine, never had a setup, or a task (lib/tasks/start's): free.
     for (const id of ["fine", "plain", "task"])
       expect(holdsQueue(id)).toBe(false);

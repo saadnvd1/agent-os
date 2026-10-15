@@ -7,3 +7,4 @@ export { setPlan, advancePlan } from "./plans";
 export { setPlacement } from "./placement";
 export { setPause } from "./pauses";
 export { fillMissing } from "./fill";
+export { insertSessionRow, updateSessionRow } from "./rows";

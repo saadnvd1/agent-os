@@ -13,7 +13,7 @@ vi.mock("@/lib/hosts", async (importOriginal) => ({
   hostExec: async () => ({ stdout: "", stderr: "" }),
 }));
 
-const { db } = await import("./db");
+const { db, updateSessionRow } = await import("./db");
 const { seedSession } = await import("./orchestrator/testing");
 const { createProject } = await import("./projects");
 const { PATCH } = await import("@/app/api/sessions/[id]/route");
@@ -283,7 +283,7 @@ describe("naming a chat from its first message", () => {
   it("leaves a task alone even while it's called Session N", async () => {
     const name = `Session ${Math.floor(Math.random() * 1e9)}`;
     const id = seedSession({ projectId: project.id, name, task: true });
-    db.prepare(`UPDATE sessions SET task_prompt = 'x' WHERE id = ?`).run(id);
+    updateSessionRow(db, id, { task_prompt: "x" });
     await t.titleChatFromMessage(id, "anything", answering("Should not apply"));
     expect(row(id).name).toBe(name);
   });

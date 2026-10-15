@@ -1,6 +1,6 @@
 import { NextRequest } from "next/server";
 import { describe, expect, it, vi } from "vitest";
-import { db } from "@/lib/db";
+import { db, insertSessionRow, updateSessionRow } from "@/lib/db";
 import { git, makeRepo } from "@/lib/done/testing";
 import { seedTask, taskRow } from "./testing";
 
@@ -28,7 +28,7 @@ const rename = (id: string, name: string) =>
 // A worktree session that isn't a task.
 function seedSession(repo: string, branch: string, worktree: string) {
   const s = seedTask(repo, branch, worktree);
-  db.prepare(`UPDATE sessions SET task_status = NULL WHERE id = ?`).run(s.id);
+  updateSessionRow(db, s.id, { task_status: null });
   return s.id;
 }
 

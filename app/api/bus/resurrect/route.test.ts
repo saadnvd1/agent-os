@@ -1,4 +1,5 @@
 import { NextRequest } from "next/server";
+import { updateSessionRow } from "@/lib/db";
 import { describe, expect, it, vi } from "vitest";
 
 const resurrect = vi.hoisted(() => vi.fn());
@@ -26,12 +27,8 @@ describe("POST /api/bus/resurrect (aos resurrect)", () => {
   it("reaches only the caller's workspace, and lists what ended with no session", async () => {
     const mine = seedWorkspace("Bus mine");
     const other = seedWorkspace("Bus other");
-    db.prepare(`UPDATE sessions SET task_status = 'dropped' WHERE id = ?`).run(
-      mine.task
-    );
-    db.prepare(`UPDATE sessions SET task_status = 'dropped' WHERE id = ?`).run(
-      other.task
-    );
+    updateSessionRow(db, mine.task, { task_status: "dropped" });
+    updateSessionRow(db, other.task, { task_status: "dropped" });
     const list = await (await call({ from: mine.chat })).json();
     expect(list.sessions.map((s: { id: string }) => s.id)).toEqual([mine.task]);
 

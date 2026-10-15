@@ -1,6 +1,6 @@
 import { randomUUID } from "crypto";
 import { describe, expect, it } from "vitest";
-import { db } from "../db";
+import { db, insertSessionRow, updateSessionRow } from "../db";
 import { seedOrchestrator } from "../orchestrator/testing";
 import { hasHeldMirrors } from "./held-replies";
 import { CARRIED_COLUMNS, KEPT, REKEYED, carryTaskState } from "./move-carry";
@@ -40,16 +40,22 @@ describe("what a move re-keys", () => {
       ).toContain(col);
     }
     const cols = (
-      db.prepare(`PRAGMA table_info(sessions)`).all() as { name: string }[]
+      db.prepare(`PRAGMA table_info(session_rows)`).all() as { name: string }[]
     ).map((c) => c.name);
     for (const c of CARRIED_COLUMNS) expect(cols).toContain(c);
   });
 });
 
 function seedSession(id: string, extra = "") {
-  db.prepare(
-    `INSERT INTO sessions (id, name, tmux_name, working_directory, task_status ${extra ? ", " + extra.split("=")[0] : ""}) VALUES (?, 't', ?, '/tmp', 'running' ${extra ? ", ?" : ""})`
-  ).run(...[id, `claude-${id}`, ...(extra ? [extra.split("=")[1]] : [])]);
+  const [col, value] = extra ? extra.split("=") : [];
+  insertSessionRow(db, {
+    id,
+    name: "t",
+    tmux_name: `claude-${id}`,
+    working_directory: "/tmp",
+    task_status: "running",
+    ...(col ? { [col]: value } : {}),
+  });
 }
 
 describe("carryTaskState", () => {
@@ -91,9 +97,11 @@ describe("carryTaskState", () => {
     db.prepare(
       `INSERT INTO task_queue (id, project_id, prompt, position, after_task) VALUES (?, 'p', 'q', 1, ?)`
     ).run(randomUUID(), from);
-    db.prepare(
-      `UPDATE sessions SET model_overrides = 'x/y', merge_armed_at = 't', pr_number = 7 WHERE id = ?`
-    ).run(from);
+    updateSessionRow(db, from, {
+      model_overrides: "x/y",
+      merge_armed_at: "t",
+      pr_number: 7,
+    });
 
     carryTaskState(from, to);
 
@@ -142,7 +150,7 @@ describe("carryTaskState", () => {
     expect(
       db
         .prepare(
-          `SELECT started_by, model_overrides, merge_armed_at, pr_number, task_since FROM sessions WHERE id = ?`
+          `SELECT started_by, model_overrides, merge_armed_at, pr_number, task_since FROM session_rows WHERE id = ?`
         )
         .get(to)
     ).toMatchObject({
@@ -154,7 +162,9 @@ describe("carryTaskState", () => {
     // Its start time survives, for a PR opened before the move.
     expect(
       (
-        db.prepare(`SELECT task_since FROM sessions WHERE id = ?`).get(to) as {
+        db
+          .prepare(`SELECT task_since FROM session_rows WHERE id = ?`)
+          .get(to) as {
           task_since: string;
         }
       ).task_since
@@ -197,17 +207,19 @@ describe("carryTaskState", () => {
     ] as const) {
       const mirror = randomUUID();
       seedSession(mirror);
-      db.prepare(
-        `UPDATE sessions SET host_id = 'h-carry', task_prompt = 'x' WHERE id = ?`
-      ).run(mirror);
+      updateSessionRow(db, mirror, { host_id: "h-carry", task_prompt: "x" });
       carryTaskState(src, mirror);
       expect(heldBy(mirror)).toBe(want);
     }
     // Only the orchestrator's mirror counts as held for replies.
     expect(hasHeldMirrors("h-carry")).toBe(true);
-    db.prepare(
-      `UPDATE sessions SET task_status = 'merged' WHERE host_id = 'h-carry' AND started_by IS NOT NULL`
-    ).run();
+    const held = db
+      .prepare(
+        `SELECT id FROM sessions WHERE host_id = 'h-carry' AND started_by IS NOT NULL`
+      )
+      .all() as { id: string }[];
+    for (const { id } of held)
+      updateSessionRow(db, id, { task_status: "merged" });
     expect(hasHeldMirrors("h-carry")).toBe(false);
   });
 });

@@ -1,6 +1,6 @@
 import { randomUUID } from "crypto";
 import { describe, expect, it } from "vitest";
-import { getDb } from "@/lib/db";
+import { getDb, updateSessionRow } from "@/lib/db";
 import type { ChatItem } from "@/lib/chat/events";
 import { saveItem } from "@/lib/chat/store";
 import {
@@ -282,9 +282,7 @@ describe("moves", () => {
     const c = chat({ workspace: ws, name: "moving" });
     createBookmark({ sessionId: c.s, itemId: c.reply, note: "n" });
     const rows = bookmarksForMove(c.s);
-    getDb()
-      .prepare(`UPDATE sessions SET task_status = 'moved' WHERE id = ?`)
-      .run(c.s);
+    updateSessionRow(getDb(), c.s, { task_status: "moved" });
     const arrived = session({ workspace: ws, name: "moving" });
     insertMovedBookmarks(arrived, rows);
     insertMovedBookmarks(arrived, rows);

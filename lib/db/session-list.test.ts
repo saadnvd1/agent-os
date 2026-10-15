@@ -1,6 +1,6 @@
 import { randomUUID } from "crypto";
 import { describe, expect, it } from "vitest";
-import { db, queries } from "@/lib/db";
+import { db, insertSessionRow, queries } from "@/lib/db";
 import { listArchived } from "@/lib/done/archive";
 import { taskSessions } from "@/lib/tasks/session";
 
@@ -13,18 +13,16 @@ function seed(
   } = {}
 ): string {
   const id = randomUUID();
-  db.prepare(
-    `INSERT INTO sessions (id, name, tmux_name, working_directory, task_status,
-       archived_at, task_brief, system_prompt)
-     VALUES (?, 'n', ?, '/tmp', ?, ?, ?, ?)`
-  ).run(
+  insertSessionRow(db, {
     id,
-    `claude-${id}`,
-    extra.task_status ?? null,
-    extra.archived ? "2026-10-07 10:00:00" : null,
-    extra.brief ?? null,
-    extra.prompt ?? null
-  );
+    name: "n",
+    tmux_name: `claude-${id}`,
+    working_directory: "/tmp",
+    task_status: extra.task_status ?? null,
+    archived_at: extra.archived ? "2026-10-07 10:00:00" : null,
+    task_brief: extra.brief ?? null,
+    system_prompt: extra.prompt ?? null,
+  });
   return id;
 }
 

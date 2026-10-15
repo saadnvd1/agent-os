@@ -21,7 +21,7 @@ vi.mock("../chat/runner", async (orig) => ({
   },
 }));
 
-const { db } = await import("../db");
+const { db, insertSessionRow } = await import("../db");
 const { DEVICE_HEADER } = await import("../security/auth");
 const { sendMessage, listPeers, resolveHeldOrchestrator } =
   await import("../bus");
@@ -40,17 +40,19 @@ const orchId = randomUUID();
 // A task held here for dev-1, whose orchestrator is "The Boss" elsewhere.
 function held(opts: { device?: string; status?: string } = {}) {
   const id = randomUUID();
-  db.prepare(
-    `INSERT INTO sessions (id, name, tmux_name, working_directory, view, task_status,
-       held_by_device, held_from, held_for, held_for_name, task_prompt)
-     VALUES (?, 'held-task', ?, '/tmp', 'chat', ?, ?, 'the Mac', ?, 'The Boss', 'x')`
-  ).run(
+  insertSessionRow(db, {
     id,
-    `claude-${id}`,
-    opts.status ?? "running",
-    opts.device ?? "dev-1",
-    orchId
-  );
+    name: "held-task",
+    tmux_name: `claude-${id}`,
+    working_directory: "/tmp",
+    view: "chat",
+    task_status: opts.status ?? "running",
+    held_by_device: opts.device ?? "dev-1",
+    held_from: "the Mac",
+    held_for: orchId,
+    held_for_name: "The Boss",
+    task_prompt: "x",
+  });
   return id;
 }
 const pending = () =>
@@ -151,11 +153,17 @@ describe("the orchestrator's machine pulling them", () => {
   const mirror = () => {
     orchestrator();
     const id = randomUUID();
-    db.prepare(
-      `INSERT INTO sessions (id, name, tmux_name, working_directory, view, task_status,
-         host_id, started_by, task_prompt)
-       VALUES (?, 'moved-task', ?, '/tmp', 'chat', 'running', ?, ?, 'x')`
-    ).run(id, `claude-${id}`, link.hostId, orchId);
+    insertSessionRow(db, {
+      id,
+      name: "moved-task",
+      tmux_name: `claude-${id}`,
+      working_directory: "/tmp",
+      view: "chat",
+      task_status: "running",
+      host_id: link.hostId,
+      started_by: orchId,
+      task_prompt: "x",
+    });
     return id;
   };
   const freshLink = () => ({ ...link, hostId: link.hostId });

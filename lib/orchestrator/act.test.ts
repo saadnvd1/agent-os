@@ -1,4 +1,5 @@
 import fs from "fs";
+import { updateSessionRow, insertSessionRow } from "@/lib/db";
 import os from "os";
 import path from "path";
 import { randomUUID } from "crypto";
@@ -215,9 +216,7 @@ describe("workspace scoping", () => {
 
   it("refuses a PR number that's only a task elsewhere", async () => {
     const { mine, other } = twoWorkspaces();
-    db.prepare(`UPDATE sessions SET pr_number = 4242 WHERE id = ?`).run(
-      other.task
-    );
+    updateSessionRow(db, other.task, { pr_number: 4242 });
     await expect(
       runTool(mine.workspace.id, "sign_off", { task: "#4242" })
     ).rejects.toThrow(/No task has PR #4242/);
@@ -402,9 +401,7 @@ describe("acting inside the workspace", () => {
     expect(
       db.prepare(`SELECT status FROM task_queue WHERE id LIKE ?`).get(`${id}%`)
     ).toEqual({ status: "removed" });
-    db.prepare(`UPDATE sessions SET task_status = 'merged' WHERE id = ?`).run(
-      mine.task
-    );
+    updateSessionRow(db, mine.task, { task_status: "merged" });
     const { tickQueue } = await import("@/lib/tasks/queue");
     await tickQueue();
     expect(started).not.toContain("never runs");
@@ -426,9 +423,7 @@ describe("acting inside the workspace", () => {
       /^Queued \(position 1\) task "auth follow-up" \(id \w{8}\) in app-\w+, after add-auth\./
     );
     expect(started).not.toContain("follow up on auth");
-    db.prepare(`UPDATE sessions SET task_status = 'merged' WHERE id = ?`).run(
-      mine.task
-    );
+    updateSessionRow(db, mine.task, { task_status: "merged" });
     const { tickQueue } = await import("@/lib/tasks/queue");
     await tickQueue();
     expect(started).toContain("follow up on auth");
@@ -486,9 +481,7 @@ describe("acting inside the workspace", () => {
       `UPDATE workspaces SET orch_max_starts_per_hour = 0 WHERE id = ?`
     ).run(w);
     try {
-      db.prepare(`UPDATE sessions SET task_status = 'merged' WHERE id = ?`).run(
-        mine.task
-      );
+      updateSessionRow(db, mine.task, { task_status: "merged" });
       await tickQueue();
       expect(started).not.toContain("braked follow-up");
       const row = db
@@ -523,9 +516,7 @@ describe("acting inside the workspace", () => {
       other.workspace.id,
       mine.app.id
     );
-    db.prepare(`UPDATE sessions SET task_status = 'merged' WHERE id = ?`).run(
-      mine.task
-    );
+    updateSessionRow(db, mine.task, { task_status: "merged" });
     await tickQueue();
     expect(started).not.toContain("moved away");
     expect(
@@ -552,10 +543,14 @@ describe("acting inside the workspace", () => {
     db.prepare(`UPDATE task_queue SET status = 'starting' WHERE id = ?`).run(
       id
     );
-    db.prepare(
-      `INSERT INTO sessions (id, name, tmux_name, working_directory, project_id, task_status)
-       VALUES (?, 'cut off', 'claude-cut', '/tmp', ?, 'running')`
-    ).run(id, mine.app.id);
+    insertSessionRow(db, {
+      id: id,
+      name: "cut off",
+      tmux_name: "claude-cut",
+      working_directory: "/tmp",
+      project_id: mine.app.id,
+      task_status: "running",
+    });
     recoverQueue();
     const event = db
       .prepare(

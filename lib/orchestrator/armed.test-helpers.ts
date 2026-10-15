@@ -47,7 +47,7 @@ vi.mock("@/lib/status-detector", () => ({
   },
 }));
 
-export const { db } = await import("@/lib/db");
+export const { db, updateSessionRow } = await import("@/lib/db");
 export const { createProject } = await import("@/lib/projects");
 export const { createWorkspace, setProjectWorkspace } =
   await import("@/lib/workspaces");
@@ -131,9 +131,12 @@ export function setup() {
     task: true,
     branch: "feature/t",
   });
-  db.prepare(
-    `UPDATE sessions SET base_branch = 'main', task_prompt = 'Add a', pr_number = 7, worktree_path = ? WHERE id = ?`
-  ).run(repo, task);
+  updateSessionRow(db, task, {
+    base_branch: "main",
+    task_prompt: "Add a",
+    pr_number: 7,
+    worktree_path: repo,
+  });
   S.pr = {
     number: 7,
     url: "https://github.com/o/r/pull/7",
@@ -206,7 +209,7 @@ export const events = (w: string) =>
 export const armedAt = (task: string) =>
   (
     db
-      .prepare(`SELECT merge_armed_at FROM sessions WHERE id = ?`)
+      .prepare(`SELECT merge_armed_at FROM session_rows WHERE id = ?`)
       .get(task) as { merge_armed_at: string | null }
   ).merge_armed_at;
 

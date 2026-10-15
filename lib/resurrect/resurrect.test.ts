@@ -93,7 +93,7 @@ vi.spyOn(os, "homedir").mockReturnValue(
   fs.mkdtempSync(path.join(os.tmpdir(), "aos-resurrect-home-"))
 );
 
-const { db } = await import("@/lib/db");
+const { db, updateSessionRow } = await import("@/lib/db");
 const { createProject } = await import("@/lib/projects");
 const { createWorkspace, setProjectWorkspace } =
   await import("@/lib/workspaces");
@@ -126,7 +126,7 @@ interface Row {
   pr_status: string | null;
 }
 const row = (id: string) =>
-  db.prepare(`SELECT * FROM sessions WHERE id = ?`).get(id) as Row;
+  db.prepare(`SELECT * FROM session_rows WHERE id = ?`).get(id) as Row;
 
 function setup() {
   const r = makeRepo();
@@ -152,17 +152,14 @@ function setup() {
       view: "chat",
     });
     const claudeId = randomUUID();
-    db.prepare(
-      `UPDATE sessions SET worktree_path = ?, working_directory = ?, base_branch = 'main',
-         claude_session_id = ?, plan_only = ?, plan_phase = ? WHERE id = ?`
-    ).run(
-      wt.dir,
-      wt.dir,
-      claudeId,
-      opts.planOnly ? 1 : 0,
-      opts.planOnly ? "awaiting" : null,
-      id
-    );
+    updateSessionRow(db, id, {
+      worktree_path: wt.dir,
+      working_directory: wt.dir,
+      base_branch: "main",
+      claude_session_id: claudeId,
+      plan_only: opts.planOnly ? 1 : 0,
+      plan_phase: opts.planOnly ? "awaiting" : null,
+    });
     const transcript = (text = `{"type":"user"}\n`) => {
       const file = transcriptPath(wt.dir, claudeId);
       fs.mkdirSync(path.dirname(file), { recursive: true });
@@ -249,9 +246,7 @@ describe("drop, then resurrect", () => {
       checkCount: 1,
       attribution: null,
     });
-    db.prepare(
-      `UPDATE sessions SET pr_number = 41, pr_status = 'open' WHERE id = ?`
-    ).run(s.id);
+    updateSessionRow(db, s.id, { pr_number: 41, pr_status: "open" });
 
     await dropTask(s.id);
     expect(prs.get(s.branch)!.state).toBe("CLOSED");
@@ -277,7 +272,7 @@ describe("drop, then resurrect", () => {
     const s = t.task("finished", { planOnly: true });
     preparePlanDir(s.dir);
     fs.writeFileSync(path.join(s.dir, PLAN_FILE), "plan text\n");
-    db.prepare(`UPDATE sessions SET plan_phase = NULL WHERE id = ?`).run(s.id);
+    updateSessionRow(db, s.id, { plan_phase: null });
 
     const done = await doneSession(s.id, { by: "direct" });
     expect(done.worktree.action).toBe("removed");
@@ -426,9 +421,7 @@ describe("refusals leave the session as it was", () => {
 
   it("a merged task", async () => {
     const { s } = await dropped("was-merged");
-    db.prepare(`UPDATE sessions SET task_status = 'merged' WHERE id = ?`).run(
-      s.id
-    );
+    updateSessionRow(db, s.id, { task_status: "merged" });
     await expect(resurrectSession(s.id)).rejects.toThrow(/was merged/);
   });
 
@@ -444,7 +437,7 @@ describe("refusals leave the session as it was", () => {
       checkCount: 1,
       attribution: null,
     });
-    db.prepare(`UPDATE sessions SET pr_number = 77 WHERE id = ?`).run(s.id);
+    updateSessionRow(db, s.id, { pr_number: 77 });
     await expect(resurrectSession(s.id)).rejects.toThrow(/PR #77 was merged/);
     expect(row(s.id).task_status).toBe("dropped");
   });

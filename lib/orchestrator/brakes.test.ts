@@ -39,7 +39,7 @@ vi.mock("./usage", async (importOriginal) => ({
   readUsage: () => usage,
 }));
 
-const { db } = await import("@/lib/db");
+const { db, updateSessionRow } = await import("@/lib/db");
 const { ensureOrchestrator } = await import("./home");
 const { runTool } = await import("./serve");
 const { listNotes } = await import("./notes");
@@ -161,9 +161,7 @@ describe("the starts-per-hour brake", () => {
   it("counts a task mid-move as running, so a move can't free a slot", async () => {
     const w = workspace();
     const id = seedSession({ projectId: w.app.id, name: "moving-one" });
-    db.prepare(
-      `UPDATE sessions SET task_status = 'moving', task_prompt = 'x' WHERE id = ?`
-    ).run(id);
+    updateSessionRow(db, id, { task_status: "moving", task_prompt: "x" });
     const { runningCount } = await import("./brakes");
     expect(await runningCount(w.workspace.id)).toBe(1);
   });
@@ -180,13 +178,9 @@ describe("the starts-per-hour brake", () => {
     );
     const { runningCount } = await import("./brakes");
     expect(await runningCount(w.workspace.id)).toBe(1);
-    db.prepare(`UPDATE sessions SET pause_state = 'paused' WHERE id = ?`).run(
-      id
-    );
+    updateSessionRow(db, id, { pause_state: "paused" });
     expect(await runningCount(w.workspace.id)).toBe(0);
-    db.prepare(`UPDATE sessions SET pause_state = 'pausing' WHERE id = ?`).run(
-      id
-    );
+    updateSessionRow(db, id, { pause_state: "pausing" });
     expect(await runningCount(w.workspace.id)).toBe(1);
   });
 

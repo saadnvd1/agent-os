@@ -23,7 +23,7 @@ const { SETTLE_S } = await import("./task-state");
 function setup() {
   const { workspace, api } = seedWorkspace();
   const id = seedSession({ projectId: api.id, name: "t", task: true });
-  const row = db.prepare(`SELECT * FROM sessions WHERE id = ?`).get(id);
+  const row = db.prepare(`SELECT * FROM session_rows WHERE id = ?`).get(id);
   return { w: workspace.id, s: row as Session };
 }
 const green = (head: string, over: Partial<TaskPR> = {}): TaskPR => ({

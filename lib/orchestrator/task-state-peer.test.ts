@@ -1,6 +1,6 @@
 import { randomUUID } from "crypto";
 import { afterEach, describe, expect, it } from "vitest";
-import { getDb, type Session } from "../db";
+import { getDb, insertSessionRow, type Session } from "../db";
 import { fakePeer } from "../__fixtures__/fake-peer";
 import { linkedHost } from "../__fixtures__/linked-host";
 import { CHECKLESS_MS, checklessFor, waitingState } from "./task-state";
@@ -17,13 +17,16 @@ async function remoteTask(lines?: string[]) {
   cleanups.push(peer.close, host.remove);
   const id = randomUUID();
   if (lines) peer.routes[`/api/sessions/${id}/preview`] = () => ({ lines });
-  getDb()
-    .prepare(
-      `INSERT INTO sessions (id, name, tmux_name, working_directory, host_id, task_status) VALUES (?, 't', 'main', '/tmp', ?, 'running')`
-    )
-    .run(id, host.hostId);
+  insertSessionRow(getDb(), {
+    id,
+    name: "t",
+    tmux_name: "main",
+    working_directory: "/tmp",
+    host_id: host.hostId,
+    task_status: "running",
+  });
   return getDb()
-    .prepare(`SELECT * FROM sessions WHERE id = ?`)
+    .prepare(`SELECT * FROM session_rows WHERE id = ?`)
     .get(id) as Session;
 }
 
@@ -85,14 +88,17 @@ async function remoteChatTask(
   const id = randomUUID();
   if (tasks)
     peer.routes["/api/tasks"] = () => ({ tasks: tasks(id), capabilities });
-  getDb()
-    .prepare(
-      `INSERT INTO sessions (id, name, tmux_name, working_directory, host_id, task_status, view)
-       VALUES (?, 't', 'main', '/tmp', ?, 'running', 'chat')`
-    )
-    .run(id, host.hostId);
+  insertSessionRow(getDb(), {
+    id,
+    name: "t",
+    tmux_name: "main",
+    working_directory: "/tmp",
+    host_id: host.hostId,
+    task_status: "running",
+    view: "chat",
+  });
   return getDb()
-    .prepare(`SELECT * FROM sessions WHERE id = ?`)
+    .prepare(`SELECT * FROM session_rows WHERE id = ?`)
     .get(id) as Session;
 }
 

@@ -86,7 +86,7 @@ vi.mock("@/lib/status-detector", () => ({
   },
 }));
 
-const { db } = await import("@/lib/db");
+const { db, updateSessionRow } = await import("@/lib/db");
 const { createProject } = await import("@/lib/projects");
 const { createWorkspace, setProjectWorkspace } =
   await import("@/lib/workspaces");
@@ -119,9 +119,11 @@ beforeEach(() => {
     `DELETE FROM orchestrator_gate_failures; DELETE FROM orchestrator_asks; DELETE FROM orchestrator_checks;`
   );
   // Nor is a task one seeded on its branch.
-  db.exec(
-    `UPDATE sessions SET task_status = 'dropped' WHERE branch_name = 'ws-wor-52'`
-  );
+  const seeded = db
+    .prepare(`SELECT id FROM sessions WHERE branch_name = 'ws-wor-52'`)
+    .pluck()
+    .all() as string[];
+  for (const id of seeded) updateSessionRow(db, id, { task_status: "dropped" });
 });
 
 const git = (cwd: string, ...args: string[]) =>
@@ -491,13 +493,13 @@ describe("refusing what isn't the workspace's to merge", () => {
       task: true,
       branch: "elsewhere",
     });
-    db.prepare(
-      `UPDATE sessions SET task_status = 'merged', pr_number = 50, pr_url = 'https://github.com/o/r/pull/50' WHERE id = ?`
-    ).run(byPR);
+    updateSessionRow(db, byPR, {
+      task_status: "merged",
+      pr_number: 50,
+      pr_url: "https://github.com/o/r/pull/50",
+    });
     await refused();
-    db.prepare(
-      `UPDATE sessions SET pr_number = NULL, pr_url = NULL WHERE id = ?`
-    ).run(byPR);
+    updateSessionRow(db, byPR, { pr_number: null, pr_url: null });
     // On its branch, in a project on another machine.
     const remote = project("/nowhere/on/this/machine");
     db.prepare(`UPDATE projects SET host_id = 'box' WHERE id = ?`).run(
@@ -510,9 +512,7 @@ describe("refusing what isn't the workspace's to merge", () => {
       branch: "ws-wor-52",
     });
     await refused();
-    db.prepare(`UPDATE sessions SET task_status = 'dropped' WHERE id = ?`).run(
-      onBox
-    );
+    updateSessionRow(db, onBox, { task_status: "dropped" });
     // On its branch here, behind an ssh alias that doesn't read as GitHub.
     const aliased = path.join(t.root, "aliased");
     git(t.root, "clone", "-q", path.join(t.root, "repo.git"), aliased);

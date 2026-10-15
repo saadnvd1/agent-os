@@ -9,6 +9,7 @@ import {
   amendBrief,
   claudeArgs,
   db,
+  updateSessionRow,
   failureOf,
   getCheck,
   listNotes,
@@ -164,9 +165,7 @@ describe("review", () => {
       kind: "review",
       status: "running",
     });
-    db.prepare(`UPDATE sessions SET task_status = 'merged' WHERE id = ?`).run(
-      t.task
-    );
+    updateSessionRow(db, t.task, { task_status: "merged" });
     const r = reviewer("pass");
     expect(await resumeReviews(r.claude)).toEqual([]);
     expect(r.runs).toEqual([]);

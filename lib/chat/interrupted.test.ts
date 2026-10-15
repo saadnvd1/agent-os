@@ -1,4 +1,5 @@
 import { describe, expect, it, vi } from "vitest";
+import { updateSessionRow } from "@/lib/db";
 import type { ChatItem } from "./events";
 import type { WorkerHandlers } from "./worker/client";
 
@@ -259,9 +260,11 @@ describe("a turn that started over an hour ago", () => {
 describe("an orchestrator whose turn a restart cut off", () => {
   it("is resumed with AgentOS's note, never as a stop by the user", async () => {
     const { id, w } = task();
-    db.prepare(
-      `UPDATE sessions SET role = 'orchestrator', task_status = NULL, workspace_id = ? WHERE id = ?`
-    ).run(w, id);
+    updateSessionRow(db, id, {
+      role: "orchestrator",
+      task_status: null,
+      workspace_id: w,
+    });
     try {
       await reattachChats();
       const commands = workers.started
@@ -290,7 +293,7 @@ describe("an orchestrator whose turn a restart cut off", () => {
 describe("a cut-off turn outside a task", () => {
   it("is resumed with no orchestrator event", async () => {
     const { id, w } = task();
-    db.prepare(`UPDATE sessions SET task_status = NULL WHERE id = ?`).run(id);
+    updateSessionRow(db, id, { task_status: null });
     try {
       await reattachChats();
       expect(sends(id)).toHaveLength(1);

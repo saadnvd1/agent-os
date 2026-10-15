@@ -1,5 +1,5 @@
 import type Database from "better-sqlite3";
-import { PART_COLUMNS, type PartTable } from "./columns";
+import { PART_COLUMNS, SESSION_ROW_COLUMNS, type PartTable } from "./columns";
 
 const ALIAS: Record<PartTable, string> = {
   session_tasks: "t",
@@ -9,11 +9,12 @@ const ALIAS: Record<PartTable, string> = {
   session_pauses: "pa",
 };
 
-// `session_rows`: the sessions table with each moved column read from its own
-// table, under the same names and in the same order, so a row is the flat
-// session it always was. A column with a default on sessions
-// (peer_mirror) keeps it. Rebuild it in any migration that adds a sessions
-// column. `parts` is the split as that migration knew it.
+// `session_rows`: a session with each moved column read from its own table,
+// in the order of SESSION_ROW_COLUMNS (the flat shape a session row always
+// had). A column with a default (peer_mirror) keeps it. Rebuild it in any
+// migration that adds a sessions column. `parts` is the split as that
+// migration knew it; a column on both sessions and a part (before the old
+// columns were dropped) is read from the part.
 export function createSessionRowsView(
   db: Database.Database,
   parts: Record<PartTable, readonly string[]> = PART_COLUMNS
@@ -24,7 +25,13 @@ export function createSessionRowsView(
   const sessionColumns = (
     db.prepare(`PRAGMA table_info(sessions)`).all() as { name: string }[]
   ).map((c) => c.name);
-  const select = sessionColumns
+  const onSessions = new Set(sessionColumns);
+  const known = new Set(SESSION_ROW_COLUMNS);
+  const names = [
+    ...SESSION_ROW_COLUMNS.filter((c) => source.has(c) || onSessions.has(c)),
+    ...sessionColumns.filter((c) => !known.has(c)),
+  ];
+  const select = names
     .map((c) => {
       const alias = source.get(c);
       if (!alias) return `s.${c}`;

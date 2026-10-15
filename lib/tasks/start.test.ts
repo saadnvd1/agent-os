@@ -57,7 +57,7 @@ vi.mock("../chat/runner", () => ({
     sendQueuedNow(sessionId, id),
 }));
 
-const { db } = await import("../db");
+const { db, insertSessionRow, updateSessionRow } = await import("../db");
 const { seedSession, seedWorkspace } = await import("../orchestrator/testing");
 const { setPaused } = await import("../orchestrator/pause");
 const { taskSetupOf } = await import("./setup");
@@ -81,16 +81,18 @@ const ok = (): SetupResult => ({
 
 function seedTask(projectId: string): string {
   const id = seedSession({ projectId, name: "task", task: true });
-  db.prepare(
-    `UPDATE sessions SET worktree_path = '/tmp/wt', task_prompt = 'Do it',
-       task_brief = 'The brief', setup_status = 'running' WHERE id = ?`
-  ).run(id);
+  updateSessionRow(db, id, {
+    worktree_path: "/tmp/wt",
+    task_prompt: "Do it",
+    task_brief: "The brief",
+    setup_status: "running",
+  });
   return id;
 }
 
 const setupOf = (id: string) =>
   taskSetupOf(
-    db.prepare(`SELECT * FROM sessions WHERE id = ?`).get(id) as object
+    db.prepare(`SELECT * FROM session_rows WHERE id = ?`).get(id) as object
   );
 
 function seedChatTask(projectId: string): string {
@@ -140,9 +142,11 @@ describe("finishTaskStart", () => {
 
   it("gives a plan-only task its held messages in the planning step", async () => {
     const id = seedChatTask(ws.app.id);
-    db.prepare(
-      `UPDATE sessions SET plan_phase = 'planning', plan_only = 1, worktree_path = ? WHERE id = ?`
-    ).run(fs.mkdtempSync(path.join(os.tmpdir(), "aos-wt-")), id);
+    updateSessionRow(db, id, {
+      plan_phase: "planning",
+      plan_only: 1,
+      worktree_path: fs.mkdtempSync(path.join(os.tmpdir(), "aos-wt-")),
+    });
     db.prepare(
       `INSERT INTO bus_messages (from_id, from_name, to_id, to_name, body, held_queued) VALUES (NULL, 'you', ?, 'task', 'use CSV', 1)`
     ).run(id);
@@ -308,9 +312,7 @@ describe("finishTaskStart", () => {
   it("doesn't launch a task closed during its setup", async () => {
     const id = seedTask(ws.app.id);
     setupWorktree.mockImplementation(async () => {
-      db.prepare(
-        `UPDATE sessions SET task_status = 'dropped' WHERE id = ?`
-      ).run(id);
+      updateSessionRow(db, id, { task_status: "dropped" });
       return ok();
     });
     await finishTaskStart(id);
@@ -373,9 +375,7 @@ describe("resumeTaskStarts", () => {
       finished
     );
     const dropped = seedTask(ws.app.id);
-    db.prepare(`UPDATE sessions SET task_status = 'dropped' WHERE id = ?`).run(
-      dropped
-    );
+    updateSessionRow(db, dropped, { task_status: "dropped" });
 
     const resumed = await resumeTaskStarts(async () => false);
     expect(resumed).toContain(cut);

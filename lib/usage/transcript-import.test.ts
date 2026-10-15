@@ -3,7 +3,7 @@ import fs from "fs";
 import os from "os";
 import path from "path";
 import { beforeEach, describe, expect, it } from "vitest";
-import { db } from "../db";
+import { db, insertSessionRow } from "../db";
 import { importTranscripts } from "./transcript-import";
 
 const line = (id: string, over: Record<string, unknown> = {}, usage = {}) =>
@@ -34,10 +34,14 @@ describe("importTranscripts", () => {
     root = fs.mkdtempSync(path.join(os.tmpdir(), "aos-transcripts-"));
     claudeId = randomUUID();
     const id = randomUUID();
-    db.prepare(
-      `INSERT INTO sessions (id, name, tmux_name, working_directory, task_status, claude_session_id)
-       VALUES (?, 'task', ?, '/tmp', 'running', ?)`
-    ).run(id, `claude-${id}`, claudeId);
+    insertSessionRow(db, {
+      id,
+      name: "task",
+      tmux_name: `claude-${id}`,
+      working_directory: "/tmp",
+      task_status: "running",
+      claude_session_id: claudeId,
+    });
     const dir = path.join(root, "-tmp-work");
     fs.mkdirSync(path.join(dir, claudeId, "subagents"), { recursive: true });
     main = path.join(dir, `${claudeId}.jsonl`);
@@ -131,10 +135,14 @@ describe("importTranscripts", () => {
     for (let i = 0; i < 9; i++) {
       const cid = randomUUID();
       const sid = randomUUID();
-      db.prepare(
-        `INSERT INTO sessions (id, name, tmux_name, working_directory, task_status, claude_session_id)
-         VALUES (?, 'bulk', ?, '/tmp', 'running', ?)`
-      ).run(sid, `claude-${sid}`, cid);
+      insertSessionRow(db, {
+        id: sid,
+        name: "bulk",
+        tmux_name: `claude-${sid}`,
+        working_directory: "/tmp",
+        task_status: "running",
+        claude_session_id: cid,
+      });
       const file = path.join(dir, `${cid}.jsonl`);
       fs.writeFileSync(file, line(`bulk-${i}`));
       const t = new Date(Date.now() - (9 - i) * 1000);

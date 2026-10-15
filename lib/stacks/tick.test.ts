@@ -2,7 +2,7 @@ import { mkdtempSync } from "fs";
 import { tmpdir } from "os";
 import { join } from "path";
 import { describe, expect, it, vi } from "vitest";
-import { db, stackQueries as q } from "../db";
+import { db, insertSessionRow, stackQueries as q } from "../db";
 import { retryItem } from "./index";
 import { seedStack } from "./testing";
 import {
@@ -63,10 +63,15 @@ describe("starting items", () => {
 
   it("links a card's running task instead of starting it twice", async () => {
     const s = seedStack(repo(), [{ key: "A", status: "planned" }]);
-    db.prepare(
-      `INSERT INTO sessions (id, name, tmux_name, working_directory, task_status, lh_card_id, base_branch)
-       VALUES ('existing-a', 'A', 'claude-x', '/tmp', 'running', ?, 'main')`
-    ).run(s.item("A").lh_card_id);
+    insertSessionRow(db, {
+      id: "existing-a",
+      name: "A",
+      tmux_name: "claude-x",
+      working_directory: "/tmp",
+      task_status: "running",
+      lh_card_id: s.item("A").lh_card_id,
+      base_branch: "main",
+    });
     await startItem(q.get(db, s.stackId)!, s.item("A"));
     expect(s.item("A")).toMatchObject({
       status: "running",

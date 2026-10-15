@@ -3,7 +3,7 @@ import fs from "fs";
 import os from "os";
 import path from "path";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
-import { getDb } from "@/lib/db";
+import { getDb, insertSessionRow } from "@/lib/db";
 import { claudeProjectDir } from "@/lib/tasks/transcript";
 import { loadSessions, loadSignals, subagentFiles } from "./sources";
 
@@ -45,24 +45,18 @@ function session(row: {
   host?: string;
   created?: string;
 }) {
-  db()
-    .prepare(
-      `INSERT INTO sessions (id, name, working_directory, worktree_path, claude_session_id,
-                             role, view, task_prompt, host_id, created_at)
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
-    )
-    .run(
-      row.id,
-      `s-${row.id.slice(0, 8)}`,
-      row.cwd,
-      row.worktree ?? null,
-      row.claude ?? null,
-      row.role ?? null,
-      row.view ?? "terminal",
-      row.task ?? null,
-      row.host ?? "local",
-      row.created ?? "2026-10-01 00:00:00"
-    );
+  insertSessionRow(db(), {
+    id: row.id,
+    name: `s-${row.id.slice(0, 8)}`,
+    working_directory: row.cwd,
+    worktree_path: row.worktree ?? null,
+    claude_session_id: row.claude ?? null,
+    role: row.role ?? null,
+    view: row.view ?? "terminal",
+    task_prompt: row.task ?? null,
+    host_id: row.host ?? "local",
+    created_at: row.created ?? "2026-10-01 00:00:00",
+  });
 }
 
 function transcript(cwd: string, name: string, old = false): string {

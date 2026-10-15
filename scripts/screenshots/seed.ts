@@ -234,7 +234,7 @@ function tmux(args: string[]): void {
 
 async function seedDb(): Promise<void> {
   process.env.DB_PATH = DB_PATH;
-  const { getDb } = await import("../../lib/db");
+  const { getDb, insertSessionRow } = await import("../../lib/db");
   const db = getDb();
   const projectIds = new Map<string, string>();
   const workspaceIds = new Map<string, string>();
@@ -261,24 +261,25 @@ async function seedDb(): Promise<void> {
     sessionIds.set(s.key, id);
     const tmuxName = `claude-${id}`;
     const when = `-${s.minutesAgo} minutes`;
-    db.prepare(
-      `INSERT INTO sessions (id, name, tmux_name, working_directory, project_id, agent_type, model, view,
-         task_prompt, task_status, branch_name, base_branch, created_at, updated_at)
-       VALUES (?, ?, ?, ?, ?, 'claude', 'opus', ?, ?, ?, ?, ?, datetime('now', ?), datetime('now', ?))`
-    ).run(
+    const at = (
+      db.prepare(`SELECT datetime('now', ?) AS t`).get(when) as { t: string }
+    ).t;
+    insertSessionRow(db, {
       id,
-      s.name,
-      tmuxName,
-      `~/code/${s.project}`,
-      projectIds.get(s.project),
-      s.view ?? "terminal",
-      s.task?.prompt ?? null,
-      s.task?.status ?? null,
-      s.task?.branch ?? null,
-      s.task ? "main" : null,
-      when,
-      when
-    );
+      name: s.name,
+      tmux_name: tmuxName,
+      working_directory: `~/code/${s.project}`,
+      project_id: projectIds.get(s.project),
+      agent_type: "claude",
+      model: "opus",
+      view: s.view ?? "terminal",
+      task_prompt: s.task?.prompt ?? null,
+      task_status: s.task?.status ?? null,
+      branch_name: s.task?.branch ?? null,
+      base_branch: s.task ? "main" : null,
+      created_at: at,
+      updated_at: at,
+    });
     if (s.chat) {
       const insert = db.prepare(
         `INSERT INTO chat_items (session_id, item_id, seq, data) VALUES (?, ?, ?, ?)`

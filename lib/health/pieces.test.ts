@@ -1,5 +1,5 @@
 import { beforeEach, describe, expect, it } from "vitest";
-import { db } from "@/lib/db";
+import { db, updateSessionRow } from "@/lib/db";
 import { createProject } from "@/lib/projects";
 import { seedSession } from "@/lib/orchestrator/testing";
 import { closeResolvedPieces, reportDuplicatePiece } from "./pieces";
@@ -31,9 +31,12 @@ function merged(over: {
     projectId: over.projectId ?? project.id,
     name: over.name,
   });
-  db.prepare(
-    `UPDATE sessions SET task_status = 'merged', pr_number = 41, task_prompt = ?, updated_at = ? WHERE id = ?`
-  ).run(over.prompt, over.at ?? "2026-10-14 12:00:00", id);
+  updateSessionRow(db, id, {
+    task_status: "merged",
+    pr_number: 41,
+    task_prompt: over.prompt,
+    updated_at: over.at ?? "2026-10-14 12:00:00",
+  });
   return id;
 }
 

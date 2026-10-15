@@ -1,4 +1,5 @@
 import { randomUUID } from "crypto";
+import { updateSessionRow } from "@/lib/db";
 import { describe, expect, it, vi } from "vitest";
 
 let paneResult: import("./delivery").Delivery = { state: "delivered" };
@@ -256,9 +257,7 @@ describe("a paused terminal", () => {
         .prepare(`SELECT id FROM task_pauses WHERE session_id = ?`)
         .get(target) as { id: number }
     ).id;
-    db.prepare(
-      `UPDATE sessions SET pause_state = 'paused', pause_id = ? WHERE id = ?`
-    ).run(pauseId, target);
+    updateSessionRow(db, target, { pause_state: "paused", pause_id: pauseId });
     typed.length = 0;
     const sent = await bus.sendMessage({
       fromId: sender,

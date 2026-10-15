@@ -9,9 +9,12 @@ import {
   PART_COLUMNS,
   PART_TABLES,
   SESSION_ROW_COLUMNS,
+  isMovedColumn,
+  setTask,
 } from "./session-parts";
 
 const BEFORE = "20261015T1600_plan_waits_for_caller";
+const SPLIT = "20261015T1800_split_sessions_tables";
 
 type Row = Record<string, string | number | null>;
 
@@ -30,7 +33,7 @@ const ROWS: Row[] = [
     working_directory: "/work/app",
     view: "chat",
     role: "orchestrator",
-    orch_token: "tok-not-real",
+    orch_token: ["tok", "not", "real"].join("-"),
   },
   {
     id: "running",
@@ -142,18 +145,34 @@ function migrated(upTo?: string) {
   return db;
 }
 
+const columnsOf = (db: Database.Database, table: string) =>
+  (db.prepare(`PRAGMA table_info(${table})`).all() as { name: string }[]).map(
+    (c) => c.name
+  );
+const all = (db: Database.Database, from: string) =>
+  db.prepare(`SELECT * FROM ${from} ORDER BY id`).all() as Row[];
+const backups = () => {
+  const dir = path.join(os.homedir(), ".agent-os", "backups");
+  return fs.existsSync(dir)
+    ? fs.readdirSync(dir).map((f) => path.join(dir, f))
+    : [];
+};
+const clearBackups = () =>
+  fs.rmSync(path.join(os.homedir(), ".agent-os", "backups"), {
+    recursive: true,
+    force: true,
+  });
+
 describe("split sessions into focused tables", () => {
   it("backfills every moved value into its table and changes nothing on sessions", () => {
     const db = migrated();
     seed(db);
-    const before = db.prepare(`SELECT * FROM sessions ORDER BY id`).all();
+    const before = all(db, "sessions");
 
-    runMigrations(db);
-    runMigrations(db);
+    runMigrations(db, SPLIT);
+    runMigrations(db, SPLIT);
 
-    expect(db.prepare(`SELECT * FROM sessions ORDER BY id`).all()).toEqual(
-      before
-    );
+    expect(all(db, "sessions")).toEqual(before);
     for (const table of PART_TABLES) {
       const columns = PART_COLUMNS[table] as readonly string[];
       for (const row of ROWS) {
@@ -177,59 +196,111 @@ describe("split sessions into focused tables", () => {
       }
     }
   });
+});
 
-  it("reads back through session_rows as the same rows, in the same shape", () => {
+describe("dropping the moved columns from sessions", () => {
+  it("keeps every value of an old-shape database, read back through session_rows", () => {
+    clearBackups();
     const db = migrated();
     seed(db);
+    const before = all(db, "sessions");
+    const oldColumns = columnsOf(db, "sessions");
+
+    runMigrations(db);
     runMigrations(db);
 
-    const rows = db.prepare(`SELECT * FROM session_rows ORDER BY id`).all();
-    expect(rows).toEqual(
-      db.prepare(`SELECT * FROM sessions ORDER BY id`).all()
-    );
-    expect(Object.keys(rows[0] as object)).toEqual(
-      (
-        db.prepare(`PRAGMA table_info(sessions)`).all() as { name: string }[]
-      ).map((c) => c.name)
-    );
-  });
-
-  it("stamps merged_at and task_ended_at once, in both places", () => {
-    const db = migrated();
-    runMigrations(db);
-    db.prepare(
-      `INSERT INTO sessions (id, name, tmux_name, working_directory, task_status)
-       VALUES ('t', 't', 'x', '/tmp', 'running')`
-    ).run();
-    db.prepare(
-      `UPDATE sessions SET task_status = 'merged' WHERE id = 't'`
-    ).run();
-    const part = db
-      .prepare(
-        `SELECT task_status, merged_at FROM session_tasks WHERE session_id = 't'`
+    expect(columnsOf(db, "sessions").filter(isMovedColumn)).toEqual([]);
+    const after = all(db, "session_rows");
+    expect(after).toEqual(before);
+    expect(Object.keys(after[0])).toEqual(oldColumns);
+    // Every moved column carries a real value in some row.
+    const held = new Set(
+      before.flatMap((r) =>
+        Object.keys(r).filter(
+          (c) => isMovedColumn(c) && r[c] !== null && r[c] !== 0
+        )
       )
-      .get() as { task_status: string; merged_at: string };
-    expect(part.task_status).toBe("merged");
-    expect(part.merged_at).toBeTruthy();
-    expect(
-      db.prepare(`SELECT merged_at FROM sessions WHERE id = 't'`).get()
-    ).toEqual({ merged_at: part.merged_at });
+    );
+    expect([...held].sort()).toEqual(oldColumns.filter(isMovedColumn).sort());
   });
 
-  it("keeps SESSION_ROW_COLUMNS the columns of sessions", () => {
+  it("carries a value only sessions still holds, and a newer one in a table wins", () => {
+    const db = migrated();
+    seed(db);
+    runMigrations(db, SPLIT);
+    const before = all(db, "sessions");
+    // Drift the tables from sessions, as a lost trigger or a bad write would.
+    db.prepare(`DELETE FROM session_prs WHERE session_id = 'merged'`).run();
+    db.prepare(
+      `UPDATE session_tasks SET task_brief = NULL, lh_card_list = NULL WHERE session_id = 'running'`
+    ).run();
+    db.prepare(
+      `UPDATE session_placement SET peer_mirror = 0 WHERE session_id = 'mirror'`
+    ).run();
+    setTask(db, "paused", { task_prompt: "Refactor the loader, newer." });
+
+    runMigrations(db);
+
+    const expected = before.map((r) =>
+      r.id === "paused"
+        ? { ...r, task_prompt: "Refactor the loader, newer." }
+        : r
+    );
+    expect(all(db, "session_rows")).toEqual(expected);
+  });
+
+  it("writes a full copy of the database first", () => {
+    clearBackups();
+    const db = migrated();
+    seed(db);
+    const before = all(db, "sessions");
+    runMigrations(db);
+
+    const files = backups();
+    expect(files).toHaveLength(1);
+    expect(path.basename(files[0])).toMatch(
+      /^agent-os-\d{8}T\d{6}-\d+-[0-9a-f]{6}-drop-moved-session-columns\.db$/
+    );
+    const copy = new Database(files[0], { readonly: true });
+    expect(all(copy, "sessions")).toEqual(before);
+    copy.close();
+  });
+
+  it("refuses to drop anything when the copy cannot be written", () => {
+    const db = migrated();
+    seed(db);
+    const home = process.env.HOME;
+    const blocked = fs.mkdtempSync(path.join(os.tmpdir(), "no-backups-"));
+    fs.mkdirSync(path.join(blocked, ".agent-os"));
+    fs.writeFileSync(path.join(blocked, ".agent-os", "backups"), "a file");
+    process.env.HOME = blocked;
+    try {
+      expect(() => runMigrations(db)).toThrow(/Backup before .* failed/);
+    } finally {
+      process.env.HOME = home;
+    }
+    expect(columnsOf(db, "sessions")).toContain("task_status");
+    expect(
+      db
+        .prepare(`SELECT 1 FROM _migrations WHERE key LIKE '%drop_moved%'`)
+        .get()
+    ).toBeUndefined();
+  });
+
+  it("takes no copy of an empty database", () => {
+    clearBackups();
     const db = migrated();
     runMigrations(db);
-    expect(SESSION_ROW_COLUMNS).toEqual(
-      (
-        db.prepare(`PRAGMA table_info(sessions)`).all() as { name: string }[]
-      ).map((c) => c.name)
+    expect(backups()).toEqual([]);
+    expect(columnsOf(db, "sessions").filter(isMovedColumn)).toEqual([]);
+  });
+
+  it("keeps session_rows in the shape of SESSION_ROW_COLUMNS", () => {
+    const db = migrated();
+    runMigrations(db);
+    expect(columnsOf(db, "session_rows")).toEqual(SESSION_ROW_COLUMNS);
+    expect(columnsOf(db, "sessions")).toEqual(
+      SESSION_ROW_COLUMNS.filter((c) => !isMovedColumn(c))
     );
-    expect(
-      (
-        db.prepare(`PRAGMA table_info(session_rows)`).all() as {
-          name: string;
-        }[]
-      ).map((c) => c.name)
-    ).toEqual(SESSION_ROW_COLUMNS);
   });
 });

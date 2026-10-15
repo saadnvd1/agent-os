@@ -63,7 +63,7 @@ function run(recipeId: string, sessionId: string) {
 }
 
 const row = (id: string) =>
-  db.prepare(`SELECT * FROM sessions WHERE id = ?`).get(id) as Parameters<
+  db.prepare(`SELECT * FROM session_rows WHERE id = ?`).get(id) as Parameters<
     typeof needsYou
   >[0] &
     Parameters<typeof inBell>[0];
