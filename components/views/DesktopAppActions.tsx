@@ -45,29 +45,35 @@ export function SidebarToggle({
   );
 }
 
-export function DesktopAppActions() {
+// A pinned sidebar has its own New button, so this one shows only while the
+// sidebar is hidden.
+export function DesktopAppActions({ showNew }: { showNew: boolean }) {
   return (
     <div
       className="flex shrink-0 items-center gap-0.5"
       onClick={(e) => e.stopPropagation()}
     >
       <InboxButton />
-      <Tooltip>
-        <TooltipTrigger asChild>
-          <Button
-            size="icon-sm"
-            aria-label="New session"
-            className="ml-1 h-7 w-7"
-            onClick={() => newDraft({ kind: "current" })}
-          >
-            <Plus className="h-4 w-4" />
-          </Button>
-        </TooltipTrigger>
-        <TooltipContent>
-          <p>New session</p>
-          <p className="text-muted-foreground text-xs">{DRAFT_KEYS.current}</p>
-        </TooltipContent>
-      </Tooltip>
+      {showNew && (
+        <Tooltip>
+          <TooltipTrigger asChild>
+            <Button
+              size="icon-sm"
+              aria-label="New session"
+              className="ml-1 h-7 w-7"
+              onClick={() => newDraft({ kind: "current" })}
+            >
+              <Plus className="h-4 w-4" />
+            </Button>
+          </TooltipTrigger>
+          <TooltipContent>
+            <p>New session</p>
+            <p className="text-muted-foreground text-xs">
+              {DRAFT_KEYS.current}
+            </p>
+          </TooltipContent>
+        </Tooltip>
+      )}
     </div>
   );
 }
