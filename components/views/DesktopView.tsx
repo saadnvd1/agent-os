@@ -59,7 +59,7 @@ export function DesktopView({
             leading={
               <SidebarToggle isPinned={isPinned} togglePin={togglePin} />
             }
-            trailing={<DesktopAppActions />}
+            trailing={<DesktopAppActions showNew={!isPinned} />}
           >
             <PaneLayout renderPane={renderPane} />
           </PaneBarSlotsProvider>
