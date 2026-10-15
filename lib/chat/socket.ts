@@ -11,6 +11,7 @@ import { db } from "../db";
 import {
   carryOutPlan,
   chatFileSuggestions,
+  warmChatFileIndexes,
   chatHistory,
   backgroundChatTask,
   chatTaskOutput,
@@ -113,6 +114,7 @@ export function serveChatSocket(
   }
   try {
     unwatch = watchChat(sessionId, reply);
+    if (!demo) warmChatFileIndexes(sessionId);
   } catch (err) {
     fail(err);
     if (!closed) ws.close();

@@ -60,7 +60,12 @@ import {
   moveQueued,
   queuedSessions,
 } from "./queued";
-import { fallbackFileSuggestions } from "./files";
+import {
+  fallbackFileSuggestions,
+  multiRootFileSuggestions,
+  warmFileIndexes,
+} from "./files";
+import { mentionRoots } from "./mention-roots";
 import { REQUESTED_FRESH, releaseConversation } from "./refresh";
 import { holdsQueue, settingUp } from "../sessions/setup-progress";
 import { firstMessageId, launchPending } from "../tasks/launch-gate";
@@ -631,12 +636,22 @@ export async function sendQueuedNow(
   live.worker.command({ type: "send_now", id, during });
 }
 
-// Files and folders for an @mention: the agent's own matching when its
-// worker is up and has an answer, ripgrep over the folder otherwise.
+// An orchestrator's "@" index starts building when its chat opens.
+export function warmChatFileIndexes(sessionId: string): void {
+  const roots = mentionRoots(sessionId);
+  if (roots) warmFileIndexes(roots);
+}
+
+// Files and folders for an @mention: an orchestrator's come from its HQ and
+// project repositories (the agent only sees its scratch folder); any other
+// session's from the agent's own matching when its worker is up and has an
+// answer, ripgrep over the folder otherwise.
 export async function chatFileSuggestions(
   sessionId: string,
   query: string
 ): Promise<FileSuggestion[]> {
+  const roots = mentionRoots(sessionId);
+  if (roots) return multiRootFileSuggestions(roots, query, sessionId);
   const live = registry.live.get(sessionId);
   const fromAgent = live?.canQueue
     ? await live.worker.fileSuggestions(query)

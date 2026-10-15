@@ -1,5 +1,13 @@
 import { describe, expect, it } from "vitest";
-import { mentionQuery, mentionText, rankPaths, withFolders } from "./mentions";
+import {
+  indexPaths,
+  mentionOption,
+  mentionQuery,
+  mentionText,
+  rankPaths,
+  scanPaths,
+  withFolders,
+} from "./mentions";
 
 describe("mentionQuery", () => {
   it("opens on @ at the start of a line or after a space", () => {
@@ -82,5 +90,85 @@ describe("rankPaths", () => {
       "components",
       "lib",
     ]);
+  });
+});
+
+describe("mentionOption", () => {
+  it("is the name and its folder for a plain suggestion", () => {
+    expect(mentionOption({ path: "lib/chat/queue.ts", dir: false })).toEqual({
+      label: "queue.ts",
+      hint: "lib/chat",
+    });
+    expect(mentionOption({ path: "lib", dir: true })).toEqual({
+      label: "lib/",
+      hint: undefined,
+    });
+  });
+
+  it("leads the hint with the source for an orchestrator's", () => {
+    expect(
+      mentionOption({
+        path: "/x/hq/docs/mission.md",
+        dir: false,
+        source: "HQ",
+        rel: "docs/mission.md",
+      })
+    ).toEqual({ label: "mission.md", hint: "HQ · docs" });
+    expect(
+      mentionOption({
+        path: "/x/app/README.md",
+        dir: false,
+        source: "app",
+        rel: "README.md",
+      })
+    ).toEqual({ label: "README.md", hint: "app" });
+    expect(
+      mentionOption({ path: "/x/app", dir: true, source: "app", rel: "" })
+    ).toEqual({ label: "app/", hint: "app" });
+  });
+});
+
+describe("scanPaths", () => {
+  const entries = (list: [string, number?][]) =>
+    indexPaths(list.map(([path]) => ({ path, dir: false }))).map((p, i) => ({
+      ...p,
+      mtime: list[i][1],
+    }));
+
+  it("lists the most recently modified first among equal matches", () => {
+    const top = scanPaths(
+      "",
+      entries([["a.ts", 100], ["b.ts", 300], ["c.ts", 200], ["d.ts"]])
+    ).top.map((x) => x.p.file.path);
+    expect(top).toEqual(["b.ts", "c.ts", "a.ts", "d.ts"]);
+  });
+
+  it("keeps a better match above a newer one", () => {
+    const top = scanPaths(
+      "queue",
+      entries([
+        ["lib/old-queue-helpers.ts", 900],
+        ["lib/queue.ts", 1],
+      ])
+    ).top.map((x) => x.p.file.path);
+    expect(top[0]).toBe("lib/queue.ts");
+  });
+
+  it("keeps what matched and counts what it looked at", () => {
+    const all = entries([["notes.md"], ["other.md"], ["nope.md"]]);
+    const scan = scanPaths("no", all, { keep: true });
+    expect(scan.scanned).toBe(3);
+    expect(scan.matches?.map((p) => p.file.path).sort()).toEqual([
+      "nope.md",
+      "notes.md",
+    ]);
+  });
+
+  it("raises the score for a boosted folder, but not for an empty query", () => {
+    const [a] = scanPaths("note", entries([["notes.md"]])).top;
+    const [b] = scanPaths("note", entries([["notes.md"]]), { boost: 5 }).top;
+    expect(b.s).toBe(a.s + 5);
+    const [c] = scanPaths("", entries([["notes.md"]]), { boost: 5 }).top;
+    expect(c.s).toBe(1);
   });
 });
