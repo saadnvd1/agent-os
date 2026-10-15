@@ -160,7 +160,7 @@ export async function notifyFrom(
   text: string
 ): Promise<Outcome> {
   const session = from
-    ? (db.prepare(`SELECT * FROM sessions WHERE id = ?`).get(from) as
+    ? (db.prepare(`SELECT * FROM session_rows WHERE id = ?`).get(from) as
         | Session
         | undefined)
     : undefined;

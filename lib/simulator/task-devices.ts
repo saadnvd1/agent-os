@@ -148,7 +148,7 @@ export async function shutFinishedTaskSimulators(): Promise<number> {
       db
         .prepare(
           `SELECT id, branch_name, worktree_path, task_status, host_id
-           FROM sessions WHERE task_status IS NOT NULL`
+           FROM session_rows WHERE task_status IS NOT NULL`
         )
         .all() as (TaskRef & { host_id: string })[]
     ).filter((t) => !isRemoteHost(t.host_id));

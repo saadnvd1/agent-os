@@ -49,7 +49,7 @@ export function moveRefusal(session: Session): string | null {
     .prepare(
       `SELECT lh_card_id,
          EXISTS (SELECT 1 FROM stack_items WHERE session_id = s.id) AS stacked
-       FROM sessions s WHERE id = ?`
+       FROM session_rows s WHERE id = ?`
     )
     .get(session.id) as
     | { lh_card_id: string | null; stacked: number }

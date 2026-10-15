@@ -51,7 +51,7 @@ const prUrlOf = (sessionId: string | null) =>
   sessionId
     ? ((
         db
-          .prepare(`SELECT pr_url FROM sessions WHERE id = ?`)
+          .prepare(`SELECT pr_url FROM session_rows WHERE id = ?`)
           .get(sessionId) as { pr_url: string | null } | undefined
       )?.pr_url ?? null)
     : null;

@@ -33,6 +33,7 @@ import {
   planPathOf,
   splitOf,
 } from "../plans/features";
+import { advancePlan, setPlan } from "../db/session-parts";
 
 export const PLAN_FILE = ".agentos/plan.md";
 
@@ -164,10 +165,7 @@ function announcePlan(s: Session, ref: string | null, retried = false): void {
   const again = retried ? " (asked once more for it first)" : "";
   const head = planNoteFor(s, file, next, again, ref ? " anyway" : "");
   if (s.held_by_device) {
-    db.prepare(`UPDATE sessions SET plan_note = ? WHERE id = ?`).run(
-      head,
-      s.id
-    );
+    setPlan(db, s.id, { plan_note: head });
     return;
   }
   queueEvent(workspaceId!, `plan-done:${s.id}`, s.id, head);
@@ -227,9 +225,9 @@ export const implementMessageId = (sessionId: string) =>
 type Send = (sessionId: string, id: string) => Promise<void>;
 
 function getSession(sessionId: string): Session | undefined {
-  return db.prepare(`SELECT * FROM sessions WHERE id = ?`).get(sessionId) as
-    | Session
-    | undefined;
+  return db
+    .prepare(`SELECT * FROM session_rows WHERE id = ?`)
+    .get(sessionId) as Session | undefined;
 }
 
 // Planning (or, once approved, awaiting) becomes implementing, once: the
@@ -273,13 +271,7 @@ async function startImplementing(
   let nothingOwn = false;
   let featureId: string | null = null;
   const claimed = db.transaction(() => {
-    const changed = db
-      .prepare(
-        `UPDATE sessions SET plan_phase = 'implementing'
-         WHERE id = ? AND plan_phase = ? AND task_status = 'running'`
-      )
-      .run(sessionId, from).changes;
-    if (!changed) return false;
+    if (!advancePlan(db, sessionId, from, "implementing")) return false;
     setSessionModel(sessionId, routed);
     let piece: string | undefined;
     let note = amendment;
@@ -485,13 +477,7 @@ export async function handoffAfterPlan(
       });
     return ref !== null;
   }
-  const awaiting = db
-    .prepare(
-      `UPDATE sessions SET plan_phase = 'awaiting'
-       WHERE id = ? AND plan_phase = 'planning' AND task_status = 'running'`
-    )
-    .run(sessionId).changes;
-  if (!awaiting) return false;
+  if (!advancePlan(db, sessionId, "planning", "awaiting")) return false;
   try {
     announcePlan(s, null, retried);
   } catch (e) {
@@ -538,7 +524,7 @@ export async function recheckPlanning(
 ): Promise<void> {
   const rows = db
     .prepare(
-      `SELECT id FROM sessions
+      `SELECT id FROM session_rows
        WHERE plan_phase = 'planning' AND task_status = 'running'
          AND archived_at IS NULL AND worktree_path IS NOT NULL`
     )

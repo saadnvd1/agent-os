@@ -61,7 +61,7 @@ function schedulerSnapshot(f: HealthFacts): string {
   const running = db
     .prepare(
       `SELECT s.name, s.pause_state, s.plan_only, s.plan_phase, s.task_status
-       FROM sessions s WHERE s.task_status IN ('running', 'moving')
+       FROM session_rows s WHERE s.task_status IN ('running', 'moving')
          AND s.archived_at IS NULL AND s.quick_of IS NULL LIMIT 20`
     )
     .all() as {

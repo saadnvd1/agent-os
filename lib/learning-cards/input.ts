@@ -80,7 +80,7 @@ export async function readSession(id: string): Promise<SessionInput | null> {
     ? (
         db
           .prepare(
-            `SELECT s.task_prompt AS p FROM sessions s JOIN projects p ON p.id = s.project_id
+            `SELECT s.task_prompt AS p FROM session_rows s JOIN projects p ON p.id = s.project_id
              WHERE p.workspace_id = ? AND s.id != ? AND s.quick_of IS NULL
                AND s.task_prompt IS NOT NULL
                AND s.created_at >= datetime('now', ?)

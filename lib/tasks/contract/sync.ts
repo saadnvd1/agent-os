@@ -23,6 +23,7 @@ import {
   planWritten,
 } from "./plan";
 import { setMirrorStatus } from "./start";
+import { setPlan } from "../../db/session-parts";
 
 const FINISHED: Record<string, TaskStatus> = {
   merged: "merged",
@@ -31,7 +32,7 @@ const FINISHED: Record<string, TaskStatus> = {
 };
 
 const getSession = (id: string) =>
-  db.prepare(`SELECT * FROM sessions WHERE id = ?`).get(id) as
+  db.prepare(`SELECT * FROM session_rows WHERE id = ?`).get(id) as
     | Session
     | undefined;
 
@@ -45,7 +46,7 @@ function announcePlanNote(s: Session, view: TaskView): void {
       ? cleanRemoteText(view.planNote).slice(0, 2000)
       : "";
   if (!note || note === s.plan_note) return;
-  db.prepare(`UPDATE sessions SET plan_note = ? WHERE id = ?`).run(note, s.id);
+  setPlan(db, s.id, { plan_note: note });
   queueEvent(workspaceId, `plan-done:${s.id}`, s.id, note);
 }
 
@@ -72,7 +73,7 @@ export async function syncMirrors(): Promise<void> {
   const rows = (
     db
       .prepare(
-        `SELECT * FROM sessions
+        `SELECT * FROM session_rows
          WHERE task_prompt IS NOT NULL AND task_status = 'running'
            AND archived_at IS NULL AND peer_mirror IS NOT 1
            AND host_id IS NOT NULL`
@@ -106,7 +107,7 @@ export async function syncMirrors(): Promise<void> {
   // A task that arrived but never began implementing (a restart between).
   const arrived = db
     .prepare(
-      `SELECT id, plan_handoff_message FROM sessions
+      `SELECT id, plan_handoff_message FROM session_rows
        WHERE plan_phase = 'awaiting' AND plan_handoff_message IS NOT NULL
          AND task_status = 'running' AND archived_at IS NULL AND peer_mirror IS NOT 1`
     )

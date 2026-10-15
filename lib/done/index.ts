@@ -35,6 +35,7 @@ import { doneHeldTask, isHeldRemote } from "../tasks/contract/held-calls";
 import { captureMergedTask } from "../session-logs";
 import { sessionEnded } from "../experiments/hooks";
 import { pushMerged } from "../notify/push/events";
+import { setPr, setTask } from "../db/session-parts";
 
 export interface DoneOptions {
   // Who asked: the orchestrator's gate failures count toward Saad, as its
@@ -108,11 +109,10 @@ async function mergeThroughGates(
 }
 
 function mark(s: Session, status: "merged" | "done", pr: TaskPR | null) {
-  db.prepare(
-    status === "merged"
-      ? `UPDATE sessions SET task_status = 'merged', pr_status = 'merged' WHERE id = ?`
-      : `UPDATE sessions SET task_status = 'done' WHERE id = ?`
-  ).run(s.id);
+  db.transaction(() => {
+    setTask(db, s.id, { task_status: status });
+    if (status === "merged") setPr(db, s.id, { pr_status: "merged" });
+  })();
   endPauseOnFinish(s.id);
   syncTaskCardInBackground(s, status, pr);
   void sessionEnded(s.id, status);
@@ -133,10 +133,7 @@ export async function doneSession(
     if (s.role === "orchestrator")
       throw new Error("An orchestrator isn't marked done.");
     if (s.archived_at) throw new Error(`${s.name} is already archived.`);
-    if (s.task_prompt)
-      db.prepare(`UPDATE sessions SET task_status = 'done' WHERE id = ?`).run(
-        s.id
-      );
+    if (s.task_prompt) setTask(db, s.id, { task_status: "done" });
     archiveSession(s.id);
     return {
       id: s.id,
@@ -180,10 +177,7 @@ export async function doneSession(
     // agent and removes the worktree, which is where they are.
     await doneHeldTask(s);
     if (plan.mark) mark(s, plan.mark, plan.pr);
-    else
-      db.prepare(
-        `UPDATE sessions SET task_status = 'done' WHERE id = ? AND task_status = 'running'`
-      ).run(s.id);
+    else setTask(db, s.id, { task_status: "done" }, { task_status: "running" });
     worktree = {
       action: "removed",
       why: `on ${hostLink(s.host_id)?.hostName ?? "its machine"}`,

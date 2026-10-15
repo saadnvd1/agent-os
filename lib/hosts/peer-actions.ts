@@ -83,7 +83,7 @@ const path = (id: string, rest = "") =>
   `/api/sessions/${encodeURIComponent(id)}${rest}`;
 
 const row = (id: string) =>
-  db.prepare(`SELECT * FROM sessions WHERE id = ?`).get(id) as Session;
+  db.prepare(`SELECT * FROM session_rows WHERE id = ?`).get(id) as Session;
 
 export async function renameOnPeer(
   link: HostLink,

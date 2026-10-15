@@ -2,6 +2,7 @@ import { refuse } from "@/lib/tasks/contract/authorize";
 import { NextRequest, NextResponse } from "next/server";
 import { db, type Session } from "@/lib/db";
 import { notifyStatusChanged } from "@/lib/status/hub";
+import { setPlan } from "@/lib/db/session-parts";
 
 // Saad's edits to a waiting plan's pieces: which to fold into the one before
 // and which to leave out. Kept on the task and applied when the plan is
@@ -21,17 +22,14 @@ export async function PUT(
   const merge = ints(body?.merge);
   const drop = ints(body?.drop).filter((n) => !merge.includes(n));
   const session = db
-    .prepare(`SELECT plan_phase FROM sessions WHERE id = ?`)
+    .prepare(`SELECT plan_phase FROM session_rows WHERE id = ?`)
     .get(id) as Pick<Session, "plan_phase"> | undefined;
   if (session?.plan_phase !== "awaiting")
     return NextResponse.json(
       { error: "That task isn't waiting for plan approval" },
       { status: 409 }
     );
-  db.prepare(`UPDATE sessions SET plan_edits = ? WHERE id = ?`).run(
-    JSON.stringify({ merge, drop }),
-    id
-  );
+  setPlan(db, id, { plan_edits: JSON.stringify({ merge, drop }) });
   notifyStatusChanged();
   return NextResponse.json({ success: true, merge, drop });
 }

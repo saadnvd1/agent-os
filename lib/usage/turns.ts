@@ -61,7 +61,7 @@ export function recordTurn(
     const current = db
       .prepare(
         `SELECT name, workspace_id, model, model_provider, role, task_status,
-           plan_phase, started_by FROM sessions WHERE id = ?`
+           plan_phase, started_by FROM session_rows WHERE id = ?`
       )
       .get(session.id) as
       | Pick<

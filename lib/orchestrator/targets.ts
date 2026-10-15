@@ -56,7 +56,7 @@ export function workspaceTask(
   if (pr !== null) {
     const rows = db
       .prepare(
-        `SELECT s.*, p.name AS project_name FROM sessions s
+        `SELECT s.*, p.name AS project_name FROM session_rows s
          JOIN projects p ON p.id = s.project_id
          WHERE p.workspace_id = ? AND s.pr_number = ? AND s.task_status IS NOT NULL
          ORDER BY s.created_at DESC`

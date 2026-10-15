@@ -16,9 +16,9 @@ export async function GET(
   const { id } = await params;
   const live = getSetup(id);
   if (live) return NextResponse.json({ setup: live });
-  const session = db.prepare(`SELECT * FROM sessions WHERE id = ?`).get(id) as
-    | Session
-    | undefined;
+  const session = db
+    .prepare(`SELECT * FROM session_rows WHERE id = ?`)
+    .get(id) as Session | undefined;
   if (!session)
     return NextResponse.json({ error: "Session not found" }, { status: 404 });
   const link = isRemoteHost(session.host_id) ? hostLink(session.host_id) : null;

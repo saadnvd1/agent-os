@@ -1,4 +1,5 @@
 import type Database from "better-sqlite3";
+import { SESSION_ROW_COLUMNS } from "./session-parts/columns";
 
 // Prepared statement cache
 const stmtCache = new Map<string, Database.Statement>();
@@ -13,28 +14,18 @@ function getStmt(db: Database.Database, sql: string): Database.Statement {
   return stmt;
 }
 
-// Every sessions column but the two large text ones, which only the single
+// Every session column but the two large text ones, which only the single
 // session paths read; a list gets has_brief for whether a brief exists.
-const listColumns = new WeakMap<Database.Database, string>();
-export function sessionListColumns(db: Database.Database, alias = ""): string {
-  let cols = listColumns.get(db);
-  if (!cols) {
-    cols = (
-      db.prepare(`PRAGMA table_info(sessions)`).all() as { name: string }[]
-    )
-      .map((c) => c.name)
-      .filter((n) => n !== "task_brief" && n !== "system_prompt")
-      .join(",");
-    listColumns.set(db, cols);
-  }
+// Read from session_rows (lib/db/session-parts).
+const LIST_COLUMNS = SESSION_ROW_COLUMNS.filter(
+  (n) => n !== "task_brief" && n !== "system_prompt"
+);
+export function sessionListColumns(_db: Database.Database, alias = ""): string {
   const prefix = alias ? `${alias}.` : "";
-  const list = cols
-    .split(",")
-    .map((c) => `${prefix}${c}`)
-    .join(", ");
+  const list = LIST_COLUMNS.map((c) => `${prefix}${c}`).join(", ");
   // The recipe run or feature piece a session is, as JSON, for its row's chip.
-  const recipe = `(SELECT json_object('id', r.id, 'name', r.name, 'seq', rr.seq, 'status', rr.status) FROM recipe_runs rr JOIN recipes r ON r.id = rr.recipe_id WHERE rr.session_id = ${alias || "sessions"}.id)`;
-  const piece = `(SELECT json_object('feature', f.id, 'name', f.name, 'position', fp.position, 'total', (SELECT COUNT(*) FROM feature_pieces WHERE feature_id = f.id AND status != 'dropped')) FROM feature_pieces fp JOIN features f ON f.id = fp.feature_id WHERE fp.session_id = ${alias || "sessions"}.id)`;
+  const recipe = `(SELECT json_object('id', r.id, 'name', r.name, 'seq', rr.seq, 'status', rr.status) FROM recipe_runs rr JOIN recipes r ON r.id = rr.recipe_id WHERE rr.session_id = ${alias || "session_rows"}.id)`;
+  const piece = `(SELECT json_object('feature', f.id, 'name', f.name, 'position', fp.position, 'total', (SELECT COUNT(*) FROM feature_pieces WHERE feature_id = f.id AND status != 'dropped')) FROM feature_pieces fp JOIN features f ON f.id = fp.feature_id WHERE fp.session_id = ${alias || "session_rows"}.id)`;
   return `${list}, (${prefix}task_brief IS NOT NULL AND ${prefix}task_brief != '') AS has_brief, ${recipe} AS recipe_run, ${piece} AS feature_piece`;
 }
 
@@ -48,12 +39,12 @@ export const queries = {
     ),
 
   getSession: (db: Database.Database) =>
-    getStmt(db, `SELECT * FROM sessions WHERE id = ?`),
+    getStmt(db, `SELECT * FROM session_rows WHERE id = ?`),
 
   getAllSessions: (db: Database.Database) =>
     getStmt(
       db,
-      `SELECT ${sessionListColumns(db)} FROM sessions ORDER BY updated_at DESC`
+      `SELECT ${sessionListColumns(db)} FROM session_rows ORDER BY updated_at DESC`
     ),
 
   // The sidebar's sessions: not archived, and not a dropped task (a
@@ -62,7 +53,7 @@ export const queries = {
   getSidebarSessions: (db: Database.Database) =>
     getStmt(
       db,
-      `SELECT ${sessionListColumns(db)} FROM sessions
+      `SELECT ${sessionListColumns(db)} FROM session_rows
          WHERE archived_at IS NULL
            AND (task_status IS NULL
                 OR task_status NOT IN ('dropped', 'moved'))
@@ -103,12 +94,6 @@ export const queries = {
       `UPDATE sessions SET worktree_path = ?, branch_name = ?, base_branch = ?, dev_server_port = ?, updated_at = datetime('now') WHERE id = ?`
     ),
 
-  updateSessionPR: (db: Database.Database) =>
-    getStmt(
-      db,
-      `UPDATE sessions SET pr_url = ?, pr_number = ?, pr_status = ?, updated_at = datetime('now') WHERE id = ?`
-    ),
-
   updateSessionGroup: (db: Database.Database) =>
     getStmt(
       db,
@@ -118,7 +103,7 @@ export const queries = {
   getSessionsByGroup: (db: Database.Database) =>
     getStmt(
       db,
-      `SELECT * FROM sessions WHERE group_path = ? ORDER BY updated_at DESC`
+      `SELECT * FROM session_rows WHERE group_path = ? ORDER BY updated_at DESC`
     ),
 
   moveSessionsToGroup: (db: Database.Database) =>
@@ -136,14 +121,14 @@ export const queries = {
   getSessionsByProject: (db: Database.Database) =>
     getStmt(
       db,
-      `SELECT * FROM sessions WHERE project_id = ? ORDER BY updated_at DESC`
+      `SELECT * FROM session_rows WHERE project_id = ? ORDER BY updated_at DESC`
     ),
 
   // Orchestration
   getWorkersByConductor: (db: Database.Database) =>
     getStmt(
       db,
-      `SELECT * FROM sessions WHERE conductor_session_id = ? ORDER BY created_at ASC`
+      `SELECT * FROM session_rows WHERE conductor_session_id = ? ORDER BY created_at ASC`
     ),
 
   updateWorkerStatus: (db: Database.Database) =>

@@ -46,7 +46,7 @@ function settleQuestions(workspaceId: string): void {
     `UPDATE orchestrator_questions
      SET status = 'cleared', resolved_by = 'orchestrator', resolved_at = datetime('now')
      WHERE workspace_id = ? AND status = 'open' AND task IN (
-       SELECT id FROM sessions WHERE task_status IN ('merged', 'dropped', 'done'))`
+       SELECT id FROM session_rows WHERE task_status IN ('merged', 'dropped', 'done'))`
   ).run(workspaceId);
 }
 

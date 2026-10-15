@@ -26,6 +26,7 @@ import {
 import { notifyStatusChanged } from "../status/hub";
 import type { TaskPR } from "./state";
 import { markStatusDirty } from "../status/dirty";
+import { setPr } from "../db/session-parts";
 
 export const expandHome = (p: string) => p.replace(/^~/, os.homedir());
 
@@ -33,7 +34,7 @@ export const expandHome = (p: string) => p.replace(/^~/, os.homedir());
 export function taskSessions(includeArchived = true): Session[] {
   return db
     .prepare(
-      `SELECT ${sessionListColumns(db)} FROM sessions
+      `SELECT ${sessionListColumns(db)} FROM session_rows
          WHERE task_status IS NOT NULL AND task_status != 'moved'
            ${includeArchived ? "" : "AND archived_at IS NULL"}
          ORDER BY created_at DESC`
@@ -205,9 +206,11 @@ export async function prFor(
     if (pr) pushPrChange(session, pr);
   }
   if (pr) {
-    db.prepare(
-      `UPDATE sessions SET pr_url = ?, pr_number = ?, pr_status = ? WHERE id = ?`
-    ).run(pr.url, pr.number, pr.state.toLowerCase(), session.id);
+    setPr(db, session.id, {
+      pr_url: pr.url,
+      pr_number: pr.number,
+      pr_status: pr.state.toLowerCase() as "open" | "merged" | "closed",
+    });
     // Merged on GitHub rather than through AgentOS: its log is due too.
     if (pr.state === "MERGED") {
       if (session.pr_status !== "merged") pushMerged(session.id);

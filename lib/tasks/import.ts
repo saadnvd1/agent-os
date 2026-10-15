@@ -38,6 +38,7 @@ import {
   validateBundle,
   type TaskBundle,
 } from "./move-bundle";
+import { setPlan, setTask } from "../db/session-parts";
 
 // Imports in flight in this process, by move id.
 const g = globalThis as unknown as { __agentosImporting?: Set<string> };
@@ -47,7 +48,7 @@ const importing = (g.__agentosImporting ??= new Set());
 export const arrived = (moveId: string) =>
   db
     .prepare(
-      `SELECT * FROM sessions WHERE moved_from = ? AND host_id = 'local'
+      `SELECT * FROM session_rows WHERE moved_from = ? AND host_id = 'local'
          AND task_status IN ('running', 'moving', 'moved', 'merged', 'done')`
     )
     .get(moveId) as Session | undefined;
@@ -56,7 +57,7 @@ export const arrived = (moveId: string) =>
 function refuseBusyBranch(projectId: string, branch: string): void {
   const busy = db
     .prepare(
-      `SELECT id FROM sessions WHERE project_id = ? AND branch_name = ?
+      `SELECT id FROM session_rows WHERE project_id = ? AND branch_name = ?
          AND task_status IN ('running', 'moving') AND host_id = 'local'`
     )
     .get(projectId, branch);
@@ -166,26 +167,29 @@ async function arrive(
       .run(worktreePath, bundle.branch, baseBranch, null, id);
     // A chat's worker reads its brief from the row; a terminal's is passed.
     db.prepare(
-      `UPDATE sessions SET task_prompt = ?, task_brief = ?, task_status = 'running', name_source = 'user',
-         claude_session_id = ?, moved_from = ? WHERE id = ?`
-    ).run(bundle.prompt, brief, claude?.sessionId ?? null, bundle.moveId, id);
+      `UPDATE sessions SET name_source = 'user', claude_session_id = ? WHERE id = ?`
+    ).run(claude?.sessionId ?? null, id);
+    setTask(db, id, {
+      task_prompt: bundle.prompt,
+      task_brief: brief,
+      task_status: "running",
+      moved_from: bundle.moveId,
+    });
     if (bundle.chat) unpackChat(id, bundle.chat, paths);
-    if (bundle.planWait)
-      db.prepare(
-        `UPDATE sessions SET plan_phase = 'awaiting' WHERE id = ?`
-      ).run(id);
+    if (bundle.planWait) setPlan(db, id, { plan_phase: "awaiting" });
     if (orch) {
-      db.prepare(
-        `UPDATE sessions SET plan_phase = ?, task_since = ? WHERE id = ?`
-      ).run(orch.planPhase, orch.since, id);
+      setPlan(db, id, { plan_phase: orch.planPhase });
+      setTask(db, id, { task_since: orch.since });
       // Held for the orchestrator's device. The orchestrator's own state
       // (started_by, its gates) never comes from the bundle: it stays on its
       // machine, and a task coming back takes it from the mirror's record.
       if (holder) {
         holdFor(id, holder, orch);
-        db.prepare(
-          `UPDATE sessions SET model_provider = ?, model_overrides = ? WHERE id = ?`
-        ).run(orch.modelProvider, orch.modelOverrides, id);
+        db.prepare(`UPDATE sessions SET model_provider = ? WHERE id = ?`).run(
+          orch.modelProvider,
+          id
+        );
+        setTask(db, id, { model_overrides: orch.modelOverrides });
       }
     }
     carryTaskState(bundle.moveId, id);

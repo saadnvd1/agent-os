@@ -109,7 +109,7 @@ const defaults: RestackDeps = {
 
 const sessionOf = (id: string | null) =>
   id
-    ? ((db.prepare(`SELECT * FROM sessions WHERE id = ?`).get(id) as
+    ? ((db.prepare(`SELECT * FROM session_rows WHERE id = ?`).get(id) as
         | Session
         | undefined) ?? null)
     : null;

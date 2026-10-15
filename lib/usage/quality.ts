@@ -82,7 +82,7 @@ export function mergedTasks(from: number, to: number): MergedTask[] {
     db
       .prepare(
         `SELECT id, project_id AS projectId, pr_number AS prNumber, merged_at AS mergedAt
-         FROM sessions WHERE task_status = 'merged' AND merged_at >= ? AND merged_at < ?`
+         FROM session_rows WHERE task_status = 'merged' AND merged_at >= ? AND merged_at < ?`
       )
       .all(sqlTime(from), sqlTime(to)) as MergedTask[]
   ).filter((t) => t.mergedAt);

@@ -47,7 +47,7 @@ async function main() {
   const { commitLogs } = await import("../lib/session-logs/hq");
   const rows = db
     .prepare(
-      `SELECT id, name FROM sessions
+      `SELECT id, name FROM session_rows
        WHERE task_prompt IS NOT NULL AND peer_mirror = 0
          AND (task_status = 'merged' OR (pr_status = 'merged' AND task_status != 'dropped'))
        ORDER BY COALESCE(merged_at, updated_at)`

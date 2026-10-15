@@ -10,6 +10,7 @@ import os from "os";
 import { db, type Session } from "../db";
 import { isRemoteHost } from "../hosts";
 import type { OrchestratedBundle } from "./move-bundle";
+import { setPlacement, setTask } from "../db/session-parts";
 
 export function holderRefusal(
   session: Pick<Session, "held_by_device" | "held_from">,
@@ -26,7 +27,7 @@ export function heldRefusal(
   device: string | null | undefined
 ): string | null {
   const session = db
-    .prepare(`SELECT held_by_device, held_from FROM sessions WHERE id = ?`)
+    .prepare(`SELECT held_by_device, held_from FROM session_rows WHERE id = ?`)
     .get(id) as Pick<Session, "held_by_device" | "held_from"> | undefined;
   return session ? holderRefusal(session, device) : null;
 }
@@ -41,17 +42,15 @@ export function holdFor(
     since?: string | null;
   }
 ): void {
-  db.prepare(
-    `UPDATE sessions SET held_by_device = ?, held_from = ?, held_for = ?, held_for_name = ?,
-       task_since = COALESCE(?, task_since) WHERE id = ?`
-  ).run(
-    holder,
-    held.heldFrom,
-    held.orchestrator?.id ?? null,
-    held.orchestrator?.name ?? null,
-    held.since ?? null,
-    id
-  );
+  db.transaction(() => {
+    setPlacement(db, id, {
+      held_by_device: holder,
+      held_from: held.heldFrom,
+      held_for: held.orchestrator?.id ?? null,
+      held_for_name: held.orchestrator?.name ?? null,
+    });
+    setTask(db, id, { task_since: held.since ?? undefined });
+  })();
 }
 
 /**
@@ -81,10 +80,7 @@ const UNRECORDED_STARTER = "unrecorded";
 
 /** Records the paired device that started a task here, the only one that may later hold it. */
 export function recordStarter(id: string, device: string): void {
-  db.prepare(`UPDATE sessions SET started_by_device = ? WHERE id = ?`).run(
-    device,
-    id
-  );
+  setPlacement(db, id, { started_by_device: device });
 }
 
 type Holdable = Pick<
@@ -124,7 +120,7 @@ export function holdExisting(
   const s = db
     .prepare(
       `SELECT held_by_device, started_by, started_by_device, task_status, host_id, task_prompt
-       FROM sessions WHERE id = ?`
+       FROM session_rows WHERE id = ?`
     )
     .get(id) as Holdable | undefined;
   if (!s?.task_prompt || s.task_status !== "running") return false;
@@ -145,7 +141,7 @@ export function planWaitRefusal(
 ): string | null {
   const s = db
     .prepare(
-      `SELECT plan_waits_for_caller, started_by_device, host_id FROM sessions WHERE id = ?`
+      `SELECT plan_waits_for_caller, started_by_device, host_id FROM session_rows WHERE id = ?`
     )
     .get(id) as
     | Pick<Session, "plan_waits_for_caller" | "started_by_device" | "host_id">

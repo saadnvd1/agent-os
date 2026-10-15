@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { execFile } from "child_process";
 import { promisify } from "util";
-import { getDb, queries, type Session } from "@/lib/db";
+import { getDb, queries, recordPr, type Session } from "@/lib/db";
 import { gitPush } from "@/lib/git-exec";
 
 const execFileAsync = promisify(execFile);
@@ -129,7 +129,7 @@ export async function GET(request: NextRequest, { params }: RouteParams) {
 
     // Update session with PR info if found
     if (pr) {
-      queries.updateSessionPR(db).run(pr.url, pr.number, pr.state, id);
+      recordPr(db, id, pr);
     }
 
     return NextResponse.json({ pr });
@@ -197,7 +197,7 @@ export async function POST(request: NextRequest, { params }: RouteParams) {
     );
 
     // Save PR info to session
-    queries.updateSessionPR(db).run(pr.url, pr.number, pr.state, id);
+    recordPr(db, id, pr);
 
     return NextResponse.json({ pr }, { status: 201 });
   } catch (error) {

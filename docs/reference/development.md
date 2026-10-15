@@ -75,6 +75,31 @@ which also holds the app's first-load JavaScript to a budget
 (`scripts/check-bundle.mjs`; `npx next experimental-analyze` shows what's in
 it).
 
+## The sessions data model
+
+A session is a row in `sessions` (identity, project, chat state, shelves, setup)
+plus a row in each of five tables that holds a group of columns only when it has
+a value: `session_tasks` (brief, status, priority, models, card), `session_prs`
+(PR, armed merge, rebase), `session_plans` (the plan step), `session_placement`
+(mirror, holder, starting device) and `session_pauses`. The lists are in
+`lib/db/session-parts/columns.ts`.
+
+- **Read** a session, or any of those columns, from the `session_rows` view: it
+  has every `sessions` column under the same name, in the same order, so a row
+  is the flat session it always was. Don't `SELECT` the moved columns from
+  `sessions`.
+- **Write** them with `setTask`, `setPr`, `setPlan`, `setPlacement` and
+  `setPause` (`lib/db/session-parts`), which take an optional condition on the
+  current values for a compare-and-set. Raw SQL on a moved column outside that
+  module fails `lib/db/session-parts/guard.test.ts`.
+- **A migration that adds a `sessions` column** adds the name to
+  `SESSION_ROW_COLUMNS` and calls `createSessionRowsView(db)`, or the view
+  won't have it (a test checks both).
+
+The old columns are still on `sessions`, mirrored and kept in step by triggers
+until they are dropped: see
+[the decision](../decisions/2026-10-15-split-sessions-table.md).
+
 ## Session audits
 
 `/session-audit`, a Claude Code skill kept locally (gitignored, not in this

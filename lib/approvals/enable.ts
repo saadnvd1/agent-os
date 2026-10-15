@@ -29,7 +29,7 @@ async function sweep(): Promise<void> {
   }
   const plans = db
     .prepare(
-      `SELECT id, host_id, plan_waits_for_caller FROM sessions WHERE plan_phase = 'awaiting' AND task_status = 'running'`
+      `SELECT id, host_id, plan_waits_for_caller FROM session_rows WHERE plan_phase = 'awaiting' AND task_status = 'running'`
     )
     .all() as {
     id: string;

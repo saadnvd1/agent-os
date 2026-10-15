@@ -38,6 +38,7 @@ import { captureMergedTask } from "../session-logs";
 import { sessionEnded } from "../experiments/hooks";
 import { snapshotWorktree } from "../resurrect/snapshot";
 import { keepSessionFiles } from "../session-artifacts/collect";
+import { setPr, setTask } from "../db/session-parts";
 
 // Never deleted, whatever a setting says.
 export const PROTECTED_BRANCHES = new Set(["main", "master", "HEAD"]);
@@ -179,9 +180,10 @@ export async function signOffTask(
       method: policy.method,
       head: opts.head,
     });
-    db.prepare(
-      `UPDATE sessions SET task_status = 'merged', pr_status = 'merged' WHERE id = ?`
-    ).run(id);
+    db.transaction(() => {
+      setTask(db, id, { task_status: "merged" });
+      setPr(db, id, { pr_status: "merged" });
+    })();
     endPauseOnFinish(id);
     db.prepare(
       `UPDATE stack_items SET status = 'merged', error = NULL WHERE session_id = ?`
@@ -248,9 +250,7 @@ export async function dropTask(id: string): Promise<void> {
   if (pr?.state === "OPEN") {
     await run("gh", ["pr", "close", String(pr.number)], repo).catch(() => {});
   }
-  db.prepare(`UPDATE sessions SET task_status = 'dropped' WHERE id = ?`).run(
-    id
-  );
+  setTask(db, id, { task_status: "dropped" });
   endPauseOnFinish(id);
   db.prepare(
     `UPDATE stack_items SET status = 'dropped' WHERE session_id = ?`

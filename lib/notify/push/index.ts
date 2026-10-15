@@ -57,7 +57,7 @@ export interface PushOptions {
 
 function isMirrored(sessionId: string): boolean {
   const s = db
-    .prepare(`SELECT host_id, peer_mirror FROM sessions WHERE id = ?`)
+    .prepare(`SELECT host_id, peer_mirror FROM session_rows WHERE id = ?`)
     .get(sessionId) as
     | { host_id: string | null; peer_mirror: number | null }
     | undefined;

@@ -70,7 +70,7 @@ export { simulatorAvailable };
 export { shutTaskSimulators, shutFinishedTaskSimulators } from "./task-devices";
 
 const session = (id: string) =>
-  db.prepare(`SELECT * FROM sessions WHERE id = ?`).get(id) as
+  db.prepare(`SELECT * FROM session_rows WHERE id = ?`).get(id) as
     | Session
     | undefined;
 

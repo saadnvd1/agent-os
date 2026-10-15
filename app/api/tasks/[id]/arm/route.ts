@@ -19,7 +19,9 @@ export async function POST(
       { status: 400 }
     );
   const task = db
-    .prepare(`SELECT * FROM sessions WHERE id = ? AND task_status IS NOT NULL`)
+    .prepare(
+      `SELECT * FROM session_rows WHERE id = ? AND task_status IS NOT NULL`
+    )
     .get((await params).id) as Session | undefined;
   if (!task)
     return NextResponse.json({ error: "No such task" }, { status: 404 });

@@ -29,6 +29,7 @@ import { addNote } from "./notes";
 import { quickWorktrees } from "./quick-store";
 import { findWorkspaceSession } from "./read";
 import { workspaceProject } from "./targets";
+import { recordPr, setTask } from "../db/session-parts";
 
 // Open quick changes one orchestrator may hold at once.
 export const MAX_OPEN_QUICK = 5;
@@ -105,8 +106,13 @@ export async function startQuickChange(
         .updateSessionWorktree(db)
         .run(wt.worktreePath, wt.branchName, baseBranch, null, id);
       db.prepare(
-        `UPDATE sessions SET task_prompt = ?, task_status = 'running', name_source = 'user', view = 'chat', quick_of = ? WHERE id = ?`
-      ).run(`Quick change: ${label}`, owner.id, id);
+        `UPDATE sessions SET name_source = 'user', view = 'chat' WHERE id = ?`
+      ).run(id);
+      setTask(db, id, {
+        task_prompt: `Quick change: ${label}`,
+        task_status: "running",
+        quick_of: owner.id,
+      });
     })();
   } catch (e) {
     await deleteWorktree(wt.worktreePath, projectPath, true).catch(() => {});
@@ -208,10 +214,7 @@ export async function quickPR(
   );
   const head = (await revParse(wt, "HEAD")).trim();
   const goal = `${title.trim()}\n\n${body.trim()}`;
-  db.prepare(`UPDATE sessions SET task_prompt = ? WHERE id = ?`).run(
-    goal,
-    s.id
-  );
+  setTask(db, s.id, { task_prompt: goal });
   const existing = await prFor(s, true);
   if (existing?.state === "OPEN") {
     forgetPR(s.id);
@@ -238,7 +241,7 @@ export async function quickPR(
     60_000
   );
   const m = /https:\/\/\S+\/pull\/(\d+)/.exec(out);
-  if (m) queries.updateSessionPR(db).run(m[0], Number(m[1]), "open", s.id);
+  if (m) recordPr(db, s.id, { url: m[0], number: Number(m[1]), state: "open" });
   forgetPR(s.id);
   addNote(
     workspaceId,

@@ -70,7 +70,7 @@ async function reclaimEnded(
 ): Promise<void> {
   const rows = db
     .prepare(
-      `SELECT id, tmux_name, task_status, host_id FROM sessions
+      `SELECT id, tmux_name, task_status, host_id FROM session_rows
        WHERE port_slot IS NOT NULL
          AND (archived_at IS NOT NULL OR task_status IN ('done', 'merged'))`
     )

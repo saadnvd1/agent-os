@@ -167,7 +167,7 @@ function tasksSection(
     .prepare(
       `SELECT s.id, s.name, p.name AS project, s.pr_number, s.pr_status, s.view,
          s.merge_armed_at AS armed_at, s.pause_state, s.paused_until, s.pause_note, s.placed_note
-       FROM sessions s JOIN projects p ON p.id = s.project_id
+       FROM session_rows s JOIN projects p ON p.id = s.project_id
        WHERE p.workspace_id = ? AND s.role IS NULL AND s.archived_at IS NULL
          AND s.task_status = 'running'
        ORDER BY s.created_at, s.id`
@@ -223,7 +223,7 @@ function queueSection(workspaceId: string): Section {
             AND b.held_queued = 1 AND b.delivered_at IS NULL AND b.read_at IS NULL) AS held,
          p.name AS project, a.name AS after_name
        FROM task_queue q JOIN projects p ON p.id = q.project_id
-       LEFT JOIN sessions a ON a.id = q.after_task
+       LEFT JOIN session_rows a ON a.id = q.after_task
        WHERE p.workspace_id = ? AND q.status IN ('queued', 'starting', 'failed')
        ORDER BY q.position`
     )

@@ -549,7 +549,7 @@ async function resumeCutOff(sessionId: string): Promise<void> {
     .prepare(
       `SELECT s.name, s.view, s.archived_at, s.task_status, s.role,
          COALESCE(s.workspace_id, p.workspace_id) AS workspace_id
-       FROM sessions s LEFT JOIN projects p ON p.id = s.project_id
+       FROM session_rows s LEFT JOIN projects p ON p.id = s.project_id
        WHERE s.id = ?`
     )
     .get(sessionId) as

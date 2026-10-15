@@ -81,7 +81,7 @@ export function loadSessions(
       `SELECT s.id, s.name, s.created_at, s.role, s.view, s.task_prompt,
               length(s.task_brief) AS task_brief_chars, s.working_directory,
               s.worktree_path, s.claude_session_id, s.workspace_id, p.name AS project
-         FROM sessions s LEFT JOIN projects p ON p.id = s.project_id
+         FROM session_rows s LEFT JOIN projects p ON p.id = s.project_id
         WHERE coalesce(s.host_id, 'local') = 'local'`
     )
     .all() as SessionRow[];
@@ -297,8 +297,8 @@ export function loadSignals(
   }>(
     `SELECT m.from_id, m.to_id, m.body, f.role AS from_role, (t.task_prompt IS NOT NULL) AS to_task
        FROM bus_messages m
-       LEFT JOIN sessions f ON f.id = m.from_id
-       LEFT JOIN sessions t ON t.id = m.to_id
+       LEFT JOIN session_rows f ON f.id = m.from_id
+       LEFT JOIN session_rows t ON t.id = m.to_id
       WHERE m.created_at >= ? AND m.created_at < ?`,
     a,
     b

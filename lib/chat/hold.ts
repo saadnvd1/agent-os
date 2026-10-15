@@ -15,10 +15,10 @@ import { db } from "../db";
 
 // The SQL form, for queries that take the session id as @sid.
 export const HELD_SQL = `(
-  EXISTS (SELECT 1 FROM sessions WHERE id = @sid AND task_status = 'moving')
+  EXISTS (SELECT 1 FROM session_rows WHERE id = @sid AND task_status = 'moving')
   OR EXISTS (SELECT 1 FROM stack_items i JOIN stacks s ON s.id = i.stack_id
              WHERE i.session_id = @sid AND s.status = 'landing')
-  OR EXISTS (SELECT 1 FROM sessions WHERE id = @sid
+  OR EXISTS (SELECT 1 FROM session_rows WHERE id = @sid
              AND pause_state IN ('pausing', 'paused'))
 )`;
 
@@ -58,7 +58,7 @@ const holdRow = (sessionId: string) =>
       `SELECT task_status, moved_to, quick_of, pause_state, paused_until,
          EXISTS (SELECT 1 FROM stack_items i JOIN stacks s ON s.id = i.stack_id
                  WHERE i.session_id = @sid AND s.status = 'landing') AS landing
-       FROM sessions WHERE id = @sid`
+       FROM session_rows WHERE id = @sid`
     )
     .get({ sid: sessionId }) as HoldRow | undefined;
 

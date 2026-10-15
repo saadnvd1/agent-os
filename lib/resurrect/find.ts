@@ -65,7 +65,7 @@ function rows(scope: EndedScope, limit: number, kind?: EndedKind): Row[] {
       `SELECT s.id, s.name, s.tmux_name, s.project_id, p.name AS project_name,
          s.task_status, s.archived_at, s.plan_phase,
          COALESCE(s.task_ended_at, s.archived_at, s.settled_at, s.updated_at) AS ended_at
-       FROM sessions s LEFT JOIN projects p ON p.id = s.project_id
+       FROM session_rows s LEFT JOIN projects p ON p.id = s.project_id
        WHERE ${where.join(" AND ")}
        ORDER BY ended_at DESC LIMIT ?`
     )

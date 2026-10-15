@@ -58,9 +58,9 @@ async function raiseFor(
   now: number
 ): Promise<void> {
   const f = facts.find((x) => x.id === taskId);
-  const task = db.prepare(`SELECT * FROM sessions WHERE id = ?`).get(taskId) as
-    | Session
-    | undefined;
+  const task = db
+    .prepare(`SELECT * FROM session_rows WHERE id = ?`)
+    .get(taskId) as Session | undefined;
   // Gone, merged or dropped: nothing left to ask. An open ask or an
   // unspent approval already covers it (followAskHeads, heldVerdict).
   if (

@@ -19,6 +19,7 @@ import {
   type ModelOverride,
 } from "./resolve";
 import { sessionRole } from "./session-role";
+import { setTask } from "../db/session-parts";
 
 export const RESUME_MESSAGE =
   "You were paused. Carry on where you left off: check the worktree and the conversation above for where things stand, then finish the task.";
@@ -45,9 +46,9 @@ export async function resumeOnModel(
   model: unknown,
   message = RESUME_MESSAGE
 ): Promise<ResumeResult> {
-  const s = db.prepare(`SELECT * FROM sessions WHERE id = ?`).get(sessionId) as
-    | Session
-    | undefined;
+  const s = db
+    .prepare(`SELECT * FROM session_rows WHERE id = ?`)
+    .get(sessionId) as Session | undefined;
   if (!s?.task_status) throw new Error("No such task");
   if (s.task_status !== "running")
     throw new Error(
@@ -65,10 +66,7 @@ export async function resumeOnModel(
     throw new Error(
       "It's mid-turn: stop it first, or wait for the turn to end"
     );
-  db.prepare(`UPDATE sessions SET model_overrides = ? WHERE id = ?`).run(
-    JSON.stringify(override),
-    sessionId
-  );
+  setTask(db, sessionId, { model_overrides: JSON.stringify(override) });
   if (launchPending(sessionId)) {
     setSessionModel(sessionId, routed);
     return { ref: routed.ref, resumed: false };

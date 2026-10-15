@@ -114,7 +114,7 @@ async function ownedBy(
 ): Promise<boolean> {
   const rows = db
     .prepare(
-      `SELECT s.pr_url, s.branch_name, p.working_directory FROM sessions s
+      `SELECT s.pr_url, s.branch_name, p.working_directory FROM session_rows s
        LEFT JOIN projects p ON p.id = s.project_id
        WHERE s.task_status IS NOT NULL AND (LOWER(s.pr_url) = ? OR s.branch_name = ?)`
     )
@@ -145,7 +145,7 @@ export async function classifyAgentPrs(
   let raised = 0;
   for (const pr of open) {
     const task = db
-      .prepare(`SELECT * FROM sessions WHERE id = ?`)
+      .prepare(`SELECT * FROM session_rows WHERE id = ?`)
       .get(pr.session_id) as Session | undefined;
     const workspaceId = task ? sessionWorkspace(task) : null;
     if (!task || !workspaceId) {

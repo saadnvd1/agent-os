@@ -65,6 +65,7 @@ import { chatStateNow } from "../chat/runner";
 import { saidSinceLastMessage } from "../chat/store";
 
 import { lastActiveOf } from "./last-active";
+import { setPlan, setTask } from "../db/session-parts";
 export * from "./state";
 export { codeReviewGate, codeReviewRefusal } from "./code-review";
 export { signOffTask, dropTask, signingOff, mergeSettled } from "./finish";
@@ -366,30 +367,41 @@ async function startTask(
       .run(wt.worktreePath, wt.branchName, baseBranch, null, id);
     // Everything the launch needs is on the row, so a restart can resume it.
     db.prepare(
-      `UPDATE sessions SET task_prompt = ?, task_brief = ?, task_status = 'running', setup_status = 'running', name_source = ?, view = ?,
-         model_provider = ?, model_overrides = ?, plan_phase = ?, plan_only = ?,
-         plan_decided = ?, plan_reason = ?, plan_waits_for_caller = ? WHERE id = ?`
+      `UPDATE sessions SET setup_status = 'running', name_source = ?, view = ?, model_provider = ? WHERE id = ?`
     ).run(
-      prompt,
-      buildTaskBrief({
-        branch: wt.branchName,
-        baseBranch,
-        stack: opts.base?.stack,
-        test: declaredTest(wt.worktreePath),
-      }),
       naming.source,
       view,
       routing.first.provider.id === ANTHROPIC
         ? null
         : routing.first.provider.id,
-      routing.override ? JSON.stringify(routing.override) : null,
-      routing.plan ? "planning" : null,
-      routing.planOnly ? 1 : null,
-      routing.planOnly ? 1 : opts.plan === undefined ? null : opts.plan ? 1 : 0,
-      opts.planReason?.trim() || null,
-      routing.planOnly && opts.planWaits ? 1 : null,
       id
     );
+    setTask(db, id, {
+      task_prompt: prompt,
+      task_brief: buildTaskBrief({
+        branch: wt.branchName,
+        baseBranch,
+        stack: opts.base?.stack,
+        test: declaredTest(wt.worktreePath),
+      }),
+      task_status: "running",
+      model_overrides: routing.override
+        ? JSON.stringify(routing.override)
+        : null,
+    });
+    setPlan(db, id, {
+      plan_phase: routing.plan ? "planning" : null,
+      plan_only: routing.planOnly ? 1 : null,
+      plan_decided: routing.planOnly
+        ? 1
+        : opts.plan === undefined
+          ? null
+          : opts.plan
+            ? 1
+            : 0,
+      plan_reason: opts.planReason?.trim() || null,
+      plan_waits_for_caller: routing.planOnly && opts.planWaits ? 1 : null,
+    });
     recordStart(id, {
       startedBy: opts.startedBy ?? null,
       parentSessionId: opts.parentSessionId ?? null,
@@ -532,7 +544,7 @@ export async function taskView(session: Session): Promise<TaskView> {
 export function movedTasks(): { id: string; movedTo: string | null }[] {
   return db
     .prepare(
-      `SELECT id, moved_to AS movedTo FROM sessions
+      `SELECT id, moved_to AS movedTo FROM session_rows
          WHERE task_status = 'moved' AND host_id = 'local'
          ORDER BY updated_at DESC LIMIT 500`
     )

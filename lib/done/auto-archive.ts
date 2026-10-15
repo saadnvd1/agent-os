@@ -33,7 +33,7 @@ const inDone = (s: Session) =>
 export async function archiveStaleDone(now = Date.now()): Promise<string[]> {
   const rows = db
     .prepare(
-      `SELECT * FROM sessions
+      `SELECT * FROM session_rows
        WHERE archived_at IS NULL AND pinned = 0 AND role IS NULL
          AND peer_mirror = 0 AND quick_of IS NULL
          AND (pr_status IS NULL OR pr_status != 'open')`

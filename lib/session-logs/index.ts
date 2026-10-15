@@ -120,7 +120,7 @@ export async function writeLog(
   id: string,
   opts: CaptureOpts & { plan?: string | null } = {}
 ): Promise<boolean> {
-  const row = db.prepare(`SELECT * FROM sessions WHERE id = ?`).get(id) as
+  const row = db.prepare(`SELECT * FROM session_rows WHERE id = ?`).get(id) as
     | Session
     | undefined;
   const existing = getLog(id);

@@ -50,7 +50,7 @@ function scopeSessions(scope: DoneScope): Session[] {
   if (!projectIds.length) return [];
   return db
     .prepare(
-      `SELECT * FROM sessions
+      `SELECT * FROM session_rows
        WHERE project_id IN (${projectIds.map(() => "?").join(", ")})
          AND role IS NULL AND archived_at IS NULL
          -- A linked machine's own sessions are cleaned up there.

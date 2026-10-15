@@ -34,7 +34,7 @@ export function unarchiveSession(id: string): Session {
       `UPDATE sessions SET archived_at = NULL WHERE id = ? AND archived_at IS NOT NULL`
     )
     .run(id).changes;
-  const row = db.prepare(`SELECT * FROM sessions WHERE id = ?`).get(id) as
+  const row = db.prepare(`SELECT * FROM session_rows WHERE id = ?`).get(id) as
     | Session
     | undefined;
   if (!row) throw new Error("Session not found");
@@ -48,7 +48,7 @@ export function listArchived(workspaceId?: string): ArchivedView[] {
     .prepare(
       `SELECT s.id, s.name, s.project_id, s.view, s.task_status, s.branch_name,
          s.pr_url, s.worktree_path, s.archived_at, p.name AS project_name, p.workspace_id AS project_workspace
-       FROM sessions s LEFT JOIN projects p ON p.id = s.project_id
+       FROM session_rows s LEFT JOIN projects p ON p.id = s.project_id
        WHERE s.archived_at IS NOT NULL
          AND (? IS NULL OR p.workspace_id = ?)
        ORDER BY s.archived_at DESC, s.updated_at DESC`

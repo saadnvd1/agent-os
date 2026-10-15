@@ -137,7 +137,7 @@ function merged(
   const rows = db
     .prepare(
       `SELECT s.id, s.name, p.name AS project, p.id AS project_id, s.pr_number, s.pr_url
-       FROM sessions s JOIN projects p ON p.id = s.project_id
+       FROM session_rows s JOIN projects p ON p.id = s.project_id
        WHERE p.workspace_id = ? AND s.task_status = 'merged'
          AND s.merged_at >= ? AND s.merged_at <= ?
        ORDER BY s.merged_at, s.id`
@@ -178,7 +178,7 @@ function inFlight(workspaceId: string, awayId: number): InFlightItem[] {
     .prepare(
       `SELECT s.id, s.name, p.name AS project, s.pr_number, s.pr_url,
          s.merge_armed_at AS armed_at
-       FROM sessions s JOIN projects p ON p.id = s.project_id
+       FROM session_rows s JOIN projects p ON p.id = s.project_id
        WHERE p.workspace_id = ? AND s.role IS NULL AND s.archived_at IS NULL
          AND s.task_status = 'running'
          AND EXISTS (SELECT 1 FROM away_actions a WHERE a.away_id = ?
@@ -224,7 +224,7 @@ function failed(workspaceId: string, away: AwayRow, end: string) {
   const deploys = db
     .prepare(
       `SELECT a.detail, s.name, s.pr_number, s.pr_url FROM away_actions a
-       LEFT JOIN sessions s ON s.id = a.subject
+       LEFT JOIN session_rows s ON s.id = a.subject
        WHERE a.away_id = ? AND a.workspace_id = ? AND a.kind = 'deploy_failed'
        ORDER BY a.id`
     )
@@ -236,7 +236,7 @@ function failed(workspaceId: string, away: AwayRow, end: string) {
   }[];
   const ended = db
     .prepare(
-      `SELECT s.name, s.task_status, s.pr_number, s.pr_url FROM sessions s
+      `SELECT s.name, s.task_status, s.pr_number, s.pr_url FROM session_rows s
        JOIN projects p ON p.id = s.project_id
        WHERE p.workspace_id = ? AND s.task_status IN ('dropped', 'done')
          AND s.task_ended_at >= ? AND s.task_ended_at <= ?

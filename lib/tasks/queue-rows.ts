@@ -18,7 +18,7 @@ export const row = (id: string) =>
     | undefined;
 
 export const sessionOf = (id: string) =>
-  db.prepare(`SELECT * FROM sessions WHERE id = ?`).get(id) as
+  db.prepare(`SELECT * FROM session_rows WHERE id = ?`).get(id) as
     | Session
     | undefined;
 
@@ -60,7 +60,7 @@ export function runningIn(
   return (
     db
       .prepare(
-        `SELECT s.id FROM sessions s JOIN projects p ON p.id = s.project_id
+        `SELECT s.id FROM session_rows s JOIN projects p ON p.id = s.project_id
          WHERE ${where} AND s.archived_at IS NULL AND s.quick_of IS NULL
            AND (s.pause_state IS NULL OR s.pause_state != 'paused')
            ${forSlots ? `AND NOT (COALESCE(s.plan_only, 0) = 1 AND COALESCE(s.plan_phase, '') != 'implementing')` : ""}
@@ -127,7 +127,7 @@ export function resolveAfter(
   const scope = workspaceId ? `AND p.workspace_id = @ws` : "";
   const candidates = db
     .prepare(
-      `SELECT s.id, s.name FROM sessions s JOIN projects p ON p.id = s.project_id
+      `SELECT s.id, s.name FROM session_rows s JOIN projects p ON p.id = s.project_id
        WHERE s.archived_at IS NULL AND s.task_status IN ('running', 'moving') ${scope}
        UNION ALL
        SELECT q.id, COALESCE(q.name, q.prompt) AS name FROM task_queue q
@@ -227,7 +227,7 @@ export function lineSignature(): string {
     .prepare(
       `SELECT COUNT(*) AS n, COALESCE(MAX(position), 0) AS p,
               COALESCE(SUM(priority = 'normal'), 0) AS pr,
-              (SELECT COUNT(*) FROM sessions WHERE task_status IS NOT NULL
+              (SELECT COUNT(*) FROM session_rows WHERE task_status IS NOT NULL
                  AND task_status NOT IN ('merged', 'dropped')) AS running
        FROM task_queue WHERE status IN ('queued', 'starting')`
     )

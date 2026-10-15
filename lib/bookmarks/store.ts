@@ -57,7 +57,7 @@ type Joined = Row & {
 // The bookmark with its chat's state as of now.
 const SELECT = `
   SELECT b.*, s.id AS s_id, s.task_status, s.archived_at
-  FROM chat_bookmarks b LEFT JOIN sessions s ON s.id = b.session_id`;
+  FROM chat_bookmarks b LEFT JOIN session_rows s ON s.id = b.session_id`;
 
 function toBookmark(r: Joined): Bookmark {
   return {
@@ -141,7 +141,7 @@ export function createBookmark(input: {
     throw new BookmarkError("scope must be 'item' or 'turn'", 400);
   const note = cleanNote(input.note);
   const session = db
-    .prepare(`SELECT * FROM sessions WHERE id = ?`)
+    .prepare(`SELECT * FROM session_rows WHERE id = ?`)
     .get(sessionId) as Session | undefined;
   if (!session) throw new BookmarkError("Session not found", 404);
   const existing = db
@@ -308,7 +308,7 @@ export function insertMovedBookmarks(
 ): void {
   if (!rows.length) return;
   const session = db
-    .prepare(`SELECT * FROM sessions WHERE id = ?`)
+    .prepare(`SELECT * FROM session_rows WHERE id = ?`)
     .get(sessionId) as Session | undefined;
   if (!session) return;
   const workspace = sessionWorkspace(session);

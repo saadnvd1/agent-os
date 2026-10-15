@@ -107,7 +107,7 @@ export async function finishTaskStart(
   earlier?: TaskSetup
 ): Promise<TaskSetup> {
   const session = db
-    .prepare(`SELECT * FROM sessions WHERE id = ?`)
+    .prepare(`SELECT * FROM session_rows WHERE id = ?`)
     .get(sessionId) as Session | undefined;
   if (!session?.worktree_path) throw new Error(`No task ${sessionId}`);
   const project = session.project_id ? getProject(session.project_id) : null;
@@ -133,7 +133,7 @@ export async function finishTaskStart(
   // The setup's own error is kept, for the agent's prompt when it launches.
   if (held) return done({ ...setup, status: "held" });
   const now = db
-    .prepare(`SELECT task_status, archived_at FROM sessions WHERE id = ?`)
+    .prepare(`SELECT task_status, archived_at FROM session_rows WHERE id = ?`)
     .get(sessionId) as
     | { task_status: string | null; archived_at: string | null }
     | undefined;
@@ -226,7 +226,7 @@ export async function resumeTaskStarts(
 ): Promise<string[]> {
   const rows = db
     .prepare(
-      `SELECT id, tmux_name, view, setup_ms, setup_error FROM sessions
+      `SELECT id, tmux_name, view, setup_ms, setup_error FROM session_rows
        WHERE setup_status = 'running' AND task_status = 'running'
          AND archived_at IS NULL`
     )
@@ -269,7 +269,7 @@ export async function resumeTaskStarts(
 export function resumeHeldStarts(): string[] {
   const rows = db
     .prepare(
-      `SELECT id, setup_ms, setup_error FROM sessions WHERE setup_status = 'held'
+      `SELECT id, setup_ms, setup_error FROM session_rows WHERE setup_status = 'held'
          AND task_status = 'running' AND archived_at IS NULL`
     )
     .all() as ({ id: string } & SetupColumns)[];

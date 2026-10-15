@@ -163,7 +163,7 @@ export function autoCompactEnv(sessionId: string): Record<string, string> {
   const row = db
     .prepare(
       `SELECT role, task_status, plan_phase, started_by, model_provider
-       FROM sessions WHERE id = ?`
+       FROM session_rows WHERE id = ?`
     )
     .get(sessionId) as
     | {

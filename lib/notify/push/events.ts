@@ -92,7 +92,7 @@ export const pushPlanAwaiting = (
 export const pushPlanReady = (sessionId: string, itemId: string) => {
   // Only a task has a screen to open; a plain chat's plan goes to the list.
   const task = db
-    .prepare(`SELECT task_status FROM sessions WHERE id = ?`)
+    .prepare(`SELECT task_status FROM session_rows WHERE id = ?`)
     .get(sessionId) as { task_status: string | null } | undefined;
   fire(
     {

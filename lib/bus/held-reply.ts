@@ -68,7 +68,7 @@ export function pendingReplies(device: string, limit = 50): PendingReply[] {
     db
       .prepare(
         `SELECT m.id, m.from_id AS fromId, m.body, m.created_at AS createdAt
-         FROM bus_messages m JOIN sessions s ON s.id = m.from_id
+         FROM bus_messages m JOIN session_rows s ON s.id = m.from_id
          WHERE m.relay_state = 'pending' AND s.held_by_device = ?
          ORDER BY m.id LIMIT ?`
       )
@@ -81,7 +81,7 @@ export function ackReplies(device: string, ids: number[]): void {
   const mark = db.prepare(
     `UPDATE bus_messages SET relay_state = 'relayed', delivered_at = datetime('now')
      WHERE id = ? AND relay_state = 'pending'
-       AND from_id IN (SELECT id FROM sessions WHERE held_by_device = ?)`
+       AND from_id IN (SELECT id FROM session_rows WHERE held_by_device = ?)`
   );
   db.transaction(() => {
     for (const id of ids) mark.run(id, device);

@@ -81,7 +81,7 @@ export async function runningCount(
   // minutes, here or there: it holds its slot.
   const moving = db
     .prepare(
-      `SELECT s.id FROM sessions s JOIN projects p ON p.id = s.project_id
+      `SELECT s.id FROM session_rows s JOIN projects p ON p.id = s.project_id
        WHERE p.workspace_id = ? AND s.task_status = 'moving' AND s.peer_mirror = 0`
     )
     .all(workspaceId) as { id: string }[];
