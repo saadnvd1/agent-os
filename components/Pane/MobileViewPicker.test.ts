@@ -12,6 +12,7 @@ Object.defineProperty(globalThis, "CustomEvent", {
 
 const all = {
   isLocalSession: true,
+  showGit: true,
   hasLog: true,
   isConductor: true,
   workerCount: 3,
@@ -34,10 +35,17 @@ describe("mobileViews", () => {
     expect(
       mobileViews({
         isLocalSession: false,
+        showGit: false,
         isConductor: false,
         workerCount: 0,
       }).map((v) => v.label)
     ).toEqual(["Chat", "Artifacts"]);
+  });
+
+  it("drops only Git when the folder is not a repo", () => {
+    expect(mobileViews({ ...all, showGit: false }).map((v) => v.label)).toEqual(
+      ["Chat", "Files", "Artifacts", "Log", "Workers"]
+    );
   });
 });
 
