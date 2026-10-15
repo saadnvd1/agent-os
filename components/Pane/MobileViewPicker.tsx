@@ -28,6 +28,8 @@ export interface MobileView {
 
 export interface MobileViewAvailability {
   isLocalSession: boolean;
+  // Local, and the folder is not known to be outside a git repository.
+  showGit: boolean;
   hasLog?: boolean;
   isConductor: boolean;
   workerCount: number;
@@ -36,6 +38,7 @@ export interface MobileViewAvailability {
 // The one list of views on a phone; the picker renders it.
 export function mobileViews({
   isLocalSession,
+  showGit,
   hasLog,
   isConductor,
   workerCount,
@@ -43,7 +46,7 @@ export function mobileViews({
   const views: (MobileView | false)[] = [
     { mode: "terminal", label: "Chat", icon: TerminalIcon },
     isLocalSession && { mode: "files", label: "Files", icon: FolderOpen },
-    isLocalSession && { mode: "git", label: "Git", icon: GitBranch },
+    showGit && { mode: "git", label: "Git", icon: GitBranch },
     { mode: "artifacts", label: "Artifacts", icon: Package },
     !!hasLog && { mode: "log", label: "Log", icon: ScrollText },
     isConductor && {

@@ -34,6 +34,8 @@ import { ShellDrawer } from "@/components/ShellDrawer";
 import { useSnapshot } from "valtio";
 import { fileOpenStore, fileOpenActions } from "@/stores/fileOpen";
 import { useDemoMode } from "@/data/demo";
+import { useIsGitRepo } from "@/data/git/queries";
+import { showGitToggle } from "./git-visibility";
 import { DemoNotice } from "@/components/DemoNotice";
 
 // Dynamic imports for client-only components with loading states
@@ -170,7 +172,19 @@ export const Pane = memo(function Pane({
     : null;
   const isLocalSession = !session?.host_id || session.host_id === "local";
   // An orchestrator works through tools in a scratch folder: no repo to show.
-  const showGitDrawer = gitDrawerOpen && session?.role !== "orchestrator";
+  const isGitRepo = useIsGitRepo(
+    session?.working_directory ?? undefined,
+    isLocalSession && !!session?.working_directory
+  );
+  const showGit = showGitToggle(isLocalSession, isGitRepo);
+  const showGitDrawer =
+    gitDrawerOpen && showGit && session?.role !== "orchestrator";
+  // The folder turned out not to be a repo: don't leave its git view open.
+  useEffect(() => {
+    if (isGitRepo !== false) return;
+    if (gitDrawerOpen) setGitDrawerOpen(false);
+    if (viewMode === "git") setViewMode("terminal");
+  }, [isGitRepo, gitDrawerOpen, viewMode, setGitDrawerOpen, setViewMode]);
   // A tab whose session runs as chat shows the conversation, not a terminal.
   const chatSessionFor = (tab: { sessionId: string | null }) => {
     const s = tab.sessionId
@@ -458,6 +472,7 @@ export const Pane = memo(function Pane({
           isConductor={isConductor}
           hasLog={hasLog}
           workerCount={workerCount}
+          showGit={showGit}
           onMenuClick={onMenuClick}
           onViewModeChange={setViewMode}
           onSelectSession={onSelectSession}
@@ -484,6 +499,7 @@ export const Pane = memo(function Pane({
           canClose={canClose}
           hasAttachedTmux={!!activeTab?.attachedTmux}
           gitDrawerOpen={gitDrawerOpen}
+          showGit={showGit}
           shellDrawerOpen={shellDrawerOpen}
           onTabSwitch={(tabId) => switchTab(paneId, tabId)}
           onTabClose={(tabId) => closeTab(paneId, tabId)}
@@ -532,7 +548,7 @@ export const Pane = memo(function Pane({
           )}
 
           {/* Git - mobile only */}
-          {session?.working_directory && (
+          {session?.working_directory && showGit && (
             <div className={viewMode === "git" ? "h-full" : "hidden"}>
               <GitPanel
                 workingDirectory={session.working_directory}
