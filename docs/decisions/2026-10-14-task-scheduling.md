@@ -72,3 +72,11 @@ table. Native clients read the new `sessions` columns (`priority`,
 (`priority`, `wait`, `rank`, `of`). Deferred: file-overlap holds, scheduler
 auto-pause, a graded usage term, a settings screen for needs, moving a paused
 task, a task pausing itself.
+
+## Amendment 2026-10-15
+
+Plan-only and plan-first tasks are no longer pinned to this machine. Their plan
+phase is placed like any other start (load, project present, `remote-plan`
+capability) and runs on the linked machine; the machine that placed it copies
+the plan, announces it and decides the implement phase (stay, or move home
+through the ordinary move when it needs a Mac or the plan is in pieces).

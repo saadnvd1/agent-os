@@ -140,10 +140,7 @@ function orchestratedBundle(session: Session): OrchestratedBundle {
     modelProvider: session.model_provider ?? null,
     modelOverrides: session.model_overrides ?? null,
     // moveRefusal keeps an unapproved plan-only task here.
-    planPhase: (session.plan_phase ?? null) as
-      | "planning"
-      | "implementing"
-      | null,
+    planPhase: (session.plan_phase ?? null) as OrchestratedBundle["planPhase"],
     planFile: readPlanFile(session.working_directory),
     orchestrator: orchestratorOf(session),
   };
@@ -215,6 +212,10 @@ export async function exportTask(id: string, to: string): Promise<TaskBundle> {
           : null,
       chat: chatBundle,
       orchestrated: isOrchestrated(now) ? orchestratedBundle(now) : undefined,
+      planWait:
+        now.plan_waits_for_caller && now.plan_phase === "awaiting"
+          ? { file: readPlanFile(cwd) }
+          : undefined,
     };
   } finally {
     packed();

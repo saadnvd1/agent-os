@@ -8,6 +8,7 @@
 import { orchestratorOf } from "./starter";
 import os from "os";
 import { db, type Session } from "../db";
+import { isRemoteHost } from "../hosts";
 import type { OrchestratedBundle } from "./move-bundle";
 
 export function holderRefusal(
@@ -132,4 +133,26 @@ export function holdExisting(
     throw new Error("Only the machine that started this task can hold it");
   holdFor(id, device, held);
   return true;
+}
+
+/**
+ * A plan another machine placed here is read and approved by that machine
+ * only: it decides where the task is built. Null for any other task.
+ */
+export function planWaitRefusal(
+  id: string,
+  device: string | null | undefined
+): string | null {
+  const s = db
+    .prepare(
+      `SELECT plan_waits_for_caller, started_by_device, host_id FROM sessions WHERE id = ?`
+    )
+    .get(id) as
+    | Pick<Session, "plan_waits_for_caller" | "started_by_device" | "host_id">
+    | undefined;
+  if (!s?.plan_waits_for_caller) return null;
+  // The placing machine's own mirror of the plan: its people decide it.
+  if (isRemoteHost(s.host_id)) return null;
+  if (device && device === s.started_by_device) return null;
+  return "The machine that placed this plan decides it; approve it from there";
 }

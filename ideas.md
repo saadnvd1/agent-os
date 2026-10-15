@@ -284,3 +284,4 @@
 - A Haiku pre-filter before the Sonnet wake.
 - Load detection for linked machines, not just this one.
 - An idempotency key on `/api/bus/send` (deduped by the server) so `aos send` can also retry when the connection drops after the request was sent.
+- Placed plans: forward per-role models to the linked machine; place the implement phase when this machine turns red between plan and implement; let a plan-first task skip the load wait at home; show planned-on versus implementing-on in the row; build a multi-piece plan's own piece on the machine that planned it.

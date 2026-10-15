@@ -38,6 +38,9 @@ export const TASK_CAPABILITIES = [
   // A keyed start that carries an orchestrator's description holds the task
   // for the device that sent it, as a move does (lib/tasks/held.ts).
   "held-start",
+  // A plan placed here by another machine stops at the plan for that machine
+  // to decide what follows (lib/tasks/remote-plan.ts).
+  "remote-plan",
 ] as const;
 
 export interface HostTasks {
@@ -138,10 +141,12 @@ export async function startRemoteTask(
     view?: "chat" | "terminal";
     // The orchestrator that started it: that machine holds the task for it.
     startedBy?: string | null;
+    // It plans first: there it plans, stops, and waits for this machine.
+    plan?: { only: boolean; reason: string | null };
   }
 ): Promise<Session> {
   const link = requireHostLink(hostId);
-  const { startedBy: by, ...rest } = opts;
+  const { startedBy: by, plan, ...rest } = opts;
   const startedBy = orchestratorOf(by);
   if (startedBy)
     await requireCapability(
@@ -150,17 +155,29 @@ export async function startRemoteTask(
       "an orchestrator's task",
       "hold"
     );
+  if (plan) await requireCapability(link, "remote-plan", "a plan step", "plan");
   const { session } = await postIdempotent<{ session: Session }>(
     link,
     "/api/tasks",
     {
       project: await projectRef(project),
       ...rest,
+      ...(plan && {
+        plan: true,
+        plan_only: true,
+        plan_waits: true,
+        plan_reason: plan.reason ?? undefined,
+      }),
       orchestrated: startedBy ? orchestratedStart(startedBy) : undefined,
     },
     180000
   );
   mirrorTask(hostId, project.id, session, startedBy);
+  if (plan)
+    db.prepare(
+      `UPDATE sessions SET plan_phase = 'planning', plan_only = ?, plan_decided = 1,
+         plan_reason = ?, plan_waits_for_caller = 1 WHERE id = ?`
+    ).run(plan.only ? 1 : null, plan.reason, session.id);
   forgetHostTasks(hostId);
   return db
     .prepare(`SELECT * FROM sessions WHERE id = ?`)

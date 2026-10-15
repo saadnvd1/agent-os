@@ -16,6 +16,7 @@ import type { MachineView } from "./schedule";
 
 // What was started, in order, by prompt and the id it was given.
 const started: { prompt: string; id?: string }[] = [];
+const startedPlanOnly = new Map<string, boolean>();
 // The machine each start was sent to, by prompt (undefined: the project's).
 const startedOn = new Map<string, string | undefined>();
 // Linked machines the placing pass sees: set per test.
@@ -27,6 +28,8 @@ let peers: Record<
     hasProject?: boolean;
     // An older AgentOS: it can't hold an orchestrator's task.
     noHold?: boolean;
+    // It runs a plan step that stops for this machine.
+    plans?: boolean;
   }
 > = {};
 
@@ -39,8 +42,10 @@ vi.mock("@/lib/tasks", async (importOriginal) => ({
     projectId: string;
     prompt: string;
     hostId?: string;
+    planOnly?: boolean;
   }) => {
     started.push({ prompt: o.prompt, id: o.id });
+    startedPlanOnly.set(o.prompt, !!o.planOnly);
     startedOn.set(o.prompt, o.hostId);
     if (o.prompt.startsWith("fail")) throw new Error("no worktree");
     db.prepare(
@@ -100,7 +105,10 @@ vi.mock("@/lib/tasks/remote", async (importOriginal) => ({
   ...(await importOriginal<typeof import("@/lib/tasks/remote")>()),
   hostTasks: async (link: { hostId: string }) => ({
     tasks: [],
-    capabilities: peers[link.hostId]?.noHold ? [] : ["held-start"],
+    capabilities: [
+      ...(peers[link.hostId]?.noHold ? [] : ["held-start"]),
+      ...(peers[link.hostId]?.plans ? ["remote-plan"] : []),
+    ],
   }),
 }));
 vi.mock("@/lib/hosts/project-machines", () => ({
@@ -173,6 +181,7 @@ beforeEach(() => {
   started.length = 0;
   recorded.length = 0;
   startedOn.clear();
+  startedPlanOnly.clear();
   peers = {};
   machine = greenView();
   capabilities = ["mac", "xcode", "simulator"];
@@ -1114,7 +1123,7 @@ describe("placement on a linked machine", () => {
     expect(started).toEqual([]);
   });
 
-  it("starts a plan-only task at home under red load, never placed", async () => {
+  it("starts a plan-only task at home under red load when no machine can plan it", async () => {
     const t = setup(null);
     const q = queue(t, "plan it", { planOnly: true });
     finish(t.task);
@@ -1124,6 +1133,62 @@ describe("placement on a linked machine", () => {
     expect(started.map((s) => s.prompt)).toEqual(["plan it"]);
     expect(startedOn.get("plan it")).toBeUndefined();
     expect(statusOf(q.id)).toBe("started");
+  });
+
+  it("places a plan-only task on a green machine that runs plans when this one is red", async () => {
+    const t = setup(null);
+    const q = queue(t, "plan it", { planOnly: true });
+    finish(t.task);
+    redHome();
+    peers = { box: { level: "green", plans: true } };
+    await tick();
+    expect(startedOn.get("plan it")).toBe("box");
+    expect(statusOf(q.id)).toBe("started");
+    expect(startedPlanOnly.get("plan it")).toBe(true);
+  });
+
+  it("places a plan-first task of Mac-only work on the box: planning needs no Mac", async () => {
+    const t = setup(null);
+    const q = queue(t, "plan first", { plan: true, machine: "mac" });
+    finish(t.task);
+    redHome();
+    peers = { box: { level: "green", plans: true } };
+    await tick();
+    expect(startedOn.get("plan first")).toBe("box");
+    expect(statusOf(q.id)).toBe("started");
+    expect(
+      db.prepare(`SELECT placed_note FROM sessions WHERE id = ?`).get(q.id)
+    ).toEqual({ placed_note: "Started on box · this machine load red" });
+  });
+
+  it("holds a plan-first task when the only linked machine can't run plans", async () => {
+    const t = setup(null);
+    const q = queue(t, "plan first", { plan: true });
+    finish(t.task);
+    redHome();
+    peers = { box: { level: "green" } };
+    await tick();
+    expect(started).toEqual([]);
+    expect(waitOf(q.id).wait_code).toBe("load_red");
+  });
+
+  it("holds a plan-first task when that machine is red too", async () => {
+    const t = setup(null);
+    queue(t, "plan first", { plan: true });
+    finish(t.task);
+    redHome();
+    peers = { box: { level: "red", plans: true } };
+    await tick();
+    expect(started).toEqual([]);
+  });
+
+  it("starts a plan-first task at home on a green machine, placing nothing", async () => {
+    const t = setup(null);
+    queue(t, "plan first", { plan: true });
+    finish(t.task);
+    peers = { box: { level: "green", plans: true } };
+    await tick();
+    expect(startedOn.get("plan first")).toBeUndefined();
   });
 
   it("holds a plan-only task on its after dependency, with no load wait", async () => {

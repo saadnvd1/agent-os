@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { exportOrResume } from "@/lib/tasks/move";
 import { callingDevice } from "@/lib/security/device-me";
-import { heldRefusal } from "@/lib/tasks/held";
+import { heldRefusal, planWaitRefusal } from "@/lib/tasks/held";
 
 // POST /api/tasks/:id/export - stop the agent, push, hand over the task.
 // The caller confirms with /moved, or restarts it here with /resume; if it
@@ -11,7 +11,8 @@ export async function POST(
   { params }: { params: Promise<{ id: string }> }
 ) {
   const id = (await params).id;
-  const held = heldRefusal(id, callingDevice(request));
+  const device = callingDevice(request);
+  const held = heldRefusal(id, device) ?? planWaitRefusal(id, device);
   if (held) return NextResponse.json({ error: held }, { status: 403 });
   try {
     const { to } = await request.json().catch(() => ({}));

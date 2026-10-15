@@ -250,10 +250,18 @@ describe("tasks on a linked machine", () => {
     expect(worktrees).toHaveLength(0);
   });
 
-  it("refuses plan-only, stacked and card tasks before calling it", async () => {
-    await expect(make({ hostId: host, planOnly: true })).rejects.toThrow(
-      /plan-only task runs on this machine/
-    );
+  it("hands a plan-only task over to plan there", async () => {
+    await make({ hostId: host, planOnly: true });
+    expect(remoteStarts).toHaveLength(1);
+    expect(remoteStarts[0].opts).toMatchObject({
+      plan: { only: true, reason: null },
+    });
+  });
+
+  it("refuses plan-only with no plan, stacked and card tasks before calling it", async () => {
+    await expect(
+      make({ hostId: host, planOnly: true, plan: false })
+    ).rejects.toThrow(/planOnly implies plan/);
     await expect(
       make({
         hostId: host,

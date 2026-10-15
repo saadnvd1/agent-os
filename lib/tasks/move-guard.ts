@@ -29,7 +29,15 @@ export function moveRefusal(session: Session): string | null {
     return "Its repo is encrypted with git-crypt and the key never leaves this machine, so it stays here";
   if (escalations(session.id).length)
     return "It's waiting on you (an escalated gate), so it stays here";
-  if (session.plan_only && session.plan_phase !== "implementing")
+  if (
+    session.plan_only &&
+    session.plan_phase !== "implementing" &&
+    // A plan another machine placed here moves to it once written.
+    !(
+      session.plan_waits_for_caller &&
+      (session.plan_phase === "awaiting" || session.plan_phase === "handoff")
+    )
+  )
     return "It's a plan-only task that hasn't been approved, so it stays here";
   const ask = db
     .prepare(
