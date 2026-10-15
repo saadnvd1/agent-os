@@ -1,4 +1,4 @@
-import { afterAll, describe, expect, it } from "vitest";
+import { afterAll, afterEach, describe, expect, it } from "vitest";
 import fs from "fs";
 import http from "http";
 import os from "os";
@@ -38,7 +38,17 @@ async function service() {
   };
 }
 
-const tmp = () => fs.mkdtempSync(path.join(os.tmpdir(), "agentos-link-"));
+// Each dir holds a machine.key: removed as soon as its test ends.
+const dirs: string[] = [];
+afterEach(() => {
+  for (const d of dirs.splice(0))
+    fs.rmSync(d, { recursive: true, force: true });
+});
+const tmp = () => {
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), "agentos-link-"));
+  dirs.push(dir);
+  return dir;
+};
 
 describe("linkWithCode", () => {
   it("links, keeps the key owner-only and sends only the public half", async () => {

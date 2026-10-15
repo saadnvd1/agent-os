@@ -10,6 +10,7 @@
   },
   "test": "npm run typecheck && npx vitest run <the test files you touched>",
   "notes": [
+    "The full suite is `npm test`: it runs through `aos heavy` with a worker cap, and every test temp dir lives under one per-run root that is removed afterwards. A run fails if it leaves anything in $TMPDIR.",
     "Run targeted tests (`npx vitest run path/to/x.test.ts`) while you work; the full suite loads the machine.",
     "The dev command above keeps the dev instance on its own port, database and tmux server: never run one against the real database or tmux.",
     "A test instance must never reach the live one: the dev command unsets the AGENTOS_* variables; stop it by its port when done and check with ps.",

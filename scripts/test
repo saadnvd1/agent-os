@@ -1,0 +1,11 @@
+#!/usr/bin/env bash
+# The full suite, kindly: through `aos heavy` (so other sessions are told) and
+# at low priority on a Mac. CI and machines without aos run plain vitest.
+set -euo pipefail
+cd "$(dirname "$0")/.."
+cmd=(npx vitest run "$@")
+[ "$(uname)" = Darwin ] && [ -z "${CI:-}" ] && cmd=(nice -n 10 "${cmd[@]}")
+if [ -z "${CI:-}" ] && command -v aos >/dev/null 2>&1; then
+  exec aos heavy -- "${cmd[@]}"
+fi
+exec "${cmd[@]}"

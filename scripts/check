@@ -56,7 +56,7 @@ if has static; then
   fi
 fi
 if has test; then
-  step "test";      npx vitest run ${vitest_args[@]+"${vitest_args[@]}"}
+  step "test";      scripts/test ${vitest_args[@]+"${vitest_args[@]}"}
 fi
 if has build; then
   # The build imports the generated migrations index, so it needs it even
