@@ -1,4 +1,4 @@
-// A gate that failed twice holds the task at once, but Saad's ask waits
+// A task the loop guard stopped is held at once, but Saad's ask waits
 // until the task's agent is done: idle, nothing sent to it lately, and CI
 // settled on its latest head. Then the ask goes up at that head, the commit
 // he'd merge; if the head moves after that, followAskHeads moves the same ask.
@@ -11,12 +11,7 @@ import { getCheck } from "./checks";
 import { openBySubject, workSubject } from "./asks";
 import { recentlyMessaged } from "./conditions";
 import type { SessionFacts } from "./facts";
-import {
-  failedTwiceWhy,
-  heldAskFailures,
-  releaseHeldAsks,
-  type FailureRow,
-} from "./gates";
+import { heldAskFailures, releaseHeldAsks, type FailureRow } from "./gates";
 import { getOrchestrator } from "./home";
 import { commitTime, fetchRefs, repoOf } from "./repo";
 import { ciSettleIn, SETTLE_S } from "./task-state";
@@ -102,7 +97,9 @@ async function raiseFor(
   }
   const last = rows.find((r) => r.last_sha)?.last_sha;
   const why = [
-    ...rows.map((r) => failedTwiceWhy(r.gate, r.last_reason ?? "")),
+    ...rows.map(
+      (r) => r.escalated_why ?? `the ${r.gate} gate failed: ${r.last_reason}`
+    ),
     ...(last && last !== pr.head
       ? [
           `Asked at ${short(pr.head)}, its head after the fixes since ${short(last)}.`,

@@ -18,6 +18,7 @@ import { settleStaleAsks } from "./ask-settle";
 import { brakesOn, liftBrake } from "./brakes";
 import { anyArmed, mergeArmed } from "./armed";
 import { followAskHeads } from "./ask-heads";
+import { followAskVerdicts } from "./ask-verdict";
 import { raiseHeldAsks } from "./held-asks";
 import { rebaseConflicting } from "./rebase";
 import { wakeTasks } from "./pr-wake";
@@ -90,6 +91,9 @@ function mergePipeline(workspaceId: string, facts: SessionFacts[]): void {
     );
     await raiseHeldAsks(workspaceId, facts).catch((error) =>
       console.error(`Raising held asks in ${workspaceId}:`, error)
+    );
+    await followAskVerdicts(workspaceId, facts).catch((error) =>
+      console.error(`Judging asked commits in ${workspaceId}:`, error)
     );
     await rebaseConflicting(workspaceId, facts);
     await mergeArmed(workspaceId, facts);

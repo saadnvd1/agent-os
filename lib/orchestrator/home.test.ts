@@ -129,7 +129,7 @@ describe("orchestratorBrief", () => {
   it("carries the gates, the hard lines and the tools", () => {
     expect(brief).toMatch(/CI is green on the PR's head commit/);
     expect(brief).toMatch(
-      /same gate failing again on a different commit goes to Saad/
+      /Only a loop goes to Saad \(the loop guard\): the same gate failing on 4 commits in a row, or failing the same way/
     );
     expect(brief).toMatch(/Merge approvals are off/);
     expect(brief).toMatch(/Don't park those PRs as asks/);

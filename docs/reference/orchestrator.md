@@ -128,18 +128,32 @@ it may do on its own, and the lines that always come back to you as asks.
   `BLOCKED:` or waiting, the diff stays in scope (no secrets, not only
   lockfiles, nothing outside the repo, within the card) and its stack parent
   has merged, and the PR body carries no AI attribution. `land` judges each item again at its own head right before
-  merging it. A gate failing again on a different commit, or a repo with no
-  CI, goes to you as an ask, and the orchestrator stops merging that task.
-  A failure counts once per task, gate and head commit, however many times
-  and from wherever that commit is judged (the armed watcher, CI finishing,
-  `sign_off`, `done`, `land`); a pass in between doesn't reset it. A review
-  that blocks counts when its verdict arrives, whether or not `sign_off`
-  ever reads it.
+  merging it. A failure counts once per task, gate and head commit, however
+  many times and from wherever that commit is judged (the armed watcher, CI
+  finishing, `sign_off`, `done`, `land`); a review that blocks counts when
+  its verdict arrives, whether or not `sign_off` ever reads it. A failure is
+  the task's to fix: every new head is judged afresh (CI, a new review,
+  scope), with no cap on ordinary fix rounds.
+- **Loop guard:** a task goes to you only when it's stuck: the same gate
+  failed on 4 commits in a row (`LOOP_GUARD_COMMITS`; a pass starts the
+  count again), or failed the same way on two commits in a row. "The same
+  way" is a signature worked out without a model: for CI, the failing job
+  and its failing test names (vitest `FAIL` lines, `×` marks), else its
+  first error line, from `gh run view --log-failed`; for the review, its
+  blocking findings by file and line; for any other gate, its reason with
+  commit ids taken out. A failure with no signature (the log couldn't be
+  read) never counts as a repeat. A repo with no CI also goes to you. Your
+  ask says which condition fired and lists the failures. From then on the
+  orchestrator stops merging that task, but AgentOS still reviews the
+  commit your ask names, and the ask shows CI and that review ("Gates at
+  abc1234: ..."), so you never approve blind. Your approval still merges
+  that one commit once, whatever the review said.
 - **Arm to merge:** `arm` (or **Arm merge** on a task's row) makes AgentOS
   merge the task's PR itself the moment every `sign_off` gate passes at its
   head, starting the review once CI is green, so nothing polls `sign_off`.
   The orchestrator hears one event: merged, or the failure (counted once per
-  head; the task stays armed for the fix, and one that goes to you disarms
+  head; the task stays armed for the fix, round after round, and merges by
+  itself once a head passes; only the loop guard sending it to you disarms
   it). The flag is in the database, so it survives a restart; `disarm`
   takes it back.
 - **Automatic rebase:** when the base moves and GitHub says a task's PR now

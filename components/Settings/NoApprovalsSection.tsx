@@ -8,7 +8,7 @@ import { useApprovalsModeQuery, useSetApprovalsMode } from "@/data/approvals";
 // What it switches off, said plainly before it can be switched on.
 export const NO_APPROVALS_WARNING = [
   "Every ask is approved the moment it is raised, hard lines included: public posts and messages, money, irreversible or destructive changes, credentials.",
-  "A PR that failed its gates twice, has no CI, or is too big to review still merges.",
+  "A PR stuck failing its gates, with no CI, or too big to review still merges.",
   "Brakes stop holding new starts, and plan-only tasks go on to implement without waiting for a plan approval.",
   "Every agent AgentOS starts runs with its permission prompts off, and prompts already waiting are allowed.",
 ];

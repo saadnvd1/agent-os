@@ -258,7 +258,7 @@ async function mergeOne(
   const seen = `${pr.head}:${failures(verdict.text)}`;
   if (task.merge_armed_seen === seen) return;
   // Counted as sign_off would count it: once per head (the database keys
-  // it), and a gate failing on a second commit goes to Saad.
+  // it), and only a task stuck in a loop goes to Saad (loop-guard.ts).
   if (!stillArmed(workspaceId, task.id)) return;
   const counted = await deps.judge(workspaceId, task);
   if (counted.ok) return merge(workspaceId, task, counted, deps);

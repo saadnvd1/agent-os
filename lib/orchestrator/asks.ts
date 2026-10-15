@@ -397,3 +397,29 @@ export function moveAskHead(
       .run(to, detail, id, from).changes === 1
   );
 }
+
+// The gates' verdict on the commit an ask names (ask-verdict.ts), kept as
+// the detail's last section and rewritten as it changes. Only while the ask
+// still names `sha`. Returns whether it changed.
+const VERDICT_AT = /\n?Gates at [0-9a-f]{7}: /;
+export const VERDICT_MAX = 800;
+
+export function setAskVerdict(id: number, sha: string, text: string): boolean {
+  const ask = db
+    .prepare(`SELECT detail FROM orchestrator_asks WHERE id = ?`)
+    .get(id) as { detail: string } | undefined;
+  if (!ask) return false;
+  const section = `Gates at ${sha.slice(0, 7)}: ${text}`.slice(0, VERDICT_MAX);
+  const rest = ask.detail.split(VERDICT_AT)[0];
+  const detail =
+    `${rest.slice(0, Math.max(0, MAX_DETAIL - section.length - 1))}\n${section}`.trim();
+  if (detail === ask.detail) return false;
+  return (
+    db
+      .prepare(
+        `UPDATE orchestrator_asks SET detail = ?
+         WHERE id = ? AND status = 'open' AND sha = ?`
+      )
+      .run(detail, id, sha).changes === 1
+  );
+}

@@ -12,8 +12,8 @@ import { noApprovalsOn } from "../approvals/no-approvals";
 
 const KEY = "orchestrator.merge_approvals";
 
-// The escalations this switch decides. A gate failing twice, or a repo with
-// no CI, goes to Saad either way.
+// The escalations this switch decides. A task the loop guard stops, or a
+// repo with no CI, goes to Saad either way.
 export const APPROVAL_GATES: readonly string[] = ["sensitive", "size"];
 
 // The switch as Saad set it, whatever No approvals mode is doing.

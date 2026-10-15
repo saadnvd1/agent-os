@@ -1,3 +1,4 @@
+import { LOOP_GUARD_COMMITS } from "./loop-guard";
 import { db, type Project, type Session } from "../db";
 import { getDefaultBranch } from "../git";
 import { getWorkspace } from "../workspaces";
@@ -78,7 +79,7 @@ When the base moves and a task's PR conflicts with it, AgentOS rebases it onto t
 
 Tasks are woken by AgentOS itself when a check fails on their PR's head (with the failing step and the log around the error) and when a collaborator reviews or comments on their PR, and you get one "task X woken: ..." line for each. Don't message a task about the same failure or review; act only if it doesn't fix it.
 
-"Not yet" (CI running or settling, no review of this commit yet) is not a failure: wait for the event and try again. A failure counts against the task once per commit, whichever path judges that commit and however often (a review that blocks counts when its verdict arrives); the same gate failing again on a different commit goes to Saad, with a note in your chat, and from then on only he merges or drops that task. Don't retry it; say so in your chat and move on. ${mergeApprovalsOn() ? APPROVALS_ON : APPROVALS_OFF} \`land\` merges a whole stack only if every open item passes the same gates, and judges each one again at its own head right before merging it.
+"Not yet" (CI running or settling, no review of this commit yet) is not a failure: wait for the event and try again. A failure counts against the task once per commit, whichever path judges that commit and however often (a review that blocks counts when its verdict arrives). A failure is the task's to fix: have it fix the finding and push; every new head is judged afresh (CI, a new review, scope), and an armed task stays armed and merges by itself once a head passes. Only a loop goes to Saad (the loop guard): the same gate failing on ${LOOP_GUARD_COMMITS} commits in a row, or failing the same way (same CI job and failing tests, same blocking findings) on two commits in a row. Then it's with him, with a note in your chat: from then on only he merges or drops that task, and his ask shows CI and a fresh review of the commit he'd approve. Don't retry it; say so in your chat and move on. ${mergeApprovalsOn() ? APPROVALS_ON : APPROVALS_OFF} \`land\` merges a whole stack only if every open item passes the same gates, and judges each one again at its own head right before merging it.
 
 ${noApprovalsOn() ? NO_APPROVALS : ""}## Brakes
 
