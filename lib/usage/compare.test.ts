@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { db } from "../db";
+import { db, updateSessionRow } from "../db";
 import { DEFAULT_PRICES } from "../models/providers";
 import { seedSession, seedWorkspace } from "../orchestrator/testing";
 import { spendByModel } from "./by-model";
@@ -297,7 +297,7 @@ describe("planned against not", () => {
     const { app } = seedWorkspace();
     const a = seedSession({ projectId: app.id, name: "a", task: true });
     const b = seedSession({ projectId: app.id, name: "b", task: true });
-    db.prepare("UPDATE sessions SET plan_decided = 0 WHERE id = ?").run(a);
+    updateSessionRow(db, a, { plan_decided: 0 });
     expect(taskOutcomes([a, b]).get(a)?.planned).toBe(false);
     expect(taskOutcomes([a, b]).get(b)?.planned).toBeNull();
   });

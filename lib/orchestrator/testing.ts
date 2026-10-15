@@ -2,7 +2,7 @@
 // test database.
 
 import { randomUUID } from "crypto";
-import { db } from "../db";
+import { db, insertSessionRow } from "../db";
 import { saveItem } from "../chat/store";
 import { createProject } from "../projects";
 import { createWorkspace, setProjectWorkspace } from "../workspaces";
@@ -16,20 +16,17 @@ export function seedSession(opts: {
   updatedAt?: string;
 }): string {
   const id = randomUUID();
-  db.prepare(
-    `INSERT INTO sessions (id, name, tmux_name, working_directory, project_id, view,
-       task_status, branch_name, updated_at)
-     VALUES (?, ?, ?, '/tmp', ?, ?, ?, ?, COALESCE(?, datetime('now')))`
-  ).run(
+  insertSessionRow(db, {
     id,
-    opts.name,
-    `claude-${id}`,
-    opts.projectId,
-    opts.view ?? "terminal",
-    opts.task ? "running" : null,
-    opts.branch ?? null,
-    opts.updatedAt ?? null
-  );
+    name: opts.name,
+    tmux_name: `claude-${id}`,
+    working_directory: "/tmp",
+    project_id: opts.projectId,
+    view: opts.view ?? "terminal",
+    task_status: opts.task ? "running" : null,
+    branch_name: opts.branch ?? null,
+    updated_at: opts.updatedAt,
+  });
   return id;
 }
 

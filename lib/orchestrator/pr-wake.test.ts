@@ -16,7 +16,7 @@ vi.mock("@/lib/chat/runner", async (importOriginal) => ({
   },
 }));
 
-const { db } = await import("@/lib/db");
+const { db, updateSessionRow } = await import("@/lib/db");
 const { seedSession } = await import("./testing");
 const { createProject } = await import("@/lib/projects");
 const { createWorkspace, setProjectWorkspace, updateWorkspace } =
@@ -260,17 +260,13 @@ describe("wakeTasks: failing checks", () => {
     await t.poll({
       ...t.deps,
       failedLog: async () => {
-        db.prepare(
-          `UPDATE sessions SET task_status = 'dropped' WHERE id = ?`
-        ).run(t.task);
+        updateSessionRow(db, t.task, { task_status: "dropped" });
         return null;
       },
     });
     expect(t.sent).toEqual([]);
     // Neither was claimed: running again, it's woken.
-    db.prepare(`UPDATE sessions SET task_status = 'running' WHERE id = ?`).run(
-      t.task
-    );
+    updateSessionRow(db, t.task, { task_status: "running" });
     await t.poll();
     expect(t.sent).toHaveLength(1);
   });
@@ -419,9 +415,7 @@ describe("wakeTasks: what isn't watched", () => {
     t.add();
     await t.poll();
     t.setPR({ state: "OPEN" });
-    db.prepare(`UPDATE sessions SET task_status = 'done' WHERE id = ?`).run(
-      t.task
-    );
+    updateSessionRow(db, t.task, { task_status: "done" });
     await t.poll();
     expect(t.calls).toEqual({ fingerprints: 0, activity: 0, log: 0 });
     expect(t.sent).toEqual([]);

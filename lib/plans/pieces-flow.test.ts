@@ -24,7 +24,7 @@ vi.mock("../tasks", async (importOriginal) => ({
   createTask,
 }));
 
-import { db, type Session } from "../db";
+import { db, insertSessionRow, updateSessionRow, type Session } from "../db";
 import { createWorkspace, setProjectWorkspace } from "../workspaces";
 import { createProject } from "../projects";
 import { listQueue } from "../chat/queued";
@@ -85,9 +85,13 @@ function task(
     task: true,
   });
   const worktree = fs.mkdtempSync(path.join(os.tmpdir(), "pieces-"));
-  db.prepare(
-    `UPDATE sessions SET worktree_path = ?, model = 'claude-opus-5-5', plan_phase = 'planning', plan_only = ?, started_by = 'orch-1' WHERE id = ?`
-  ).run(worktree, planOnly ? 1 : 0, id);
+  updateSessionRow(db, id, {
+    worktree_path: worktree,
+    model: "claude-opus-5-5",
+    plan_phase: "planning",
+    plan_only: planOnly ? 1 : 0,
+    started_by: "orch-1",
+  });
   recordTurn(
     { id, name: "Big feature", workspace_id: null },
     null,
@@ -154,10 +158,7 @@ describe("handoff", () => {
 
   it("plan-only: approval applies the edits and lists what isn't built", async () => {
     const { id } = task(true, TWO);
-    db.prepare(`UPDATE sessions SET plan_edits = ? WHERE id = ?`).run(
-      JSON.stringify({ drop: [2] }),
-      id
-    );
+    updateSessionRow(db, id, { plan_edits: JSON.stringify({ drop: [2] }) });
     await handoffAfterPlan(id, async () => {});
     const sent = vi.fn(async () => {});
     await approvePlan(id, "go", sent);
@@ -191,18 +192,24 @@ const deps = (over: Partial<ReleaseDeps> = {}) => {
 };
 
 function seedPieceSession(id: string) {
-  db.prepare(
-    `INSERT OR IGNORE INTO sessions (id, name, tmux_name, working_directory, task_status)
-     VALUES (?, 'piece', ?, '/tmp', 'running')`
-  ).run(id, `claude-${id}`);
+  if (db.prepare(`SELECT 1 FROM sessions WHERE id = ?`).get(id)) return;
+  insertSessionRow(db, {
+    id,
+    name: "piece",
+    tmux_name: `claude-${id}`,
+    working_directory: "/tmp",
+    task_status: "running",
+  });
 }
 
+const sqlNow = () => new Date().toISOString().slice(0, 19).replace("T", " ");
+
 const merge = (id: string, pr = 241) =>
-  db
-    .prepare(
-      `UPDATE sessions SET task_status = 'merged', pr_number = ?, merged_at = datetime('now') WHERE id = ?`
-    )
-    .run(pr, id);
+  updateSessionRow(db, id, {
+    task_status: "merged",
+    pr_number: pr,
+    merged_at: sqlNow(),
+  });
 
 describe("release", () => {
   it("holds a piece until its dependency merges, then starts it once", async () => {
@@ -244,9 +251,7 @@ describe("release", () => {
 
   it("a dropped dependency blocks what waits on it", async () => {
     const { id, feature } = await build();
-    db.prepare(`UPDATE sessions SET task_status = 'dropped' WHERE id = ?`).run(
-      id
-    );
+    updateSessionRow(db, id, { task_status: "dropped" });
     const { d, started } = deps();
     await releasePieces(d);
     expect(started).toEqual([]);
@@ -399,16 +404,14 @@ describe("release with the real start and deploy check", () => {
     merge(id);
     const dep = piecesOf(feature.id)[0];
     const session = (_x: string) =>
-      db.prepare(`SELECT * FROM sessions WHERE id = ?`).get(id) as never;
+      db.prepare(`SELECT * FROM session_rows WHERE id = ?`).get(id) as never;
     expect(await realDeps.deployed(dep, session(""))).not.toBe("ok");
     expect(
       await realDeps.deployed({ ...dep, project_id: "gone" }, session(""))
     ).toBe("failed");
-    db.prepare(`UPDATE sessions SET pr_number = NULL WHERE id = ?`).run(id);
+    updateSessionRow(db, id, { pr_number: null });
     expect(await realDeps.deployed(dep, session(""))).toBe("failed");
-    db.prepare(
-      `UPDATE sessions SET pr_number = 5, merged_at = NULL WHERE id = ?`
-    ).run(id);
+    updateSessionRow(db, id, { pr_number: 5, merged_at: null });
     expect(await realDeps.deployed(dep, session(""))).toBe("failed");
   });
 });
@@ -443,7 +446,7 @@ describe("plan_pieces", () => {
     const { id } = await build();
     const { planPiecesText } = await import("../orchestrator/plan-pieces");
     const session = db
-      .prepare(`SELECT * FROM sessions WHERE id = ?`)
+      .prepare(`SELECT * FROM session_rows WHERE id = ?`)
       .get(id) as never;
     expect(planPiecesText(session)).toContain(
       "2. Hooks [waiting] after 1 is merged"
@@ -462,7 +465,7 @@ describe("session list", () => {
     const { id } = await build();
     const row = db
       .prepare(
-        `SELECT ${sessionListColumns(db, "s")} FROM sessions s WHERE s.id = ?`
+        `SELECT ${sessionListColumns(db, "s")} FROM session_rows s WHERE s.id = ?`
       )
       .get(id) as { recipe_run: string | null; feature_piece: string | null };
     expect(row.recipe_run).toBeNull();
@@ -589,7 +592,9 @@ describe("pieces that can't be registered", () => {
     expect(listQueue(id)).toEqual([]);
     expect(
       (
-        db.prepare(`SELECT plan_phase FROM sessions WHERE id = ?`).get(id) as {
+        db
+          .prepare(`SELECT plan_phase FROM session_rows WHERE id = ?`)
+          .get(id) as {
           plan_phase: string;
         }
       ).plan_phase
@@ -680,11 +685,12 @@ function seedFeature(
 }
 
 const mergeIn = (id: string, project: string, pr: number) =>
-  db
-    .prepare(
-      `UPDATE sessions SET project_id = ?, task_status = 'merged', pr_number = ?, merged_at = datetime('now') WHERE id = ?`
-    )
-    .run(project, pr, id);
+  updateSessionRow(db, id, {
+    project_id: project,
+    task_status: "merged",
+    pr_number: pr,
+    merged_at: sqlNow(),
+  });
 
 const keys = (workspace: string, part: string) =>
   pendingEvents(workspace).filter((e) => e.key.includes(part));

@@ -1,5 +1,5 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
-import { db } from "@/lib/db";
+import { db, insertSessionRow, updateSessionRow } from "@/lib/db";
 import { seedSession, seedWorkspace } from "@/lib/orchestrator/testing";
 
 // The agent process is at the module edge: a chat's worker, a terminal's tmux.
@@ -61,7 +61,7 @@ const hour = (n: number) => new Date(Date.now() + n * 3_600_000);
 const sess = (id: string) =>
   db
     .prepare(
-      `SELECT pause_state, paused_until, pause_id FROM sessions WHERE id = ?`
+      `SELECT pause_state, paused_until, pause_id FROM session_rows WHERE id = ?`
     )
     .get(id) as {
     pause_state: string | null;
@@ -202,13 +202,12 @@ describe("pausing a chat task", () => {
     expect(() => requestPause(t.id, { until: hour(24 * 61) })).toThrow(
       /60 days/
     );
-    db.prepare(`UPDATE sessions SET task_status = 'merged' WHERE id = ?`).run(
-      t.id
-    );
+    updateSessionRow(db, t.id, { task_status: "merged" });
     expect(() => requestPause(t.id, { until: hour(1) })).toThrow(/merged/);
-    db.prepare(
-      `UPDATE sessions SET task_status = 'running', role = 'orchestrator' WHERE id = ?`
-    ).run(t.id);
+    updateSessionRow(db, t.id, {
+      task_status: "running",
+      role: "orchestrator",
+    });
     expect(() => requestPause(t.id, { until: hour(1) })).toThrow(
       /orchestrator/i
     );
@@ -338,9 +337,7 @@ describe("resuming", () => {
 
   it("a paused task that merges ends its pause as finished", async () => {
     const t = await paused();
-    db.prepare(`UPDATE sessions SET task_status = 'merged' WHERE id = ?`).run(
-      t.id
-    );
+    updateSessionRow(db, t.id, { task_status: "merged" });
     await sweepPauses();
     expect(pauseOf(t.id).end_reason).toBe("finished");
     expect(sess(t.id).pause_state).toBeNull();
@@ -452,9 +449,7 @@ describe("a terminal task", () => {
     db.prepare(`UPDATE task_pauses SET state = 'resuming' WHERE id = ?`).run(
       p.id
     );
-    db.prepare(`UPDATE sessions SET pause_state = 'resuming' WHERE id = ?`).run(
-      t.id
-    );
+    updateSessionRow(db, t.id, { pause_state: "resuming" });
     await sweepPauses();
     expect(launched).toHaveLength(1);
     expect(launched[0].prompt).toContain("m1");

@@ -4,7 +4,7 @@ import fs from "fs";
 import os from "os";
 import path from "path";
 import { describe, expect, it } from "vitest";
-import { getDb } from "@/lib/db";
+import { getDb, insertSessionRow } from "@/lib/db";
 import type { ChatItem } from "@/lib/chat/events";
 import { saveItem } from "@/lib/chat/store";
 import * as listRoute from "@/app/api/sessions/[id]/artifacts/route";
@@ -37,20 +37,16 @@ function repo(): string {
 
 function session(dir: string, pr = true) {
   const id = randomUUID();
-  getDb()
-    .prepare(
-      `INSERT INTO sessions (id, name, tmux_name, working_directory, worktree_path, pr_url, pr_number, pr_status)
-       VALUES (?, 'art', ?, ?, ?, ?, ?, ?)`
-    )
-    .run(
-      id,
-      `claude-${id}`,
-      dir,
-      dir,
-      pr ? "https://github.com/o/r/pull/9" : null,
-      pr ? 9 : null,
-      pr ? "merged" : null
-    );
+  insertSessionRow(getDb(), {
+    id,
+    name: "art",
+    tmux_name: `claude-${id}`,
+    working_directory: dir,
+    worktree_path: dir,
+    pr_url: pr ? "https://github.com/o/r/pull/9" : null,
+    pr_number: pr ? 9 : null,
+    pr_status: pr ? "merged" : null,
+  });
   let at = 0;
   const add = (i: object) =>
     saveItem(id, { id: randomUUID(), createdAt: ++at, ...i } as ChatItem);

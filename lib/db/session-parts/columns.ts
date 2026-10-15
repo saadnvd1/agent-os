@@ -84,9 +84,9 @@ export const isMovedColumn = (column: string): boolean =>
 export const partOf = (column: string): PartTable | undefined =>
   partOfColumn.get(column);
 
-// Every column of the sessions table, in order: the shape of a session row
-// and of `session_rows`. A migration that adds a sessions column adds it here
-// and rebuilds the view (createSessionRowsView).
+// The shape of a session row and of `session_rows`, in order: the sessions
+// columns and the moved ones where they always stood. A migration that adds a
+// sessions column adds it here and rebuilds the view (createSessionRowsView).
 export const SESSION_ROW_COLUMNS: readonly string[] = [
   "id",
   "name",

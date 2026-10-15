@@ -1,4 +1,5 @@
 import fs from "fs";
+import { updateSessionRow } from "@/lib/db";
 import os from "os";
 import path from "path";
 import { beforeAll, describe, expect, it, vi } from "vitest";
@@ -23,7 +24,7 @@ vi.mock("@/lib/status-detector", () => ({
 const { db } = await import("@/lib/db");
 type Session = import("@/lib/db").Session;
 const getSession = (id: string) =>
-  db.prepare(`SELECT * FROM sessions WHERE id = ?`).get(id) as Session;
+  db.prepare(`SELECT * FROM session_rows WHERE id = ?`).get(id) as Session;
 const { ensureOrchestrator } = await import("./home");
 const { runTool } = await import("./serve");
 const { listNotes } = await import("./notes");
@@ -250,9 +251,7 @@ describe("de-duplication", () => {
       "c".repeat(40)
     );
     expect(resolveStaleAsks(t.w)).toBe(0);
-    db.prepare(`UPDATE sessions SET task_status = 'merged' WHERE id = ?`).run(
-      t.task
-    );
+    updateSessionRow(db, t.task, { task_status: "merged" });
     expect(resolveStaleAsks(t.w)).toBe(1);
     expect(openAsks(t.w)).toEqual([]);
   });

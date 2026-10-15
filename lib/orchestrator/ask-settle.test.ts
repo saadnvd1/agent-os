@@ -17,7 +17,7 @@ vi.mock("@/lib/status-detector", () => ({
   },
 }));
 
-const { db } = await import("@/lib/db");
+const { db, updateSessionRow } = await import("@/lib/db");
 const { ensureOrchestrator } = await import("./home");
 const { runTool } = await import("./serve");
 const { listNotes } = await import("./notes");
@@ -38,7 +38,7 @@ const {
 
 type Session = import("@/lib/db").Session;
 const getSession = (id: string) =>
-  db.prepare(`SELECT * FROM sessions WHERE id = ?`).get(id) as Session;
+  db.prepare(`SELECT * FROM session_rows WHERE id = ?`).get(id) as Session;
 
 beforeAll(() => {
   const home = fs.mkdtempSync(path.join(os.tmpdir(), "aos-orch-settle-"));
@@ -53,10 +53,7 @@ function workspace() {
   ensureOrchestrator(ws.workspace.id);
   const w = ws.workspace.id;
   const setTask = (fields: Record<string, string | number | null>) => {
-    const cols = Object.keys(fields);
-    db.prepare(
-      `UPDATE sessions SET ${cols.map((c) => `${c} = ?`).join(", ")} WHERE id = ?`
-    ).run(...cols.map((c) => fields[c]), ws.task);
+    updateSessionRow(db, ws.task, fields);
   };
   // The task has PR #107 open, as prFor records it.
   setTask({ pr_url: PR, pr_number: 107, pr_status: "open" });

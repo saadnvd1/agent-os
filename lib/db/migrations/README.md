@@ -35,8 +35,12 @@ export default {
   again.
 - Adding a column to `sessions`? `session_rows` (the view that reads a session
   with its columns from the tables they moved to) lists the columns at the time
-  it was built. Add the name to `SESSION_ROW_COLUMNS` in
+  it was built, in the order of `SESSION_ROW_COLUMNS`. Add the name to `SESSION_ROW_COLUMNS` in
   `lib/db/session-parts/columns.ts` and call `createSessionRowsView(db)` after
   the `ALTER`; `lib/db/split-sessions-migration.test.ts` fails if the view and
-  the table disagree. Columns that belong to a group go in `PART_COLUMNS` and a
-  new migration for that table instead.
+  the table disagree.
+  Columns that belong to a group go in `PART_COLUMNS` and a new migration for
+  that table instead.
+- A destructive step (dropping a column or table) takes a full copy first:
+  `backupDatabase` in `lib/db/backup.ts` (`VACUUM INTO` under
+  `~/.agent-os/backups/`), and throws so the migration stops if it can't.

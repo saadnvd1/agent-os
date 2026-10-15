@@ -85,19 +85,23 @@ a value: `session_tasks` (brief, status, priority, models, card), `session_prs`
 `lib/db/session-parts/columns.ts`.
 
 - **Read** a session, or any of those columns, from the `session_rows` view: it
-  has every `sessions` column under the same name, in the same order, so a row
-  is the flat session it always was. Don't `SELECT` the moved columns from
-  `sessions`.
+  has every column a session row ever had, under the same name and in the same
+  order (`SESSION_ROW_COLUMNS`), so a row is the flat session it always was.
+  The moved columns no longer exist on `sessions`.
 - **Write** them with `setTask`, `setPr`, `setPlan`, `setPlacement` and
   `setPause` (`lib/db/session-parts`), which take an optional condition on the
   current values for a compare-and-set. Raw SQL on a moved column outside that
   module fails `lib/db/session-parts/guard.test.ts`.
+- **Seed or patch a whole flat row** (tests, fixtures, seeds) with
+  `insertSessionRow` and `updateSessionRow`, which write each column where it
+  lives.
 - **A migration that adds a `sessions` column** adds the name to
   `SESSION_ROW_COLUMNS` and calls `createSessionRowsView(db)`, or the view
   won't have it (a test checks both).
 
-The old columns are still on `sessions`, mirrored and kept in step by triggers
-until they are dropped: see
+The old columns were dropped from `sessions` by migration
+`20261015T1830_drop_moved_session_columns`, after a full copy of the database
+in `~/.agent-os/backups/`: see
 [the decision](../decisions/2026-10-15-split-sessions-table.md).
 
 ## Session audits

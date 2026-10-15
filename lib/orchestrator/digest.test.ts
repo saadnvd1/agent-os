@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { db } from "../db";
+import { db, updateSessionRow } from "../db";
 import { seedWorkspace } from "./testing";
 import { addRule } from "./rules";
 import { buildDigest, CHARS_PER_TOKEN } from "./digest";
@@ -15,9 +15,7 @@ function seed() {
   const w = s.workspace.id;
   addRule(w, "Never merge #111", "orchestrator");
   addRule(w, "Briefs must not name third-party products", "saad");
-  db.prepare(
-    `UPDATE sessions SET pr_number = 42, pr_status = 'open' WHERE id = ?`
-  ).run(s.task);
+  updateSessionRow(db, s.task, { pr_number: 42, pr_status: "open" });
   db.prepare(
     `INSERT INTO orchestrator_checks (workspace_id, session_id, sha, kind, status)
      VALUES (?, ?, 'aaaaaaa111', 'review', 'block'), (?, ?, 'bbbbbbb222', 'review', 'pass')`
@@ -157,10 +155,14 @@ describe("the startup digest", () => {
 
   it("says when there's nothing, for the sections that matter empty", () => {
     const { workspace } = seedWorkspace();
-    db.prepare(
-      `UPDATE sessions SET task_status = 'merged' WHERE project_id IN
-      (SELECT id FROM projects WHERE workspace_id = ?)`
-    ).run(workspace.id);
+    const ids = db
+      .prepare(
+        `SELECT s.id FROM sessions s WHERE s.project_id IN
+        (SELECT id FROM projects WHERE workspace_id = ?)`
+      )
+      .pluck()
+      .all(workspace.id) as string[];
+    for (const id of ids) updateSessionRow(db, id, { task_status: "merged" });
     const out = buildDigest(workspace.id);
     expect(out).toContain(
       "### Standing rules\n- None. Keep one with rule_add."
@@ -174,9 +176,15 @@ describe("the startup digest", () => {
 describe("the startup digest with arm-to-merge", () => {
   it("marks a task armed to merge", () => {
     const { workspace, task } = seedWorkspace();
-    db.prepare(
-      `UPDATE sessions SET pr_number = 7, pr_status = 'open', merge_armed_at = datetime('now') WHERE id = ?`
-    ).run(task);
+    const now = db
+      .prepare("SELECT datetime('now') AS t")
+      .pluck()
+      .get() as string;
+    updateSessionRow(db, task, {
+      pr_number: 7,
+      pr_status: "open",
+      merge_armed_at: now,
+    });
     expect(buildDigest(workspace.id)).toContain("PR #7 open | armed to merge");
   });
 });

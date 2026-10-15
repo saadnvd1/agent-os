@@ -29,7 +29,7 @@ describe("task_scheduling migration", () => {
       (db.prepare(`PRAGMA table_info(${t})`).all() as { name: string }[]).map(
         (c) => c.name
       );
-    expect(cols("sessions")).toEqual(
+    expect(cols("session_rows")).toEqual(
       expect.arrayContaining([
         "priority",
         "pause_state",

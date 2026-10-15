@@ -8,7 +8,7 @@ const { retireChat } = vi.hoisted(() => ({
 }));
 vi.mock("../chat/runner", () => ({ retireChat, sendQueuedNow: vi.fn() }));
 
-import { db } from "../db";
+import { db, updateSessionRow } from "../db";
 import { listAutoApprovals, setNoApprovals } from "../approvals/no-approvals";
 import { listQueue } from "../chat/queued";
 import {
@@ -49,9 +49,13 @@ function planOnlyTask() {
     task: true,
   });
   const worktree = fs.mkdtempSync(path.join(os.tmpdir(), "plan-only-"));
-  db.prepare(
-    `UPDATE sessions SET worktree_path = ?, model = 'claude-opus-5-5', plan_phase = 'planning', plan_only = 1, started_by = 'orch-1' WHERE id = ?`
-  ).run(worktree, id);
+  updateSessionRow(db, id, {
+    worktree_path: worktree,
+    model: "claude-opus-5-5",
+    plan_phase: "planning",
+    plan_only: 1,
+    started_by: "orch-1",
+  });
   recordTurn(
     { id, name: "planned", workspace_id: null },
     null,
@@ -69,7 +73,9 @@ function planOnlyTask() {
 }
 
 const row = (id: string) =>
-  db.prepare(`SELECT model, plan_phase FROM sessions WHERE id = ?`).get(id) as {
+  db
+    .prepare(`SELECT model, plan_phase FROM session_rows WHERE id = ?`)
+    .get(id) as {
     model: string;
     plan_phase: string;
   };
@@ -173,7 +179,7 @@ describe("plan only", () => {
     const { id } = planOnlyTask();
     await handoffAfterPlan(id, async () => {});
     const s = db
-      .prepare(`SELECT * FROM sessions WHERE id = ?`)
+      .prepare(`SELECT * FROM session_rows WHERE id = ?`)
       .get(id) as never;
     expect(taskPlan(s)).toMatchObject({ status: "ready", source: "step" });
     const base = {

@@ -10,7 +10,7 @@ import {
   it,
   vi,
 } from "vitest";
-import { db, type Session } from "../../db";
+import { db, insertSessionRow, updateSessionRow, type Session } from "../../db";
 import { createHost } from "../../hosts";
 import { saveHostLink } from "../../hosts/remote-api";
 import { createProject } from "../../projects";
@@ -48,13 +48,17 @@ vi.mock("@/lib/tasks/move-flow", () => ({
   moveTask: async (id: string, to: string) => {
     moved.push({ id, to });
     const arrived = randomUUID();
-    db.prepare(
-      `INSERT INTO sessions (id, name, tmux_name, working_directory, task_status, plan_phase)
-       VALUES (?, 'arrived', ?, '/tmp', 'running', 'awaiting')`
-    ).run(arrived, `claude-${arrived}`);
+    insertSessionRow(db, {
+      id: arrived,
+      name: "arrived",
+      tmux_name: `claude-${arrived}`,
+      working_directory: "/tmp",
+      task_status: "running",
+      plan_phase: "awaiting",
+    });
     db.prepare(`DELETE FROM sessions WHERE id = ?`).run(id);
     return db
-      .prepare(`SELECT * FROM sessions WHERE id = ?`)
+      .prepare(`SELECT * FROM session_rows WHERE id = ?`)
       .get(arrived) as Session;
   },
 }));
@@ -117,14 +121,13 @@ function mirror(over: { planOnly?: boolean; orchestrated?: boolean } = {}) {
     view: "chat",
   } as Partial<Session> as Session;
   mirrorTask(hostId, f.projectId, remote, null);
-  db.prepare(
-    `UPDATE sessions SET plan_phase = 'planning', plan_only = ?, plan_decided = 1,
-       plan_waits_for_caller = 1, started_by = ? WHERE id = ?`
-  ).run(
-    over.planOnly ? 1 : null,
-    over.orchestrated ? orchestratorId : null,
-    id
-  );
+  updateSessionRow(db, id, {
+    plan_phase: "planning",
+    plan_only: over.planOnly ? 1 : null,
+    plan_decided: 1,
+    plan_waits_for_caller: 1,
+    started_by: over.orchestrated ? orchestratorId : null,
+  });
   return id;
 }
 
@@ -347,10 +350,15 @@ describe("a plan written on a linked machine", () => {
 
   it("finishes implementing a task that arrived but never started, after a restart", async () => {
     const arrived = randomUUID();
-    db.prepare(
-      `INSERT INTO sessions (id, name, tmux_name, working_directory, task_status, plan_phase, plan_handoff_message)
-       VALUES (?, 'arrived', ?, '/tmp', 'running', 'awaiting', 'also cover b')`
-    ).run(arrived, `claude-${arrived}`);
+    insertSessionRow(db, {
+      id: arrived,
+      name: "arrived",
+      tmux_name: `claude-${arrived}`,
+      working_directory: "/tmp",
+      task_status: "running",
+      plan_phase: "awaiting",
+      plan_handoff_message: "also cover b",
+    });
     await syncRemotePlans();
     await vi.waitFor(() => expect(implemented).toHaveLength(1));
     expect(implemented[0]).toEqual({ id: arrived, message: "also cover b" });
@@ -361,9 +369,7 @@ describe("a plan written on a linked machine", () => {
 
   it("leaves the arrived hand-off marker until implementing has started", async () => {
     const id = mirror();
-    db.prepare(`UPDATE sessions SET plan_phase = 'handoff' WHERE id = ?`).run(
-      id
-    );
+    updateSessionRow(db, id, { plan_phase: "handoff" });
     await handoffHome(id);
     expect(implemented).toHaveLength(1);
     expect(row(implemented[0].id).plan_handoff_message).toBeNull();

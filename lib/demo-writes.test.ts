@@ -1,4 +1,5 @@
 import { randomUUID } from "crypto";
+import { insertSessionRow } from "@/lib/db";
 import { NextRequest } from "next/server";
 import {
   afterAll,
@@ -65,10 +66,14 @@ const ctx = <T extends object>(params: T) => ({
 
 function newSession(task = false): string {
   const id = randomUUID();
-  db.prepare(
-    `INSERT INTO sessions (id, name, tmux_name, working_directory, task_prompt, task_status)
-     VALUES (?, 'demo', ?, '~/code/a', ?, ?)`
-  ).run(id, `claude-${id}`, task ? "do it" : null, task ? "running" : null);
+  insertSessionRow(db, {
+    id: id,
+    name: "demo",
+    tmux_name: `claude-${id}`,
+    working_directory: "~/code/a",
+    task_prompt: task ? "do it" : null,
+    task_status: task ? "running" : null,
+  });
   return id;
 }
 
@@ -184,7 +189,7 @@ describe("demo: POST /api/sessions/:id/done", () => {
       worktree: { action: "none" },
     });
     const row = db
-      .prepare(`SELECT archived_at, task_status FROM sessions WHERE id = ?`)
+      .prepare(`SELECT archived_at, task_status FROM session_rows WHERE id = ?`)
       .get(id) as { archived_at: string | null; task_status: string };
     expect(row.archived_at).toBeTruthy();
     expect(row.task_status).toBe("done");

@@ -74,12 +74,16 @@ vi.mock("./contract/start", async (importOriginal) => ({
     opts: Record<string, unknown>
   ) => {
     remoteStarts.push({ hostId, opts });
-    const { db } = await import("../db");
-    db.prepare(
-      `INSERT INTO sessions (id, name, tmux_name, working_directory, host_id, task_status)
-       VALUES (?, 'remote', ?, '/tmp', ?, 'running')`
-    ).run(opts.id, `claude-${opts.id}`, hostId);
-    return db.prepare(`SELECT * FROM sessions WHERE id = ?`).get(opts.id);
+    const { db, insertSessionRow } = await import("../db");
+    insertSessionRow(db, {
+      id: opts.id as string,
+      name: "remote",
+      tmux_name: `claude-${opts.id}`,
+      working_directory: "/tmp",
+      host_id: hostId,
+      task_status: "running",
+    });
+    return db.prepare(`SELECT * FROM session_rows WHERE id = ?`).get(opts.id);
   },
 }));
 vi.mock("./contract/views", () => ({
@@ -93,13 +97,13 @@ vi.mock("./contract/views", () => ({
     })),
 }));
 
-const { db } = await import("../db");
+const { db, insertSessionRow } = await import("../db");
 const { createProject } = await import("../projects");
 const { createTask, taskView, listTasks, taskRouting, ownedByATask } =
   await import("./index");
 
 const row = (id: string) =>
-  db.prepare(`SELECT * FROM sessions WHERE id = ?`).get(id) as Session;
+  db.prepare(`SELECT * FROM session_rows WHERE id = ?`).get(id) as Session;
 
 let projectId: string;
 beforeEach(() => {
@@ -291,10 +295,7 @@ describe("taskView by phase", () => {
       task_prompt: "the prompt",
       ...extra,
     };
-    const keys = Object.keys(cols);
-    db.prepare(
-      `INSERT INTO sessions (${keys.join(",")}) VALUES (${keys.map(() => "?").join(",")})`
-    ).run(...Object.values(cols));
+    insertSessionRow(db, cols as Parameters<typeof insertSessionRow>[1]);
     return row(id);
   }
   const pr = (o: Partial<TaskPR> = {}): TaskPR => ({

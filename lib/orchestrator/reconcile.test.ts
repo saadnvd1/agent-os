@@ -1,5 +1,5 @@
 import { beforeEach, describe, expect, it } from "vitest";
-import { db } from "../db";
+import { db, updateSessionRow } from "../db";
 import { saveItem } from "../chat/store";
 import { putSetting } from "../settings-store";
 import { pendingEvents } from "./events";
@@ -112,10 +112,7 @@ describe("PRs agents opened", () => {
       name: "Own task",
       task: true,
     });
-    db.prepare(`UPDATE sessions SET pr_url = ? WHERE id = ?`).run(
-      URL_OTHER,
-      owner
-    );
+    updateSessionRow(db, owner, { pr_url: URL_OTHER });
     await classifyAgentPrs(
       deps(app.id, api.id, async (url) => ({
         state: url === URL_OUTSIDE ? "MERGED" : "OPEN",

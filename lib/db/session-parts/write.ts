@@ -15,12 +15,9 @@ const sameAs = (current: unknown, wanted: Value | readonly Value[]): boolean =>
     (w) => (current ?? null) === w
   );
 
-// The one writer of the part tables. Writes the patched columns to the part
-// table, then mirrors the same values onto the legacy sessions columns, which
-// stay until they are dropped (docs/decisions/2026-10-15-split-sessions-table.md):
-// that UPDATE is the only dual-write, and the step that drops the columns
-// deletes it. Returns whether it wrote (false: the session is gone or `when`
-// no longer holds).
+// The one writer of the part tables: writes the patched columns to the part
+// table (docs/decisions/2026-10-15-split-sessions-table.md). Returns whether
+// it wrote (false: the session is gone or `when` no longer holds).
 export function writePart<T extends PartTable>(
   db: Database.Database,
   table: T,
@@ -58,12 +55,7 @@ export function writePart<T extends PartTable>(
            ${columns.map((c) => `${c} = excluded.${c}`).join(", ")}`
       )
       .run(values);
-    if (inserted.changes === 0) return false;
-    db.prepare(
-      `UPDATE sessions SET ${columns.map((c) => `${c} = @${c}`).join(", ")}
-        WHERE id = @id`
-    ).run(values);
-    return true;
+    return inserted.changes > 0;
   });
   return run();
 }

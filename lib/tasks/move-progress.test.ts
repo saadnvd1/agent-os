@@ -21,7 +21,7 @@ vi.mock("../worktrees", async (orig) => ({
 vi.mock("../env-setup", () => ({ setupWorktree: vi.fn(async () => ({})) }));
 vi.mock("../agents/launch", () => ({ launchClaude: vi.fn(async () => {}) }));
 
-import { db } from "../db";
+import { db, insertSessionRow } from "../db";
 import { createHost } from "../hosts";
 import { saveHostLink } from "../hosts/remote-api";
 import { exportTask, markMoved } from "./move";
@@ -139,10 +139,16 @@ describe("a move back here's progress", () => {
     const bundle = await exportTask(leftHere, "box");
     markMoved(leftHere, "box");
     const mirrorId = randomUUID();
-    db.prepare(
-      `INSERT INTO sessions (id, name, tmux_name, working_directory, project_id, task_status, branch_name, host_id)
-       VALUES (?, 'Fix it', ?, '/home/alice/wt', ?, 'running', ?, ?)`
-    ).run(mirrorId, `claude-${mirrorId}`, f.projectId, branch, hostId);
+    insertSessionRow(db, {
+      id: mirrorId,
+      name: "Fix it",
+      tmux_name: `claude-${mirrorId}`,
+      working_directory: "/home/alice/wt",
+      project_id: f.projectId,
+      task_status: "running",
+      branch_name: branch,
+      host_id: hostId,
+    });
     return { mirrorId, bundle: { ...bundle, moveId: mirrorId } };
   }
 

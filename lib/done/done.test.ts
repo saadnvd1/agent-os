@@ -1,4 +1,5 @@
 import { spawn } from "child_process";
+import { updateSessionRow } from "@/lib/db";
 import fs from "fs";
 import os from "os";
 import path from "path";
@@ -144,7 +145,7 @@ beforeEach(() => {
 });
 
 const row = (id: string) =>
-  db.prepare(`SELECT * FROM sessions WHERE id = ?`).get(id) as {
+  db.prepare(`SELECT * FROM session_rows WHERE id = ?`).get(id) as {
     task_status: string | null;
     archived_at: string | null;
     settled_at: string | null;
@@ -302,9 +303,13 @@ describe("done, by state", () => {
       commits: { "src/q.ts": "export const q = 1;\n" },
     });
     const pr = t.openPR(s, {}, true);
-    db.prepare(
-      `UPDATE sessions SET quick_of = ?, pr_number = ?, pr_url = ?, pr_status = 'open', view = 'chat' WHERE id = ?`
-    ).run(ensureOrchestrator(t.w).id, pr.number, pr.url, s.id);
+    updateSessionRow(db, s.id, {
+      quick_of: ensureOrchestrator(t.w).id,
+      pr_number: pr.number,
+      pr_url: pr.url,
+      pr_status: "open",
+      view: "chat",
+    });
     return { s, pr };
   }
 
@@ -468,7 +473,7 @@ describe("done, by state", () => {
     );
     ghDown = false;
     const lost = t.session("pr-lost", { task: true });
-    db.prepare(`UPDATE sessions SET pr_number = 41 WHERE id = ?`).run(lost.id);
+    updateSessionRow(db, lost.id, { pr_number: 41 });
     await expect(doneSession(lost.id, { by: "direct" })).rejects.toThrow(
       /had PR #41 but GitHub doesn't return it now/
     );
@@ -883,9 +888,7 @@ describe("done right after a sign-off", () => {
       commits: { "m.ts": "1\n" },
     });
     t.openPR(s, { state: "MERGED" });
-    db.prepare(
-      `UPDATE sessions SET task_status = 'merged', pr_status = 'merged' WHERE id = ?`
-    ).run(s.id);
+    updateSessionRow(db, s.id, { task_status: "merged", pr_status: "merged" });
     git(t.repo, "push", "-q", "origin", "--delete", s.branch);
     git(s.dir!, "fetch", "-q", "--prune", "origin");
     fs.writeFileSync(path.join(s.dir!, "notes.md"), "keep me\n");
@@ -978,7 +981,7 @@ describe("done --all-idle", () => {
     });
     t.openPR(green);
     const lost = t.session("lost", { task: true });
-    db.prepare(`UPDATE sessions SET pr_number = 9 WHERE id = ?`).run(lost.id);
+    updateSessionRow(db, lost.id, { pr_number: 9 });
     const scope = scopeOf(getDoneTarget(caller.id));
 
     const preview = await previewIdle(scope, caller.id);
@@ -1237,7 +1240,7 @@ describe("merge settings", () => {
 describe("done is not archive", () => {
   const shelvesOf = (id: string) => {
     const session = db
-      .prepare(`SELECT * FROM sessions WHERE id = ?`)
+      .prepare(`SELECT * FROM session_rows WHERE id = ?`)
       .get(id) as Session;
     return buildShelves({
       sessions: [session],
@@ -1282,9 +1285,7 @@ describe("done is not archive", () => {
     const busy = t.session("busy-arch", { worktree: false, live: "running" });
     await expect(archiveChecked(busy.id)).rejects.toThrow(/still working/);
     const pr = t.session("pr-arch", { task: true, worktree: false });
-    db.prepare(`UPDATE sessions SET pr_status = 'open' WHERE id = ?`).run(
-      pr.id
-    );
+    updateSessionRow(db, pr.id, { pr_status: "open" });
     await expect(archiveChecked(pr.id)).rejects.toThrow(/open PR/);
     for (const id of [orch.id, busy.id, pr.id])
       expect(row(id).archived_at).toBeNull();
@@ -1308,9 +1309,7 @@ describe("the 30-day auto-archive", () => {
     const t = setup();
     const stale = t.session("stale", { worktree: false });
     const staleTask = t.session("stale-task", { task: true, worktree: false });
-    db.prepare(`UPDATE sessions SET task_status = 'done' WHERE id = ?`).run(
-      staleTask.id
-    );
+    updateSessionRow(db, staleTask.id, { task_status: "done" });
     const pinned = t.session("stale-pinned", { worktree: false });
     const running = t.session("stale-running", {
       worktree: false,
@@ -1322,9 +1321,7 @@ describe("the 30-day auto-archive", () => {
     for (const s of [stale, staleTask, pinned, running, withPR]) age(s.id);
     age(orch.id);
     db.prepare(`UPDATE sessions SET pinned = 1 WHERE id = ?`).run(pinned.id);
-    db.prepare(`UPDATE sessions SET pr_status = 'open' WHERE id = ?`).run(
-      withPR.id
-    );
+    updateSessionRow(db, withPR.id, { pr_status: "open" });
 
     const archived = await archiveStaleDone(now);
     expect(archived.sort()).toEqual([stale.id, staleTask.id].sort());

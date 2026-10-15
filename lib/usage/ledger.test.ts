@@ -1,6 +1,6 @@
 import { randomUUID } from "crypto";
 import { beforeEach, describe, expect, it } from "vitest";
-import { db } from "../db";
+import { db, insertSessionRow } from "../db";
 import { usageEvents } from "../chat/drivers/claude";
 import {
   backfillCheckRuns,
@@ -29,10 +29,14 @@ beforeEach(() => {
 
 function session(over: { task?: boolean; role?: string } = {}) {
   const id = randomUUID();
-  db.prepare(
-    `INSERT INTO sessions (id, name, tmux_name, working_directory, task_status, role)
-     VALUES (?, 'work', ?, '/tmp', ?, ?)`
-  ).run(id, `claude-${id}`, over.task ? "running" : null, over.role ?? null);
+  insertSessionRow(db, {
+    id,
+    name: "work",
+    tmux_name: `claude-${id}`,
+    working_directory: "/tmp",
+    task_status: over.task ? "running" : null,
+    role: over.role ?? null,
+  });
   return id;
 }
 

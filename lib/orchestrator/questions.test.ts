@@ -18,7 +18,7 @@ vi.mock("@/lib/status-detector", () => ({
   },
 }));
 
-const { db } = await import("@/lib/db");
+const { db, updateSessionRow } = await import("@/lib/db");
 const { ensureOrchestrator } = await import("./home");
 const { runTool } = await import("./serve");
 const { seedWorkspace, seedSession } = await import("./testing");
@@ -107,9 +107,7 @@ describe("open questions", () => {
     expect(t.overview().questions).toMatchObject([
       { task: id, taskName: "billing" },
     ]);
-    db.prepare(`UPDATE sessions SET task_status = 'merged' WHERE id = ?`).run(
-      id
-    );
+    updateSessionRow(db, id, { task_status: "merged" });
     expect(t.overview().questions).toEqual([]);
   });
 });

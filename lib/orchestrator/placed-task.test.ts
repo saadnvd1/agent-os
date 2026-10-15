@@ -85,7 +85,7 @@ async function placed() {
   return { id, orch, ws };
 }
 const row = (id: string) =>
-  db.prepare(`SELECT * FROM sessions WHERE id = ?`).get(id) as never;
+  db.prepare(`SELECT * FROM session_rows WHERE id = ?`).get(id) as never;
 
 describe("a task the queue placed on a linked machine", () => {
   it("asks that machine to hold it for its orchestrator, and is recorded like a moved one", async () => {

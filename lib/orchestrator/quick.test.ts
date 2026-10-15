@@ -84,7 +84,7 @@ vi.mock("@/lib/status-detector", () => ({
   },
 }));
 
-const { db } = await import("@/lib/db");
+const { db, updateSessionRow } = await import("@/lib/db");
 const { createProject } = await import("@/lib/projects");
 const { createWorkspace, setProjectWorkspace } =
   await import("@/lib/workspaces");
@@ -161,7 +161,7 @@ function setup() {
 }
 
 const row = (id: string) =>
-  db.prepare(`SELECT * FROM sessions WHERE id = ?`).get(id) as {
+  db.prepare(`SELECT * FROM session_rows WHERE id = ?`).get(id) as {
     id: string;
     name: string;
     quick_of: string | null;
@@ -179,13 +179,17 @@ async function quickChange(s: ReturnType<typeof setup>, name = "fix typo") {
     project: s.project.name,
     name,
   });
-  const id = (
-    db
-      .prepare(
-        `SELECT id FROM sessions WHERE quick_of = ? ORDER BY created_at DESC, rowid DESC LIMIT 1`
-      )
-      .get(s.orchestrator.id) as { id: string }
-  ).id;
+  const quick = db
+    .prepare(`SELECT id FROM session_rows WHERE quick_of = ?`)
+    .pluck()
+    .all(s.orchestrator.id) as string[];
+  const id = db
+    .prepare(
+      `SELECT id FROM sessions WHERE id IN (${quick.map(() => "?").join(",")})
+       ORDER BY created_at DESC, rowid DESC LIMIT 1`
+    )
+    .pluck()
+    .get(...quick) as string;
   return { text, id, wt: row(id).worktree_path };
 }
 
@@ -476,9 +480,14 @@ describe("the code-review gate", () => {
       task: true,
       branch: git(s.repo, "branch", "--show-current"),
     });
-    db.prepare(
-      `UPDATE sessions SET base_branch = 'main', task_prompt = 'Change it', pr_number = 7, worktree_path = ?, view = 'chat', quick_of = ? WHERE id = ?`
-    ).run(s.repo, opts.quick ? s.orchestrator.id : null, task);
+    updateSessionRow(db, task, {
+      base_branch: "main",
+      task_prompt: "Change it",
+      pr_number: 7,
+      worktree_path: s.repo,
+      view: "chat",
+      quick_of: opts.quick ? s.orchestrator.id : null,
+    });
     pr = {
       number: 7,
       url: "https://github.com/o/r/pull/7",

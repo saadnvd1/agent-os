@@ -2,7 +2,7 @@ import { beforeEach, describe, expect, it } from "vitest";
 import * as fs from "fs";
 import * as os from "os";
 import * as path from "path";
-import { db } from "./db";
+import { db, updateSessionRow } from "./db";
 import { createProject } from "./projects";
 import { seedSession } from "./orchestrator/testing";
 import { allocatePorts, releasePorts, sessionPorts } from "./ports";
@@ -92,9 +92,7 @@ describe("allocatePorts", () => {
     const archived = session();
     await allocatePorts(done, bases, free, gone);
     await allocatePorts(archived, bases, free, gone);
-    db.prepare(`UPDATE sessions SET task_status = 'merged' WHERE id = ?`).run(
-      done
-    );
+    updateSessionRow(db, done, { task_status: "merged" });
     db.prepare(
       `UPDATE sessions SET archived_at = datetime('now') WHERE id = ?`
     ).run(archived);
@@ -111,9 +109,7 @@ describe("allocatePorts", () => {
     db.prepare(
       `UPDATE sessions SET archived_at = datetime('now') WHERE id = ?`
     ).run(archived);
-    db.prepare(`UPDATE sessions SET task_status = 'merged' WHERE id = ?`).run(
-      merged
-    );
+    updateSessionRow(db, merged, { task_status: "merged" });
     const asked: string[] = [];
     const running = async (name: string) => (asked.push(name), true);
     expect((await allocatePorts(session(), bases, free, running)).slot).toBe(3);
@@ -166,7 +162,7 @@ describe("allocatePorts", () => {
   it("takes back a done task's slot even if a tmux session has its name", async () => {
     const id = session();
     await allocatePorts(id, bases, free, gone);
-    db.prepare(`UPDATE sessions SET task_status = 'done' WHERE id = ?`).run(id);
+    updateSessionRow(db, id, { task_status: "done" });
     await allocatePorts(session(), bases, free, async () => true);
     expect(sessionPorts(id)).toBeNull();
   });

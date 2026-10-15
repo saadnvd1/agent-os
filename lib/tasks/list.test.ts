@@ -23,7 +23,7 @@ vi.mock("../lumifyhub/task-cards", () => ({
   taskCardUrl: () => null,
 }));
 
-const { db } = await import("../db");
+const { db, insertSessionRow } = await import("../db");
 const { createProject } = await import("../projects");
 const { listTasks } = await import("./index");
 
@@ -37,22 +37,20 @@ function seed(
     workingDirectory: mkdtempSync(join(tmpdir(), "list-tasks-")),
   });
   const id = crypto.randomUUID();
-  db.prepare(
-    `INSERT INTO sessions (id, name, tmux_name, working_directory, project_id,
-       task_status, branch_name, base_branch, pr_number, pr_url, pr_status,
-       archived_at)
-     VALUES (?, 'task', ?, '/tmp', ?, ?, ?, 'main', ?, ?, ?, ?)`
-  ).run(
+  insertSessionRow(db, {
     id,
-    `claude-${id}`,
-    project.id,
-    status,
-    branch,
-    extra.pr ?? null,
-    extra.pr ? `https://github.com/o/r/pull/${extra.pr}` : null,
-    extra.prStatus ?? null,
-    extra.archived ? "2026-10-07 10:00:00" : null
-  );
+    name: "task",
+    tmux_name: `claude-${id}`,
+    working_directory: "/tmp",
+    project_id: project.id,
+    task_status: status,
+    branch_name: branch,
+    base_branch: "main",
+    pr_number: extra.pr ?? null,
+    pr_url: extra.pr ? `https://github.com/o/r/pull/${extra.pr}` : null,
+    pr_status: extra.prStatus ?? null,
+    archived_at: extra.archived ? "2026-10-07 10:00:00" : null,
+  });
   return id;
 }
 

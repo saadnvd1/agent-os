@@ -100,6 +100,8 @@
 - [ ] Rate limiting / queue for parallel sessions
 - [ ] WebSocket reconnection handling
 - [ ] Session auto-save/recovery
+- [ ] `session_chat` table for the nine `chat_*` sessions columns, like the 2026-10-15 split (chat workers must write through the new writers first)
+- [ ] Drop the old conductor columns on sessions (`conductor_session_id`, `worker_task`, `worker_status`) if nothing reads them
 
 ## Performance (after the 2026-10-07 audit)
 

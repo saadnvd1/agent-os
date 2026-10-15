@@ -84,7 +84,7 @@ function setup() {
   ensureOrchestrator(ws.workspace.id);
   const w = ws.workspace.id;
   const task = db
-    .prepare(`SELECT * FROM sessions WHERE id = ?`)
+    .prepare(`SELECT * FROM session_rows WHERE id = ?`)
     .get(ws.task) as import("@/lib/db").Session;
   escalate(w, task, "ci", "no CI ran", "https://pr/7", "a".repeat(40));
   const gate = openAsks(w)[0];

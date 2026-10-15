@@ -63,7 +63,7 @@ vi.mock("../hosts/peer-socket", () => ({
 
 const { serveTerminal, SHELL_AFTER_MS } = await import("./connection");
 const { GRACE_MS } = await import("./shared-attach");
-const { db } = await import("../db");
+const { db, insertSessionRow } = await import("../db");
 const { enterStage, setupMoved, startSetup } =
   await import("../sessions/setup-progress");
 
@@ -107,10 +107,14 @@ beforeEach(() => {
   ptys.length = 0;
   setup = startSetup(TASK, "feature/x", { task: true });
   db.prepare(`DELETE FROM sessions WHERE id = ?`).run(TASK);
-  db.prepare(
-    `INSERT INTO sessions (id, name, tmux_name, working_directory, task_status, setup_status)
-     VALUES (?, 'task', ?, '/tmp', 'running', 'running')`
-  ).run(TASK, TMUX);
+  insertSessionRow(db, {
+    id: TASK,
+    name: "task",
+    tmux_name: TMUX,
+    working_directory: "/tmp",
+    task_status: "running",
+    setup_status: "running",
+  });
 });
 afterEach(async () => {
   // Past both machines' shared attach grace, so the next test attaches afresh.

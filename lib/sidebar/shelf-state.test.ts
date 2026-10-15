@@ -23,7 +23,7 @@ function insertSession(over: { active_at?: string | null } = {}): string {
 }
 
 const row = (id: string) =>
-  getDb().prepare(`SELECT * FROM sessions WHERE id = ?`).get(id) as Record<
+  getDb().prepare(`SELECT * FROM session_rows WHERE id = ?`).get(id) as Record<
     string,
     string | null
   >;

@@ -1,7 +1,7 @@
 import { ORCHESTRATOR_PERMISSIONS } from "../../orchestrator/tool-names";
 import { randomUUID } from "crypto";
 import { describe, expect, it, vi } from "vitest";
-import { getDb, type Session } from "@/lib/db";
+import { getDb, type Session, updateSessionRow } from "@/lib/db";
 import type { ChatConversation, ChatStartOptions } from "../driver";
 import type { ChatItem, DriverEvent } from "../events";
 import { InputQueue } from "../queue";
@@ -96,7 +96,7 @@ async function startHost(
       .run(saved.resumeId ?? null, JSON.stringify(saved.usage), id);
   seed?.(id);
   const session = getDb()
-    .prepare(`SELECT * FROM sessions WHERE id = ?`)
+    .prepare(`SELECT * FROM session_rows WHERE id = ?`)
     .get(id) as Session;
   current = fakeConversation();
   const emitted: WorkerEvent[] = [];
@@ -495,9 +495,7 @@ describe("ChatHost queue", () => {
   it("holds a send that lands as a move or Land takes hold, and what's queued, until it's let go", async () => {
     const { id, host, conversation } = await startHost();
     await host.handle({ type: "send", id: "user-1", text: "long job" });
-    getDb()
-      .prepare(`UPDATE sessions SET task_status = 'moving' WHERE id = ?`)
-      .run(id);
+    updateSessionRow(getDb(), id, { task_status: "moving" });
     await host.handle({ type: "send", id: "user-2", text: "in flight" });
     expect(conversation.send).toHaveBeenCalledTimes(1);
     expect(listQueue(id).map((m) => m.text)).toEqual(["in flight"]);
@@ -506,9 +504,7 @@ describe("ChatHost queue", () => {
     await tick();
     expect(conversation.send).toHaveBeenCalledTimes(1);
     expect(host.state).toBe("idle");
-    getDb()
-      .prepare(`UPDATE sessions SET task_status = 'running' WHERE id = ?`)
-      .run(id);
+    updateSessionRow(getDb(), id, { task_status: "running" });
     await host.handle({ type: "drain" });
     expect(conversation.send).toHaveBeenLastCalledWith("in flight", undefined);
     host.close();
@@ -1227,9 +1223,7 @@ describe("ChatHost background frees the queue", () => {
   it("keeps a held queue, a compaction's, and a retiring worker's", async () => {
     const held = await startHost();
     await queueAll(held.host, ["a"]);
-    getDb()
-      .prepare(`UPDATE sessions SET task_status = 'moving' WHERE id = ?`)
-      .run(held.id);
+    updateSessionRow(getDb(), held.id, { task_status: "moving" });
     await held.host.handle({ type: "background_task", reqId: "b1" });
     expect(held.conversation.send).toHaveBeenCalledTimes(1);
     expect(listQueue(held.id)).toHaveLength(1);
@@ -1742,7 +1736,7 @@ describe("ChatHost retiring after a deploy", () => {
     expect(conversation.close).toHaveBeenCalledOnce();
     const { ChatHost } = await import("./host");
     const session = getDb()
-      .prepare(`SELECT * FROM sessions WHERE id = ?`)
+      .prepare(`SELECT * FROM session_rows WHERE id = ?`)
       .get(id) as Session;
     current = fakeConversation();
     const next = new ChatHost(session, () => {});
@@ -1766,7 +1760,7 @@ describe("ChatHost retiring after a deploy", () => {
       id,
       row: () =>
         getDb()
-          .prepare(`SELECT * FROM sessions WHERE id = ?`)
+          .prepare(`SELECT * FROM session_rows WHERE id = ?`)
           .get(id) as Session,
     };
   }
@@ -1796,7 +1790,9 @@ describe("ChatHost retiring after a deploy", () => {
     await tick();
     expect(conversation.close).toHaveBeenCalledOnce();
     const row = () =>
-      getDb().prepare(`SELECT * FROM sessions WHERE id = ?`).get(id) as Session;
+      getDb()
+        .prepare(`SELECT * FROM session_rows WHERE id = ?`)
+        .get(id) as Session;
     // Kept in the database, so a server restart in between doesn't lose it,
     // nor a next worker that goes before sending anything.
     current = fakeConversation();
@@ -1834,7 +1830,9 @@ describe("ChatHost retiring after a deploy", () => {
     host.close();
     current = fakeConversation();
     const next = new ChatHost(
-      getDb().prepare(`SELECT * FROM sessions WHERE id = ?`).get(id) as Session,
+      getDb()
+        .prepare(`SELECT * FROM session_rows WHERE id = ?`)
+        .get(id) as Session,
       () => {}
     );
     await next.handle({ type: "send", id: "user-1", text: "hello" });
@@ -1905,7 +1903,9 @@ describe("ChatHost fresh start at the context threshold", () => {
     const { ChatHost } = await import("./host");
     current = fakeConversation();
     const next = new ChatHost(
-      getDb().prepare(`SELECT * FROM sessions WHERE id = ?`).get(id) as Session,
+      getDb()
+        .prepare(`SELECT * FROM session_rows WHERE id = ?`)
+        .get(id) as Session,
       () => {},
       at(200_000)
     );
@@ -2445,7 +2445,9 @@ describe("ChatHost compacts a stale chat before a message", () => {
     const { ChatHost } = await import("./host");
     current = fakeConversation();
     const next = new ChatHost(
-      getDb().prepare(`SELECT * FROM sessions WHERE id = ?`).get(id) as Session,
+      getDb()
+        .prepare(`SELECT * FROM session_rows WHERE id = ?`)
+        .get(id) as Session,
       () => {}
     );
     expect(started?.resumeId).toBeNull();
@@ -2485,7 +2487,9 @@ describe("a role's tool guard", () => {
 
 describe("ChatHost fresh start on request", () => {
   const sessionRow = (id: string) =>
-    getDb().prepare(`SELECT * FROM sessions WHERE id = ?`).get(id) as Session;
+    getDb()
+      .prepare(`SELECT * FROM session_rows WHERE id = ?`)
+      .get(id) as Session;
   const savedRow = (id: string) =>
     getDb()
       .prepare(

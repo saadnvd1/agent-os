@@ -25,7 +25,7 @@ vi.mock("@/lib/tasks/gh", async (orig) => ({
 }));
 
 const TOKEN = "device-token";
-const { db } = await import("@/lib/db");
+const { db, insertSessionRow, updateSessionRow } = await import("@/lib/db");
 const { syncMirrors } = await import("@/lib/tasks/contract/sync");
 const { forget: forgetHostTasks } = await import("@/lib/tasks/contract/client");
 const { sessionFacts } = await import("./facts");
@@ -49,19 +49,28 @@ afterAll(async () => {
 });
 
 // The mirror of a task that moved to the box, as the Mac keeps it.
-function mirror(over = "") {
+function mirror(over: Record<string, string | number | null> = {}) {
   const ws = seedWorkspace();
   seedOrchestrator("orch");
   const id = randomUUID();
-  db.prepare(
-    `INSERT INTO sessions (id, name, tmux_name, working_directory, project_id, view,
-       task_status, task_prompt, host_id, peer_mirror, started_by, branch_name)
-     VALUES (?, 'moved-one', ?, '/tmp', ?, 'chat', 'running', 'x', ?, 0, 'orch', 'feature/m')`
-  ).run(id, `claude-${id}`, ws.api.id, host.hostId);
-  if (over) db.prepare(`UPDATE sessions SET ${over} WHERE id = ?`).run(id);
+  insertSessionRow(db, {
+    id,
+    name: "moved-one",
+    tmux_name: `claude-${id}`,
+    working_directory: "/tmp",
+    project_id: ws.api.id,
+    view: "chat",
+    task_status: "running",
+    task_prompt: "x",
+    host_id: host.hostId,
+    peer_mirror: 0,
+    started_by: "orch",
+    branch_name: "feature/m",
+  });
+  if (Object.keys(over).length > 0) updateSessionRow(db, id, over);
   view = { id, state: "running", chatTurn: "idle" };
   forgetHostTasks(host.hostId);
-  const session = db.prepare(`SELECT * FROM sessions WHERE id = ?`).get(id);
+  const session = db.prepare(`SELECT * FROM session_rows WHERE id = ?`).get(id);
   return { id, ws, session: session as never };
 }
 
@@ -123,7 +132,7 @@ describe("a task its orchestrator moved to a linked machine", () => {
 
   it("is read whole: every recent turn, with its lines, not the first 300 characters", async () => {
     const { readSession } = await import("./read");
-    const m = mirror("peer_mirror = 0");
+    const m = mirror({ peer_mirror: 0 });
     peer.routes[`/api/tasks/${m.id}/chat-tail`] = () => ({ text: chat(5) });
     const out = await readSession(m.ws.workspace.id, m.id, 60);
     expect(out).toContain("chat on");

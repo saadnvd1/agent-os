@@ -1,5 +1,5 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
-import { db } from "../../db";
+import { db, insertSessionRow } from "../../db";
 import { isGenericPayload } from "../copy";
 
 const relaySend = vi.fn();
@@ -177,9 +177,13 @@ describe("pushEvent", () => {
 
   it("never pushes for a session mirrored from another machine", async () => {
     pairPhone();
-    db.prepare(
-      `INSERT INTO sessions (id, name, tmux_name, working_directory, peer_mirror) VALUES ('mirror-1', 'm', 'm1', '/tmp', 1)`
-    ).run();
+    insertSessionRow(db, {
+      id: "mirror-1",
+      name: "m",
+      tmux_name: "m1",
+      working_directory: "/tmp",
+      peer_mirror: 1,
+    });
     db.prepare(
       `INSERT INTO sessions (id, name, tmux_name, working_directory, host_id) VALUES ('remote-1', 'r', 'r1', '/tmp', 'box')`
     ).run();

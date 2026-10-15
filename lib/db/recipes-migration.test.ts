@@ -18,7 +18,7 @@ describe("recipes migration", () => {
     for (const t of ["recipes", "recipe_runs", "features", "feature_pieces"])
       expect(names(db, t).length).toBeGreaterThan(3);
     expect(names(db, "schedules")).toContain("recipe_id");
-    expect(names(db, "sessions")).toContain("plan_edits");
+    expect(names(db, "session_rows")).toContain("plan_edits");
   });
 
   it("lets a recipe have one live run only", () => {

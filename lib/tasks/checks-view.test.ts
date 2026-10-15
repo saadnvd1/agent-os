@@ -1,6 +1,6 @@
 import { NextRequest } from "next/server";
 import { beforeEach, describe, expect, it, vi } from "vitest";
-import { db, type Session } from "../db";
+import { db, updateSessionRow, type Session } from "../db";
 import { TRUST_HEADER } from "../security/auth";
 import { putCheck } from "../orchestrator/checks";
 import { seedSession, seedWorkspace } from "../orchestrator/testing";
@@ -53,9 +53,9 @@ beforeEach(() => {
   resetLogCache();
   ws = seedWorkspace();
   const id = seedSession({ projectId: ws.app.id, name: "checks", task: true });
-  db.prepare(`UPDATE sessions SET pr_number = 5 WHERE id = ?`).run(id);
+  updateSessionRow(db, id, { pr_number: 5 });
   session = db
-    .prepare(`SELECT * FROM sessions WHERE id = ?`)
+    .prepare(`SELECT * FROM session_rows WHERE id = ?`)
     .get(id) as Session;
   vi.mocked(sessionMod.prFor).mockResolvedValue({
     number: 5,

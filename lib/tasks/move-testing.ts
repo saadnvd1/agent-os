@@ -6,7 +6,7 @@ import fs from "fs";
 import os from "os";
 import path from "path";
 import { randomUUID } from "crypto";
-import { db, type Session } from "../db";
+import { db, insertSessionRow, type Session } from "../db";
 import { createProject } from "../projects";
 import { writeTranscript } from "./transcript";
 import { gitSync } from "../git-exec";
@@ -17,7 +17,7 @@ export const git = (cwd: string, ...args: string[]) =>
   gitSync(cwd, args).trim();
 
 export const row = (id: string) =>
-  db.prepare(`SELECT * FROM sessions WHERE id = ?`).get(id) as Session;
+  db.prepare(`SELECT * FROM session_rows WHERE id = ?`).get(id) as Session;
 
 export interface MoveFixture {
   tmp: string;
@@ -71,11 +71,20 @@ export async function seedTask(
   git(f.repo, "worktree", "add", "-q", "-b", branch, cwd, "main");
   fs.writeFileSync(path.join(cwd, "work.txt"), "half done\n");
   const id = randomUUID();
-  db.prepare(
-    `INSERT INTO sessions (id, name, tmux_name, working_directory, project_id, task_status,
-       task_prompt, branch_name, worktree_path, base_branch, claude_session_id, model)
-     VALUES (?, 'Fix it', ?, ?, ?, 'running', 'fix the thing', ?, ?, 'main', ?, 'sonnet')`
-  ).run(id, `claude-${id}`, cwd, f.projectId, branch, cwd, CLAUDE_ID);
+  insertSessionRow(db, {
+    id,
+    name: "Fix it",
+    tmux_name: `claude-${id}`,
+    working_directory: cwd,
+    project_id: f.projectId,
+    task_status: "running",
+    task_prompt: "fix the thing",
+    branch_name: branch,
+    worktree_path: cwd,
+    base_branch: "main",
+    claude_session_id: CLAUDE_ID,
+    model: "sonnet",
+  });
   await writeTranscript(
     cwd,
     CLAUDE_ID,

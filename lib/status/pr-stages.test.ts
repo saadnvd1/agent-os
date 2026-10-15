@@ -7,7 +7,7 @@ vi.mock("@/lib/tasks/session", async (importOriginal) => ({
   cachedPR: () => cached,
 }));
 
-const { db } = await import("@/lib/db");
+const { db, updateSessionRow } = await import("@/lib/db");
 const { seedSession, seedWorkspace } =
   await import("@/lib/orchestrator/testing");
 const { putCheck } = await import("@/lib/orchestrator/checks");
@@ -27,9 +27,7 @@ const open = (over: Partial<TaskPR> = {}): TaskPR => ({
 function task() {
   const { workspace, app } = seedWorkspace();
   const id = seedSession({ projectId: app.id, name: "t", task: true });
-  db.prepare(
-    `UPDATE sessions SET pr_number = 7, pr_status = 'open' WHERE id = ?`
-  ).run(id);
+  updateSessionRow(db, id, { pr_number: 7, pr_status: "open" });
   return { id, workspaceId: workspace.id };
 }
 const stageOf = (id: string) => {
@@ -60,9 +58,11 @@ describe("addPrStages", () => {
       kind: "review",
       status: "pass",
     });
-    db.prepare(
-      `UPDATE sessions SET merge_armed_at = datetime('now') WHERE id = ?`
-    ).run(id);
+    updateSessionRow(db, id, {
+      merge_armed_at: (
+        db.prepare(`SELECT datetime('now') AS t`).get() as { t: string }
+      ).t,
+    });
     expect(stageOf(id)).toBe("armed");
   });
 

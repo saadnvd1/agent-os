@@ -140,10 +140,12 @@ describe("the read tool", () => {
 
 describe("the resurrect tool", () => {
   const ended = async (workspaceId: string, name: string) => {
-    const { db } = await import("@/lib/db");
-    db.prepare(
-      `UPDATE sessions SET task_status = 'dropped' WHERE name = ?`
-    ).run(name);
+    const { db, updateSessionRow } = await import("@/lib/db");
+    const ids = db
+      .prepare(`SELECT id FROM sessions WHERE name = ?`)
+      .pluck()
+      .all(name) as string[];
+    for (const id of ids) updateSessionRow(db, id, { task_status: "dropped" });
   };
 
   it("is held by Pause like the other tools that change the workspace", async () => {

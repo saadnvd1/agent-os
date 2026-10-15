@@ -1,5 +1,5 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
-import { db } from "../db";
+import { db, updateSessionRow } from "../db";
 import { seedSession, seedWorkspace } from "../orchestrator/testing";
 import { ensureOrchestrator } from "../orchestrator/home";
 import { setPaused } from "../orchestrator/pause";
@@ -434,10 +434,8 @@ describe("an orchestrator already told Away is on", () => {
 describe("checking deploys after a merge while away", () => {
   function merged(w: string, projectId: string) {
     const id = seedSession({ projectId, name: "shipped", task: true });
-    db.prepare(`UPDATE sessions SET pr_number = 7 WHERE id = ?`).run(id);
-    db.prepare(`UPDATE sessions SET task_status = 'merged' WHERE id = ?`).run(
-      id
-    );
+    updateSessionRow(db, id, { pr_number: 7 });
+    updateSessionRow(db, id, { task_status: "merged" });
     return id;
   }
   it("keeps checking while pending, and records a failure once, in a digest", async () => {
@@ -466,12 +464,14 @@ describe("checking deploys after a merge while away", () => {
     const { w, orch, api } = seed();
     const id = merged(w, api.id);
     const before = seedSession({ projectId: api.id, name: "old", task: true });
-    db.prepare(
-      `UPDATE sessions SET task_status = 'merged', pr_number = 6, merged_at = ? WHERE id = ?`
-    ).run(toSql(NOW - 2 * 60 * 60 * 1000), before);
+    updateSessionRow(db, before, {
+      task_status: "merged",
+      pr_number: 6,
+      merged_at: toSql(NOW - 2 * 60 * 60 * 1000),
+    });
     await sweepWorkspace(away, w, orch, NOW);
     const at = db
-      .prepare(`SELECT merged_at FROM sessions WHERE id = ?`)
+      .prepare(`SELECT merged_at FROM session_rows WHERE id = ?`)
       .get(id) as { merged_at: string };
     expect(h.deployInputs).toEqual([
       { mergeSha: "a".repeat(40), mergedAt: fromSql(at.merged_at) },

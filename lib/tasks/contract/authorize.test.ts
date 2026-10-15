@@ -30,7 +30,7 @@ vi.mock("@/lib/chat/runner", async (orig) => ({
   },
 }));
 
-const { db } = await import("@/lib/db");
+const { db, insertSessionRow } = await import("@/lib/db");
 const { DEVICE_HEADER } = await import("@/lib/security/auth");
 const { POST: stop } = await import("@/app/api/tasks/[id]/stop/route");
 const { POST: done_ } = await import("@/app/api/tasks/[id]/done/route");
@@ -42,11 +42,17 @@ const { GET: chatFacts } =
 
 function held(view: "chat" | "terminal" = "chat") {
   const id = randomUUID();
-  db.prepare(
-    `INSERT INTO sessions (id, name, tmux_name, working_directory, view, task_status,
-       held_by_device, held_from, task_prompt)
-     VALUES (?, 'held-one', ?, '/tmp', ?, 'running', 'dev-mac', 'the Mac', 'x')`
-  ).run(id, `claude-${id}`, view);
+  insertSessionRow(db, {
+    id,
+    name: "held-one",
+    tmux_name: `claude-${id}`,
+    working_directory: "/tmp",
+    view,
+    task_status: "running",
+    held_by_device: "dev-mac",
+    held_from: "the Mac",
+    task_prompt: "x",
+  });
   return id;
 }
 const call = (
@@ -82,10 +88,13 @@ describe("a held task's routes", () => {
 
   it("are not there for an ordinary task", async () => {
     const id = randomUUID();
-    db.prepare(
-      `INSERT INTO sessions (id, name, tmux_name, working_directory, task_status)
-       VALUES (?, 'plain', ?, '/tmp', 'running')`
-    ).run(id, `claude-${id}`);
+    insertSessionRow(db, {
+      id,
+      name: "plain",
+      tmux_name: `claude-${id}`,
+      working_directory: "/tmp",
+      task_status: "running",
+    });
     expect((await call(stop, id, "dev-mac")).status).toBe(404);
   });
 

@@ -66,7 +66,7 @@ vi.mock("@/lib/worktrees", async (importOriginal) => ({
   deleteWorktree: async () => {},
 }));
 
-const { db } = await import("@/lib/db");
+const { db, updateSessionRow } = await import("@/lib/db");
 const { saveItem } = await import("@/lib/chat/store");
 const { waitingState } = await import("./task-state");
 const { evaluateGates } = await import("./gates");
@@ -86,7 +86,9 @@ const sqlite = (ms: number) =>
   new Date(ms).toISOString().replace("T", " ").slice(0, 19);
 
 function row(id: string): Session {
-  return db.prepare(`SELECT * FROM sessions WHERE id = ?`).get(id) as Session;
+  return db
+    .prepare(`SELECT * FROM session_rows WHERE id = ?`)
+    .get(id) as Session;
 }
 
 let n = 0;
@@ -395,10 +397,7 @@ describe("chat tasks, where they differ from terminal ones", () => {
   it("get the task brief in the chat's system prompt", async () => {
     const brief = buildTaskBrief({ branch: "feature/x", baseBranch: "main" });
     const t = task("chat", { said: "x", state: "idle" });
-    db.prepare(`UPDATE sessions SET task_brief = ? WHERE id = ?`).run(
-      brief,
-      t.id
-    );
+    updateSessionRow(db, t.id, { task_brief: brief });
     const extras = await roleExtras(row(t.id));
     expect(extras.systemAppend).toBe(brief);
     expect(extras.systemAppend).toContain("independent review");

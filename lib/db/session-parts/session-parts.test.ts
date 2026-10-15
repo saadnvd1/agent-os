@@ -6,6 +6,8 @@ import { readChangeVersions } from "../changes";
 import {
   advancePlan,
   fillMissing,
+  insertSessionRow,
+  isMovedColumn,
   recordPr,
   setPause,
   setPlacement,
@@ -13,26 +15,22 @@ import {
   setPr,
   setTask,
   startTaskClock,
+  updateSessionRow,
   writePart,
 } from ".";
 
 let db: Database.Database;
 
-const insert = (id: string, extra = "") =>
+const insert = (id: string) =>
   db
     .prepare(
-      `INSERT INTO sessions (id, name, tmux_name, working_directory, created_at${extra ? ", " + extra.split("=")[0] : ""})
-       VALUES (?, ?, ?, '/tmp', '2026-10-01 08:00:00'${extra ? ", " + extra.split("=")[1] : ""})`
+      `INSERT INTO sessions (id, name, tmux_name, working_directory, created_at)
+       VALUES (?, ?, ?, '/tmp', '2026-10-01 08:00:00')`
     )
     .run(id, id, `t-${id}`);
 
 const part = (table: string, id: string) =>
   db.prepare(`SELECT * FROM ${table} WHERE session_id = ?`).get(id);
-const legacy = (id: string) =>
-  db.prepare(`SELECT * FROM sessions WHERE id = ?`).get(id) as Record<
-    string,
-    unknown
-  >;
 const row = (id: string) =>
   db.prepare(`SELECT * FROM session_rows WHERE id = ?`).get(id) as Record<
     string,
@@ -47,7 +45,7 @@ beforeEach(() => {
 });
 
 describe("writing a part", () => {
-  it("lands in the part table and mirrors onto the legacy columns", () => {
+  it("lands in the part table, and sessions has no moved column", () => {
     expect(
       setTask(db, "a", { task_prompt: "do it", task_status: "running" })
     ).toBe(true);
@@ -55,10 +53,10 @@ describe("writing a part", () => {
       task_prompt: "do it",
       task_status: "running",
     });
-    expect(legacy("a")).toMatchObject({
-      task_prompt: "do it",
-      task_status: "running",
-    });
+    const own = (
+      db.prepare(`PRAGMA table_info(sessions)`).all() as { name: string }[]
+    ).map((c) => c.name);
+    expect(own.filter(isMovedColumn)).toEqual([]);
     expect(row("a")).toMatchObject({ task_status: "running" });
   });
 
@@ -107,17 +105,35 @@ describe("writing a part", () => {
     expect(row("a")).toMatchObject({ peer_mirror: 1, held_by_device: "dev" });
   });
 
-  it("stamps merged_at once, the same in both places", () => {
+  it("stamps merged_at once", () => {
     setTask(db, "a", { task_status: "running" });
     setTask(db, "a", { task_status: "merged" });
     const first = (part("session_tasks", "a") as { merged_at: string })
       .merged_at;
     expect(first).toBeTruthy();
-    expect(legacy("a").merged_at).toBe(first);
     setTask(db, "a", { task_prompt: "again" });
     expect(
       (part("session_tasks", "a") as { merged_at: string }).merged_at
     ).toBe(first);
+  });
+
+  it("stamps merged_at and task_ended_at on a first status write too, and keeps a given one", () => {
+    insert("b");
+    insert("c");
+    insert("d");
+    setTask(db, "b", { task_status: "merged" });
+    setTask(db, "c", { task_status: "dropped" });
+    setTask(db, "d", {
+      task_status: "merged",
+      merged_at: "2026-10-02 10:00:00",
+    });
+    expect(row("b").merged_at).toBeTruthy();
+    expect(row("c").task_ended_at).toBeTruthy();
+    expect(row("c").merged_at).toBeNull();
+    expect(row("d").merged_at).toBe("2026-10-02 10:00:00");
+    setTask(db, "a", { task_status: "running" });
+    setTask(db, "a", { task_status: "done" });
+    expect(row("a").task_ended_at).toBeTruthy();
   });
 
   it("bumps the sessions change topic", () => {
@@ -173,30 +189,36 @@ describe("helpers", () => {
   });
 });
 
-describe("a write straight to a legacy column (an older build, a chat worker)", () => {
-  it("reaches the part table", () => {
-    db.prepare(
-      `UPDATE sessions SET task_status = 'moving', pr_number = 4 WHERE id = 'a'`
-    ).run();
-    expect(part("session_tasks", "a")).toMatchObject({ task_status: "moving" });
-    expect(part("session_prs", "a")).toMatchObject({ pr_number: 4 });
+describe("flat rows", () => {
+  it("insertSessionRow splits a flat row over sessions and the parts", () => {
+    insertSessionRow(db, {
+      id: "b",
+      name: "b",
+      tmux_name: "t-b",
+      working_directory: "/tmp",
+      priority: "high",
+      pr_url: null,
+      peer_mirror: 0,
+    });
+    expect(part("session_tasks", "b")).toMatchObject({ priority: "high" });
+    expect(part("session_prs", "b")).toBeUndefined();
+    expect(part("session_placement", "b")).toBeUndefined();
+    expect(row("b")).toMatchObject({ name: "b", priority: "high" });
   });
 
-  it("does not undo a newer value in the part table", () => {
-    setPlan(db, "a", { plan_phase: "awaiting", plan_note: "n" });
-    db.prepare(`UPDATE sessions SET plan_only = 1 WHERE id = 'a'`).run();
-    expect(part("session_plans", "a")).toMatchObject({
-      plan_phase: "awaiting",
-      plan_note: "n",
-      plan_only: 1,
+  it("updateSessionRow writes each column where it lives, nulls included", () => {
+    updateSessionRow(db, "a", { name: "renamed", pr_number: 4 });
+    updateSessionRow(db, "a", { pr_number: null, task_status: "moving" });
+    expect(row("a")).toMatchObject({
+      name: "renamed",
+      pr_number: null,
+      task_status: "moving",
     });
   });
 
-  it("an insert with moved values fills the part tables, and a delete removes them", () => {
-    insert("b", "priority='high'");
-    expect(part("session_tasks", "b")).toMatchObject({ priority: "high" });
-    expect(part("session_prs", "b")).toBeUndefined();
-    db.prepare(`DELETE FROM sessions WHERE id = 'b'`).run();
-    expect(part("session_tasks", "b")).toBeUndefined();
+  it("a deleted session takes its part rows with it", () => {
+    setTask(db, "a", { priority: "high" });
+    db.prepare(`DELETE FROM sessions WHERE id = 'a'`).run();
+    expect(part("session_tasks", "a")).toBeUndefined();
   });
 });

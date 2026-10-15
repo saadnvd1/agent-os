@@ -8,7 +8,7 @@ const { retireChat } = vi.hoisted(() => ({
 }));
 vi.mock("../chat/runner", () => ({ retireChat, sendQueuedNow: vi.fn() }));
 
-import { db } from "../db";
+import { db, updateSessionRow } from "../db";
 import { listQueue } from "../chat/queued";
 import {
   seedOrchestrator,
@@ -47,9 +47,13 @@ function task(planOnly: boolean) {
     task: true,
   });
   const worktree = fs.mkdtempSync(path.join(os.tmpdir(), "plan-wait-"));
-  db.prepare(
-    `UPDATE sessions SET worktree_path = ?, model = 'claude-opus-5-5', plan_phase = 'planning', plan_only = ?, started_by = 'orch-1' WHERE id = ?`
-  ).run(worktree, planOnly ? 1 : 0, id);
+  updateSessionRow(db, id, {
+    worktree_path: worktree,
+    model: "claude-opus-5-5",
+    plan_phase: "planning",
+    plan_only: planOnly ? 1 : 0,
+    started_by: "orch-1",
+  });
   recordTurn(
     { id, name: "planned", workspace_id: null },
     null,
@@ -64,7 +68,7 @@ function task(planOnly: boolean) {
 
 const phase = (id: string) =>
   (
-    db.prepare(`SELECT plan_phase FROM sessions WHERE id = ?`).get(id) as {
+    db.prepare(`SELECT plan_phase FROM session_rows WHERE id = ?`).get(id) as {
       plan_phase: string;
     }
   ).plan_phase;
@@ -230,9 +234,7 @@ describe.each([
       backgroundRunning: () => true,
       waitMs: 1000,
     });
-    db.prepare(`UPDATE sessions SET task_status = 'dropped' WHERE id = ?`).run(
-      id
-    );
+    updateSessionRow(db, id, { task_status: "dropped" });
     await vi.advanceTimersByTimeAsync(2000);
     expect(send).not.toHaveBeenCalled();
     expect(phase(id)).toBe("planning");

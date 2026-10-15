@@ -34,7 +34,7 @@ vi.mock("../chat/runner", async (orig) => ({
 }));
 
 import { randomUUID } from "crypto";
-import { db } from "../db";
+import { db, insertSessionRow } from "../db";
 import { createHost } from "../hosts";
 import { saveHostLink } from "../hosts/remote-api";
 import { moveTask } from "./move-flow";
@@ -220,7 +220,7 @@ describe("moving a chat task", () => {
     );
     await expect(importTask(bundle)).rejects.toThrow(/didn't start/);
     const left = db
-      .prepare(`SELECT id FROM sessions WHERE moved_from = ?`)
+      .prepare(`SELECT id FROM session_rows WHERE moved_from = ?`)
       .all(id) as { id: string }[];
     expect(left).toEqual([]);
     for (const table of ["chat_items", "chat_queue", "chat_bookmarks"])
@@ -400,11 +400,17 @@ describe("moving a chat task to a linked machine", () => {
 
   it("won't take one back from a machine that can't hand over its chat, or can't say", async () => {
     const mirror = randomUUID();
-    db.prepare(
-      `INSERT INTO sessions (id, name, tmux_name, working_directory, project_id, host_id,
-         task_status, branch_name, view)
-       VALUES (?, 'Fix it', ?, '/home/alice/wt', ?, ?, 'running', 'feature/chat-back', 'chat')`
-    ).run(mirror, `claude-${mirror}`, f.projectId, hostId);
+    insertSessionRow(db, {
+      id: mirror,
+      name: "Fix it",
+      tmux_name: `claude-${mirror}`,
+      working_directory: "/home/alice/wt",
+      project_id: f.projectId,
+      host_id: hostId,
+      task_status: "running",
+      branch_name: "feature/chat-back",
+      view: "chat",
+    });
     fetchMock.mockResolvedValueOnce(
       json({ tasks: [], capabilities: ["move"] })
     );

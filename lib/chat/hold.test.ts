@@ -13,7 +13,12 @@ vi.mock("./worker/client", async (orig) => ({
   waitForExit: vi.fn(async () => {}),
 }));
 
-import { db, stackQueries as q } from "../db";
+import {
+  db,
+  stackQueries as q,
+  insertSessionRow,
+  updateSessionRow,
+} from "../db";
 import { seedStack } from "../stacks/testing";
 import { chatHold, collectWhileMoving } from "./hold";
 import { claimNext, enqueue, listQueue } from "./queued";
@@ -25,10 +30,15 @@ import { waitForExit } from "./worker/client";
 
 function chatSession(status = "running"): string {
   const id = randomUUID();
-  db.prepare(
-    `INSERT INTO sessions (id, name, tmux_name, working_directory, task_status, view, moved_to)
-     VALUES (?, 'chat', ?, '/tmp', ?, 'chat', ?)`
-  ).run(id, `claude-${id}`, status, status === "moved" ? "box" : null);
+  insertSessionRow(db, {
+    id: id,
+    name: "chat",
+    tmux_name: `claude-${id}`,
+    working_directory: "/tmp",
+    task_status: status,
+    view: "chat",
+    moved_to: status === "moved" ? "box" : null,
+  });
   return id;
 }
 
@@ -40,17 +50,12 @@ describe("a paused chat", () => {
     const id = chatSession("running");
     queued(id, "from CI");
     for (const state of ["pausing", "paused"]) {
-      db.prepare(`UPDATE sessions SET pause_state = ? WHERE id = ?`).run(
-        state,
-        id
-      );
+      updateSessionRow(db, id, { pause_state: state });
       expect(chatHold(id)).toMatch(/resume/);
       expect(claimNext(id)).toBeNull();
       expect(listQueue(id)).toHaveLength(1);
     }
-    db.prepare(`UPDATE sessions SET pause_state = 'resuming' WHERE id = ?`).run(
-      id
-    );
+    updateSessionRow(db, id, { pause_state: "resuming" });
     expect(chatHold(id)).toBeNull();
     expect(claimNext(id)?.text).toBe("from CI");
   });
@@ -65,9 +70,7 @@ describe("a held chat", () => {
     // The worker's own drain, at a turn's end, takes nothing.
     expect(claimNext(id)).toBeNull();
     packed();
-    db.prepare(`UPDATE sessions SET task_status = 'running' WHERE id = ?`).run(
-      id
-    );
+    updateSessionRow(db, id, { task_status: "running" });
     expect(chatHold(id)).toBeNull();
     expect(claimNext(id)?.text).toBe("wait for me");
   });
@@ -100,7 +103,7 @@ describe("a held chat", () => {
 
   it("refuses, rather than strand, what's sent once the move packed the queue", async () => {
     const id = chatSession("moving");
-    db.prepare(`UPDATE sessions SET moved_to = 'box' WHERE id = ?`).run(id);
+    updateSessionRow(db, id, { moved_to: "box" });
     await expect(sendChat(id, { text: "too late" })).rejects.toThrow(
       "It's moving to box; send it there once it arrives"
     );
@@ -115,9 +118,7 @@ describe("a held chat", () => {
     const send = sendChat(id, { text: "raced the move", queue: true });
     const confirmed = sendChatConfirmed(id, { text: "raced too" });
     // The move starts while the worker spins up.
-    db.prepare(`UPDATE sessions SET task_status = 'moving' WHERE id = ?`).run(
-      id
-    );
+    updateSessionRow(db, id, { task_status: "moving" });
     const packed = collectWhileMoving(id);
     started({ worker: { command }, state: "idle" } as unknown as Live);
     await send;

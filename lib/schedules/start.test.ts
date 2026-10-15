@@ -1,7 +1,7 @@
 import type { ChatOrigin } from "../chat/events";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { randomUUID } from "crypto";
-import { db } from "../db";
+import { db, insertSessionRow } from "../db";
 import type { TaskState } from "../tasks/state";
 import type { ChatState } from "../chat/events";
 import type { Schedule, ScheduleRun } from "./store";
@@ -62,15 +62,14 @@ const { setPaused } = await import("../orchestrator/pause");
 
 function session(fields: { task_status?: string; archived?: boolean } = {}) {
   const id = randomUUID();
-  db.prepare(
-    `INSERT INTO sessions (id, name, tmux_name, working_directory, task_status, archived_at)
-     VALUES (?, 's', ?, '/tmp', ?, ?)`
-  ).run(
+  insertSessionRow(db, {
     id,
-    `claude-${id}`,
-    fields.task_status ?? null,
-    fields.archived ? "2026-10-07 00:00:00" : null
-  );
+    name: "s",
+    tmux_name: `claude-${id}`,
+    working_directory: "/tmp",
+    task_status: fields.task_status ?? null,
+    archived_at: fields.archived ? "2026-10-07 00:00:00" : null,
+  });
   return id;
 }
 

@@ -55,7 +55,7 @@ describe("who started a task", () => {
     const { db } = await import("../db");
     return db
       .prepare(
-        `SELECT started_by, parent_session_id, started_via, started_by_device FROM sessions WHERE id = ?`
+        `SELECT started_by, parent_session_id, started_via, started_by_device FROM session_rows WHERE id = ?`
       )
       .get(id);
   };

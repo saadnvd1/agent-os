@@ -3,7 +3,7 @@ import fs from "fs";
 import os from "os";
 import path from "path";
 import { beforeEach, describe, expect, it } from "vitest";
-import { db } from "../db";
+import { db, insertSessionRow } from "../db";
 import { callFromAssistant, recordCall, sessionContext } from "./calls";
 import {
   lightPass,
@@ -40,10 +40,14 @@ function mergedTask(
   over: { review?: string; ci?: string; second?: boolean } = {}
 ) {
   const id = randomUUID();
-  db.prepare(
-    `INSERT INTO sessions (id, name, tmux_name, working_directory, task_status, merged_at)
-     VALUES (?, 't', ?, '/tmp', 'merged', ?)`
-  ).run(id, `claude-${id}`, sql(at));
+  insertSessionRow(db, {
+    id,
+    name: "t",
+    tmux_name: `claude-${id}`,
+    working_directory: "/tmp",
+    task_status: "merged",
+    merged_at: sql(at),
+  });
   const check = (sha: string, kind: string, status: string) =>
     db
       .prepare(
@@ -306,9 +310,13 @@ describe("nightly", () => {
   function seedDay(day: string, merges: number, cost: number) {
     for (let i = 0; i < merges; i++) mergedTask(noon(day) + i);
     const id = randomUUID();
-    db.prepare(
-      `INSERT INTO sessions (id, name, tmux_name, working_directory, task_status) VALUES (?, 'w', ?, '/tmp', 'running')`
-    ).run(id, `claude-${id}`);
+    insertSessionRow(db, {
+      id,
+      name: "w",
+      tmux_name: `claude-${id}`,
+      working_directory: "/tmp",
+      task_status: "running",
+    });
     recordCall(
       {
         ...callFromAssistant(

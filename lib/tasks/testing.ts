@@ -1,7 +1,7 @@
 // Test fixtures for task PR lookups: real repositories and worktrees, with
 // gh faked by branch.
 
-import { db, type Session } from "../db";
+import { db, insertSessionRow, type Session } from "../db";
 import { createProject } from "../projects";
 import type { FindPROpts } from "./gh";
 import type { TaskPR } from "./state";
@@ -53,13 +53,19 @@ export function seedTask(
     workingDirectory: repo,
   });
   const id = crypto.randomUUID();
-  db.prepare(
-    `INSERT INTO sessions (id, name, tmux_name, working_directory, project_id,
-       task_status, branch_name, base_branch, worktree_path)
-     VALUES (?, 'Read and execute the brief', ?, ?, ?, 'running', ?, 'main', ?)`
-  ).run(id, `claude-${id}`, worktree, project.id, branch, worktree);
+  insertSessionRow(db, {
+    id,
+    name: "Read and execute the brief",
+    tmux_name: `claude-${id}`,
+    working_directory: worktree,
+    project_id: project.id,
+    task_status: "running",
+    branch_name: branch,
+    base_branch: "main",
+    worktree_path: worktree,
+  });
   return taskRow(id);
 }
 
 export const taskRow = (id: string) =>
-  db.prepare(`SELECT * FROM sessions WHERE id = ?`).get(id) as Session;
+  db.prepare(`SELECT * FROM session_rows WHERE id = ?`).get(id) as Session;

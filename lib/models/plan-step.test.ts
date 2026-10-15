@@ -2,7 +2,7 @@ import fs from "fs";
 import os from "os";
 import path from "path";
 import { beforeEach, describe, expect, it, vi } from "vitest";
-import { db } from "../db";
+import { db, updateSessionRow } from "../db";
 import { listQueue } from "../chat/queued";
 import {
   seedOrchestrator,
@@ -39,16 +39,18 @@ function planningTask() {
     task: true,
   });
   const worktree = fs.mkdtempSync(path.join(os.tmpdir(), "plan-step-"));
-  db.prepare(
-    `UPDATE sessions SET worktree_path = ?, model = 'claude-opus-5-5', plan_phase = 'planning' WHERE id = ?`
-  ).run(worktree, id);
+  updateSessionRow(db, id, {
+    worktree_path: worktree,
+    model: "claude-opus-5-5",
+    plan_phase: "planning",
+  });
   return { id, worktree };
 }
 
 const row = (id: string) =>
   db
     .prepare(
-      `SELECT model, model_provider, plan_phase FROM sessions WHERE id = ?`
+      `SELECT model, model_provider, plan_phase FROM session_rows WHERE id = ?`
     )
     .get(id);
 

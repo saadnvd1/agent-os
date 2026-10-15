@@ -78,7 +78,7 @@ vi.mock("../notify", () => ({
   notifyPhone: (_source: string, text: string) => phone.push(text),
 }));
 
-const { db } = await import("../db");
+const { db, updateSessionRow } = await import("../db");
 const { registry } = await import("../chat/registry");
 const { seedSession } = await import("../orchestrator/testing");
 const { createProject } = await import("../projects");
@@ -418,12 +418,12 @@ describe("message schedules: runs", () => {
   it.each([
     [
       "deleted",
-      `DELETE FROM sessions WHERE id = ?`,
+      (id: string) => db.prepare(`DELETE FROM sessions WHERE id = ?`).run(id),
       "session no longer exists",
     ],
     [
       "finished",
-      `UPDATE sessions SET task_status = 'done' WHERE id = ?`,
+      (id: string) => updateSessionRow(db, id, { task_status: "done" }),
       "session finished",
     ],
   ])(
@@ -431,7 +431,7 @@ describe("message schedules: runs", () => {
     async (_, gone, why) => {
       const { ws, sessionId, schedule } = setup();
       phone.length = 0;
-      db.prepare(gone).run(sessionId);
+      gone(sessionId);
       await tick(realDeps, at("2026-10-07T13:10:05Z"));
       await tick(realDeps, at("2026-10-07T13:20:05Z"));
       await tick(realDeps, at("2026-10-07T13:30:05Z"));

@@ -39,7 +39,7 @@ function pausedTask() {
 const row = (id: string) =>
   db
     .prepare(
-      `SELECT model, model_provider, model_overrides, claude_session_id, worktree_path FROM sessions WHERE id = ?`
+      `SELECT model, model_provider, model_overrides, claude_session_id, worktree_path FROM session_rows WHERE id = ?`
     )
     .get(id);
 

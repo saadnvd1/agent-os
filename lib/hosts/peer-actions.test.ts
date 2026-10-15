@@ -1,7 +1,7 @@
 import { randomUUID } from "crypto";
 import { afterEach, describe, expect, it } from "vitest";
 import { NextRequest } from "next/server";
-import { db, type Session } from "../db";
+import { db, type Session, insertSessionRow } from "../db";
 import { fakePeer } from "../__fixtures__/fake-peer";
 import { linkedHost } from "../__fixtures__/linked-host";
 import { doneSession } from "../done";
@@ -44,7 +44,7 @@ const listed = (hostId: string, id: string, extra: object = {}) =>
 const later = () => Date.now() + 2000;
 
 const row = (id: string) =>
-  db.prepare(`SELECT * FROM sessions WHERE id = ?`).get(id) as
+  db.prepare(`SELECT * FROM session_rows WHERE id = ?`).get(id) as
     | Session
     | undefined;
 
@@ -142,10 +142,14 @@ describe("syncPeerMirrors", () => {
     cleanups.push(() =>
       db.prepare(`DELETE FROM sessions WHERE id = ?`).run(mine)
     );
-    db.prepare(
-      `INSERT INTO sessions (id, name, tmux_name, working_directory, host_id, task_prompt)
-       VALUES (?, 'task', 'claude-y', '~', ?, 'do it')`
-    ).run(task, hostId);
+    insertSessionRow(db, {
+      id: task,
+      name: "task",
+      tmux_name: "claude-y",
+      working_directory: "~",
+      host_id: hostId,
+      task_prompt: "do it",
+    });
     syncPeerMirrors(
       hostId,
       [listed(hostId, mine, { name: "theirs" })],

@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { db } from "../db";
+import { db, updateSessionRow } from "../db";
 import { amendBrief } from "../orchestrator/amendments";
 import { seedSession, seedWorkspace } from "../orchestrator/testing";
 import { compactContext } from "./compact-context";
@@ -9,10 +9,7 @@ describe("compactContext", () => {
   const taskWith = (prompt: string) => {
     const ws = seedWorkspace();
     const id = seedSession({ projectId: ws.app.id, name: "t", task: true });
-    db.prepare(`UPDATE sessions SET task_prompt = ? WHERE id = ?`).run(
-      prompt,
-      id
-    );
+    updateSessionRow(db, id, { task_prompt: prompt });
     return { ws, id };
   };
 

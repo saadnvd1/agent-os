@@ -1,5 +1,5 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
-import { db } from "@/lib/db";
+import { db, updateSessionRow } from "@/lib/db";
 import { seedSession, seedWorkspace } from "@/lib/orchestrator/testing";
 import { updateWorkspace } from "@/lib/workspaces";
 import { resetMachineStarts } from "@/lib/load/start-gate";
@@ -55,7 +55,7 @@ const { ensureOrchestrator } = await import("@/lib/orchestrator/home");
 const settle = () => new Promise((r) => setTimeout(r, 20));
 const sess = (id: string) =>
   db
-    .prepare(`SELECT pause_state, pause_note FROM sessions WHERE id = ?`)
+    .prepare(`SELECT pause_state, pause_note FROM session_rows WHERE id = ?`)
     .get(id) as { pause_state: string | null; pause_note: string | null };
 
 // A workspace at its limit of 3 running tasks, one of them paused (and so
@@ -176,9 +176,10 @@ describe("a timed resume", () => {
     await sweepPauses();
     await tickOnce();
     expect(released).not.toContain(t.paused);
-    db.prepare(
-      `UPDATE sessions SET task_status = 'merged' WHERE name = 'a'`
-    ).run();
+    for (const { id } of db
+      .prepare(`SELECT id FROM sessions WHERE name = 'a'`)
+      .all() as { id: string }[])
+      updateSessionRow(db, id, { task_status: "merged" });
     await tickOnce();
     expect(released).toContain(t.paused);
     expect(sess(t.paused).pause_note).toBeNull();

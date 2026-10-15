@@ -2,13 +2,13 @@ import fs from "fs";
 import os from "os";
 import path from "path";
 import { describe, expect, it } from "vitest";
-import { db, type Session } from "../db";
+import { db, updateSessionRow, type Session } from "../db";
 import { saveItem } from "../chat/store";
 import { seedSession, seedWorkspace } from "../orchestrator/testing";
 import { PLAN_TEXT_MAX } from "./loop-types";
 import { planTitle, taskPlan } from "./plan-view";
 
-const make = (set: string, ...args: unknown[]) => {
+const make = (set: Record<string, string | number | null> = {}) => {
   const { app } = seedWorkspace();
   const id = seedSession({
     projectId: app.id,
@@ -16,9 +16,10 @@ const make = (set: string, ...args: unknown[]) => {
     view: "chat",
     task: true,
   });
-  if (set)
-    db.prepare(`UPDATE sessions SET ${set} WHERE id = ?`).run(...args, id);
-  return db.prepare(`SELECT * FROM sessions WHERE id = ?`).get(id) as Session;
+  updateSessionRow(db, id, set);
+  return db
+    .prepare(`SELECT * FROM session_rows WHERE id = ?`)
+    .get(id) as Session;
 };
 const worktree = (plan?: string) => {
   const dir = fs.mkdtempSync(path.join(os.tmpdir(), "aos-plan-"));
@@ -31,12 +32,12 @@ const worktree = (plan?: string) => {
 
 describe("taskPlan", () => {
   it("is null when nothing says there is or isn't a plan", () => {
-    expect(taskPlan(make(""))).toBeNull();
+    expect(taskPlan(make())).toBeNull();
   });
 
   it("keeps today's decision with no document", () => {
     expect(
-      taskPlan(make("plan_decided = 0, plan_reason = 'tiny'"))
+      taskPlan(make({ plan_decided: 0, plan_reason: "tiny" }))
     ).toMatchObject({
       planned: false,
       reason: "tiny",
@@ -47,9 +48,7 @@ describe("taskPlan", () => {
 
   it("is writing while the plan step runs", () => {
     const dir = worktree();
-    const plan = taskPlan(
-      make("plan_phase = 'planning', worktree_path = ?", dir)
-    );
+    const plan = taskPlan(make({ plan_phase: "planning", worktree_path: dir }));
     expect(plan).toMatchObject({
       status: "writing",
       source: "step",
@@ -60,10 +59,11 @@ describe("taskPlan", () => {
   it("is approved once the step moved on, with title, path and capped text", () => {
     const dir = worktree("# Add the widget\n" + "line\n".repeat(2000));
     const plan = taskPlan(
-      make(
-        "plan_phase = 'implementing', plan_decided = 1, worktree_path = ?",
-        dir
-      )
+      make({
+        plan_phase: "implementing",
+        plan_decided: 1,
+        worktree_path: dir,
+      })
     )!;
     expect(plan).toMatchObject({
       status: "approved",
@@ -76,7 +76,7 @@ describe("taskPlan", () => {
   });
 
   it("is ready for a chat's plan until it is carried out", () => {
-    const s = make("chat_plan = 1");
+    const s = make({ chat_plan: 1 });
     saveItem(s.id, {
       id: "plan-1",
       kind: "plan",

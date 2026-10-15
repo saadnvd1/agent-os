@@ -1,6 +1,6 @@
 import fs from "fs";
 import { beforeEach, describe, expect, it, vi } from "vitest";
-import { db } from "@/lib/db";
+import { db, insertSessionRow, updateSessionRow } from "@/lib/db";
 import { git, makeRepo } from "@/lib/done/testing";
 import type { FindPROpts } from "./gh";
 import {
@@ -262,7 +262,7 @@ describe("prFor after the task's branch was renamed", () => {
     const r = makeRepo();
     const wt = r.worktree("feature/mine", { "work.txt": "task work\n" });
     const task = seedTask(r.repo, "feature/mine", wt.dir);
-    db.prepare(`UPDATE sessions SET pr_number = 150 WHERE id = ?`).run(task.id);
+    updateSessionRow(db, task.id, { pr_number: 150 });
     prs.set("feature/mine", fakePR(151, { head: wt.head }));
 
     expect((await prFor(taskRow(task.id), true))?.number).toBe(151);
@@ -273,9 +273,10 @@ describe("prFor after the task's branch was renamed", () => {
     const r = makeRepo();
     const wt = r.worktree("feature/mine");
     const task = seedTask(r.repo, "feature/mine", wt.dir);
-    db.prepare(
-      `UPDATE sessions SET created_at = '2026-10-07 11:00:00', pr_number = 9 WHERE id = ?`
-    ).run(task.id);
+    updateSessionRow(db, task.id, {
+      created_at: "2026-10-07 11:00:00",
+      pr_number: 9,
+    });
 
     await prFor(taskRow(task.id), true);
     expect(lookups[0].since).toBe("2026-10-07T11:00:00Z");
@@ -322,7 +323,7 @@ describe("prFor after the task's branch was renamed", () => {
     const r = makeRepo();
     const wt = r.worktree("feature/same", { "work.txt": "task work\n" });
     const task = seedTask(r.repo, "feature/same", wt.dir);
-    db.prepare(`UPDATE sessions SET pr_number = 3 WHERE id = ?`).run(task.id);
+    updateSessionRow(db, task.id, { pr_number: 3 });
     ghDown = true;
 
     await expect(prFor(taskRow(task.id), true, true)).rejects.toThrow(/502/);

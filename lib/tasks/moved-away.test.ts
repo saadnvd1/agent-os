@@ -23,7 +23,7 @@ vi.mock("../async-operations", () => ({
   runInBackground: (task: () => Promise<void>) => void task(),
 }));
 
-import { db } from "../db";
+import { db, insertSessionRow, updateSessionRow } from "../db";
 import { DEVICE_HEADER } from "../security/auth";
 import { cleanUpMovedAway } from "./moved-away";
 import { POST as moved } from "@/app/api/tasks/[id]/moved/route";
@@ -46,9 +46,11 @@ afterAll(() => {
 // A held task whose work went back to the machine that sent it.
 async function away(branch: string) {
   const t = await seed(f, WT_ROOT, branch);
-  db.prepare(
-    `UPDATE sessions SET task_status = 'moved', held_by_device = 'dev-1', held_from = 'mac' WHERE id = ?`
-  ).run(t.id);
+  updateSessionRow(db, t.id, {
+    task_status: "moved",
+    held_by_device: "dev-1",
+    held_from: "mac",
+  });
   return t;
 }
 // Its work committed and on a remote, as a move leaves it.
@@ -115,9 +117,7 @@ describe("POST /api/tasks/:id/moved on a held task", () => {
   it("tidies up for the holder, and does nothing for another device", async () => {
     const t = await seed(f, WT_ROOT, "feature/away-route");
     pushed(t.cwd, "feature/away-route");
-    db.prepare(
-      `UPDATE sessions SET held_by_device = 'dev-1', held_from = 'mac' WHERE id = ?`
-    ).run(t.id);
+    updateSessionRow(db, t.id, { held_by_device: "dev-1", held_from: "mac" });
     expect((await call(t.id, "dev-2")).status).toBe(403);
     expect(fs.existsSync(t.cwd)).toBe(true);
     expect((await call(t.id, "dev-1")).status).toBe(200);
@@ -125,7 +125,7 @@ describe("POST /api/tasks/:id/moved on a held task", () => {
     expect(
       (
         db
-          .prepare(`SELECT task_status FROM sessions WHERE id = ?`)
+          .prepare(`SELECT task_status FROM session_rows WHERE id = ?`)
           .get(t.id) as {
           task_status: string;
         }

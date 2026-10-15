@@ -14,7 +14,7 @@ vi.mock("@/lib/tasks", async (orig) => ({
   },
 }));
 
-const { db } = await import("@/lib/db");
+const { db, updateSessionRow } = await import("@/lib/db");
 const { createHost } = await import("@/lib/hosts");
 const { ensureOrchestrator } = await import("./home");
 const { runTool } = await import("./serve");
@@ -31,9 +31,7 @@ function setup() {
   const ws = seedWorkspace();
   const orch = ensureOrchestrator(ws.workspace.id);
   createHost("box", "alice@devbox");
-  db.prepare(
-    `UPDATE sessions SET started_by = ?, task_prompt = 'x' WHERE id = ?`
-  ).run(orch.id, ws.task);
+  updateSessionRow(db, ws.task, { started_by: orch.id, task_prompt: "x" });
   return { ...ws, orch };
 }
 
