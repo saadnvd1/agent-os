@@ -283,3 +283,4 @@
 - A daily drift digest, only when something happened.
 - A Haiku pre-filter before the Sonnet wake.
 - Load detection for linked machines, not just this one.
+- An idempotency key on `/api/bus/send` (deduped by the server) so `aos send` can also retry when the connection drops after the request was sent.
