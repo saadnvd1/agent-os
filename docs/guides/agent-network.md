@@ -57,7 +57,7 @@ message waits in the recipient's `aos inbox`.
 
 When AgentOS is restarting, `aos` waits for it to come back (up to 60 seconds,
 backing off) and says so once on stderr. A refused connection is retried for
-every command; a dropped connection or a proxy's bare 502/503 only for reads,
+every command; a dropped connection or a proxy's bare 502/503 only for reads that change nothing (not the inbox),
 so a message is never sent twice. 4xx and other real errors are not retried.
 `AOS_RETRY_SECONDS` shortens the wait, and `0` turns it off.
 

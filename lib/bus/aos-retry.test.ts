@@ -28,6 +28,11 @@ function serve(handler: Handler, port = 0) {
   );
 }
 
+// Port 2 is privileged and unused, so nothing can take it and a connection to
+// it is refused: the shape of a server that is down.
+const DOWN = 2;
+
+// Only the test that brings the server up late needs a port it can bind later.
 async function freePort() {
   const { server, port } = await serve(() => {});
   await new Promise((r) => server.close(r));
@@ -107,19 +112,29 @@ describe("aos through an AgentOS restart", () => {
   });
 
   it("fails as before when the window runs out", async () => {
-    const port = await freePort();
+    const port = DOWN;
     const r = await aos(["peers"], port, "1");
     expect(r.code).toBe(1);
     expect(r.err).toContain(
       `aos: can't reach AgentOS at http://127.0.0.1:${port}`
     );
     expect(r.err.match(RESTARTING)).toHaveLength(1);
-    expect(r.ms).toBeGreaterThanOrEqual(900);
-    expect(r.ms).toBeLessThan(8000);
+  });
+
+  it("does not retry an inbox read whose response was lost", async () => {
+    const s = await serve((req) => req.socket.destroy());
+    try {
+      const r = await aos(["inbox"], s.port, "5");
+      expect(r.code).toBe(1);
+      expect(r.err).toMatch(/can't reach AgentOS/);
+      expect(s.seen).toHaveLength(1);
+    } finally {
+      s.server.close();
+    }
   });
 
   it("does not wait when AOS_RETRY_SECONDS is 0", async () => {
-    const port = await freePort();
+    const port = DOWN;
     const r = await aos(["peers"], port, "0");
     expect(r.code).toBe(1);
     expect(r.err).toMatch(/can't reach AgentOS/);

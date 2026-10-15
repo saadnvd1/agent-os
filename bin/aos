@@ -100,8 +100,14 @@ const dropped = (err) =>
     ["ECONNRESET", "UND_ERR_SOCKET", "EPIPE"].includes(c)
   );
 
+// GETs that change nothing, so a lost response can be fetched again. Other GETs
+// (the inbox marks what it returns as read) are retried only on a refusal.
+const PURE_READS =
+  /^\/api\/(bus\/(peers|messages|docs)|tasks\/queue|stacks|schedules)(\/|\?|$)/;
+
 async function call(path, init = {}) {
-  const reads = !init.method || ["GET", "HEAD"].includes(init.method);
+  const reads =
+    (!init.method || init.method === "GET") && PURE_READS.test(path);
   const window = retryWindowMs();
   const started = Date.now();
   let delay = 500;
