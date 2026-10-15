@@ -44,6 +44,8 @@ import { launchClaude } from "../agents/launch";
 import { PLAN_FILE, preparePlanDir } from "../models/plan-step";
 import { planFromTranscript } from "./plan";
 import { dropSnapshot, restoreWorktree, type RestoredAs } from "./snapshot";
+import { restoreSwept, sweptNote } from "./swept";
+import { forgetSwept } from "../worktree-sweep/store";
 import { setPr, setTask } from "../db/session-parts";
 
 export interface ResurrectOptions {
@@ -69,6 +71,7 @@ const ENDED_TASK = new Set(["dropped", "done"]);
 // Restores in flight here, so two clicks can't both build a worktree.
 const g = globalThis as unknown as { __agentosResurrecting?: Set<string> };
 const inFlight = (g.__agentosResurrecting ??= new Set());
+export const restoring = (id: string) => inFlight.has(id);
 
 interface PrInfo {
   number: number;
@@ -124,12 +127,22 @@ export async function resurrectSession(
   // restoring it is the whole of it.
   if (!endedTask || (s.archived_at && s.task_status !== "dropped")) {
     if (s.archived_at) {
+      const swept = await restoreSwept(s);
       unarchiveSession(id);
-      return outcome(s, "unarchived", `${s.name} is back in the sidebar.`);
+      return outcome(
+        s,
+        "unarchived",
+        `${s.name} is back in the sidebar${swept ? `; ${swept}` : ""}.`
+      );
     }
     if (s.settled_at) {
+      const swept = await restoreSwept(s);
       reopenSession(id);
-      return outcome(s, "reopened", `${s.name} reopened.`);
+      return outcome(
+        s,
+        "reopened",
+        `${s.name} reopened${swept ? `; ${swept}` : ""}.`
+      );
     }
     throw new Error(`${s.name} isn't dropped, done or archived.`);
   }
@@ -357,6 +370,11 @@ async function bringBack(
   if (restored && after.view !== "chat") await relaunch(after, restored.path);
   syncTaskCardInBackground(after, "working", null);
   void dropSnapshot(repo, s.id);
+  const swept = sweptNote(s.id);
+  if (swept) {
+    notes.unshift(swept);
+    forgetSwept(s.id);
+  }
   const text = `${s.name} is back${restored ? ` in ${restored.path}` : ""}${reopened ? `, PR #${reopened} reopened` : ""}${notes.length ? `; ${notes.join("; ")}` : ""}.`;
   return outcome(s, "task", text, {
     worktree: restored?.mode ?? "chat-only",

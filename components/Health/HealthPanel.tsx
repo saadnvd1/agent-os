@@ -19,14 +19,16 @@ import {
   type CheckSummary,
 } from "@/lib/health/view";
 import { cn } from "@/lib/utils";
+import { SweepRuns } from "./SweepRuns";
 
-const TABS = ["open", "history", "notes", "thresholds"] as const;
+const TABS = ["open", "history", "notes", "thresholds", "cleanup"] as const;
 type Tab = (typeof TABS)[number];
 const TAB_LABEL: Record<Tab, string> = {
   open: "Open",
   history: "History",
   notes: "Notes",
   thresholds: "Thresholds",
+  cleanup: "Clean-up",
 };
 
 const tokens = (n: number) =>
@@ -407,6 +409,7 @@ export function HealthPanel() {
       )}
       {tab === "notes" && <Notes />}
       {tab === "thresholds" && <Thresholds />}
+      {tab === "cleanup" && <SweepRuns />}
     </div>
   );
 }

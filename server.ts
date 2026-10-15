@@ -18,6 +18,7 @@ import { recordBoot } from "./lib/health/boots";
 import { realDeps, schedulesEnabled, startScheduler } from "./lib/schedules";
 import { startSettling } from "./lib/recipes";
 import { startAutoArchive } from "./lib/done/auto-archive";
+import { startWorktreeSweep } from "./lib/worktree-sweep/start";
 import { startUsageRollup, usageRollupEnabled } from "./lib/usage/nightly";
 import { resumePhoneOutbox } from "./lib/notify";
 import { resumePushOutbox } from "./lib/notify/push";
@@ -445,6 +446,8 @@ app.prepare().then(async () => {
   startSettling();
   // Sessions that sat in Done for 30 days are archived.
   startAutoArchive();
+  // Settled worktrees older than the setting are removed; branches stay.
+  startWorktreeSweep();
   resumePhoneOutbox();
   resumePushOutbox();
   // The usage ledger's daily rollup and its ratchet alerts.

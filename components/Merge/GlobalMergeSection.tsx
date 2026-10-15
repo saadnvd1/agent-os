@@ -11,6 +11,7 @@ import {
 } from "@/lib/tasks/merge-methods";
 import { MergeApprovalToggle } from "./MergeApprovalToggle";
 import { MergeSettingsFields } from "./MergeSettingsFields";
+import { GlobalSweepSection } from "./WorktreeSweepSection";
 
 // "rebase, keeps worktree"
 function describe(s: MergeSettings): string {
@@ -85,6 +86,7 @@ export function GlobalMergeSection() {
         )}
       </div>
       {data && <Overrides overrides={data.overrides} />}
+      <GlobalSweepSection />
     </div>
   );
 }
