@@ -8,7 +8,8 @@ import { experimentOn } from "../experiments";
 import { getOrchestrator } from "../orchestrator/home";
 import { quickPR, startQuickChange } from "../orchestrator/quick";
 import { addRule } from "../orchestrator/rules";
-import { isRemoteHost } from "../hosts";
+import { hostExec, isRemoteHost } from "../hosts";
+import { shellQuote } from "../hosts/ssh";
 import { getProject } from "../projects";
 import { createRecipe, getRecipe, updateRecipe } from "../recipes/store";
 import { recipePrefill } from "../recipes/draft";
@@ -48,6 +49,22 @@ export function withLesson(text: string, line: string): string {
 const clean = (s: string | undefined, max: number) =>
   (s ?? "").replace(/\s+/g, " ").trim().slice(0, max);
 
+// Whether the remote checkout ignores CLAUDE.md; null when it can't be told.
+async function remoteIgnores(hostId: string, dir: string) {
+  const rest = dir.replace(/^~/, "");
+  const cd = rest === dir ? shellQuote(dir) : `"$HOME"${shellQuote(rest)}`;
+  try {
+    const { stdout } = await hostExec(
+      hostId,
+      `cd ${cd} && git check-ignore -q CLAUDE.md; echo $?`
+    );
+    const code = stdout.trim().split("\n").pop();
+    return code === "0" ? true : code === "1" ? false : null;
+  } catch {
+    return null;
+  }
+}
+
 async function toClaudeMd(card: Card, p: LessonPayload, line: string) {
   const project = p.projectId ? getProject(p.projectId) : null;
   if (!project) throw new CardRefused("That project is gone");
@@ -59,18 +76,25 @@ async function toClaudeMd(card: Card, p: LessonPayload, line: string) {
   )?.name;
   // Ignored CLAUDE.md is local dev notes: a worktree never has it, so a quick
   // change or task would have nothing to commit and no PR could open.
-  if (
-    !isRemoteHost(project.host_id) &&
-    (await gitOk(expandHome(project.working_directory), [
+  if (isRemoteHost(project.host_id)) {
+    if (
+      (await remoteIgnores(project.host_id, project.working_directory)) !==
+      false
+    )
+      throw new CardRefused(
+        `${project.name} runs on another machine and its CLAUDE.md is gitignored or can't be checked; add the lesson there by hand`
+      );
+  } else if (
+    await gitOk(expandHome(project.working_directory), [
       "check-ignore",
       "-q",
       "CLAUDE.md",
-    ]))
+    ])
   ) {
     const file = path.join(expandHome(project.working_directory), "CLAUDE.md");
     const before = fs.existsSync(file) ? fs.readFileSync(file, "utf8") : "";
     fs.writeFileSync(file, withLesson(before, line));
-    return file;
+    return "CLAUDE.md";
   }
   if (
     workspaceId &&
