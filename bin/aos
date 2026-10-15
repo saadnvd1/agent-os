@@ -56,6 +56,9 @@ const usage = `aos: talk to other agent sessions in AgentOS
   aos done --all-idle                clean up (done, then archive) every idle or
                                      stopped session there; never merges, lists
                                      open PRs instead
+  aos branches prune [--yes]         list the stale remote branches of your workspace's
+                                     task PRs (merged or closed, head unchanged);
+                                     --yes deletes them (default is a dry run)
   aos archive <session>              put a session away, out of the sidebar (still
                                      in Archived, and Unarchive brings it back);
                                      refused while it works or has an open PR
@@ -761,6 +764,20 @@ async function main() {
         session,
         allIdle,
       });
+      console.log(summary);
+      return;
+    }
+    case "branches": {
+      const flags = args.filter((a) => a.startsWith("--"));
+      const yes = flags.includes("--yes");
+      if (
+        args.find((a) => !a.startsWith("--")) !== "prune" ||
+        flags.some((f) => f !== "--yes" && f !== "--dry-run") ||
+        (yes && flags.includes("--dry-run"))
+      )
+        fail("usage: aos branches prune [--dry-run | --yes]");
+      needMe();
+      const { summary } = await post("/api/bus/branches", { from: me, yes });
       console.log(summary);
       return;
     }

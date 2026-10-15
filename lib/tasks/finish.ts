@@ -16,7 +16,8 @@ import { resolveMergedTaskAsks } from "../orchestrator/ask-settle";
 import { endSessionAgent } from "../sessions/end";
 import { run } from "./gh";
 import { pushMerged } from "../notify/push/events";
-import { gitFetch, gitPush } from "../git-exec";
+import { gitFetch } from "../git-exec";
+import { deleteTaskBranch } from "./remote-branch";
 import {
   mergePolicy,
   type MergeMethod,
@@ -40,9 +41,6 @@ import { snapshotWorktree } from "../resurrect/snapshot";
 import { keepSessionFiles } from "../session-artifacts/collect";
 import { setPr, setTask } from "../db/session-parts";
 
-// Never deleted, whatever a setting says.
-export const PROTECTED_BRANCHES = new Set(["main", "master", "HEAD"]);
-
 export const sessionMergePolicy = (session: Session): MergePolicy =>
   mergePolicy(session.project_id ? getProject(session.project_id) : null);
 
@@ -52,7 +50,12 @@ export const sessionMergePolicy = (session: Session): MergePolicy =>
 async function cleanup(
   session: Session,
   repo: string,
-  opts: { keepRemoteBranch?: boolean; merged?: MergedAs } = {}
+  opts: {
+    keepRemoteBranch?: boolean;
+    merged?: MergedAs;
+    // The head the PR merged or closed at.
+    prHead?: string | null;
+  } = {}
 ): Promise<void> {
   const keepRemoteBranch = opts.keepRemoteBranch ?? false;
   await endSessionAgent(session);
@@ -68,14 +71,13 @@ async function cleanup(
   }
   // A stacked child's PR targets this branch: deleting it on origin would
   // make GitHub close that PR, and a closed PR can't be retargeted.
-  if (
-    session.branch_name &&
-    !keepRemoteBranch &&
-    !PROTECTED_BRANCHES.has(session.branch_name)
-  ) {
-    await gitPush(repo, ["origin", "--delete", session.branch_name]).catch(
-      () => {}
-    );
+  if (session.branch_name && !keepRemoteBranch) {
+    await deleteTaskBranch({
+      repo,
+      branch: session.branch_name,
+      prHead: opts.prHead,
+      keep: [session.base_branch],
+    });
   }
   await gitFetch(repo, ["--prune", "--quiet"]).catch(() => {});
   forgetPR(session.id);
@@ -112,6 +114,7 @@ async function finishMerge(
   await cleanup(session, repo, {
     keepRemoteBranch: stuck || !policy.delete_remote_branch,
     merged: { prHead },
+    prHead,
   });
   // After cleanup's fetch, so the base branch holds the merged files.
   inBackground(`re-publish docs after task ${session.id}`, () =>
@@ -257,5 +260,5 @@ export async function dropTask(id: string): Promise<void> {
   ).run(id);
   syncTaskCardInBackground(session, "dropped", pr);
   await snapshot;
-  await cleanup(session, repo);
+  await cleanup(session, repo, { prHead: pr?.head });
 }
