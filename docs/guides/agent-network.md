@@ -55,6 +55,12 @@ will see it after its turn) or `FAILED: <why>` with exit code 2; a chat session
 counts as delivered once its worker records the message. Either way the
 message waits in the recipient's `aos inbox`.
 
+When AgentOS is restarting, `aos` waits for it to come back (up to 60 seconds,
+backing off) and says so once on stderr. A refused connection is retried for
+every command; a dropped connection or a proxy's bare 502/503 only for reads that change nothing (not the inbox),
+so a message is never sent twice. 4xx and other real errors are not retried.
+`AOS_RETRY_SECONDS` shortens the wait, and `0` turns it off.
+
 Sessions are addressed by name, `project/name`, id or a unique id prefix, and
 renaming one keeps its old names: a message to "Session 3" still reaches the
 session now called "orchestrator", and `aos peers` shows

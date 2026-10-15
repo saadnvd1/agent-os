@@ -80,20 +80,69 @@ const usage = `aos: talk to other agent sessions in AgentOS
 // Needed only when AgentOS is reached over a network that requires pairing.
 const token = process.env.AGENTOS_TOKEN;
 
+// AgentOS is briefly down on every restart. A refused connection never reached
+// the server, so any request can be retried; a dropped one may have been read,
+// so only reads are. A proxy's bare 502/503 is retried for reads too.
+const retryWindowMs = () => {
+  const raw = process.env.AOS_RETRY_SECONDS;
+  const secs = raw === undefined || raw === "" ? NaN : Number(raw);
+  return (Number.isFinite(secs) && secs >= 0 ? secs : 60) * 1000;
+};
+let warnedRetry = false;
+
+const codesOf = (err) => {
+  const c = err?.cause;
+  return [c?.code, ...(c?.errors ?? []).map((e) => e.code)];
+};
+const refused = (err) => codesOf(err).includes("ECONNREFUSED");
+const dropped = (err) =>
+  codesOf(err).some((c) =>
+    ["ECONNRESET", "UND_ERR_SOCKET", "EPIPE"].includes(c)
+  );
+
+// GETs that change nothing, so a lost response can be fetched again. Other GETs
+// (the inbox marks what it returns as read) are retried only on a refusal.
+const PURE_READS =
+  /^\/api\/(bus\/(peers|messages|docs)|tasks\/queue|stacks|schedules)(\/|\?|$)/;
+
 async function call(path, init = {}) {
-  let res;
-  try {
-    const headers = {
-      ...init.headers,
-      ...(token && { Authorization: `Bearer ${token}` }),
-    };
-    res = await fetch(url + path, { ...init, headers });
-  } catch {
-    fail(`can't reach AgentOS at ${url}`);
+  const reads =
+    (!init.method || init.method === "GET") && PURE_READS.test(path);
+  const window = retryWindowMs();
+  const started = Date.now();
+  let delay = 500;
+  const headers = {
+    ...init.headers,
+    ...(token && { Authorization: `Bearer ${token}` }),
+  };
+  for (;;) {
+    let res;
+    let data;
+    let retry = false;
+    try {
+      res = await fetch(url + path, { ...init, headers });
+      data = await res.json().catch(() => null);
+      retry =
+        reads &&
+        (res.status === 502 || res.status === 503) &&
+        typeof data?.error !== "string";
+    } catch (err) {
+      if (!refused(err) && !(reads && dropped(err)))
+        fail(`can't reach AgentOS at ${url}`);
+      retry = true;
+    }
+    const left = window - (Date.now() - started);
+    if (retry && left > 0) {
+      if (!warnedRetry) console.error("aos: AgentOS is restarting, retrying…");
+      warnedRetry = true;
+      await new Promise((r) => setTimeout(r, Math.min(delay, left)));
+      delay = Math.min(delay * 2, 8000);
+      continue;
+    }
+    if (!res) fail(`can't reach AgentOS at ${url}`);
+    if (!res.ok) fail(data?.error || `request failed (${res.status})`);
+    return data ?? {};
   }
-  const data = await res.json().catch(() => ({}));
-  if (!res.ok) fail(data.error || `request failed (${res.status})`);
-  return data;
 }
 
 const post = (path, body) =>
