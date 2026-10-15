@@ -77,7 +77,7 @@ describe("autodeploy restart gap", () => {
     t.commit("b");
     const c = t.commit("c");
     const held = t.run();
-    expect(held).toMatch(/HELD [0-9a-f]{7} \d+s left in the 600s restart gap/);
+    expect(held).toMatch(/HELD [0-9a-f]{7} \d+s left in the 3600s restart gap/);
     expect(t.deployed()).toBe(a);
     expect(t.restarts()).toBe(1);
     // Still waiting a minute later: no second log line for the same head.
@@ -86,7 +86,7 @@ describe("autodeploy restart gap", () => {
     // The gap ends: the head that was waiting goes out, once.
     fs.writeFileSync(
       path.join(t.state, "restarted"),
-      `${Math.floor(Date.now() / 1000) - 601}\n`
+      `${Math.floor(Date.now() / 1000) - 3601}\n`
     );
     expect(t.run()).toContain("Deploying");
     expect(t.deployed()).toBe(c);
