@@ -12,7 +12,9 @@ import { isRemoteHost } from "../hosts";
 import { getProject } from "../projects";
 import { createRecipe, getRecipe, updateRecipe } from "../recipes/store";
 import { recipePrefill } from "../recipes/draft";
-import { createTask } from "../tasks";
+import { createTask, dropTask } from "../tasks";
+import { gitOk } from "../git-exec";
+import { expandHome } from "../tasks/session";
 import { claimCard, getCard, releaseCard, settleCard } from "./store";
 import type { Card, LessonPayload, RecipePayload } from "./types";
 
@@ -55,6 +57,21 @@ async function toClaudeMd(card: Card, p: LessonPayload, line: string) {
       .prepare(`SELECT name FROM sessions WHERE id = ?`)
       .get(card.session_id) as { name: string } | undefined
   )?.name;
+  // Ignored CLAUDE.md is local dev notes: a worktree never has it, so a quick
+  // change or task would have nothing to commit and no PR could open.
+  if (
+    !isRemoteHost(project.host_id) &&
+    (await gitOk(expandHome(project.working_directory), [
+      "check-ignore",
+      "-q",
+      "CLAUDE.md",
+    ]))
+  ) {
+    const file = path.join(expandHome(project.working_directory), "CLAUDE.md");
+    const before = fs.existsSync(file) ? fs.readFileSync(file, "utf8") : "";
+    fs.writeFileSync(file, withLesson(before, line));
+    return file;
+  }
   if (
     workspaceId &&
     getOrchestrator(workspaceId) &&
@@ -68,12 +85,17 @@ async function toClaudeMd(card: Card, p: LessonPayload, line: string) {
     const file = path.join(quick.worktreePath, "CLAUDE.md");
     const before = fs.existsSync(file) ? fs.readFileSync(file, "utf8") : "";
     fs.writeFileSync(file, withLesson(before, line));
-    await quickPR(
-      workspaceId,
-      quick.id,
-      "docs: add a lesson to CLAUDE.md",
-      `${line}${source ? `\n\nFrom the session "${source}".` : ""}`
-    );
+    try {
+      await quickPR(
+        workspaceId,
+        quick.id,
+        "docs: add a lesson to CLAUDE.md",
+        `${line}${source ? `\n\nFrom the session "${source}".` : ""}`
+      );
+    } catch (e) {
+      await dropTask(quick.id).catch(() => {});
+      throw e;
+    }
     return quick.id;
   }
   const task = await createTask({
