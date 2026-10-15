@@ -273,6 +273,11 @@ export interface QueuedMessage {
 export interface FileSuggestion {
   path: string;
   dir: boolean;
+  // An orchestrator's picker searches several folders: `path` is then
+  // absolute, `source` names the folder it came from ("HQ", a project) and
+  // `rel` is the path inside it.
+  source?: string;
+  rel?: string;
 }
 
 // Waiting: a turn is paused on the reader (an approval or a question).

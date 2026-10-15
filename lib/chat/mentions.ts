@@ -37,6 +37,9 @@ export interface IndexedPath {
   lower: string;
   name: string;
   depth: number;
+  // Modified time in ms, where the index knows it: newer ranks first among
+  // equal matches.
+  mtime?: number;
 }
 
 export function indexPaths(files: FileSuggestion[]): IndexedPath[] {
@@ -68,16 +71,48 @@ function score(q: string, p: IndexedPath): number {
   return 10;
 }
 
-// Ahead of b: a better score, then a shallower path, then alphabetical.
-const ahead = (
-  a: { s: number; p: IndexedPath },
-  b: { s: number; p: IndexedPath }
-) =>
+// Ahead of b: a better score, then the more recently modified, then a
+// shallower path, then alphabetical.
+export interface Scored {
+  s: number;
+  p: IndexedPath;
+}
+export const ahead = (a: Scored, b: Scored) =>
   a.s !== b.s
     ? a.s > b.s
-    : a.p.depth !== b.p.depth
-      ? a.p.depth < b.p.depth
-      : a.p.lower < b.p.lower;
+    : (a.p.mtime ?? 0) !== (b.p.mtime ?? 0)
+      ? (a.p.mtime ?? 0) > (b.p.mtime ?? 0)
+      : a.p.depth !== b.p.depth
+        ? a.p.depth < b.p.depth
+        : a.p.lower < b.p.lower;
+
+// One pass over an index: the best `limit` matches, best first, how many
+// entries were looked at, and (when asked) every entry that matched, so the
+// next keystroke of the same query can look at those alone: whatever
+// matches "fil" also matches "file". `boost` raises every score of a folder
+// that should win ties, not for an empty query where recency is the point.
+export function scanPaths(
+  query: string,
+  indexed: IndexedPath[],
+  opts: { limit?: number; keep?: boolean; boost?: number } = {}
+): { top: Scored[]; matches: IndexedPath[] | null; scanned: number } {
+  const limit = opts.limit ?? 15;
+  const boost = query ? (opts.boost ?? 0) : 0;
+  const top: Scored[] = [];
+  const matches: IndexedPath[] | null = opts.keep ? [] : null;
+  for (const p of indexed) {
+    const raw = score(query, p);
+    if (raw === 0) continue;
+    matches?.push(p);
+    const x = { s: raw + boost, p };
+    if (top.length === limit && !ahead(x, top[top.length - 1])) continue;
+    let i = top.length;
+    while (i > 0 && ahead(x, top[i - 1])) i--;
+    top.splice(i, 0, x);
+    if (top.length > limit) top.pop();
+  }
+  return { top, matches, scanned: indexed.length };
+}
 
 // Best matches first, then shorter paths; for when the agent can't be asked.
 // Keeps only the top few as it goes: a folder can hold tens of thousands of
@@ -87,23 +122,32 @@ export function rankPaths(
   files: FileSuggestion[] | IndexedPath[],
   limit = 15
 ): FileSuggestion[] {
-  const q = query.toLowerCase();
   const indexed =
     files.length && "lower" in files[0]
       ? (files as IndexedPath[])
       : indexPaths(files as FileSuggestion[]);
-  const top: { s: number; p: IndexedPath }[] = [];
-  for (const p of indexed) {
-    const s = score(q, p);
-    if (s === 0) continue;
-    const x = { s, p };
-    if (top.length === limit && !ahead(x, top[top.length - 1])) continue;
-    let i = top.length;
-    while (i > 0 && ahead(x, top[i - 1])) i--;
-    top.splice(i, 0, x);
-    if (top.length > limit) top.pop();
-  }
-  return top.map((x) => x.p.file);
+  return scanPaths(query.toLowerCase(), indexed, { limit }).top.map(
+    (x) => x.p.file
+  );
+}
+
+// How a suggestion reads in the "@" menu: its name, and where it lives. An
+// orchestrator's results lead the hint with their source ("HQ · docs").
+export function mentionOption(f: FileSuggestion): {
+  label: string;
+  hint?: string;
+} {
+  const label = `${f.path.slice(f.path.lastIndexOf("/") + 1)}${f.dir ? "/" : ""}`;
+  if (f.source === undefined)
+    return {
+      label,
+      hint: f.path.includes("/")
+        ? f.path.slice(0, f.path.lastIndexOf("/"))
+        : undefined,
+    };
+  const rel = f.rel ?? "";
+  const parent = rel.includes("/") ? rel.slice(0, rel.lastIndexOf("/")) : "";
+  return { label, hint: parent ? `${f.source} · ${parent}` : f.source };
 }
 
 // Every folder a file list implies, alongside the files themselves.

@@ -16,6 +16,7 @@ import {
   type TextAttachment,
 } from "@/lib/chat/paste";
 import { insertCommand, rankCommands, slashQuery } from "@/lib/chat/commands";
+import { mentionOption } from "@/lib/chat/mentions";
 import { cn } from "@/lib/utils";
 import { loadDraft, useSaveDraft } from "../useDraft";
 import { ComposerMenu, type MenuOption } from "../ComposerMenu";
@@ -189,10 +190,7 @@ export function ComposerBody({
       : mentions.files.map((f) => ({
           key: `${f.dir ? "d" : "f"}:${f.path}`,
           // The name first, so two long paths never read the same.
-          label: `${f.path.slice(f.path.lastIndexOf("/") + 1)}${f.dir ? "/" : ""}`,
-          hint: f.path.includes("/")
-            ? f.path.slice(0, f.path.lastIndexOf("/"))
-            : undefined,
+          ...mentionOption(f),
           icon: f.dir ? (
             <Folder className="text-muted-foreground h-3.5 w-3.5 shrink-0" />
           ) : (
