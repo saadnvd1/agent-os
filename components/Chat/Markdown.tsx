@@ -49,6 +49,7 @@ const components: Components = {
           href={local ? imageUrl(href) : href}
           target="_blank"
           rel="noreferrer"
+          className="chat-link"
         >
           {children}
         </a>

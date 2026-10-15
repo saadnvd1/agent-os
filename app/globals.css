@@ -110,6 +110,34 @@
     0 0 0 4px hsl(var(--primary) / 0.15);
 }
 
+/* One look for every link in the chat feed: it reacts to hover, keyboard focus
+   and touch (:active), since a phone has no hover. */
+@utility chat-link {
+  cursor: pointer;
+  overflow-wrap: anywhere;
+  border-radius: 0.125rem;
+  text-decoration-line: underline;
+  text-decoration-thickness: 1px;
+  text-underline-offset: 2px;
+  transition:
+    color 120ms,
+    background-color 120ms,
+    text-decoration-thickness 120ms;
+  &:hover {
+    color: hsl(var(--primary));
+    background-color: hsl(var(--primary) / 0.1);
+    text-decoration-thickness: 2px;
+  }
+  &:active {
+    color: hsl(var(--primary));
+    background-color: hsl(var(--primary) / 0.2);
+  }
+  &:focus-visible {
+    outline: 2px solid hsl(var(--ring));
+    outline-offset: 2px;
+  }
+}
+
 @utility label-mono {
   font-family: var(--font-geist-mono);
   font-size: 0.6875rem;

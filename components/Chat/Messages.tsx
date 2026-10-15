@@ -42,7 +42,7 @@ function UserLink({ href }: { href: string }) {
       target={id ? undefined : "_blank"}
       rel={id ? undefined : "noopener noreferrer"}
       onClick={id ? (e) => openSessionLink(e, id) : undefined}
-      className="font-medium [overflow-wrap:anywhere] underline underline-offset-2"
+      className="chat-link font-medium"
     >
       {href}
     </a>
