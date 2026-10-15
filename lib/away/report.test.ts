@@ -255,7 +255,7 @@ describe("why a task is still in flight", () => {
         ],
         askKinds: ["decision"],
       })
-    ).toBe("with you: the ci gate failed twice");
+    ).toBe("with you: the ci gate kept failing (the loop guard)");
     expect(inFlightWhy({ ...base, askKinds: ["gate"] })).toBe(
       "waiting on your answer (gate)"
     );

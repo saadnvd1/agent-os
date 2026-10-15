@@ -4,8 +4,9 @@
  * anything touching CI config, build and hook scripts, agent config, deploys
  * or secrets handling goes to Saad whatever the gates say. A repository with
  * no CI (decided from the repository, never from one head with no checks)
- * and a gate failing on two different commits go to him either way. Once a
- * task is with Saad the orchestrator doesn't merge it; he signs it off or drops it.
+ * and a task the loop guard finds stuck (loop-guard.ts) go to him either
+ * way. Once a task is with Saad the orchestrator doesn't merge it; he signs
+ * it off or drops it.
  */
 
 import { MERGED_AS, type MergeMethod } from "../tasks/merge-policy";
@@ -28,9 +29,17 @@ import { countFailure, escalate } from "./escalate";
 import {
   ciGate,
   evaluateGates,
+  failureCounted,
   holdingEscalations,
+  recordPass,
   type GateInput,
+  type GateOutcome,
 } from "./gates";
+import {
+  readCiSignature,
+  reasonSignature,
+  reviewSignature,
+} from "./loop-guard";
 import { addNote } from "./notes";
 import { latestApproval, refundApproval, spendApproval } from "./ask-approvals";
 import { workSubject } from "./asks";
@@ -121,6 +130,7 @@ export async function judge(
     async () => ({
       checks: pr.checks,
       failing: pr.failing,
+      failingUrl: pr.failingUrl,
       settleIn: ciSettleIn({
         workspaceId,
         taskId: task.id,
@@ -257,15 +267,41 @@ export async function gateVerdict(
   const waiting = outcomes.filter((o) => o.state === "wait");
   if (!failed.length && !waiting.length)
     return { ok: true, sha, pr: pr.number };
-  const lines = [
-    ...failed.map((o) =>
-      opts.count === false
-        ? `- ${o.gate} failed: ${o.reason}`
-        : countFailure(workspaceId, work, o, pr.url, sha).line
-    ),
-    ...waiting.map((o) => `- ${o.gate}: not yet, ${o.reason}`),
-  ];
+  const lines: string[] = [];
+  if (opts.count === false)
+    lines.push(...failed.map((o) => `- ${o.gate} failed: ${o.reason}`));
+  else {
+    for (const o of outcomes)
+      if (o.state === "pass") recordPass(work.id, o.gate);
+    for (const o of failed) {
+      const signature = await failureSignature(work, o, live);
+      lines.push(
+        countFailure(workspaceId, work, o, pr.url, sha, { signature }).line
+      );
+    }
+  }
+  lines.push(...waiting.map((o) => `- ${o.gate}: not yet, ${o.reason}`));
   return no(`${head}\n${lines.join("\n")}`, !failed.length);
+}
+
+// What the loop guard compares between this failure and the one before.
+// The CI log is read once per head: a head already counted needs none.
+async function failureSignature(
+  work: GateWork,
+  o: GateOutcome,
+  i: Omit<GateInput, "sha" | "ruleBreaks">
+): Promise<string | null> {
+  if (o.gate === "review") return reviewSignature(i.review?.detail ?? null);
+  if (o.gate === "scope" && i.scope?.status === "block")
+    return reasonSignature(i.scope.detail);
+  if (o.gate !== "ci" || i.checks !== "fail") return reasonSignature(o.reason);
+  if (failureCounted(work.id, "ci", work.sha)) return null;
+  return readCiSignature({
+    repo: work.repo,
+    prUrl: work.pr.url,
+    failing: i.failing,
+    failingUrl: i.failingUrl,
+  });
 }
 
 // Asked only when it can change the answer: a head with no checks that

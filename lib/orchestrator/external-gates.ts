@@ -69,6 +69,7 @@ export async function judgeExternal(
       return {
         checks: pr.checks,
         failing: pr.failing,
+        failingUrl: pr.failingUrl,
         settleIn: ciSettleIn({
           workspaceId,
           taskId: ext.id,

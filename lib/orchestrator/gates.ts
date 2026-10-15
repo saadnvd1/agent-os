@@ -2,13 +2,11 @@
  * The merge gates, ported from dispatch orchestrate. Each one passes, waits
  * (not ready yet: CI running or settling, no review of this commit yet),
  * fails, or goes straight to Saad (the repository has no CI at all, never
- * just a head with no checks). Only a failure counts
- * against the task, and a gate failing again on a different commit goes to
- * Saad instead of being retried. A failure counts once per task, gate and
- * head commit, whichever path judged it (the armed watcher, CI finishing,
- * sign_off, done, land, a review's verdict arriving): judging the same head
- * again is never another failure. A pass doesn't reset the count, so a gate
- * that fails on A, passes on B and fails on C has failed twice.
+ * just a head with no checks). Only a failure counts against the task, once
+ * per task, gate and head commit, whichever path judged it (the armed
+ * watcher, CI finishing, sign_off, done, land, a review's verdict arriving):
+ * judging the same head again is never another failure. Every new head is
+ * judged afresh; only a task stuck in a loop goes to Saad (loop-guard.ts).
  */
 
 import { db } from "../db";
@@ -38,6 +36,8 @@ export interface GateInput {
   sha: string;
   checks: ChecksVerdict;
   failing?: string | null;
+  // The failing check's details page, for its log (loop-guard.ts).
+  failingUrl?: string | null;
   // Seconds until CI on this commit counts as settled (tasks/task-state).
   settleIn: number;
   // GitHub's word on merging the PR into its base, and that base's name.
@@ -217,22 +217,31 @@ export interface FailureRow {
   last_sha: string | null;
   // Set while the escalation's ask waits for the agent to finish (held-asks.ts).
   ask_held_at: string | null;
+  // Commits in a row this gate failed on, since it last passed.
+  streak: number;
+  last_signature: string | null;
+  // 1 when the last failure's signature equals the one before it.
+  repeated: number;
+  // Why it went to Saad, as his ask says it.
+  escalated_why: string | null;
 }
 
 // Counts one failure; returns the count now. With `sha`, a failure is
 // counted once per commit: the (task, gate, sha) key in
 // orchestrator_gate_failure_commits decides, so neither a restart nor two
-// evaluations at once count the same head twice.
+// evaluations at once count the same head twice. `signature` is what the
+// loop guard compares between consecutive failures (loop-guard.ts).
 export function recordFailure(
   workspaceId: string,
   sessionId: string,
   gate: string,
   reason: string,
-  sha: string | null = null
+  sha: string | null = null,
+  signature: string | null = null
 ): number {
   return db
     .transaction(countOnce)
-    .immediate(workspaceId, sessionId, gate, reason, sha);
+    .immediate(workspaceId, sessionId, gate, reason, sha, signature);
 }
 
 function countOnce(
@@ -240,26 +249,85 @@ function countOnce(
   sessionId: string,
   gate: string,
   reason: string,
-  sha: string | null
+  sha: string | null,
+  signature: string | null
 ): number {
   const fresh =
     sha === null ||
     db
       .prepare(
-        `INSERT OR IGNORE INTO orchestrator_gate_failure_commits (session_id, gate, sha, workspace_id, reason)
-           VALUES (?, ?, ?, ?, ?)`
+        `INSERT OR IGNORE INTO orchestrator_gate_failure_commits (session_id, gate, sha, workspace_id, reason, signature)
+           VALUES (?, ?, ?, ?, ?, ?)`
       )
-      .run(sessionId, gate, sha, workspaceId, reason).changes > 0;
+      .run(sessionId, gate, sha, workspaceId, reason, signature).changes > 0;
+  // Every SET reads the row as it was before this update.
   db.prepare(
-    `INSERT INTO orchestrator_gate_failures (session_id, gate, workspace_id, count, last_reason, last_sha)
-       VALUES (?, ?, ?, 1, ?, ?)
+    `INSERT INTO orchestrator_gate_failures (session_id, gate, workspace_id, count, last_reason, last_sha, streak, last_signature, repeated)
+       VALUES (@session, @gate, @workspace, 1, @reason, @sha, 1, @signature, 0)
        ON CONFLICT(session_id, gate) DO UPDATE SET
-         count = count + ?,
+         count = count + @fresh,
          last_reason = excluded.last_reason,
-         last_sha = excluded.last_sha`
-  ).run(sessionId, gate, workspaceId, reason, sha, fresh ? 1 : 0);
+         last_sha = excluded.last_sha,
+         streak = streak + @fresh,
+         repeated = CASE WHEN @fresh = 1
+           THEN (streak > 0 AND excluded.last_signature IS NOT NULL AND last_signature IS excluded.last_signature)
+           ELSE repeated END,
+         last_signature = CASE WHEN @fresh = 1 THEN excluded.last_signature ELSE last_signature END`
+  ).run({
+    session: sessionId,
+    gate,
+    workspace: workspaceId,
+    reason,
+    sha,
+    signature,
+    fresh: fresh ? 1 : 0,
+  });
   markStatusDirty(sessionId);
   return failureOf(sessionId, gate)!.count;
+}
+
+// The gate passed at a head: the next failure starts a new streak. An
+// escalated gate keeps its record; Saad has it.
+export function recordPass(sessionId: string, gate: string): void {
+  db.prepare(
+    `UPDATE orchestrator_gate_failures SET streak = 0, last_signature = NULL, repeated = 0
+     WHERE session_id = ? AND gate = ? AND escalated_at IS NULL AND streak > 0`
+  ).run(sessionId, gate);
+}
+
+// Whether this head's failure of the gate is already counted.
+export function failureCounted(
+  sessionId: string,
+  gate: string,
+  sha: string
+): boolean {
+  return !!db
+    .prepare(
+      `SELECT 1 FROM orchestrator_gate_failure_commits WHERE session_id = ? AND gate = ? AND sha = ?`
+    )
+    .get(sessionId, gate, sha);
+}
+
+export interface CommitFailure {
+  sha: string;
+  reason: string | null;
+  signature: string | null;
+}
+
+// The gate's latest `n` failed commits, oldest first.
+export function lastFailures(
+  sessionId: string,
+  gate: string,
+  n: number
+): CommitFailure[] {
+  return (
+    db
+      .prepare(
+        `SELECT sha, reason, signature FROM orchestrator_gate_failure_commits
+         WHERE session_id = ? AND gate = ? ORDER BY rowid DESC LIMIT ?`
+      )
+      .all(sessionId, gate, n) as CommitFailure[]
+  ).reverse();
 }
 
 export function failureOf(sessionId: string, gate: string): FailureRow | null {
@@ -272,10 +340,14 @@ export function failureOf(sessionId: string, gate: string): FailureRow | null {
   );
 }
 
-export function markEscalated(sessionId: string, gate: string): void {
+export function markEscalated(
+  sessionId: string,
+  gate: string,
+  why: string | null = null
+): void {
   db.prepare(
-    `UPDATE orchestrator_gate_failures SET escalated_at = datetime('now') WHERE session_id = ? AND gate = ?`
-  ).run(sessionId, gate);
+    `UPDATE orchestrator_gate_failures SET escalated_at = datetime('now'), escalated_why = ? WHERE session_id = ? AND gate = ?`
+  ).run(why, sessionId, gate);
   markStatusDirty(sessionId);
 }
 
@@ -299,9 +371,6 @@ export function heldAskFailures(workspaceId: string): FailureRow[] {
     )
     .all(workspaceId) as FailureRow[];
 }
-
-export const failedTwiceWhy = (gate: string, reason: string) =>
-  `the ${gate} gate failed on two different commits: ${reason}`;
 
 export function escalations(sessionId: string): FailureRow[] {
   return db

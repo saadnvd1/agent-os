@@ -73,3 +73,15 @@ describe("reviewRun", () => {
     expect(prompts[0]).not.toContain("too big to read whole");
   });
 });
+
+describe("REVIEW_SYSTEM", () => {
+  it("makes gaming a gate a blocking finding", () => {
+    expect(REVIEW_SYSTEM).toMatch(/games a gate[^.]*is always blocking/);
+    for (const how of [
+      "tests deleted, skipped or weakened",
+      "assertions loosened",
+      "disabled or bypassed",
+    ])
+      expect(REVIEW_SYSTEM).toContain(how);
+  });
+});

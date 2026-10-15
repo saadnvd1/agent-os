@@ -92,7 +92,7 @@ export function inFlightWhy(t: {
 }): string {
   const escalated = t.failures.filter((f) => f.escalated_at);
   if (escalated.length)
-    return `with you: the ${escalated.map((f) => f.gate).join(" and ")} gate failed twice`;
+    return `with you: the ${escalated.map((f) => f.gate).join(" and ")} gate kept failing (the loop guard)`;
   if (t.askKinds.length) return `waiting on your answer (${t.askKinds[0]})`;
   const flagged = t.flagged
     ? `; flagged to the orchestrator ${t.flagged}x while you were away`

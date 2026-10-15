@@ -17,6 +17,13 @@ let pane = "";
 let refuseMerge: string | null = null;
 // What the repository CI probes (check runs, statuses, recent PRs) print.
 let probeOut: string | Error = "0";
+// A failed CI job's log, as `gh run view --log-failed` prints it.
+let ciLog =
+  "Test 1\tRun tests\t2026-01-01T00:00:00.0Z  FAIL  src/a.test.ts > adds\n";
+const JOB_URL = "https://github.com/o/r/actions/runs/1/job/2";
+// CI failing on the head, with a log the loop guard can read.
+const failingCI = (failing = "unit") =>
+  ({ ...pr!, checks: "fail", failing, failingUrl: JOB_URL }) as TaskPR;
 const isProbe = (args: string[]) =>
   args[0] === "api" ||
   (args[0] === "pr" &&
@@ -28,6 +35,7 @@ vi.mock("@/lib/tasks/gh", async (importOriginal) => {
   return {
     ...real,
     run: async (cmd: string, args: string[], cwd: string, t?: number) => {
+      if (cmd === "gh" && args[0] === "run" && args[1] === "view") return ciLog;
       if (cmd === "gh" && isProbe(args)) {
         if (probeOut instanceof Error) throw probeOut;
         return probeOut;
@@ -78,6 +86,7 @@ const { armTask, mergeArmed } = await import("./armed");
 const { resumeReviews, review } = await import("./review");
 const { getCheck, putCheck } = await import("./checks");
 const { failureOf, recordFailure } = await import("./gates");
+const { LOOP_GUARD_COMMITS } = await import("./loop-guard");
 const { clearRepoCI } = await import("./repo-ci");
 const { listNotes } = await import("./notes");
 const { listItems } = await import("@/lib/chat/store");
@@ -93,6 +102,7 @@ const { fetchRefs } = await import("./repo");
 const { getTaskSession } = await import("@/lib/tasks/session");
 const { changedFiles } = await import("./diff");
 const { followAskHeads } = await import("./ask-heads");
+const { followAskVerdicts } = await import("./ask-verdict");
 const { raiseHeldAsks, HOLD_MIN_MS, HOLD_MAX_MS } = await import("./held-asks");
 
 // The one ask a task's escalation leaves on Saad's list.
@@ -108,6 +118,13 @@ function oneGateAsk(w: string, task: string, sha: string) {
   });
   return asks[0];
 }
+
+// The loop guard's last strike: the gate already failed on the commits
+// before this one.
+const failedBefore = (w: string, task: string, gate: string) => {
+  for (let i = 1; i < LOOP_GUARD_COMMITS; i++)
+    recordFailure(w, task, gate, `earlier ${i}`, String(i).repeat(40));
+};
 
 // Facts for the task: its agent idle, or busy.
 const taskFacts = (task: string, status: "idle" | "running" = "idle") =>
@@ -140,6 +157,8 @@ beforeEach(() => {
   merges.length = 0;
   refuseMerge = null;
   probeOut = "0";
+  ciLog =
+    "Test 1\tRun tests\t2026-01-01T00:00:00.0Z  FAIL  src/a.test.ts > adds\n";
   clearRepoCI();
   // A live terminal at its prompt, nothing waiting.
   pane = "❯ ";
@@ -635,17 +654,17 @@ describe("sign_off", () => {
     await expect(t.signOff()).resolves.toMatch(/Merged add-a/);
   });
 
-  it("escalates the same gate failing on a second commit, and then holds the task for Saad", async () => {
+  it("escalates the same CI failure on a second commit, and then holds the task for Saad", async () => {
     const t = setup();
     await reviewNow(t.w);
-    pr = { ...pr!, checks: "fail", failing: "unit" };
+    pr = failingCI();
     await expect(t.signOff()).rejects.toThrow(/ci failed \(first\)/);
     // The same head judged again isn't another failure.
     await expect(t.signOff()).rejects.toThrow(/ci failed \(first\)/);
     const next = t.push("src/b.ts", "export const b = 2;\n");
     await reviewNow(t.w);
     await expect(t.signOff()).rejects.toThrow(
-      /ci failed \(again\)[\s\S]*Escalated to Saad: the ci gate failed on two different commits/
+      /ci failed \(again, 2 of 4 in a row\)[\s\S]*Escalated to Saad: the ci gate failed the same way on two commits in a row/
     );
     // The ask waits for the agent; the task is held meanwhile.
     expect(openAsks(t.w)).toEqual([]);
@@ -892,11 +911,11 @@ describe("sign_off", () => {
   });
 
   describe("an ask held until the agent is done", () => {
-    // CI failing on two commits, so the gate escalates and holds the ask.
+    // CI failing the same way on two commits, so the loop guard holds the ask.
     async function escalated() {
       const t = setup();
       await reviewNow(t.w);
-      pr = { ...pr!, checks: "fail", failing: "unit" };
+      pr = failingCI();
       await expect(t.signOff()).rejects.toThrow(/ci failed \(first\)/);
       t.push("src/b.ts", "export const b = 2;\n");
       await reviewNow(t.w);
@@ -922,7 +941,9 @@ describe("sign_off", () => {
       pr = { ...pr!, checks: "pass" };
       await askUp(t.w, t.task);
       const ask = oneGateAsk(t.w, t.task, fix);
-      expect(ask.detail).toMatch(/failed on two different commits/);
+      expect(ask.detail).toMatch(
+        /the ci gate failed the same way on two commits in a row \(unit: src\/a.test.ts > adds\)/
+      );
       expect(ask.detail).toMatch(new RegExp(`Asked at ${fix.slice(0, 7)}`));
       expect(
         listNotes(t.w).filter((n) => n.kind === "escalation")
@@ -1183,10 +1204,10 @@ describe("sign_off", () => {
     await expect(t.signOff()).resolves.toMatch(/Merged add-a/);
   });
 
-  it("keeps holding a gate that failed twice when approvals are off", async () => {
+  it("keeps holding a task the loop guard stopped when approvals are off", async () => {
     const t = setup();
     await reviewNow(t.w);
-    pr = { ...pr!, checks: "fail", failing: "unit" };
+    pr = failingCI();
     await expect(t.signOff()).rejects.toThrow(/ci failed \(first\)/);
     t.push("src/b.ts", "export const b = 2;\n");
     await reviewNow(t.w);
@@ -1585,7 +1606,7 @@ describe("gate failures count per task and gate", () => {
         .all(w) as { line: string }[]
     ).map((e) => e.line);
 
-  it("counts a blocking review when its verdict arrives, once per commit, and sends the second to Saad", async () => {
+  it("counts a blocking review when its verdict arrives, once per commit, and sends the same findings again to Saad", async () => {
     const t = setup();
     await reviewNow(t.w, "block");
     expect(failureOf(t.task, "review")).toMatchObject({
@@ -1605,7 +1626,7 @@ describe("gate failures count per task and gate", () => {
     await askUp(t.w, t.task);
     oneGateAsk(t.w, t.task, next);
     expect(events(t.w).at(-1)).toMatch(
-      /review of \w+ found blocking issues; the review gate failed twice, so it's with Saad now/
+      /review of \w+ found blocking issues; the review gate is stuck in a loop \(the loop guard\), so it's with Saad now/
     );
     await expect(t.signOff()).rejects.toThrow(/is with Saad \(review/);
     expect(merges).toEqual([]);
@@ -1626,7 +1647,7 @@ describe("gate failures count per task and gate", () => {
     expect(failureOf(t.task, "scope")?.count).toBe(2);
     expect(failureOf(t.task, "scope")?.escalated_at).toBeTruthy();
     expect(events(t.w).at(-1)).toMatch(
-      /passed; the scope gate failed twice, so it's with Saad now/
+      /passed; the scope gate is stuck in a loop \(the loop guard\), so it's with Saad now/
     );
   });
 
@@ -1662,26 +1683,28 @@ describe("gate failures count per task and gate", () => {
     expect(openAsks(t.w)).toEqual([]);
   });
 
-  it("escalates on a second head's failure, a pass in between not resetting the count", async () => {
+  it("starts a new streak after a pass, so the same failure either side of it isn't a loop", async () => {
     const t = setup();
     await reviewNow(t.w);
-    pr = { ...pr!, checks: "fail", failing: "unit" };
+    pr = failingCI();
     await expect(t.signOff()).rejects.toThrow(/ci failed \(first\)/);
     // Head B passes CI (the review of B waits, so nothing merges).
     t.push("src/b.ts", "export const b = 2;\n");
     pr = { ...pr!, checks: "pass", failing: null };
     await expect(t.signOff()).rejects.toThrow(/review: not yet/);
-    expect(failureOf(t.task, "ci")?.count).toBe(1);
-    // Head C fails CI again: the second commit the gate failed on.
+    expect(failureOf(t.task, "ci")).toMatchObject({ count: 1, streak: 0 });
+    // Head C fails the same way: the first of a new streak.
     const c = t.push("src/c.ts", "export const c = 3;\n");
     await reviewNow(t.w);
-    pr = { ...pr!, checks: "fail", failing: "unit" };
-    await expect(t.signOff()).rejects.toThrow(
-      /ci failed \(again\)[\s\S]*Escalated to Saad: the ci gate failed on two different commits/
-    );
-    expect(failureOf(t.task, "ci")).toMatchObject({ count: 2, last_sha: c });
-    await askUp(t.w, t.task);
-    oneGateAsk(t.w, t.task, c);
+    pr = failingCI();
+    await expect(t.signOff()).rejects.toThrow(/ci failed \(first\)/);
+    expect(failureOf(t.task, "ci")).toMatchObject({
+      count: 2,
+      streak: 1,
+      last_sha: c,
+      escalated_at: null,
+    });
+    expect(openAsks(t.w)).toEqual([]);
   });
 });
 
@@ -1929,9 +1952,9 @@ describe("a merge decision from Saad", () => {
   it("never lets its approval skip the code review of a held task", async () => {
     const t = setup();
     await reviewNow(t.w);
-    // The code-review gate fails on a second commit and the task is held
-    // for Saad.
-    recordFailure(t.w, t.task, "code-review", "earlier", "0".repeat(40));
+    // The code-review gate fails on its fourth commit in a row and the
+    // task is held for Saad.
+    failedBefore(t.w, t.task, "code-review");
     pr = { ...pr!, attribution: ATTRIBUTED };
     await expect(t.signOff()).rejects.toThrow(/Escalated to Saad/);
     await askUp(t.w, t.task);
@@ -1960,7 +1983,7 @@ describe("a merge decision from Saad", () => {
   async function heldTask() {
     const t = setup();
     await reviewNow(t.w);
-    recordFailure(t.w, t.task, "code-review", "earlier", "0".repeat(40));
+    failedBefore(t.w, t.task, "code-review");
     pr = { ...pr!, attribution: ATTRIBUTED };
     await expect(t.signOff()).rejects.toThrow(/Escalated to Saad/);
     await askUp(t.w, t.task);
@@ -2019,9 +2042,9 @@ describe("a merge decision from Saad", () => {
     await reviewNow(t.w);
     await ask(t, { task: "add-a", sha: t.sha });
     const [raised] = openAsks(t.w);
-    // The code-review gate then fails on a second commit and escalates
-    // onto that ask.
-    recordFailure(t.w, t.task, "code-review", "earlier", "0".repeat(40));
+    // The code-review gate then fails on its fourth commit in a row and
+    // escalates onto that ask.
+    failedBefore(t.w, t.task, "code-review");
     pr = { ...pr!, attribution: ATTRIBUTED };
     await expect(t.signOff()).rejects.toThrow(/Escalated to Saad/);
     expect(openAsks(t.w)).toMatchObject([
@@ -2378,5 +2401,80 @@ describe("the PR's real base", () => {
       /stacked on .*which has not merged/
     );
     expect(merges).toEqual([]);
+  });
+});
+
+describe("a PR the loop guard sent to Saad", () => {
+  // CI failing the same way on two commits, then a fix whose CI passes:
+  // Saad's ask names the fix.
+  async function stuck() {
+    const t = setup();
+    await reviewNow(t.w);
+    pr = failingCI();
+    await expect(t.signOff()).rejects.toThrow(/ci failed \(first\)/);
+    t.push("src/b.ts", "export const b = 2;\n");
+    await expect(t.signOff()).rejects.toThrow(
+      /Escalated to Saad: the ci gate failed the same way on two commits in a row/
+    );
+    const fix = t.push("src/c.ts", "export const c = 3;\n");
+    pr = { ...pr!, checks: "pass", failing: null, failingUrl: null };
+    await askUp(t.w, t.task);
+    return { t, fix, ask: oneGateAsk(t.w, t.task, fix) };
+  }
+  const judgeAsked = (w: string, task: string, verdict: "pass" | "block") => {
+    const reviews: string[] = [];
+    return followAskVerdicts(w, taskFacts(task), {
+      review: async (ws, ref) => {
+        reviews.push(ref);
+        await review(ws, ref, { wait: true, claude: reviewer(verdict).claude });
+      },
+    }).then(() => reviews);
+  };
+
+  it("still reviews the commit Saad would approve, and his ask shows CI and that review", async () => {
+    const { t, fix, ask } = await stuck();
+    expect(ask.detail).toMatch(/^the ci gate failed the same way/);
+    expect(await judgeAsked(t.w, t.task, "block")).toEqual([t.task]);
+    expect(getCheck(t.task, fix, "review")?.status).toBe("block");
+    const shown = getAsk(t.w, ask.id)!.detail;
+    expect(shown).toMatch(/^the ci gate failed the same way/);
+    expect(shown).toMatch(
+      new RegExp(
+        `Gates at ${fix.slice(0, 7)}: CI passed\\. Independent review: blocking findings\\.[\\s\\S]*src/a\\.ts:1: off by one`
+      )
+    );
+    // Reviewed once: the next pass only refreshes what the ask shows.
+    expect(await judgeAsked(t.w, t.task, "block")).toEqual([]);
+    expect(getAsk(t.w, ask.id)!.detail).toBe(shown);
+    // Counted nothing: the task is with Saad.
+    expect(failureOf(t.task, "review")).toBeNull();
+  });
+
+  it("merges once at the commit Saad approves, whatever the review said", async () => {
+    const { t, fix, ask } = await stuck();
+    await judgeAsked(t.w, t.task, "block");
+    answerAsk(t.w, ask.id, { action: "approve" }, fix);
+    await expect(t.signOff()).resolves.toMatch(/Merged add-a/);
+    expect(merges).toEqual([
+      ["pr", "merge", "7", "--squash", "--match-head-commit", fix],
+    ]);
+    expect(getAsk(t.w, ask.id)?.used_at).toBeTruthy();
+  });
+
+  it("asks him again, with a fresh review, when the head moves past the commit he approved", async () => {
+    const { t, fix, ask } = await stuck();
+    answerAsk(t.w, ask.id, { action: "approve" }, fix);
+    const later = t.push("src/d.ts", "export const d = 4;\n");
+    await expect(t.signOff()).rejects.toThrow(
+      /Saad approved \w+, but PR #7's head is now/
+    );
+    expect(merges).toEqual([]);
+    const again = oneGateAsk(t.w, t.task, later);
+    await judgeAsked(t.w, t.task, "pass");
+    expect(getAsk(t.w, again.id)!.detail).toMatch(
+      new RegExp(
+        `Gates at ${later.slice(0, 7)}: CI passed\\. Independent review: passed\\.`
+      )
+    );
   });
 });

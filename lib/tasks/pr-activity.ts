@@ -275,9 +275,19 @@ export async function failedLog(
   repo: Repo,
   url: string | null | undefined
 ): Promise<FailedLog | null> {
+  const raw = await failedJobLog(dir, repo, url);
+  return raw === null ? null : trimLog(raw);
+}
+
+// The same log whole, as gh prints it.
+export async function failedJobLog(
+  dir: string,
+  repo: Repo,
+  url: string | null | undefined
+): Promise<string | null> {
   const job = jobOf(url);
   if (!job) return null;
-  const raw = await run(
+  return run(
     "gh",
     [
       "run",
@@ -291,5 +301,4 @@ export async function failedLog(
     dir,
     60000
   );
-  return trimLog(raw);
 }

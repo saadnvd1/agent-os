@@ -24,7 +24,8 @@ import { runClaude, type ClaudeRunner } from "./claude-cli";
 import { changedFiles, fullDiff } from "./diff";
 import { diffParts } from "./diff-parts";
 import { countFailure, escalate } from "./escalate";
-import { checkGate, holdingEscalations } from "./gates";
+import { checkGate, holdingEscalations, recordPass } from "./gates";
+import { reasonSignature, reviewSignature } from "./loop-guard";
 import { reviewWanted } from "./held-review";
 import { mergeApprovalsOn, mergeApprovalsSetting } from "./merge-approvals";
 import {
@@ -222,10 +223,19 @@ function countVerdicts(
   const escalated: string[] = [];
   for (const gate of ["review", "scope"] as const) {
     if (gate === "scope" && !target.task?.lh_card_id) continue;
-    const o = checkGate(gate, getCheck(target.id, sha, gate), sha);
+    const row = getCheck(target.id, sha, gate);
+    const o = checkGate(gate, row, sha);
+    if (o.state === "pass") recordPass(target.id, gate);
     if (o.state !== "fail") continue;
     try {
-      if (countFailure(workspaceId, target, o, target.pr.url, sha).escalated)
+      const signature =
+        gate === "review"
+          ? reviewSignature(row?.detail ?? null)
+          : reasonSignature(row?.detail);
+      if (
+        countFailure(workspaceId, target, o, target.pr.url, sha, { signature })
+          .escalated
+      )
         escalated.push(gate);
     } catch (e) {
       // The verdict's event still goes out; sign_off counts it again.
@@ -233,7 +243,7 @@ function countVerdicts(
     }
   }
   return escalated.length
-    ? `; the ${escalated.join(" and ")} gate failed twice, so it's with Saad now`
+    ? `; the ${escalated.join(" and ")} gate is stuck in a loop (the loop guard), so it's with Saad now`
     : "";
 }
 
