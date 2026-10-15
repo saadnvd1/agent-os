@@ -173,6 +173,7 @@ export function DesktopTabBar({
         {session?.working_directory && (
           <PaneViewToggle
             sessionId={session.id}
+            isChat={session.view === "chat"}
             viewMode={viewMode}
             isLocalSession={isLocalSession}
             isConductor={isConductor}
