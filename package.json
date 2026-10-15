@@ -48,7 +48,7 @@
     "lint": "eslint .",
     "format": "prettier --write .",
     "format:check": "prettier --check .",
-    "test": "vitest run",
+    "test": "scripts/test",
     "test:watch": "vitest",
     "check": "scripts/check",
     "screenshots": "tsx scripts/screenshots/run.ts",

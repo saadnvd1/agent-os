@@ -55,7 +55,7 @@ beforeEach(() => {
 });
 afterAll(() => {
   server.close();
-  reset();
+  fs.rmSync(dir, { recursive: true, force: true });
 });
 
 describe("POST /api/devices/connect", () => {
