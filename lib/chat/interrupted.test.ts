@@ -256,6 +256,37 @@ describe("a turn that started over an hour ago", () => {
   });
 });
 
+describe("an orchestrator whose turn a restart cut off", () => {
+  it("is resumed with AgentOS's note, never as a stop by the user", async () => {
+    const { id, w } = task();
+    db.prepare(
+      `UPDATE sessions SET role = 'orchestrator', task_status = NULL, workspace_id = ? WHERE id = ?`
+    ).run(w, id);
+    try {
+      await reattachChats();
+      const commands = workers.started
+        .filter((x) => x.sessionId === id)
+        .flatMap((x) => x.commands);
+      expect(commands.map((c) => c.type)).not.toContain("interrupt");
+      expect(commands.map((c) => c.type)).not.toContain("send_now");
+      expect(sends(id)).toEqual([
+        expect.objectContaining({
+          id: "user-resume-tool-1",
+          text: RESUME_NOTE,
+          from: "agentos",
+          origin: { kind: "event", label: "AgentOS" },
+        }),
+      ]);
+      expect(events(w, id)).toEqual([]);
+      registry.live.delete(id);
+      await reattachChats();
+      expect(sends(id)).toHaveLength(1);
+    } finally {
+      forget(id);
+    }
+  });
+});
+
 describe("a cut-off turn outside a task", () => {
   it("is resumed with no orchestrator event", async () => {
     const { id, w } = task();

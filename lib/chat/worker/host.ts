@@ -677,13 +677,20 @@ export class ChatHost {
           this.sendUser(cmd, true);
           return;
         }
+        // What the reader queued goes first: an event or agent message that
+        // reaches an idle worker (a fresh one after a restart) waits behind
+        // it rather than start a turn their next message would stop.
+        const backlog = listQueue(this.session.id).length > 0;
+        if (!this.busy() && backlog && !this.closed) {
+          enqueue(this.session.id, cmd);
+          this.emit({ type: "queue" });
+          this.sendQueued();
+          return;
+        }
         if (this.compactFirst(cmd)) return;
         // A compaction run for an earlier message takes nothing in: what's
         // sent meanwhile goes behind that message.
-        if (
-          (cmd.queue || this.compacting) &&
-          (this.busy() || listQueue(this.session.id).length)
-        ) {
+        if ((cmd.queue || this.compacting) && (this.busy() || backlog)) {
           // Behind the running turn, and behind anything queued before it.
           enqueue(this.session.id, cmd);
           this.emit({ type: "queue" });

@@ -328,3 +328,83 @@ describe("toolsDigest", () => {
     expect(orchestratorToolsDigest()).toMatch(/^[0-9a-f]{16}$/);
   });
 });
+
+describe("the tool caller across an AgentOS restart", () => {
+  const net = () => import("net");
+  const http = () => import("http");
+
+  async function freePort(): Promise<number> {
+    const server = (await net()).createServer();
+    await new Promise<void>((r) => server.listen(0, "127.0.0.1", r));
+    const port = (server.address() as { port: number }).port;
+    await new Promise((r) => server.close(r));
+    return port;
+  }
+
+  async function listen(
+    port: number,
+    handler: (res: import("http").ServerResponse) => void
+  ) {
+    const seen = { requests: 0 };
+    const server = (await http()).createServer((req, res) => {
+      seen.requests++;
+      req.resume();
+      handler(res);
+    });
+    await new Promise<void>((r) => server.listen(port, "127.0.0.1", r));
+    return { seen, close: () => server.close() };
+  }
+
+  const caller = async (port: number, waitMs?: number) =>
+    (await import("./tools")).httpToolCaller(
+      `http://127.0.0.1:${port}`,
+      "w",
+      "t",
+      waitMs
+    );
+
+  it("waits for a server that isn't up yet, then calls it once", async () => {
+    const port = await freePort();
+    const call = (await caller(port))("sessions", {});
+    await new Promise((r) => setTimeout(r, 600));
+    const up = await listen(port, (res) => res.end("ok"));
+    try {
+      await expect(call).resolves.toBe("ok");
+      expect(up.seen.requests).toBe(1);
+    } finally {
+      up.close();
+    }
+  });
+
+  it("doesn't repeat a call the restart cut off", async () => {
+    const port = await freePort();
+    const up = await listen(port, (res) => res.destroy());
+    try {
+      await expect((await caller(port))("start_task", {})).rejects.toThrow(
+        /may or may not have taken effect/
+      );
+      expect(up.seen.requests).toBe(1);
+    } finally {
+      up.close();
+    }
+  });
+
+  it("gives up when the server doesn't come back in time", async () => {
+    const port = await freePort();
+    await expect((await caller(port, 300))("sessions", {})).rejects.toThrow(
+      /didn't come back/
+    );
+  });
+
+  it("stops waiting when the turn is stopped", async () => {
+    const port = await freePort();
+    const abort = new AbortController();
+    const call = (await caller(port))("sessions", {}, abort.signal);
+    setTimeout(() => abort.abort(new Error("stopped")), 200);
+    await expect(call).rejects.toThrow("stopped");
+    const up = await listen(port, (res) => res.end("late"));
+    await new Promise((r) => setTimeout(r, 400));
+    expect(up.seen.requests).toBe(0);
+    up.close();
+  });
+});

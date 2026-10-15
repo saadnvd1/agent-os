@@ -523,6 +523,25 @@ describe("ChatHost queue", () => {
     host.close();
   });
 
+  it("puts an event for an idle worker behind what the reader queued", async () => {
+    const { id, host, conversation } = await startHost();
+    enqueue(id, { id: "user-q", text: "reader's message" });
+    await host.handle({
+      type: "send",
+      id: "user-e",
+      text: "task x: merged",
+      from: "agentos",
+      origin: { kind: "event", label: "AgentOS" },
+    });
+    expect(conversation.send).toHaveBeenCalledTimes(1);
+    expect(conversation.send).toHaveBeenCalledWith(
+      "reader's message",
+      undefined
+    );
+    expect(listQueue(id).map((m) => m.id)).toEqual(["user-e"]);
+    host.close();
+  });
+
   it("sends a queued message only once, even when the send is retried", async () => {
     const { id, host, conversation } = await startHost();
     await host.handle({
