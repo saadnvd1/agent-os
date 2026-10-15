@@ -370,7 +370,7 @@ export function ChatPanel({
     send(text);
   };
   // A chat past the compact threshold compacts before the next message
-  // unless the reader picks "Send as-is", for that send only.
+  // unless the reader picks "Skip once", for that send only.
   const compactTokens = useFreshStartQuery().data?.compactTokens ?? 0;
   const [asIsFor, setAsIsFor] = useState<string | null>(null);
   const asIs = asIsFor === sessionId;

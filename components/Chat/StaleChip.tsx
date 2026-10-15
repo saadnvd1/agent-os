@@ -9,7 +9,7 @@ import { useNow } from "./useNow";
 // Above the composer while the chat is due a compaction (lib/chat/stale):
 // its context is past the compact threshold, and maybe its prompt cache has
 // expired too, so the next message would re-read all of it at full price.
-// Send compacts first unless the reader picks "Send as-is", for that one
+// Send compacts first unless the reader picks "Skip once", for that one
 // send only.
 export function StaleChip({
   context,
@@ -37,7 +37,7 @@ export function StaleChip({
       <span className="text-muted-foreground min-w-0 flex-1 truncate">
         {staleLabel(stale)} ·{" "}
         <span className="text-foreground">
-          {asIs ? "Sending as-is" : "Compact first?"}
+          {asIs ? "Next send skips compacting" : "Compacts when you send"}
         </span>
       </span>
       <button
@@ -49,7 +49,7 @@ export function StaleChip({
           asIs && "text-primary"
         )}
       >
-        {asIs ? "Compact first" : "Send as-is"}
+        {asIs ? "Undo" : "Skip once"}
       </button>
     </div>
   );
