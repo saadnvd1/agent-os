@@ -15,7 +15,7 @@ import { isValidTmuxName } from "./attach";
 import { homeRelative } from "./discover";
 import { toPeerSession } from "./peer-sessions";
 import { insertMirror } from "./peer-sync";
-import { hostTasks, postIdempotent } from "../tasks/remote";
+import { list as hostTasks, postIdempotent } from "../tasks/contract/client";
 import type { ProjectRef } from "../tasks/project-ref";
 import {
   HostApiError,

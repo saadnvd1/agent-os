@@ -18,7 +18,7 @@ import {
 } from "./loop-types";
 import { expandHome } from "./session";
 import { isRemoteHost } from "../hosts";
-import { remotePlanPath } from "./remote-plan-path";
+import { remotePlanPath } from "./contract/plan-path";
 
 const TITLE_MAX = 120;
 

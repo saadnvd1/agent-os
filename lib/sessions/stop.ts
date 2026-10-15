@@ -2,7 +2,7 @@ import { endTmuxSession } from "../tmux/end";
 import { hostLink } from "../hosts/remote-api";
 import { stopChatTurn } from "../chat/stop";
 import type { Session } from "../db";
-import { isHeldRemote, stopHeldTask } from "../tasks/held-remote";
+import { isHeldRemote, stopHeldTask } from "../tasks/contract/held-calls";
 import { releaseOnEnd } from "../simulator";
 import { forgetPlanWait } from "../models/plan-step";
 

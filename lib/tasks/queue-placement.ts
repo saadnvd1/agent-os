@@ -10,7 +10,7 @@ import { peerReading, peerSource, refreshPeers } from "../hosts/peer-load";
 import { projectMachines } from "../hosts/project-machines";
 import { viewOf } from "../load/machines";
 import { usesGitCrypt } from "../worktree-add";
-import { hostTasks } from "./remote";
+import { list as hostTasks } from "./contract/client";
 import {
   asPlanPhase,
   place,

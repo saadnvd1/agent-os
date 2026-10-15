@@ -9,29 +9,32 @@
  * Moving the task reuses the ordinary move (move-flow.ts).
  */
 
-import fs from "fs";
+import fs from "fs/promises";
 import path from "path";
-import { db, type Session } from "../db";
-import { isRemoteHost } from "../hosts";
-import { peerSource } from "../hosts/peer-load";
-import { hostApi, hostLink, requireHostLink } from "../hosts/remote-api";
-import { LOCAL, machineCapabilities } from "../load/machines";
-import { noApprovalsOn, recordAutoApproval } from "../approvals/no-approvals";
-import { implementArrived, planNoteFor } from "../models/plan-step";
-import { sessionWorkspace } from "../models/resolve";
-import { queueEvent } from "../orchestrator/events";
-import { brakesOn } from "../orchestrator/brakes";
-import { isPaused } from "../orchestrator/pause";
-import { getProject } from "../projects";
-import { planFor, splitOf } from "../plans/features";
-import { forgetHostTasks, hostTasks } from "./remote";
-import { moveTask } from "./move-flow";
-import { meetsNeeds, needsOf } from "./placement";
-import { remotePlanPath } from "./remote-plan-path";
-import { DEFAULT_PRIORITY, isPriority } from "./schedule-types";
-import { localHolds } from "./hold-checks";
-import { expandHome } from "./session";
-import { orchestratorOf } from "./starter";
+import { db, type Session } from "../../db";
+import { isRemoteHost } from "../../hosts";
+import { peerSource } from "../../hosts/peer-load";
+import { hostLink, requireHostLink } from "../../hosts/remote-api";
+import { LOCAL, machineCapabilities } from "../../load/machines";
+import {
+  noApprovalsOn,
+  recordAutoApproval,
+} from "../../approvals/no-approvals";
+import { implementArrived, planNoteFor } from "../../models/plan-step";
+import { sessionWorkspace } from "../../models/resolve";
+import { queueEvent } from "../../orchestrator/events";
+import { brakesOn } from "../../orchestrator/brakes";
+import { isPaused } from "../../orchestrator/pause";
+import { getProject } from "../../projects";
+import { planFor, splitOf } from "../../plans/features";
+import { moveTask } from "../move-flow";
+import * as client from "./client";
+import { meetsNeeds, needsOf } from "../placement";
+import { remotePlanPath } from "./plan-path";
+import { DEFAULT_PRIORITY, isPriority } from "../schedule-types";
+import { localHolds } from "../hold-checks";
+import { expandHome } from "../session";
+import { orchestratorOf } from "../starter";
 
 export { remotePlanPath };
 
@@ -40,9 +43,9 @@ const getSession = (id: string) =>
     | Session
     | undefined;
 
-function readCopy(id: string): string | null {
+async function readCopy(id: string): Promise<string | null> {
   try {
-    return fs.readFileSync(remotePlanPath(id), "utf8");
+    return await fs.readFile(remotePlanPath(id), "utf8");
   } catch {
     return null;
   }
@@ -81,20 +84,17 @@ export function implementTarget(
   return meetsNeeds(needs, machineCapabilities()) ? "home" : "there";
 }
 
-// One look at a mirror that is planning: if its plan is written there, copy
-// it, say so, and carry on for a plan-first task.
-async function planWritten(s: Session): Promise<void> {
+/**
+ * A mirror that is planning, its machine's listing of it in hand: if its plan
+ * is written there, copy it, say so, and carry on for a plan-first task.
+ */
+export async function planWritten(
+  s: Session,
+  view: { planReady?: boolean } | undefined
+): Promise<void> {
   const link = hostLink(s.host_id);
-  if (!link) return;
-  const view = await hostTasks(link)
-    .then(({ tasks }) => tasks.find((t) => t?.id === s.id))
-    .catch(() => undefined);
-  if (!view?.planReady) return;
-  const { text } = await hostApi<{ text: string | null }>(
-    link,
-    `/api/tasks/${encodeURIComponent(s.id)}/plan`,
-    { timeout: 30000 }
-  );
+  if (!link || !view?.planReady) return;
+  const text = await client.plan(link, s.id);
   const claimed = db
     .prepare(
       `UPDATE sessions SET plan_phase = 'awaiting' WHERE id = ? AND plan_phase = 'planning'`
@@ -102,8 +102,8 @@ async function planWritten(s: Session): Promise<void> {
     .run(s.id).changes;
   if (!claimed) return;
   if (text !== null) {
-    fs.mkdirSync(path.dirname(remotePlanPath(s.id)), { recursive: true });
-    fs.writeFileSync(remotePlanPath(s.id), text);
+    await fs.mkdir(path.dirname(remotePlanPath(s.id)), { recursive: true });
+    await fs.writeFile(remotePlanPath(s.id), text);
   }
   const fresh = getSession(s.id)!;
   const split = checkedSplit(fresh, text);
@@ -136,7 +136,7 @@ async function planWritten(s: Session): Promise<void> {
   if (!goOn) {
     try {
       const planned = text ? planFor(fresh, text) : null;
-      (await import("../notify/push/events")).pushPlanAwaiting(
+      (await import("../../notify/push/events")).pushPlanAwaiting(
         s.id,
         s.name,
         planned?.pieces.length ?? 1
@@ -146,7 +146,7 @@ async function planWritten(s: Session): Promise<void> {
     }
     return;
   }
-  await continueRemotePlan(fresh);
+  await continuePlanThere(fresh);
   if (auto)
     recordAutoApproval({
       source: "plan",
@@ -161,22 +161,18 @@ async function planWritten(s: Session): Promise<void> {
  * Carries a written plan on: approves it on the machine that planned it, or
  * hands it to the move home. Returns what it will implement on.
  */
-export async function continueRemotePlan(
+export async function continuePlanThere(
   s: Session,
   message?: string
 ): Promise<string> {
   const link = requireHostLink(s.host_id!);
-  const split = checkedSplit(s, readCopy(s.id));
+  const split = checkedSplit(s, await readCopy(s.id));
   if (implementTarget(s, split) === "there") {
-    const out = await hostApi<{ model?: string }>(
-      link,
-      `/api/tasks/${encodeURIComponent(s.id)}/approve-plan`,
-      { body: message ? { message } : {}, timeout: 60000 }
-    );
+    const out = await client.approvePlan(link, s.id, message);
     db.prepare(
       `UPDATE sessions SET plan_phase = 'implementing' WHERE id = ? AND plan_phase = 'awaiting'`
     ).run(s.id);
-    forgetHostTasks(link.hostId);
+    client.forget(link.hostId);
     return out.model ?? link.hostName;
   }
   db.prepare(
@@ -197,9 +193,12 @@ export async function continueRemotePlan(
   return "this machine, once it is free";
 }
 
-const handingOff = new Set<string>();
+export const handingOff = new Set<string>();
 
-async function finishArrival(id: string, message?: string): Promise<boolean> {
+export async function finishArrival(
+  id: string,
+  message?: string
+): Promise<boolean> {
   await implementArrived(id, message || undefined);
   db.prepare(
     `UPDATE sessions SET plan_handoff_message = NULL WHERE id = ?`
@@ -208,7 +207,7 @@ async function finishArrival(id: string, message?: string): Promise<boolean> {
 }
 
 // Fired, not awaited: a move takes minutes and the queue tick must not wait.
-function fire(id: string, run: () => Promise<unknown>) {
+export function fire(id: string, run: () => Promise<unknown>) {
   if (handingOff.has(id)) return;
   void run().catch((e) => console.error(`Moving ${id} here failed:`, e));
 }
@@ -253,7 +252,7 @@ export async function handoffHome(
     const edits = s.plan_edits ?? null;
     const arrived = await moveTask(id, LOCAL);
     // The arrived row keeps the pending hand-off until implementing has
-    // started, so a restart in between is picked up by syncRemotePlans.
+    // started, so a restart in between is picked up by syncMirrors.
     db.prepare(
       `UPDATE sessions SET plan_edits = COALESCE(?, plan_edits), plan_handoff_message = ? WHERE id = ?`
     ).run(edits, message ?? "", arrived.id);
@@ -265,44 +264,5 @@ export async function handoffHome(
     }
   } finally {
     handingOff.delete(id);
-  }
-}
-
-/** Every mirror whose plan is being written, or approved and coming here. */
-export async function syncRemotePlans(): Promise<void> {
-  const rows = db
-    .prepare(
-      `SELECT * FROM sessions
-       WHERE plan_waits_for_caller = 1 AND plan_phase IN ('planning', 'handoff')
-         AND task_status = 'running' AND archived_at IS NULL`
-    )
-    .all() as Session[];
-  for (const s of rows) {
-    if (!isRemoteHost(s.host_id)) continue;
-    try {
-      if (s.plan_phase === "planning") await planWritten(s);
-      else fire(s.id, () => handoffHome(s.id));
-    } catch (e) {
-      console.error(`Plan on ${s.host_id} for ${s.id} failed:`, e);
-    }
-  }
-  // A task that arrived but never began implementing (a restart between).
-  const arrived = db
-    .prepare(
-      `SELECT id, plan_handoff_message FROM sessions
-       WHERE plan_phase = 'awaiting' AND plan_handoff_message IS NOT NULL
-         AND task_status = 'running' AND archived_at IS NULL AND peer_mirror IS NOT 1`
-    )
-    .all() as { id: string; plan_handoff_message: string }[];
-  for (const a of arrived) {
-    if (isRemoteHost(getSession(a.id)?.host_id)) continue;
-    fire(a.id, async () => {
-      handingOff.add(a.id);
-      try {
-        await finishArrival(a.id, a.plan_handoff_message);
-      } finally {
-        handingOff.delete(a.id);
-      }
-    });
   }
 }

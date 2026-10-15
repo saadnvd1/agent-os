@@ -17,7 +17,11 @@ import { unarchiveSession } from "../done/archive";
 import { reopenSession } from "../sidebar/shelf-state";
 import { peerSessionLink } from "../hosts/peer-actions";
 import { hostApi, hostLink } from "../hosts/remote-api";
-import { forgetHostTasks, isMirror, unknownOutcome } from "../tasks/remote";
+import {
+  forget as forgetHostTasks,
+  unknownOutcome,
+} from "../tasks/contract/client";
+import { isMirror } from "../tasks/contract/start";
 import { heldRefusal } from "../tasks/held";
 import { expandHome, projectPathFor } from "../tasks/session";
 import { run } from "../tasks/gh";

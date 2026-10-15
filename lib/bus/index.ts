@@ -15,7 +15,7 @@ import { deliverToPane, type Delivery } from "./delivery";
 import { resolveRef, wasNames, type Candidate } from "./resolve";
 import { tmuxPane } from "./tmux-pane";
 import { pauseHoldOf, pausedNote } from "../tasks/pause-hold";
-import { isHeldRemote, relayToHeldTask } from "../tasks/held-remote";
+import { isHeldRemote, relayToHeldTask } from "../tasks/contract/held-calls";
 import {
   assertTakesMessages,
   findQueuedTarget,

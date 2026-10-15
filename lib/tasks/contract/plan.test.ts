@@ -10,16 +10,16 @@ import {
   it,
   vi,
 } from "vitest";
-import { db, type Session } from "../db";
-import { createHost } from "../hosts";
-import { saveHostLink } from "../hosts/remote-api";
-import { createProject } from "../projects";
-import { createWorkspace, setProjectWorkspace } from "../workspaces";
-import { seedOrchestrator } from "../orchestrator/testing";
-import { pendingEvents } from "../orchestrator/events";
-import { setPaused } from "../orchestrator/pause";
-import type { MachineView } from "./schedule";
-import { json, row, setupMoveRepo, type MoveFixture } from "./move-testing";
+import { db, type Session } from "../../db";
+import { createHost } from "../../hosts";
+import { saveHostLink } from "../../hosts/remote-api";
+import { createProject } from "../../projects";
+import { createWorkspace, setProjectWorkspace } from "../../workspaces";
+import { seedOrchestrator } from "../../orchestrator/testing";
+import { pendingEvents } from "../../orchestrator/events";
+import { setPaused } from "../../orchestrator/pause";
+import type { MachineView } from "../schedule";
+import { json, row, setupMoveRepo, type MoveFixture } from "../move-testing";
 
 const greenView = (): MachineView => ({
   label: "this machine",
@@ -76,11 +76,13 @@ vi.mock("@/lib/notify/push/events", async (importOriginal) => ({
   },
 }));
 
-const { mirrorTask, forgetHostTasks, TASK_CAPABILITIES } =
-  await import("./remote");
-const { syncRemotePlans, remotePlanPath, handoffHome } =
-  await import("./remote-plan");
-const { approvePlan } = await import("../models/plan-step");
+const { mirrorTask } = await import("./start");
+const { forget: forgetHostTasks } = await import("./client");
+const { TASK_CAPABILITIES } = await import("./types");
+const { handoffHome } = await import("./plan");
+const { remotePlanPath } = await import("./plan-path");
+const { syncMirrors: syncRemotePlans } = await import("./sync");
+const { approvePlan } = await import("../../models/plan-step");
 
 let f: MoveFixture;
 let hostId: string;

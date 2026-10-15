@@ -26,7 +26,8 @@ vi.mock("@/lib/tasks/gh", async (orig) => ({
 
 const TOKEN = "device-token";
 const { db } = await import("@/lib/db");
-const { forgetHostTasks } = await import("@/lib/tasks/remote");
+const { syncMirrors } = await import("@/lib/tasks/contract/sync");
+const { forget: forgetHostTasks } = await import("@/lib/tasks/contract/client");
 const { sessionFacts } = await import("./facts");
 const { waitingState } = await import("./task-state");
 const { pendingEvents } = await import("./events");
@@ -98,12 +99,13 @@ describe("a task running on a linked machine", () => {
       lastActiveAt: 1234,
     };
     forgetHostTasks(host.hostId);
+    await syncMirrors();
     const facts = await sessionFacts(m.ws.workspace.id);
     const mine = facts.find((f) => f.id === m.id);
     expect(mine?.lastActive).toBe(1234);
-    await sessionFacts(m.ws.workspace.id);
+    await syncMirrors();
     forgetHostTasks(host.hostId);
-    await sessionFacts(m.ws.workspace.id);
+    await syncMirrors();
     const plans = pendingEvents(m.ws.workspace.id).filter((e) =>
       e.key.includes("plan-done")
     );

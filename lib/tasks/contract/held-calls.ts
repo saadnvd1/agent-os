@@ -1,25 +1,22 @@
 /**
- * An orchestrator's calls on a task it moved to a linked machine, which that
- * machine's AgentOS answers for the device that sent the task (held.ts). The
- * orchestrator polls and calls; the other machine never reaches back.
+ * An orchestrator's calls on a task it put on a linked machine, which that
+ * machine's AgentOS answers for the device that sent the task (held.ts). A
+ * machine that doesn't hold the task yet is asked to, once, and the call
+ * repeated. The orchestrator polls and calls; the other machine never reaches
+ * back.
  */
 
-import { db, type Session } from "../db";
+import { db, type Session } from "../../db";
 import {
   HostApiError,
-  cleanRemoteBlock,
-  cleanRemoteText,
-  hostApi,
   hostLink,
   requireHostLink,
-} from "../hosts/remote-api";
-import type { Delivery } from "../bus/delivery";
-import { wakeLine } from "../bus/format";
-import { orchestratedStart } from "./held";
-import { orchestratorOf } from "./starter";
-
-const path = (id: string, leaf: string) =>
-  `/api/tasks/${encodeURIComponent(id)}/${leaf}`;
+} from "../../hosts/remote-api";
+import type { Delivery } from "../../bus/delivery";
+import { wakeLine } from "../../bus/format";
+import { orchestratedStart } from "../held";
+import { orchestratorOf } from "../starter";
+import * as client from "./client";
 
 /**
  * A task its orchestrator put on a linked machine, whether by moving it or
@@ -54,16 +51,11 @@ async function adoptHeld(task: Held): Promise<boolean> {
   if (adopted.has(task.id)) return false;
   adopted.set(task.id, now);
   try {
-    const link = requireHostLink(task.host_id);
-    await hostApi(link, path(task.id, "hold"), {
-      body: {
-        orchestrated: orchestratedStart(
-          task.started_by!,
-          task.task_since ?? null
-        ),
-      },
-      timeout: 20000,
-    });
+    await client.hold(
+      requireHostLink(task.host_id),
+      task.id,
+      orchestratedStart(task.started_by!, task.task_since ?? null)
+    );
   } catch {
     return false;
   }
@@ -72,6 +64,8 @@ async function adoptHeld(task: Held): Promise<boolean> {
   return true;
 }
 
+// compat: task-contract-1. A task the queue placed before machines held them
+// is unheld there; drop this heal once every linked machine holds on start.
 /** The call, held first if that machine says it isn't, once. */
 async function withHold<T>(task: Held, call: () => Promise<T>): Promise<T> {
   try {
@@ -142,16 +136,13 @@ export async function relayToHeldTask(
   try {
     const link = requireHostLink(to.host_id);
     const send = () =>
-      hostApi<{ state?: unknown }>(link, path(to.id, "message"), {
-        body: {
-          id: messageId ? `bus-${messageId}` : undefined,
-          line,
-          from: fromName,
-        },
-        timeout: 20000,
+      client.message(link, to.id, {
+        id: messageId ? `bus-${messageId}` : undefined,
+        line,
+        from: fromName,
       });
-    const { state } = await (heal ? withHold(to, send) : send());
-    return { state: state === "queued" ? "queued" : "delivered" };
+    const state = await (heal ? withHold(to, send) : send());
+    return { state };
   } catch (error) {
     const why = error instanceof Error ? error.message : String(error);
     return { state: "failed", why: why.slice(0, 300) };
@@ -164,15 +155,9 @@ export async function heldChatTail(
   lines: number
 ): Promise<string | null> {
   const link = requireHostLink(task.host_id);
-  const { text } = await withHold(task, () =>
-    hostApi<{ text?: unknown }>(
-      link,
-      `${path(task.id, "chat-tail")}?lines=${lines}`,
-      { timeout: 10000 }
-    )
-  ).catch(() => ({ text: undefined }));
-  // Whole lines, as a local read has them (read.ts caps and trims them).
-  return typeof text === "string" ? cleanRemoteBlock(text, 16000) : null;
+  return withHold(task, () => client.chatTail(link, task.id, lines)).catch(
+    () => null
+  );
 }
 
 /**
@@ -184,38 +169,22 @@ export async function heldChatFacts(
   task: Held
 ): Promise<{ blocked: string | null; turn: string | null } | null> {
   const link = requireHostLink(task.host_id);
-  const res = await withHold(task, () =>
-    hostApi<{ blocked?: unknown; turn?: unknown }>(
-      link,
-      path(task.id, "chat-facts"),
-      { timeout: 10000 }
-    )
-  ).catch(() => null);
-  if (!res || (res.blocked !== null && typeof res.blocked !== "string"))
-    return null;
-  if (res.turn !== null && typeof res.turn !== "string") return null;
-  return {
-    blocked: res.blocked ? cleanRemoteBlock(res.blocked, 2000) : null,
-    turn: res.turn,
-  };
+  return withHold(task, () => client.chatFacts(link, task.id)).catch(
+    () => null
+  );
 }
 
 /** Stops its agent there; its conversation and worktree are kept. */
 export async function stopHeldTask(task: Held): Promise<string> {
   const link = requireHostLink(task.host_id);
-  const { text } = await withHold(task, () =>
-    hostApi<{ text?: unknown }>(link, path(task.id, "stop"), {
-      body: {},
-      timeout: 30000,
-    })
+  return (
+    (await withHold(task, () => client.stop(link, task.id))) ||
+    `Stopped ${task.name}.`
   );
-  return cleanRemoteText(text) || `Stopped ${task.name}.`;
 }
 
 /** Done there: its agent stops and its worktree goes. Never a merge. */
 export async function doneHeldTask(task: Held): Promise<void> {
   const link = requireHostLink(task.host_id);
-  await withHold(task, () =>
-    hostApi(link, path(task.id, "done"), { body: {}, timeout: 120000 })
-  );
+  await withHold(task, () => client.done(link, task.id));
 }

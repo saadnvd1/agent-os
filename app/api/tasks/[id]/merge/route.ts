@@ -1,8 +1,8 @@
+import { refuse } from "@/lib/tasks/contract/authorize";
 import { NextRequest, NextResponse } from "next/server";
 import { signOffTask } from "@/lib/tasks";
 import { callingDevice } from "@/lib/security/device-me";
 import { isBranchName } from "@/lib/git";
-import { heldRefusal } from "@/lib/tasks/held";
 
 // head: merge only if the PR is still at this commit; the answer names the
 // commit it was pinned to, so another machine forwarding a merge can check.
@@ -11,8 +11,8 @@ export async function POST(
   { params }: { params: Promise<{ id: string }> }
 ) {
   const id = (await params).id;
-  const held = heldRefusal(id, callingDevice(request));
-  if (held) return NextResponse.json({ error: held }, { status: 403 });
+  const refused = refuse(request, id, "open");
+  if (refused) return refused;
   const { head, base } = await request.json().catch(() => ({}));
   if (
     head !== undefined &&

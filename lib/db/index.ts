@@ -1,9 +1,10 @@
 import Database from "better-sqlite3";
-import path from "path";
 import fs from "fs";
 import { createSchema } from "./schema";
 import { runMigrations } from "./migrations";
 import { dbPath } from "./path";
+
+import { machineDb } from "./machine-scope";
 
 // Re-export types and queries
 export * from "./types";
@@ -89,6 +90,8 @@ export function initDb(): Database.Database {
 let _db: Database.Database | null = null;
 
 export function getDb(): Database.Database {
+  const scoped = machineDb.getStore();
+  if (scoped) return scoped;
   if (!_db) {
     _db = initDb();
   }

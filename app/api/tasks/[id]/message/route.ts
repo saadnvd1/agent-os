@@ -3,7 +3,7 @@ import { statusDetector } from "@/lib/status-detector";
 import { deliver } from "@/lib/bus";
 import { sendChatConfirmed } from "@/lib/chat/runner";
 import { cleanRemoteText } from "@/lib/hosts/remote-api";
-import { heldRoute } from "@/lib/tasks/held-routes";
+import { taskRoute } from "@/lib/tasks/contract/authorize";
 
 const MAX_LINE = 40_000;
 
@@ -15,7 +15,7 @@ export async function POST(
   ctx: { params: Promise<{ id: string }> }
 ) {
   const body = await request.json().catch(() => ({}));
-  return heldRoute(request, ctx, async (task) => {
+  return taskRoute(request, ctx, "holder", async (task) => {
     const line = typeof body.line === "string" ? body.line.trim() : "";
     if (!line || line.length > MAX_LINE) throw new Error("Bad message");
     const id = typeof body.id === "string" ? body.id.slice(0, 100) : undefined;

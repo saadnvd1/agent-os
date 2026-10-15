@@ -16,13 +16,8 @@ import { holderRefusal } from "./held";
 import { isPaused } from "../orchestrator/pause";
 import { sessionWorkspace } from "../models/resolve";
 import { arrived as arrivedHere, importTask } from "./import";
-import {
-  forgetHostTasks,
-  requireCapability,
-  postIdempotent,
-  unknownOutcome,
-} from "./remote";
-import { arrivedThere, settleMovedOut, tell } from "./move-recover";
+import * as client from "./contract/client";
+import { arrivedThere, settleMovedOut } from "./move-recover";
 import {
   finishProgress,
   moveSteps,
@@ -89,7 +84,7 @@ export async function moveTask(id: string, toHostId: string): Promise<Session> {
 }
 
 const requireChatMoves = (link: HostLink) =>
-  requireCapability(link, "chat-move", "chat tasks");
+  client.requireCapability(link, "chat-move", "chat tasks");
 
 const unconfirmed = (where: string, err: unknown) =>
   new Error(
@@ -101,7 +96,11 @@ async function moveOut(session: Session, hostId: string): Promise<Session> {
   const chat = session.view === "chat";
   if (chat) await requireChatMoves(link);
   if (isOrchestrated(session))
-    await requireCapability(link, "orchestrated-move", "orchestrator tasks");
+    await client.requireCapability(
+      link,
+      "orchestrated-move",
+      "orchestrator tasks"
+    );
   startProgress(
     session.id,
     link.hostName,
@@ -118,15 +117,10 @@ async function moveOut(session: Session, hostId: string): Promise<Session> {
   stepProgress(session.id, "arrive");
   let there: Session;
   try {
-    ({ session: there } = await postIdempotent<{ session: Session }>(
-      link,
-      "/api/tasks/import",
-      bundle,
-      600000
-    ));
+    ({ session: there } = await client.importBundle(link, bundle));
   } catch (err) {
     // It may be running there already: resuming here could run it twice.
-    if (unknownOutcome(err)) throw unconfirmed(link.hostName, err);
+    if (client.unknownOutcome(err)) throw unconfirmed(link.hostName, err);
     await resumeTask(session.id);
     throw err;
   }
@@ -144,7 +138,6 @@ async function moveIn(mirror: Session): Promise<Session> {
   const link = requireHostLink(mirror.host_id);
   if (mirror.view === "chat") await requireChatMoves(link);
   startProgress(mirror.id, "this machine", moveSteps("in", link.hostName));
-  const path = `/api/tasks/${encodeURIComponent(mirror.id)}`;
   // A retry after it arrived here but that machine didn't hear: tidy up.
   let here = arrivedHere(mirror.id);
   if (!here) {
@@ -158,21 +151,16 @@ async function moveIn(mirror: Session): Promise<Session> {
     stepProgress(mirror.id, "export");
     let bundle: TaskBundle;
     try {
-      ({ bundle } = await postIdempotent<{ bundle: TaskBundle }>(
-        link,
-        `${path}/export`,
-        { to: os.hostname() },
-        300000
-      ));
+      bundle = await client.exportOut(link, mirror.id, os.hostname());
     } catch (err) {
       mirrorRunning(mirror.id);
-      if (unknownOutcome(err)) throw unconfirmed(link.hostName, err);
+      if (client.unknownOutcome(err)) throw unconfirmed(link.hostName, err);
       throw err;
     }
     try {
       here = await importTask(bundle);
     } catch (err) {
-      await tell(link, `${path}/resume`, { force: true }).catch((e) => {
+      await client.resume(link, mirror.id, { force: true }).catch((e) => {
         throw new Error(
           `${(err as Error).message}; and ${link.hostName} didn't resume it: ${e.message}`
         );
@@ -186,7 +174,7 @@ async function moveIn(mirror: Session): Promise<Session> {
   // "moving" there, which nothing can sign off), the mirror stays, so Move
   // here again comes back to this.
   try {
-    await tell(link, `${path}/moved`, { to: os.hostname() });
+    await client.confirmMoved(link, mirror.id, os.hostname());
   } catch (err) {
     throw new Error(
       `It's running here now, but ${link.hostName} didn't confirm (${(err as Error).message}). Press Move here again to tidy up.`
@@ -197,7 +185,7 @@ async function moveIn(mirror: Session): Promise<Session> {
     mirror.id,
     mirror.host_id
   );
-  forgetHostTasks(link.hostId);
+  client.forget(link.hostId);
   return db
     .prepare(`SELECT * FROM sessions WHERE id = ?`)
     .get(here.id) as Session;

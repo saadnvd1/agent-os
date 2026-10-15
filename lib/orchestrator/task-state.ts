@@ -9,8 +9,8 @@ import { blockedReason } from "../tasks/state";
 import { checkWaitingPatterns, statusDetector } from "../status-detector";
 import { getCheck, putCheck } from "./checks";
 import { cleanRemoteText, hostLink, type HostLink } from "../hosts/remote-api";
-import { heldChatFacts, isHeldRemote } from "../tasks/held-remote";
-import { hostTasks } from "../tasks/remote";
+import { heldChatFacts, isHeldRemote } from "../tasks/contract/held-calls";
+import { list as hostTasks } from "../tasks/contract/client";
 import { peerPane } from "../hosts/peer-sessions";
 import { untrusted } from "./untrusted";
 
@@ -104,6 +104,8 @@ async function peerChatWaiting(
             : `its chat on ${link.hostName} couldn't say whether a question is open`,
     };
   }
+  // compat: task-contract-1. A machine without held-chat-facts is asked
+  // through its task list; drop this once every linked machine has it.
   const view = await hostTasks(link, true)
     .then(({ tasks, capabilities }) =>
       // One that can't say its chat's turn can't rule out an open question.

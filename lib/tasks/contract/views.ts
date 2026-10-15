@@ -1,21 +1,15 @@
 /**
  * How tasks on other machines look here: each mirror's view as its machine
- * reports it. A mirror follows the machine's word: finished when it says
- * finished, moved when it says moved, never because it went missing once.
+ * reports it. Reading only: the sync loop (sync.ts) is what records that a
+ * mirror finished or moved, never because it went missing once.
  */
 
-import type { Session } from "../db";
-import { requireHostLink, type HostLink } from "../hosts/remote-api";
-import { deriveTaskState, type TaskStatus } from "./state";
-import { hostTasks, setMirrorStatus } from "./remote";
-import type { TaskView } from "./index";
-import { viewOf } from "./move-targets";
-
-const FINISHED: Record<string, TaskStatus> = {
-  merged: "merged",
-  dropped: "dropped",
-  done: "done",
-};
+import type { Session } from "../../db";
+import { requireHostLink, type HostLink } from "../../hosts/remote-api";
+import { deriveTaskState } from "../state";
+import type { TaskView } from "../index";
+import { viewOf } from "../move-targets";
+import * as client from "./client";
 
 function offlineView(
   session: Session,
@@ -57,13 +51,13 @@ async function viewsOn(hostId: string, rows: Session[]): Promise<TaskView[]> {
     return rows.map((s) => offlineView(s, "", (err as Error).message));
   }
   try {
-    const { tasks, moved = [] } = await hostTasks(link);
+    const { tasks, moved = [] } = await client.list(link);
     const live = new Map(tasks.map((t) => [t.id, t]));
     const gone = new Set(moved.map((m) => m.id));
     return rows.flatMap((s): TaskView[] => {
       const t = live.get(s.id);
       if (!t) {
-        if (gone.has(s.id)) return (setMirrorStatus(s.id, "moved"), []);
+        if (gone.has(s.id)) return [];
         return [
           offlineView(
             s,
@@ -72,7 +66,6 @@ async function viewsOn(hostId: string, rows: Session[]): Promise<TaskView[]> {
           ),
         ];
       }
-      if (FINISHED[t.state]) setMirrorStatus(s.id, FINISHED[t.state]);
       return [
         {
           ...t,
@@ -92,7 +85,7 @@ async function viewsOn(hostId: string, rows: Session[]): Promise<TaskView[]> {
   }
 }
 
-export async function remoteTaskViews(mirrors: Session[]): Promise<TaskView[]> {
+export async function mirrorViews(mirrors: Session[]): Promise<TaskView[]> {
   const byHost = new Map<string, Session[]>();
   for (const s of mirrors)
     byHost.set(s.host_id, [...(byHost.get(s.host_id) ?? []), s]);

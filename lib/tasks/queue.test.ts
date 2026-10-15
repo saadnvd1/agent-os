@@ -101,9 +101,9 @@ vi.mock("@/lib/hosts/remote-api", async (importOriginal) => ({
   linkedHostIds: () => new Set(Object.keys(peers)),
   hostLink: (id: string) => (peers[id] ? { hostId: id } : null),
 }));
-vi.mock("@/lib/tasks/remote", async (importOriginal) => ({
-  ...(await importOriginal<typeof import("@/lib/tasks/remote")>()),
-  hostTasks: async (link: { hostId: string }) => ({
+vi.mock("@/lib/tasks/contract/client", async (importOriginal) => ({
+  ...(await importOriginal<typeof import("@/lib/tasks/contract/client")>()),
+  list: async (link: { hostId: string }) => ({
     tasks: [],
     capabilities: [
       ...(peers[link.hostId]?.noHold ? [] : ["held-start"]),

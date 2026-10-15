@@ -10,7 +10,7 @@ import { hostLink } from "../hosts/remote-api";
 import { peerPane } from "../hosts/peer-sessions";
 import { workspaceSessions } from "./facts";
 import { untrusted } from "./untrusted";
-import { heldChatTail, isHeldRemote } from "../tasks/held-remote";
+import { heldChatTail, isHeldRemote } from "../tasks/contract/held-calls";
 import {
   findExternalSession,
   knownExternalSession,

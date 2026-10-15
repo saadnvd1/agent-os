@@ -37,7 +37,7 @@ import { importTask } from "./import";
 import { moveTask } from "./move-flow";
 import { signOffTask } from "./finish";
 import { holderRefusal } from "./held";
-import { TASK_CAPABILITIES } from "./remote";
+import { TASK_CAPABILITIES } from "./contract/types";
 import {
   json,
   row,
