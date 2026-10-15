@@ -6,42 +6,51 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import { Button } from "@/components/ui/button";
+import { useHealthCount } from "@/data/health";
 import { usageLabel, useMachineLoad } from "@/data/load";
-import type { LoadView } from "@/lib/load/monitor";
+import { settingsUiActions } from "@/stores/settingsUi";
+import { loadSummary, statusDot, type DotLevel } from "./statusDot";
 import { cn } from "@/lib/utils";
 
-const DOT: Record<LoadView["level"], string> = {
+const DOT: Record<DotLevel, string> = {
   green: "bg-green-500",
   amber: "bg-amber-500",
   red: "bg-destructive",
 };
 
-// "Load 4.2 on 10 cores · memory normal"
-export function loadSummary(load: LoadView): string {
-  const memory = load.pressure ?? `${load.memUsedPct}% used`;
-  return `Load ${load.load1} on ${load.cores} cores · memory ${memory}`;
-}
+const BUTTON_CLASS =
+  "-ml-1.5 h-11 w-11 shrink-0 md:ml-0 md:h-8 md:w-6 [@media(hover:none)]:md:-ml-1.5 [@media(hover:none)]:md:h-11 [@media(hover:none)]:md:w-11";
 
-// The machine's load as a dot beside the workspace's name; tap it for the
-// numbers and the sessions using the most CPU.
+// One dot beside the workspace's name for the machine's load and the health
+// watch, whichever is worse. With a health issue open a tap goes to Settings
+// → Health; otherwise it shows the load numbers and the busiest sessions.
 export function LoadGauge() {
   const load = useMachineLoad();
-  if (!load) return null;
+  const { data: health } = useHealthCount();
+  const dot = statusDot(load, health);
+  if (!dot) return null;
+  const button = (
+    <Button
+      variant="ghost"
+      size="icon-sm"
+      aria-label={dot.label}
+      title={dot.title}
+      data-status-dot={dot.level}
+      data-opens={dot.opensHealth ? "health" : "load"}
+      onClick={
+        dot.opensHealth ? () => settingsUiActions.open("health") : undefined
+      }
+      className={BUTTON_CLASS}
+    >
+      <span className={cn("h-2 w-2 rounded-full", DOT[dot.level])} />
+    </Button>
+  );
+  if (dot.opensHealth || !load) return button;
   const summary = loadSummary(load);
   const top = load.top.filter((s) => s.cores >= 0.1);
   return (
     <DropdownMenu>
-      <DropdownMenuTrigger asChild>
-        <Button
-          variant="ghost"
-          size="icon-sm"
-          aria-label={`Machine load ${load.level}. ${summary}`}
-          title={summary}
-          className="-ml-1.5 h-11 w-11 shrink-0 md:ml-0 md:h-8 md:w-6 [@media(hover:none)]:md:-ml-1.5 [@media(hover:none)]:md:h-11 [@media(hover:none)]:md:w-11"
-        >
-          <span className={cn("h-2 w-2 rounded-full", DOT[load.level])} />
-        </Button>
-      </DropdownMenuTrigger>
+      <DropdownMenuTrigger asChild>{button}</DropdownMenuTrigger>
       <DropdownMenuContent align="end" className="w-72 p-3">
         <p className="text-sm font-medium">{summary}</p>
         {load.level !== "green" && (

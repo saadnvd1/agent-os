@@ -34,7 +34,7 @@ export function useHealthQuery() {
   });
 }
 
-// What the sidebar dot needs, and nothing more.
+// What the sidebar status dot needs, and nothing more.
 export function useHealthCount() {
   return useQuery({
     queryKey: healthKeys.count(),
