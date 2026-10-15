@@ -303,3 +303,32 @@ describe("questionSource", () => {
     ).toBe("q");
   });
 });
+
+describe("events after a cut-off turn", () => {
+  it("each folds with its own reply, however the earlier turn ended", () => {
+    const sent = (id: string) => ({ ...event(id), midTurn: false });
+    const items: ChatItem[] = [
+      user("u", { midTurn: false }),
+      reply("a1"),
+      sent("R"),
+      reply("r1"),
+      end("end1"),
+      sent("E2"),
+      reply("r2"),
+      end("end2"),
+      sent("E3"),
+      reply("r3"),
+      end("end3"),
+    ];
+    const blocks = groupTimeline(items, { foldEvents: true });
+    const events = blocks.find((b) => b.type === "events");
+    if (events?.type !== "events") throw new Error("expected events");
+    expect(events.turns.map((t) => [t.id, t.replies.map((i) => i.id)])).toEqual(
+      [
+        ["R", ["r1", "end1"]],
+        ["E2", ["r2", "end2"]],
+        ["E3", ["r3", "end3"]],
+      ]
+    );
+  });
+});

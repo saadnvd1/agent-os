@@ -55,4 +55,105 @@ describe("readingOrder", () => {
     const items = [user("u"), err, event("e")];
     expect(readingOrder(items)).toBe(items);
   });
+
+  it("trusts a saved midTurn over the guess, so a cut-off turn can't swallow later events", () => {
+    const sent = (id: string, midTurn: boolean) => event(id, { midTurn });
+    const items = [
+      user("u", { midTurn: false }),
+      a("a1"),
+      sent("R", false),
+      a("r1"),
+      end("end1"),
+      sent("E2", false),
+      a("r2"),
+      end("end2"),
+      sent("E3", false),
+      a("r3"),
+      end("end3"),
+    ];
+    expect(readingOrder(items)).toBe(items);
+  });
+
+  it("holds an event saved as mid-turn until the turn ends, however it looks", () => {
+    const items = [
+      user("u", { midTurn: false }),
+      event("e", { midTurn: true }),
+      a("b"),
+      end("t"),
+      a("c"),
+      end("t2"),
+    ];
+    expect(ids(readingOrder(items))).toEqual(["u", "b", "t", "e", "c", "t2"]);
+  });
+
+  it("starts one waiting event per turn end, so answers stay with their own", () => {
+    const items = [
+      user("u", { midTurn: false }),
+      event("e1", { midTurn: true }),
+      event("e2", { midTurn: true }),
+      a("b"),
+      end("t1"),
+      a("r1"),
+      end("t2"),
+      a("r2"),
+      end("t3"),
+    ];
+    expect(ids(readingOrder(items))).toEqual([
+      "u",
+      "b",
+      "t1",
+      "e1",
+      "r1",
+      "t2",
+      "e2",
+      "r2",
+      "t3",
+    ]);
+  });
+
+  it("answered together, the first takes the reply and the rest stay bare", () => {
+    const items = [
+      user("u", { midTurn: false }),
+      event("e1", { midTurn: true }),
+      event("e2", { midTurn: true }),
+      a("b"),
+      end("t1"),
+      a("both"),
+      end("t2"),
+      user("typed", { midTurn: false }),
+    ];
+    expect(ids(readingOrder(items))).toEqual([
+      "u",
+      "b",
+      "t1",
+      "e1",
+      "both",
+      "t2",
+      "e2",
+      "typed",
+    ]);
+  });
+
+  it("an extra turn end doesn't move an event's reply", () => {
+    const items = [
+      user("u", { midTurn: false }),
+      event("e1", { midTurn: true }),
+      a("b"),
+      end("t1"),
+      a("r1"),
+      end("t2"),
+      end("stray"),
+      user("typed", { midTurn: false }),
+    ];
+    expect(ids(readingOrder(items))).toEqual([
+      "u",
+      "b",
+      "t1",
+      "e1",
+      "r1",
+      "t2",
+      "stray",
+      "typed",
+    ]);
+  });
 });

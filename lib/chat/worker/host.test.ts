@@ -521,7 +521,7 @@ describe("ChatHost queue", () => {
     expect(conversation.send).toHaveBeenCalledTimes(2);
     expect(listQueue(id)).toEqual([]);
     const [first, second] = listItems(id);
-    expect(first).not.toHaveProperty("midTurn");
+    expect(first).toMatchObject({ id: "user-1", midTurn: false });
     expect(second).toMatchObject({ id: "user-2", midTurn: true });
     host.close();
   });
@@ -645,6 +645,24 @@ describe("ChatHost queue", () => {
     conversation.events.push({ type: "state", state: "idle" });
     await tick();
     expect(host.state).toBe("idle");
+    host.close();
+  });
+
+  it("a message sent now with no turn started yet lands in place and waits for nothing", async () => {
+    const { id, host, conversation } = await startHost();
+    await host.handle({ type: "send", id: "user-1", text: "long job" });
+    // Esc before the agent has started a turn: no hand-over, but running.
+    await host.handle({ type: "interrupt" });
+    await host.handle({ type: "send", id: "user-2", text: "instead" });
+    expect(conversation.send).toHaveBeenLastCalledWith("instead", undefined, {
+      now: true,
+    });
+    expect(
+      listItems(id).map((i) => [i.id, (i as { midTurn?: boolean }).midTurn])
+    ).toEqual([
+      ["user-1", false],
+      ["user-2", false],
+    ]);
     host.close();
   });
 

@@ -149,9 +149,10 @@ export type ChatItem =
       // Saved since messages were tagged where they're sent: without an
       // origin, the reader typed it. Older items are matched by their text.
       tagged?: true;
-      // Sent while a turn ran: the agent reads it once that turn ends, so
-      // what follows it until then still belongs to that turn.
-      midTurn?: true;
+      // Whether it was sent while a turn ran: the agent then reads it once
+      // that turn ends, so what follows until then is still that turn's.
+      // Always set when saved; absent only on history from before it was.
+      midTurn?: boolean;
       // The provider's id for this message, to undo file changes back to it.
       checkpoint?: string;
     })

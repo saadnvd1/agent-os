@@ -2,21 +2,27 @@ import type { ChatItem } from "./events";
 import { activityOrigin } from "./turns";
 
 // Activity sent while a turn runs is saved when sent but read by the agent
-// once that turn ends. It moves to just after the turn's end, so the turn a
+// once that turn ends. It moves to after the turn's end, so the turn a
 // person's message started stays whole and the activity gets its own reply.
-// History from before messages carried `midTurn` is read the same way.
+//
+// Several waiting at one turn's end are taken a turn each: the first starts
+// after the end, the next after the following one. Whether the agent
+// answers them together or apart isn't recorded, and this way a turn each
+// keeps every reply with its own event; answered together, the first takes
+// the reply and the rest show as bare rows.
+//
+// A message saved with `midTurn` is trusted either way. Only history from
+// before the field is guessed, from whether a turn was open when it landed.
 export function readingOrder(items: ChatItem[]): ChatItem[] {
   const out: ChatItem[] = [];
-  let waiting: ChatItem[] = [];
+  const waiting: ChatItem[] = [];
   let open = false;
   let moved = false;
-  const release = () => {
-    out.push(...waiting);
-    waiting = [];
-  };
+  const release = () => out.push(...waiting.splice(0));
   for (const item of items) {
     if (item.kind === "user") {
-      if ((item.midTurn || open) && activityOrigin(item)) {
+      const waits = item.midTurn === undefined ? open : item.midTurn;
+      if (waits && activityOrigin(item)) {
         waiting.push(item);
         moved = true;
         continue;
@@ -26,8 +32,9 @@ export function readingOrder(items: ChatItem[]): ChatItem[] {
       open = true;
     } else if (item.kind === "turn_end") {
       out.push(item);
-      open = waiting.length > 0;
-      release();
+      open = false;
+      const next = waiting.shift();
+      if (next) out.push(next);
     } else if (
       item.kind === "undo" ||
       item.kind === "error" ||
