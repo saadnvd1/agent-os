@@ -12,6 +12,7 @@ import { queueEvent, queueEventOnce } from "../orchestrator/events";
 import { amendBrief, scopeChangesOf } from "../orchestrator/amendments";
 import { usageRows } from "../session-logs/gather";
 import { pieceBrief } from "./pieces";
+import { reportDuplicatePiece } from "../health/pieces";
 import {
   getFeature,
   planPathOf,
@@ -280,6 +281,12 @@ async function releaseOne(
       return;
     }
   }
+  if (piece.note !== RELEASED_ANYWAY)
+    reportDuplicatePiece(
+      feature,
+      piece,
+      all.map((p) => p.session_id).filter((id): id is string => !!id)
+    );
   const claimed = db
     .prepare(
       `UPDATE feature_pieces SET status = 'building', session_id = ?, note = NULL

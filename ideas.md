@@ -272,3 +272,14 @@
 - Shared build caches harvested from finished worktrees into a store, so a cache newer than the main checkout's seeds the next one. Left out because one agent's cache would then be trusted by another's typecheck or build.
 - On a lockfile mismatch, seed node_modules and run the install for the delta only (`npm ci` deletes node_modules first, so it needs `npm install` and a guard that the worktree's lockfile isn't rewritten).
 - Sweep stale `aos-quick-repo-*` worktrees left under the worktrees folder.
+
+## Health watcher (after V1)
+
+- `bg-orphan` detector: a background job whose process has exited while its monitor still waits (needs process-tree attribution).
+- More probes for the watchers: `ci_log`, `gh_pr`, `ps_tree`.
+- Retry-loop and lingering-state detectors (a task repeating the same failing command, a state that never leaves).
+- Drain before a restart, so a long `aos sim open` isn't killed.
+- A timed pause for a task hogging the machine, offered as an action once the reports prove reliable.
+- A daily drift digest, only when something happened.
+- A Haiku pre-filter before the Sonnet wake.
+- Load detection for linked machines, not just this one.

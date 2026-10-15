@@ -41,6 +41,7 @@ const UNCAPPED = [
   "once:plan-done:",
   "once:recipe:",
   "once:feature:",
+  "once:health:", // one line per anomaly, keyed by its id
 ];
 export const bypassesCap = (e: Pick<EventRow, "key">) =>
   UNCAPPED.some((p) => e.key.startsWith(p));
