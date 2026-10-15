@@ -62,7 +62,7 @@ import { NeedsYouStrip } from "@/components/Orchestrator/NeedsYouStrip";
 import { useResolveQuestion } from "@/data/orchestrators";
 import { needsYouFocus, needsYouFocusActions } from "@/stores/needsYouFocus";
 import { hrefWithSession } from "@/lib/session-url";
-import { isQuestionTool } from "@/lib/chat/turns";
+import { questionSource } from "@/lib/chat/turns";
 import { useViewport } from "@/hooks/useViewport";
 import { useChatCommands } from "./useChatCommands";
 import { copySelection } from "./copy-selection";
@@ -751,16 +751,7 @@ export function ChatPanel({
                   )
                 );
                 window.dispatchEvent(new PopStateEvent("popstate"));
-              } else
-                goTo((all) => {
-                  const asked = all.findLast(
-                    (i) =>
-                      isQuestionTool(i) &&
-                      (i as { input?: { text?: string } }).input?.text ===
-                        item.question.text
-                  );
-                  return asked?.id ?? null;
-                });
+              } else goTo((all) => questionSource(all, item.question.text));
             }}
             onReply={(item) => {
               setReplyTo({ id: item.question.id, text: item.question.text });

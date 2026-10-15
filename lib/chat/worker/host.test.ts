@@ -520,6 +520,9 @@ describe("ChatHost queue", () => {
     await host.handle({ type: "send", id: "user-2", text: "from a peer" });
     expect(conversation.send).toHaveBeenCalledTimes(2);
     expect(listQueue(id)).toEqual([]);
+    const [first, second] = listItems(id);
+    expect(first).not.toHaveProperty("midTurn");
+    expect(second).toMatchObject({ id: "user-2", midTurn: true });
     host.close();
   });
 

@@ -564,7 +564,8 @@ export class ChatHost {
     this.sent.add(m.id);
     this.currentTurn = m.id;
     this.hardStopAt = 0;
-    if (this.busy()) this.behind++;
+    const midTurn = this.busy();
+    if (midTurn) this.behind++;
     // Sent now, it stops the running turn, which still ends after this.
     if (!this.busy()) now = false;
     // A turn the agent has started and not ended is what stops.
@@ -599,6 +600,7 @@ export class ChatHost {
       peer: m.peer,
       origin: m.origin,
       tagged: true as const,
+      ...(midTurn && !handOver ? { midTurn: true as const } : {}),
       createdAt: Date.now(),
       checkpoint,
     };

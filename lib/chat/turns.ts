@@ -18,8 +18,6 @@ export interface EventTurn {
   at: number;
   // Still being answered.
   live: boolean;
-  // The reply opened a question for the reader.
-  hasQuestion: boolean;
 }
 
 const FOLDED_KINDS = new Set(["event", "peer", "schedule", "system"]);
@@ -38,6 +36,26 @@ export function activityOrigin(item: UserItem): ChatOrigin | null {
 
 export const isQuestionTool = (item: ChatItem): boolean =>
   item.kind === "tool" && /(^|__)question$/.test(item.name);
+
+export const isAskTool = (item: ChatItem): boolean =>
+  item.kind === "tool" && /(^|__)ask_saad$/.test(item.name);
+
+// The assistant message a question was asked in (its turn's last words
+// before the call), else the call itself.
+export function questionSource(items: ChatItem[], text: string): string | null {
+  const at = items.findLastIndex(
+    (i) =>
+      isQuestionTool(i) &&
+      (i as { input?: { text?: string } }).input?.text === text
+  );
+  if (at === -1) return null;
+  for (let i = at - 1; i >= 0; i--) {
+    const item = items[i];
+    if (item.kind === "user" || item.kind === "turn_end") break;
+    if (item.kind === "assistant" && item.text.trim()) return item.id;
+  }
+  return items[at].id;
+}
 
 export function plainSummary(text: string, max = 140): string {
   const line =
@@ -89,6 +107,8 @@ export function eventTurnAt(
     (i) =>
       i.kind === "plan" ||
       i.kind === "error" ||
+      isQuestionTool(i) ||
+      isAskTool(i) ||
       (i.kind === "approval" && i.status === "pending")
   );
   if (needsReader) return null;
@@ -105,7 +125,6 @@ export function eventTurnAt(
       task: taskName(origin),
       at: user.createdAt,
       live: !ended && end >= items.length,
-      hasQuestion: replies.some(isQuestionTool),
     },
   };
 }
