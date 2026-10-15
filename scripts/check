@@ -59,6 +59,9 @@ if has test; then
   step "test";      npx vitest run ${vitest_args[@]+"${vitest_args[@]}"}
 fi
 if has build; then
+  # The build imports the generated migrations index, so it needs it even
+  # when the static group (which checks it) did not run.
+  step "migrations"; node scripts/gen-migrations-index.mjs
   step "build";   npx next build
   step "bundle";  node scripts/check-bundle.mjs
 fi
