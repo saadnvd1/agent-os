@@ -9,16 +9,38 @@ concurrency:
   group: ci-${{ github.ref }}
   cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 
+# The groups of scripts/check as parallel jobs. No job needs another: every
+# check exists from the start, so the merge gate never sees a head where the
+# checks it can see have all passed and another has yet to appear.
 jobs:
-  check:
-    name: Check
+  static:
+    name: Static
     runs-on: ubuntu-latest
+    timeout-minutes: 20
     steps:
       - uses: actions/checkout@v4
-      - uses: actions/setup-node@v4
-        with:
-          node-version: 22
-          cache: npm
-      - run: npm ci
+      - uses: ./.github/actions/setup
+      - run: scripts/check --only static --parallel
+
+  test:
+    name: Test (${{ matrix.shard }}/3)
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    strategy:
+      fail-fast: false
+      matrix:
+        shard: [1, 2, 3]
+    steps:
+      - uses: actions/checkout@v4
+      - uses: ./.github/actions/setup
       - run: sudo apt-get install -y ripgrep
-      - run: scripts/check --build
+      - run: scripts/check --only test -- --shard=${{ matrix.shard }}/3
+
+  build:
+    name: Build
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+      - uses: ./.github/actions/setup
+      - run: scripts/check --only build
