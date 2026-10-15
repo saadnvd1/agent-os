@@ -8,7 +8,7 @@
 import { notifyPhone } from "../notify";
 import { listOrchestrators } from "../orchestrator/home";
 import { queueEventOnce } from "../orchestrator/events";
-import { untrusted } from "../orchestrator/untrusted";
+import { redact, untrusted } from "../orchestrator/untrusted";
 import { duration } from "./detectors";
 import { markDelivered, markPhoned, verdictOf } from "./store";
 import { db } from "../db";
@@ -32,13 +32,20 @@ export const realRoute: RouteDeps = {
       .map((o) => o.workspace_id as string),
 };
 
+export const phoneLine = (line: string): string => {
+  const safe = redact(line).replace(/\s+/g, " ").trim();
+  return safe.length > 160 ? `${safe.slice(0, 159)}…` : safe;
+};
+
 export function chatLine(row: AnomalyRow, v: Verdict): string {
   const head = `Health (${AREA_LABELS[row.area].toLowerCase()}${v.unjudged ? ", unjudged" : ""}):`;
-  if (v.unjudged) return `${head} ${row.line}`;
+  // A detector line can carry a job description or a piece name an agent wrote.
+  const line = untrusted("health detector", row.line);
+  if (v.unjudged) return `${head} ${line}`;
   const said = [v.cause, v.action ? `Suggest: ${v.action}` : ""]
     .filter(Boolean)
     .join(" ");
-  return `${head} ${row.line} ${untrusted("health watcher", said)}`;
+  return `${head} ${line} ${untrusted("health watcher", said)}`;
 }
 
 function phonedToday(now: number): number {
@@ -76,10 +83,10 @@ export function deliver(
     );
   markDelivered(row.id, now);
   if (v.saadOnly && !row.phoned_at && phonedToday(now) < PHONE_CAP_PER_DAY) {
-    // The detector's own words only: nothing a log or a model wrote.
+    // Nothing a model wrote; the detector's line, redacted and clipped.
     deps.phone(
       "health",
-      `${row.line} It needs you; the details are in the orchestrator chat.`,
+      `${phoneLine(row.line)} It needs you; the details are in the orchestrator chat.`,
       {
         category: "system",
         key: `health:${row.id}`,

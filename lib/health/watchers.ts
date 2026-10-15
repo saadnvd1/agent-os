@@ -108,7 +108,10 @@ export const unjudged = (row: AnomalyRow, why: string): Verdict => ({
 export function brake(c: HealthConfig, deps: WatchDeps): string | null {
   if (c.watchersOn < 1) return "watchers are off";
   const pct = deps.usagePct();
-  if (pct !== null && pct >= c.wakeUsageCeilingPct)
+  // readUsage only reports a window while its sample is fresh, so no number
+  // means no fresh reading: don't spend tokens blind.
+  if (pct === null) return "no fresh usage reading";
+  if (pct >= c.wakeUsageCeilingPct)
     return `the usage window is at ${Math.round(pct)}%`;
   return null;
 }

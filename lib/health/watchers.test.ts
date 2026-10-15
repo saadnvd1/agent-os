@@ -44,7 +44,7 @@ const answer = (over: Record<string, unknown> = {}) => ({
   ...over,
 });
 
-function deps(replies: unknown[], pct: number | null = null) {
+function deps(replies: unknown[], pct: number | null = 10) {
   const runs: ClaudeRun[] = [];
   const run = vi.fn(async (r: ClaudeRun) => {
     runs.push(r);
@@ -129,7 +129,12 @@ describe("a wake", () => {
     expect(r.tokens).toBeNull();
     expect(brake(config(), deps([], 95).deps)).toContain("95%");
     expect(brake(config(), deps([], 50).deps)).toBeNull();
-    expect(brake(config(), deps([], null).deps)).toBeNull();
+    const blind = deps([answer()], null);
+    const b = await wake(row(), facts(), config(), blind.deps);
+    expect(blind.run).not.toHaveBeenCalled();
+    expect(b.verdict.unjudged).toBe(true);
+    expect(b.verdict.why).toBe("no fresh usage reading");
+    expect(brake(config(), deps([], null).deps)).toBe("no fresh usage reading");
   });
 });
 
