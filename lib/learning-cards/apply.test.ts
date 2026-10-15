@@ -1,7 +1,8 @@
+import { execFileSync } from "child_process";
 import fs from "fs";
 import os from "os";
 import path from "path";
-import { beforeEach, describe, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { db } from "../db";
 import { setExperiment } from "../experiments";
 import { listRules } from "../orchestrator/rules";
@@ -19,8 +20,15 @@ vi.mock("../orchestrator/quick", () => ({
   quickPR: (...a: unknown[]) => quickPR(...(a as [])),
 }));
 const createTask = vi.fn(async () => ({ id: "task-1" }));
+const hostExec = vi.fn(async () => ({ stdout: "1\n", stderr: "" }));
+vi.mock("../hosts", async (orig) => ({
+  ...(await orig<typeof import("../hosts")>()),
+  hostExec: (...a: unknown[]) => hostExec(...(a as [])),
+}));
+const dropTask = vi.fn(async () => {});
 vi.mock("../tasks", () => ({
   createTask: (...a: unknown[]) => createTask(...(a as [])),
+  dropTask: (...a: unknown[]) => dropTask(...(a as [])),
 }));
 
 const { applyCard, dismissCard, acceptRecipeCardFor, withLesson, CardRefused } =
@@ -56,12 +64,21 @@ function lessonCard(
   })!;
 }
 
+const repos: string[] = [];
+afterEach(() => {
+  for (const d of repos.splice(0))
+    fs.rmSync(d, { recursive: true, force: true });
+});
+
 beforeEach(() => {
+  hostExec.mockReset();
+  hostExec.mockResolvedValue({ stdout: "1\n", stderr: "" });
   clearCards();
   setExperiment("learning-cards", true);
   quickPR.mockClear();
   startQuickChange.mockClear();
   createTask.mockClear();
+  dropTask.mockClear();
   quickDir = fs.mkdtempSync(path.join(os.tmpdir(), "lc-quick-"));
 });
 
@@ -141,6 +158,102 @@ describe("applyCard", () => {
     );
     expect(done.applied_ref).toBe("quick-1");
     expect(createTask).not.toHaveBeenCalled();
+  });
+
+  function repoFor(s: ReturnType<typeof seedSession>, ignored: boolean) {
+    const dir = fs.mkdtempSync(path.join(os.tmpdir(), "lc-repo-"));
+    repos.push(dir);
+    const env = { ...process.env };
+    delete env.GIT_DIR;
+    delete env.GIT_INDEX_FILE;
+    const g = (...a: string[]) =>
+      execFileSync("git", ["-C", dir, ...a], { env });
+    g("init", "-q");
+    fs.writeFileSync(
+      path.join(dir, ".gitignore"),
+      ignored ? "CLAUDE.md\n" : ""
+    );
+    if (!ignored) fs.writeFileSync(path.join(dir, "CLAUDE.md"), "# Repo\n");
+    db.prepare(`UPDATE projects SET working_directory = ? WHERE id = ?`).run(
+      dir,
+      s.project.id
+    );
+    return dir;
+  }
+
+  it("appends to an ignored CLAUDE.md in the checkout, with no quick change or task", async () => {
+    const s = seedSession({ orchestrator: true });
+    const dir = repoFor(s, true);
+    fs.writeFileSync(path.join(dir, "CLAUDE.md"), "# Notes\n\nkeep me\n");
+    const done = await applyCard(
+      lessonCard(s, { destination: "claude_md" }).id
+    );
+    expect(fs.readFileSync(path.join(dir, "CLAUDE.md"), "utf8")).toBe(
+      "# Notes\n\nkeep me\n\n## Lessons\n\n- Run tests first\n"
+    );
+    expect(done.status).toBe("accepted");
+    expect(done.applied_ref).toBe("CLAUDE.md");
+    expect(startQuickChange).not.toHaveBeenCalled();
+    expect(createTask).not.toHaveBeenCalled();
+  });
+
+  it("creates an ignored CLAUDE.md when it is missing", async () => {
+    const s = seedSession({ orchestrator: true });
+    const dir = repoFor(s, true);
+    await applyCard(lessonCard(s, { destination: "claude_md" }).id);
+    expect(fs.readFileSync(path.join(dir, "CLAUDE.md"), "utf8")).toBe(
+      "## Lessons\n\n- Run tests first\n"
+    );
+  });
+
+  it.each([
+    ["ignored", async () => ({ stdout: "0\n", stderr: "" })],
+    ["uncheckable", async () => ({ stdout: "128\n", stderr: "" })],
+    [
+      "unreachable",
+      async () => {
+        throw new Error("ssh down");
+      },
+    ],
+  ])("refuses a remote project whose CLAUDE.md is %s", async (_n, reply) => {
+    const s = seedSession({ orchestrator: true });
+    db.prepare(`UPDATE projects SET host_id = 'remote-1' WHERE id = ?`).run(
+      s.project.id
+    );
+    hostExec.mockImplementationOnce(reply);
+    const card = lessonCard(s, { destination: "claude_md" });
+    await expect(applyCard(card.id)).rejects.toThrow(CardRefused);
+    expect(getCard(card.id)?.status).toBe("pending");
+    expect(startQuickChange).not.toHaveBeenCalled();
+    expect(createTask).not.toHaveBeenCalled();
+  });
+
+  it("still starts a task for a remote project whose CLAUDE.md is tracked", async () => {
+    const s = seedSession();
+    db.prepare(`UPDATE projects SET host_id = 'remote-1' WHERE id = ?`).run(
+      s.project.id
+    );
+    await applyCard(lessonCard(s, { destination: "claude_md" }).id);
+    expect(createTask).toHaveBeenCalled();
+  });
+
+  it("keeps the quick change and PR for a tracked CLAUDE.md", async () => {
+    const s = seedSession({ orchestrator: true });
+    repoFor(s, false);
+    const done = await applyCard(
+      lessonCard(s, { destination: "claude_md" }).id
+    );
+    expect(done.applied_ref).toBe("quick-1");
+    expect(quickPR).toHaveBeenCalled();
+  });
+
+  it("drops the quick change when its PR fails, and releases the card", async () => {
+    const s = seedSession({ orchestrator: true });
+    const card = lessonCard(s, { destination: "claude_md" });
+    quickPR.mockRejectedValueOnce(new Error("nothing to commit"));
+    await expect(applyCard(card.id)).rejects.toThrow("nothing to commit");
+    expect(dropTask).toHaveBeenCalledWith("quick-1");
+    expect(getCard(card.id)?.status).toBe("pending");
   });
 
   it("starts a small task for CLAUDE.md when there is no orchestrator", async () => {
