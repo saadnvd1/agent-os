@@ -33,7 +33,11 @@ const GIT_SPAWN = [
   },
 ];
 const SERVER_CODE = ["lib/**/*.ts", "app/**/*.ts", "server.ts", "mcp/**/*.ts"];
-const NOT_GIT_HELPER = ["lib/git-exec.ts", "**/*.test.ts"];
+const NOT_GIT_HELPER = [
+  "lib/git-exec.ts",
+  "**/*.test.ts",
+  "**/*.test-helpers.ts",
+];
 
 export default defineConfig([
   ...nextVitals,

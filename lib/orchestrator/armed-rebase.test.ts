@@ -1,226 +1,34 @@
+import "./armed.test-helpers";
 import fs from "fs";
-import os from "os";
 import path from "path";
 import { execFileSync } from "child_process";
-import { beforeAll, beforeEach, describe, expect, it, vi } from "vitest";
-import type { TaskPR } from "@/lib/tasks/state";
-import type { SessionFacts } from "./facts";
-
-// A real repository with a local bare remote; gh is faked around it.
-let pr: TaskPR | null = null;
-const merges: string[][] = [];
-const isProbe = (args: string[]) =>
-  args[0] === "api" ||
-  (args[0] === "pr" &&
-    args[1] === "list" &&
-    args.includes("statusCheckRollup"));
-
-vi.mock("@/lib/tasks/gh", async (importOriginal) => {
-  const real = await importOriginal<typeof import("@/lib/tasks/gh")>();
-  return {
-    ...real,
-    run: async (cmd: string, args: string[], cwd: string, t?: number) => {
-      if (cmd === "gh" && isProbe(args)) return "0";
-      if (cmd === "gh") {
-        merges.push(args);
-        if (pr) pr = { ...pr, state: "MERGED" };
-        return "";
-      }
-      if (cmd === "tmux") throw new Error("no tmux in tests");
-      return real.run(cmd, args, cwd, t);
-    },
-    findPR: async () => pr,
-  };
-});
-vi.mock("@/lib/status-detector", () => ({
-  checkWaitingPatterns: () => false,
-  statusDetector: {
-    refreshCache: async () => {},
-    sessionExists: () => true,
-    getStatus: async () => "idle",
-    titleFor: () => "",
-    getTimestamp: () => 0,
-    hostFor: () => "local",
-    capturePane: async () => "❯ ",
-  },
-}));
-
-const { db } = await import("@/lib/db");
-const { createProject } = await import("@/lib/projects");
-const { createWorkspace, setProjectWorkspace } =
-  await import("@/lib/workspaces");
-const { ensureOrchestrator } = await import("./home");
-const { runTool } = await import("./serve");
-const { getCheck, putCheck } = await import("./checks");
-const { failureOf, recordFailure } = await import("./gates");
-const { LOOP_GUARD_COMMITS } = await import("./loop-guard");
-const { seedSession } = await import("./testing");
-const { setMergeApprovals } = await import("./merge-approvals");
-const { mergeArmed, armTask } = await import("./armed");
-const { setPaused } = await import("./pause");
-const { escalate } = await import("./escalate");
-const { openAsks, raiseAsk } = await import("./asks");
-const { judge, mergeJudged } = await import("./signoff");
-const { rebaseConflicting } = await import("./rebase");
-const { recordConditions } = await import("./events");
-
-beforeAll(() => {
-  const home = fs.mkdtempSync(path.join(os.tmpdir(), "aos-orch-armed-"));
-  vi.spyOn(os, "homedir").mockReturnValue(home);
-});
-beforeEach(() => {
-  merges.length = 0;
-});
-
-const git = (cwd: string, ...args: string[]) =>
-  execFileSync("git", args, {
-    cwd,
-    encoding: "utf8",
-    stdio: "pipe",
-    env: { ...process.env, GIT_COMMITTER_DATE: "2026-01-01T00:00:00Z" },
-  }).trim();
-
-function commit(repo: string, file: string, text: string): string {
-  fs.mkdirSync(path.dirname(path.join(repo, file)), { recursive: true });
-  fs.writeFileSync(path.join(repo, file), text);
-  git(repo, "add", "-A");
-  git(repo, "commit", "-qm", `change ${file}`);
-  git(repo, "push", "-q", "origin", "HEAD");
-  return git(repo, "rev-parse", "HEAD");
-}
-
-const lines = (n: number, change: Record<number, string> = {}) =>
-  Array.from({ length: n }, (_, i) => change[i + 1] ?? `line ${i + 1}`).join(
-    "\n"
-  ) + "\n";
-
-// A workspace whose project is a real clone, which is also the task's
-// worktree, on its branch with its PR open at the branch's head. `other`
-// is a second clone for moving main.
-function setup() {
-  setMergeApprovals(false);
-  const root = fs.mkdtempSync(path.join(os.tmpdir(), "aos-armed-repo-"));
-  const remote = path.join(root, "remote.git");
-  const repo = path.join(root, "repo");
-  const other = path.join(root, "other");
-  git(root, "init", "-q", "--bare", "-b", "main", remote);
-  git(root, "clone", "-q", remote, repo);
-  for (const r of [repo]) {
-    git(r, "config", "user.email", "t@example.com");
-    git(r, "config", "user.name", "T");
-  }
-  commit(repo, "src/b.ts", lines(12));
-  git(root, "clone", "-q", remote, other);
-  git(other, "config", "user.email", "o@example.com");
-  git(other, "config", "user.name", "O");
-  git(repo, "checkout", "-qb", "feature/t");
-  const sha = commit(repo, "src/b.ts", lines(12, { 5: "changed five" }));
-
-  const workspace = createWorkspace(`ws-${path.basename(root)}`);
-  const project = createProject({
-    name: `app-${path.basename(root)}`,
-    workingDirectory: repo,
-  });
-  setProjectWorkspace(project.id, workspace.id);
-  ensureOrchestrator(workspace.id);
-  const task = seedSession({
-    projectId: project.id,
-    name: "add-a",
-    task: true,
-    branch: "feature/t",
-  });
-  db.prepare(
-    `UPDATE sessions SET base_branch = 'main', task_prompt = 'Add a', pr_number = 7, worktree_path = ? WHERE id = ?`
-  ).run(repo, task);
-  pr = {
-    number: 7,
-    url: "https://github.com/o/r/pull/7",
-    state: "OPEN",
-    checks: "pass",
-    head: sha,
-    failing: null,
-    checkCount: 1,
-    attribution: null,
-  };
-  const w = workspace.id;
-  const put = (
-    kind: "review" | "ci",
-    status: "pass" | "block",
-    at = pr!.head!
-  ) =>
-    putCheck({
-      workspaceId: w,
-      sessionId: task,
-      sha: at,
-      kind,
-      status,
-      detail:
-        kind === "ci"
-          ? JSON.stringify({ count: pr!.checkCount, at: 0 })
-          : "Looks right.",
-    });
-  // CI has looked settled on the head for a while.
-  put("ci", "pass");
-  return {
-    w,
-    repo,
-    other,
-    remote,
-    task,
-    sha,
-    put,
-    // Someone else's PR merged: main moves.
-    moveMain: (file: string, text: string) => {
-      git(other, "pull", "-q", "origin", "main");
-      return commit(other, file, text);
-    },
-    facts: (status: SessionFacts["status"] = "idle"): SessionFacts[] => [
-      {
-        id: task,
-        name: "add-a",
-        project: project.name,
-        view: "terminal",
-        status,
-        activity: null,
-        needsInput: false,
-        lastActive: 0,
-        branch: "feature/t",
-        task: { state: "review", pr, blocked: null, ciSettleIn: 0 },
-        stack: null,
-      },
-    ],
-  };
-}
-
-const events = (w: string) =>
-  (
-    db
-      .prepare(
-        `SELECT key, line FROM orchestrator_events WHERE workspace_id = ? AND key LIKE 'once:%' ORDER BY id`
-      )
-      .all(w) as { key: string; line: string }[]
-  ).map((e) => e.line);
-
-const armedAt = (task: string) =>
-  (
-    db
-      .prepare(`SELECT merge_armed_at FROM sessions WHERE id = ?`)
-      .get(task) as { merge_armed_at: string | null }
-  ).merge_armed_at;
-
-function armedDeps() {
-  const reviews: string[] = [];
-  return {
-    reviews,
-    deps: {
-      judge,
-      merge: mergeJudged,
-      review: async (_w: string, id: string) => {
-        reviews.push(id);
-      },
-    },
-  };
-}
+import { describe, expect, it } from "vitest";
+import {
+  LOOP_GUARD_COMMITS,
+  S,
+  armTask,
+  armedAt,
+  armedDeps,
+  commit,
+  db,
+  escalate,
+  events,
+  failureOf,
+  getCheck,
+  git,
+  judge,
+  lines,
+  mergeArmed,
+  merges,
+  openAsks,
+  raiseAsk,
+  rebaseConflicting,
+  recordConditions,
+  recordFailure,
+  runTool,
+  setPaused,
+  setup,
+} from "./armed.test-helpers";
 
 describe("arm", () => {
   it("merges an armed task once every gate passes at its head, with one event", async () => {
@@ -300,102 +108,6 @@ describe("arm", () => {
     );
   });
 
-  describe("the loop guard", () => {
-    // A new head of the PR, CI settled on it, reviewed with this finding
-    // (null: passed), then the armed watcher looks.
-    async function head(
-      t: ReturnType<typeof setup>,
-      n: number,
-      finding: string | null
-    ) {
-      const sha = commit(t.repo, "src/c.ts", `c ${n}\n`);
-      pr = { ...pr!, head: sha };
-      t.put("ci", "pass", sha);
-      putCheck({
-        workspaceId: t.w,
-        sessionId: t.task,
-        sha,
-        kind: "review",
-        status: finding ? "block" : "pass",
-        detail: finding ? `One bug.\n- [blocking] ${finding}` : "Looks right.",
-      });
-      await mergeArmed(t.w, t.facts(), armedDeps().deps, n * 60_000);
-      return sha;
-    }
-
-    it("keeps a task armed through three failed commits and merges it on a passing fourth", async () => {
-      const t = setup();
-      await runTool(t.w, "arm", { task: "add-a" });
-      for (let n = 1; n < LOOP_GUARD_COMMITS; n++)
-        await head(t, n, `src/b.ts:${n}: bug ${n}`);
-      expect(merges).toEqual([]);
-      expect(armedAt(t.task)).not.toBeNull();
-      expect(failureOf(t.task, "review")).toMatchObject({
-        streak: 3,
-        escalated_at: null,
-      });
-      expect(openAsks(t.w)).toEqual([]);
-      expect(events(t.w).at(-1)).toMatch(
-        /stays armed[\s\S]*review failed \(again, 3 of 4 in a row\)/
-      );
-      const fourth = await head(t, LOOP_GUARD_COMMITS, null);
-      expect(merges).toEqual([
-        ["pr", "merge", "7", "--squash", "--match-head-commit", fourth],
-      ]);
-    });
-
-    it("sends the task to Saad when the gate fails on four commits in a row", async () => {
-      const t = setup();
-      await runTool(t.w, "arm", { task: "add-a" });
-      const shas: string[] = [];
-      for (let n = 1; n <= LOOP_GUARD_COMMITS; n++)
-        shas.push(await head(t, n, `src/b.ts:${n}: bug ${n}`));
-      expect(merges).toEqual([]);
-      expect(armedAt(t.task)).toBeNull();
-      expect(events(t.w).at(-1)).toMatch(
-        /armed merge stopped and disarmed, it went to Saad/
-      );
-      const why = failureOf(t.task, "review")?.escalated_why ?? "";
-      expect(why).toMatch(
-        /^the review gate failed on 4 commits in a row \(the loop guard stops at 4\)/
-      );
-      // Each failure listed, oldest first.
-      expect(
-        why
-          .split("\n")
-          .slice(1)
-          .map((l) => l.slice(2, 9))
-      ).toEqual(shas.map((s) => s.slice(0, 7)));
-    });
-
-    it("sends the task to Saad when the same failure repeats on the next commit", async () => {
-      const t = setup();
-      await runTool(t.w, "arm", { task: "add-a" });
-      await head(t, 1, "src/b.ts:5: off by one");
-      expect(armedAt(t.task)).not.toBeNull();
-      // Worded differently, same place: the same finding.
-      await head(t, 2, "src/b.ts:5: still off by one at the loop end");
-      expect(armedAt(t.task)).toBeNull();
-      expect(failureOf(t.task, "review")?.escalated_why).toMatch(
-        /^the review gate failed the same way on two commits in a row \(src\/b\.ts:5\)/
-      );
-    });
-
-    it("keeps going when the second commit fails differently", async () => {
-      const t = setup();
-      await runTool(t.w, "arm", { task: "add-a" });
-      await head(t, 1, "src/b.ts:5: off by one");
-      await head(t, 2, "src/b.ts:9: null check missing");
-      expect(armedAt(t.task)).not.toBeNull();
-      expect(failureOf(t.task, "review")).toMatchObject({
-        streak: 2,
-        repeated: 0,
-        escalated_at: null,
-      });
-      expect(openAsks(t.w)).toEqual([]);
-    });
-  });
-
   it("arms and disarms by task or PR number, as a flag in the database", async () => {
     const t = setup();
     await runTool(t.w, "arm", { task: "add-a" });
@@ -441,12 +153,12 @@ describe("arm", () => {
   it("disarms with one event when the PR is closed, or the task went to Saad", async () => {
     const t = setup();
     await runTool(t.w, "arm", { task: "add-a" });
-    pr = { ...pr!, state: "CLOSED" };
+    S.pr = { ...S.pr!, state: "CLOSED" };
     await mergeArmed(t.w, t.facts(), armedDeps().deps, 1);
     expect(armedAt(t.task)).toBeNull();
     expect(events(t.w)).toEqual(["task add-a: disarmed, its PR #7 was closed"]);
 
-    pr = { ...pr!, state: "OPEN" };
+    S.pr = { ...S.pr!, state: "OPEN" };
     await runTool(t.w, "arm", { task: "add-a" });
     escalate(t.w, { id: t.task, name: "add-a" }, "ci", "why", "url", t.sha);
     await mergeArmed(t.w, t.facts(), armedDeps().deps, 2);
@@ -563,7 +275,7 @@ describe("automatic rebase", () => {
     const t = setup();
     t.put("review", "pass");
     const main = t.moveMain("src/c.ts", "export const c = 1;\n");
-    pr = { ...pr!, mergeable: "CONFLICTING" };
+    S.pr = { ...S.pr!, mergeable: "CONFLICTING" };
     const r = rebaseDeps();
     await rebaseConflicting(t.w, t.facts(), r.deps);
 
@@ -588,7 +300,7 @@ describe("automatic rebase", () => {
     ]);
 
     // The review carried over to the new head: the gates take it.
-    pr = { ...pr!, head, mergeable: "MERGEABLE" };
+    S.pr = { ...S.pr!, head, mergeable: "MERGEABLE" };
     t.put("ci", "pass", head);
     await expect(runTool(t.w, "sign_off", { task: "add-a" })).resolves.toMatch(
       /Merged add-a/
@@ -601,7 +313,12 @@ describe("automatic rebase", () => {
     await runTool(t.w, "arm", { task: "add-a" });
     t.moveMain("src/c.ts", "export const c = 1;\n");
     // A conflicting head gets no checks at all.
-    pr = { ...pr!, checks: "none", checkCount: 0, mergeable: "CONFLICTING" };
+    S.pr = {
+      ...S.pr!,
+      checks: "none",
+      checkCount: 0,
+      mergeable: "CONFLICTING",
+    };
     const { deps } = armedDeps();
     await mergeArmed(t.w, t.facts(), deps, 1);
     expect(merges).toEqual([]);
@@ -616,8 +333,8 @@ describe("automatic rebase", () => {
     expect(head).not.toBe(t.sha);
     expect(armedAt(t.task)).not.toBeNull();
 
-    pr = {
-      ...pr!,
+    S.pr = {
+      ...S.pr!,
       head,
       checks: "pass",
       checkCount: 1,
@@ -641,7 +358,7 @@ describe("automatic rebase", () => {
       recorded,
       t.task
     );
-    pr = { ...pr!, mergeable: "CONFLICTING", base };
+    S.pr = { ...S.pr!, mergeable: "CONFLICTING", base };
     await rebaseConflicting(t.w, t.facts(), rebaseDeps().deps);
     git(t.repo, "fetch", "-q", "origin");
     expect(git(t.repo, "rev-parse", `${originHead(t.repo)}^`)).toBe(main);
@@ -658,7 +375,7 @@ describe("automatic rebase", () => {
     t.put("review", "pass");
     git(t.repo, "push", "-q", "origin", "feature/t:refs/heads/elsewhere");
     t.moveMain("src/c.ts", "export const c = 1;\n");
-    pr = { ...pr!, mergeable: "CONFLICTING", base: "elsewhere" };
+    S.pr = { ...S.pr!, mergeable: "CONFLICTING", base: "elsewhere" };
     const r = rebaseDeps();
     await rebaseConflicting(t.w, t.facts(), r.deps);
     git(t.repo, "fetch", "-q", "origin");
@@ -677,7 +394,7 @@ describe("automatic rebase", () => {
     // Main changes a line next to the task's: merges cleanly, but the
     // task's diff now has different context.
     t.moveMain("src/b.ts", lines(12, { 7: "main's seven" }));
-    pr = { ...pr!, mergeable: "CONFLICTING" };
+    S.pr = { ...S.pr!, mergeable: "CONFLICTING" };
     const r = rebaseDeps();
     await rebaseConflicting(t.w, t.facts(), r.deps);
     git(t.repo, "fetch", "-q", "origin");
@@ -691,7 +408,7 @@ describe("automatic rebase", () => {
   it("asks a conflicting task once to rebase, and doesn't touch its branch", async () => {
     const t = setup();
     t.moveMain("src/b.ts", lines(12, { 5: "main's five" }));
-    pr = { ...pr!, mergeable: "CONFLICTING" };
+    S.pr = { ...S.pr!, mergeable: "CONFLICTING" };
     const r = rebaseDeps();
     // Even mid-turn: the message waits for its next prompt.
     await rebaseConflicting(t.w, t.facts("running"), r.deps);
@@ -711,7 +428,7 @@ describe("automatic rebase", () => {
   it("never rebases mid-turn or over uncommitted work", async () => {
     const t = setup();
     t.moveMain("src/c.ts", "export const c = 1;\n");
-    pr = { ...pr!, mergeable: "CONFLICTING" };
+    S.pr = { ...S.pr!, mergeable: "CONFLICTING" };
     const r = rebaseDeps();
     await rebaseConflicting(t.w, t.facts("running"), r.deps);
     await rebaseConflicting(t.w, t.facts("waiting"), r.deps);
@@ -735,7 +452,7 @@ describe("automatic rebase", () => {
   it("pushes only the rebased PR head, never a commit made in the worktree meanwhile", async () => {
     const t = setup();
     t.moveMain("src/c.ts", "export const c = 1;\n");
-    pr = { ...pr!, mergeable: "CONFLICTING" };
+    S.pr = { ...S.pr!, mergeable: "CONFLICTING" };
     const r = rebaseDeps();
     // A turn starts while the rebase runs and commits in the task's worktree.
     r.hooks.onRebase = () => {
@@ -762,7 +479,7 @@ describe("automatic rebase", () => {
   it("moves an idle task's worktree to the rebased head", async () => {
     const t = setup();
     t.moveMain("src/c.ts", "export const c = 1;\n");
-    pr = { ...pr!, mergeable: "CONFLICTING" };
+    S.pr = { ...S.pr!, mergeable: "CONFLICTING" };
     const r = rebaseDeps();
     await rebaseConflicting(t.w, t.facts(), r.deps);
     git(t.repo, "fetch", "-q", "origin");
@@ -774,7 +491,7 @@ describe("automatic rebase", () => {
   it("asks the task when its worktree has commits the PR doesn't, or the push lease is refused", async () => {
     const t = setup();
     t.moveMain("src/c.ts", "export const c = 1;\n");
-    pr = { ...pr!, mergeable: "CONFLICTING" };
+    S.pr = { ...S.pr!, mergeable: "CONFLICTING" };
     git(t.repo, "commit", "-q", "--allow-empty", "-m", "local only");
     const r = rebaseDeps();
     await rebaseConflicting(t.w, t.facts(), r.deps);
@@ -783,7 +500,7 @@ describe("automatic rebase", () => {
 
     const u = setup();
     u.moveMain("src/c.ts", "export const c = 1;\n");
-    pr = { ...pr!, mergeable: "CONFLICTING" };
+    S.pr = { ...S.pr!, mergeable: "CONFLICTING" };
     const s2 = rebaseDeps();
     // Someone pushes to the branch while the rebase runs.
     s2.hooks.onRebase = () => {
@@ -805,7 +522,7 @@ describe("automatic rebase", () => {
   it("starts a review of the rebased head when the old head had no passing review", async () => {
     const t = setup();
     t.moveMain("src/c.ts", "export const c = 1;\n");
-    pr = { ...pr!, mergeable: "CONFLICTING" };
+    S.pr = { ...S.pr!, mergeable: "CONFLICTING" };
     const r = rebaseDeps();
     await rebaseConflicting(t.w, t.facts(), r.deps);
     git(t.repo, "fetch", "-q", "origin");
@@ -819,7 +536,7 @@ describe("automatic rebase", () => {
     for (const when of ["before", "during"] as const) {
       const t = setup();
       t.moveMain("src/c.ts", "export const c = 1;\n");
-      pr = { ...pr!, mergeable: "CONFLICTING" };
+      S.pr = { ...S.pr!, mergeable: "CONFLICTING" };
       const r = rebaseDeps();
       if (when === "before") setPaused(t.w, true);
       else r.hooks.onRebase = () => setPaused(t.w, true);
@@ -840,7 +557,7 @@ describe("automatic rebase", () => {
   it("leaves the worktree alone when a turn started during the rebase", async () => {
     const t = setup();
     t.moveMain("src/c.ts", "export const c = 1;\n");
-    pr = { ...pr!, mergeable: "CONFLICTING" };
+    S.pr = { ...S.pr!, mergeable: "CONFLICTING" };
     const r = rebaseDeps();
     r.hooks.onRebase = r.busy;
     await rebaseConflicting(t.w, t.facts(), r.deps);
@@ -857,7 +574,7 @@ describe("automatic rebase", () => {
     t.put("review", "pass");
     // Main adds trailing whitespace to a context line of the task's change.
     t.moveMain("src/b.ts", lines(12, { 8: "line 8  " }));
-    pr = { ...pr!, mergeable: "CONFLICTING" };
+    S.pr = { ...S.pr!, mergeable: "CONFLICTING" };
     const r = rebaseDeps();
     await rebaseConflicting(t.w, t.facts(), r.deps);
     git(t.repo, "fetch", "-q", "origin");
@@ -873,7 +590,7 @@ describe("automatic rebase", () => {
       `UPDATE sessions SET rebased_from = 'aaa', rebased_to = 'bbb' WHERE id = ?`
     ).run(t.task);
     t.moveMain("src/c.ts", "export const c = 1;\n");
-    pr = { ...pr!, mergeable: "CONFLICTING" };
+    S.pr = { ...S.pr!, mergeable: "CONFLICTING" };
     const r = rebaseDeps();
     r.hooks.onRebase = () => {
       git(t.other, "fetch", "-q", "origin");
@@ -894,7 +611,7 @@ describe("automatic rebase", () => {
   it("doesn't move the worktree's branch off a commit made just before the catch-up", async () => {
     const t = setup();
     t.moveMain("src/c.ts", "export const c = 1;\n");
-    pr = { ...pr!, mergeable: "CONFLICTING" };
+    S.pr = { ...S.pr!, mergeable: "CONFLICTING" };
     const r = rebaseDeps();
     r.hooks.onUpdateRef = () => {
       r.hooks.onUpdateRef = undefined;
@@ -913,7 +630,7 @@ describe("automatic rebase", () => {
   it("leaves a PR GitHub calls mergeable alone", async () => {
     const t = setup();
     t.moveMain("src/c.ts", "export const c = 1;\n");
-    pr = { ...pr!, mergeable: "MERGEABLE" };
+    S.pr = { ...S.pr!, mergeable: "MERGEABLE" };
     const r = rebaseDeps();
     await rebaseConflicting(t.w, t.facts(), r.deps);
     expect(originHead(t.repo)).toBe(t.sha);
