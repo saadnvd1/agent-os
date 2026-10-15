@@ -44,7 +44,20 @@ export function splitUserText(text: string): UserTextPart[] {
   if (code !== null)
     parts.push({ kind: "code", code: code.join("\n"), language });
   flushProse();
-  return parts;
+  // A block carries its own margin: the line breaks around it would show as
+  // blank lines on top of that, in a bubble that keeps its line breaks.
+  return parts
+    .map((p, i) =>
+      p.kind === "text"
+        ? {
+            ...p,
+            text: p.text
+              .replace(parts[i - 1]?.kind === "code" ? /^\n+/ : /^$/, "")
+              .replace(parts[i + 1]?.kind === "code" ? /\n+$/ : /^$/, ""),
+          }
+        : p
+    )
+    .filter((p) => p.kind === "code" || p.text !== "");
 }
 
 // Backtick spans inside prose, split out so they can be set in monospace.
