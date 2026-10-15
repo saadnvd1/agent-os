@@ -46,7 +46,7 @@ export function seedSession(
 
 export const clearCards = () =>
   db.exec(
-    `DELETE FROM learning_cards; DELETE FROM experiment_usage; DELETE FROM orchestrator_notes`
+    `DELETE FROM learning_cards; DELETE FROM experiment_usage; DELETE FROM orchestrator_notes; DELETE FROM orchestrator_events`
   );
 
 export const uid = () => randomUUID();

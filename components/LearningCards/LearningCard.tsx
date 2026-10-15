@@ -149,12 +149,15 @@ function LessonRow({
 
 export function LearningCards({
   cards,
+  embedded = false,
   busy = false,
   onApply,
   onDismiss,
   onEditRecipe,
 }: {
   cards: Card[];
+  // Inside another surface (the Needs-you strip): no frame of its own.
+  embedded?: boolean;
   busy?: boolean;
   onApply: (
     id: number,
@@ -168,7 +171,11 @@ export function LearningCards({
     <div
       role="region"
       aria-label="Learning cards"
-      className="bg-card popover-surface mb-2 flex flex-col gap-3 rounded-2xl p-3"
+      className={
+        embedded
+          ? "flex flex-col gap-3 px-3 pt-1 pb-3"
+          : "bg-card popover-surface mb-2 flex flex-col gap-3 rounded-2xl p-3"
+      }
     >
       {cards.map((c) =>
         c.kind === "recipe" ? (
@@ -195,12 +202,22 @@ export function LearningCards({
 }
 
 // On a finished session, above the composer. Nothing while the experiment is off.
-export function LearningCardsHost({ sessionId }: { sessionId: string }) {
+export function LearningCardsHost({
+  sessionId,
+  only,
+  embedded,
+}: {
+  sessionId: string;
+  // Just this card.
+  only?: number;
+  embedded?: boolean;
+}) {
   const { data } = useLearningCards(sessionId);
-  const { apply, dismiss, isPending } = useApplyCard(sessionId);
+  const { apply, dismiss, isPending } = useApplyCard();
   return (
     <LearningCards
-      cards={data ?? []}
+      embedded={embedded}
+      cards={(data ?? []).filter((c) => only === undefined || c.id === only)}
       busy={isPending}
       onApply={apply}
       onDismiss={dismiss}

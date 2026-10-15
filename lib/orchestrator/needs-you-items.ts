@@ -2,6 +2,7 @@
 // Client-safe and pure, so the strip and its tests share one rule.
 
 import { NEED_LABEL, type SessionNeed } from "../sidebar/shelves";
+import type { PendingCardView } from "../learning-cards/types";
 import type { AskView, QuestionView } from "./ask-view";
 
 export type NeedsYouItem =
@@ -20,6 +21,15 @@ export type NeedsYouItem =
       sub: string;
       at: number;
       question: QuestionView;
+    }
+  // A learning card a finished session left, waiting to be kept or dropped.
+  | {
+      key: string;
+      kind: "card";
+      title: string;
+      sub: string;
+      at: number;
+      card: PendingCardView;
     }
   // The orchestrator's own chat waiting on an approval or an answer.
   | { key: string; kind: "chat"; title: string; sub: string; at: number }
@@ -56,6 +66,7 @@ export function needsYouItems(input: {
   questions: QuestionView[];
   dismissed: readonly string[];
   tasks?: TaskNeed[];
+  cards?: PendingCardView[];
   chatWaiting?: boolean;
   chatKey?: string;
 }): NeedsYouItem[] {
@@ -82,6 +93,15 @@ export function needsYouItems(input: {
       })
     ),
   ];
+  for (const card of input.cards ?? [])
+    items.push({
+      key: `card:${card.id}`,
+      kind: "card",
+      title: card.title,
+      sub: card.sessionName,
+      at: card.createdAt,
+      card,
+    });
   if (input.chatWaiting)
     items.push({
       key: input.chatKey ?? "approval:chat",

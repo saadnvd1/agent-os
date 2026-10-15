@@ -1,5 +1,6 @@
 "use client";
 
+import { Lightbulb } from "lucide-react";
 import { useEffect, useRef, useState, type ReactNode } from "react";
 import type { SidebarRow } from "@/lib/sidebar/shelves";
 import { cn } from "@/lib/utils";
@@ -42,6 +43,21 @@ export function UnreadDot() {
       aria-label="Unread"
       className="bg-primary h-[7px] w-[7px] shrink-0 rounded-full"
     />
+  );
+}
+
+// A learning card is waiting on this session.
+export function CardBadge({ count }: { count: number }) {
+  return (
+    <span
+      data-tip="Learning card waiting: open the session to keep or drop it"
+      className="shrink-0"
+    >
+      <Lightbulb
+        aria-label={count > 1 ? `${count} learning cards` : "Learning card"}
+        className="h-3 w-3 text-amber-600 dark:text-amber-400"
+      />
+    </span>
   );
 }
 

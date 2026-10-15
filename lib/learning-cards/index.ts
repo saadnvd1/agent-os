@@ -1,7 +1,12 @@
 import { experimentOn } from "../experiments";
 import { countEvent } from "../experiments/meter";
-import { listCards, markShown } from "./store";
-import type { Card, RecipePayload } from "./types";
+import { listCards, listPending, markShown } from "./store";
+import {
+  cardTitle,
+  type Card,
+  type PendingCardView,
+  type RecipePayload,
+} from "./types";
 
 const ID = "learning-cards" as const;
 
@@ -26,4 +31,22 @@ export function pendingRecipeDraft(sessionId: string) {
   const card = listCards(sessionId, "pending").find((c) => c.kind === "recipe");
   const p = card?.payload as RecipePayload | undefined;
   return p ? { brief: p.brief, summary: p.summary } : undefined;
+}
+
+// Every pending card, or one workspace's. Reading it is not seeing the card:
+// nothing is stamped as shown. Nothing while the experiment is off.
+export function pendingCards(workspaceId?: string): PendingCardView[] {
+  if (!experimentOn(ID)) return [];
+  return listPending()
+    .filter((c) => workspaceId === undefined || c.ws === workspaceId)
+    .map((c) => ({
+      id: c.id,
+      sessionId: c.session_id,
+      sessionName: c.session_name,
+      workspaceId: c.ws,
+      kind: c.kind,
+      title: cardTitle(c),
+      destination: c.destination,
+      createdAt: c.created_at,
+    }));
 }

@@ -51,6 +51,13 @@ function fake(answers: Partial<typeof ANSWER> | Error = ANSWER) {
 const rows = (event: string) =>
   db.prepare(`SELECT * FROM experiment_usage WHERE event = ?`).all(event);
 
+const eventLines = (workspaceId: string) =>
+  db
+    .prepare(
+      `SELECT key, line FROM orchestrator_events WHERE workspace_id = ? ORDER BY id`
+    )
+    .all(workspaceId) as { key: string; line: string }[];
+
 const release = () => {
   const s = releaseToTesters();
   return seedSession({
@@ -82,7 +89,7 @@ describe("analyzeSession", () => {
     ).toEqual({ n: 0 });
   });
 
-  it("makes both cards, meters each call, and leaves one note for the orchestrator", async () => {
+  it("makes both cards, meters each call, and tells the orchestrator once per card", async () => {
     const { id, ws } = release();
     const runner = fake();
     await analyzeSession(id, "done", runner);
@@ -90,11 +97,44 @@ describe("analyzeSession", () => {
     expect(listCards(id).map((c) => c.kind)).toEqual(["recipe", "lesson"]);
     expect(rows("script")).toHaveLength(1);
     expect(rows("model")).toHaveLength(2);
-    const notes = db
-      .prepare(`SELECT text FROM orchestrator_notes WHERE workspace_id = ?`)
-      .all(ws.id) as { text: string }[];
-    expect(notes).toHaveLength(1);
-    expect(notes[0].text).toContain("Learning card on Beta build");
+    const events = eventLines(ws.id);
+    expect(events).toHaveLength(2);
+    const [recipe, lesson] = listCards(id);
+    expect(events.map((e) => e.key)).toEqual([
+      `once:learning-card:${recipe.id}`,
+      `once:learning-card:${lesson.id}`,
+    ]);
+    for (const e of events) {
+      expect(e.line).toContain('Learning card on "Beta build"');
+      expect(e.line).not.toContain("\n");
+    }
+    expect(events[1].line).toContain("npm run build");
+    expect(
+      db.prepare(`SELECT COUNT(*) AS n FROM orchestrator_notes`).get()
+    ).toEqual({ n: 0 });
+  });
+
+  it("sends no second line for a card when the session is analysed again", async () => {
+    const { id, ws } = release();
+    await analyzeSession(id, "done", fake());
+    await analyzeSession(id, "recipe-settled", fake());
+    db.exec(`DELETE FROM experiment_usage`);
+    await analyzeSession(id, "merged", fake());
+    expect(eventLines(ws.id)).toHaveLength(2);
+  });
+
+  it("sends nothing when the workspace has no orchestrator, or the experiment is off", async () => {
+    const plain = seedSession({
+      ...releaseToTesters(),
+      steps: [
+        ...releaseToTesters().steps,
+        bash("npm run biuld", { ok: false, output: "no script" }),
+        bash("npm run build"),
+      ],
+    });
+    await analyzeSession(plain.id, "done", fake());
+    expect(listCards(plain.id).length).toBeGreaterThan(0);
+    expect(eventLines(plain.ws.id)).toEqual([]);
   });
 
   it("sends the helper the brief and report, never the transcript", async () => {

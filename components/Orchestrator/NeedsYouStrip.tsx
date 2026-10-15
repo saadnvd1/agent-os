@@ -6,12 +6,15 @@ import {
   ChevronDown,
   CornerDownLeft,
   GitMerge,
+  Lightbulb,
   MessageCircleQuestion,
   UserRound,
   X,
 } from "lucide-react";
 import { toast } from "sonner";
+import { useApplyCard } from "@/data/learning-cards";
 import { useDismissNeedsYou } from "@/data/orchestrators";
+import { LearningCardsHost } from "@/components/LearningCards/LearningCard";
 import { useNeedsYou } from "@/hooks/useNeedsYou";
 import type { NeedsYouItem } from "@/lib/orchestrator/needs-you-items";
 import { cn } from "@/lib/utils";
@@ -21,6 +24,7 @@ const ICON = {
   question: MessageCircleQuestion,
   chat: MessageCircleQuestion,
   task: UserRound,
+  card: Lightbulb,
 } as const;
 
 const STORE = "agentos:needs-you-open";
@@ -42,6 +46,9 @@ export const NeedsYouStrip = memo(function NeedsYouStrip({
 }: NeedsYouActions & { workspaceId: string; chatWaiting: boolean }) {
   const items = useNeedsYou(workspaceId, chatWaiting);
   const dismiss = useDismissNeedsYou(workspaceId);
+  const cards = useApplyCard();
+  // The learning card opened in place.
+  const [openCard, setOpenCard] = useState<number | null>(null);
   // Open on a wide screen, closed on a phone, then as he left it. It renders
   // nothing until the orchestrator's data has loaded, so never on the server.
   const [open, setOpen] = useState(() => {
@@ -55,19 +62,21 @@ export const NeedsYouStrip = memo(function NeedsYouStrip({
     setOpen(!open);
   };
   const hide = (item: NeedsYouItem) =>
-    dismiss.mutate(
-      { key: item.key },
-      {
-        onSuccess: () =>
-          toast("Hidden from Needs you", {
-            action: {
-              label: "Undo",
-              onClick: () => dismiss.mutate({ key: item.key, undo: true }),
-            },
-          }),
-        onError: (e) => toast.error(e.message),
-      }
-    );
+    item.kind === "card"
+      ? cards.dismiss(item.card.id)
+      : dismiss.mutate(
+          { key: item.key },
+          {
+            onSuccess: () =>
+              toast("Hidden from Needs you", {
+                action: {
+                  label: "Undo",
+                  onClick: () => dismiss.mutate({ key: item.key, undo: true }),
+                },
+              }),
+            onError: (e) => toast.error(e.message),
+          }
+        );
   const newest = items[0];
 
   return (
@@ -101,43 +110,73 @@ export const NeedsYouStrip = memo(function NeedsYouStrip({
         />
       </button>
       {open && (
-        <ul className="max-h-48 divide-y divide-amber-500/15 overflow-y-auto border-t border-amber-500/15">
+        <ul
+          className={cn(
+            "divide-y divide-amber-500/15 overflow-y-auto border-t border-amber-500/15",
+            openCard === null ? "max-h-48" : "max-h-[60vh]"
+          )}
+        >
           {items.map((item) => {
             const Icon =
               item.kind === "ask" && item.ask.kind === "gate"
                 ? GitMerge
                 : ICON[item.kind];
+            const card = item.kind === "card" ? item.card : null;
+            const expanded = !!card && openCard === card.id;
             return (
-              <li key={item.key} className="flex items-center">
-                <button
-                  type="button"
-                  onClick={() => onGo(item)}
-                  className="hover:bg-foreground/[0.04] flex min-h-11 min-w-0 flex-1 items-center gap-2 px-3 text-left text-xs"
-                >
-                  <Icon className="text-muted-foreground h-3.5 w-3.5 shrink-0" />
-                  <span className="min-w-0 flex-1 truncate">{item.title}</span>
-                  <span className="text-muted-foreground/70 hidden max-w-[30%] shrink-0 truncate sm:block">
-                    {item.sub}
-                  </span>
-                </button>
-                {item.kind === "question" && (
+              <li key={item.key}>
+                <div className="flex items-center">
                   <button
                     type="button"
-                    onClick={() => onReply(item)}
-                    aria-label="Reply"
+                    aria-expanded={card ? expanded : undefined}
+                    onClick={() =>
+                      card ? setOpenCard(expanded ? null : card.id) : onGo(item)
+                    }
+                    className="hover:bg-foreground/[0.04] flex min-h-11 min-w-0 flex-1 items-center gap-2 px-3 text-left text-xs"
+                  >
+                    <Icon className="text-muted-foreground h-3.5 w-3.5 shrink-0" />
+                    <span className="min-w-0 flex-1 truncate">
+                      {item.title}
+                    </span>
+                    <span className="text-muted-foreground/70 hidden max-w-[30%] shrink-0 truncate sm:block">
+                      {item.sub}
+                    </span>
+                  </button>
+                  {item.kind === "question" && (
+                    <button
+                      type="button"
+                      onClick={() => onReply(item)}
+                      aria-label="Reply"
+                      className="text-muted-foreground hover:text-foreground flex size-11 shrink-0 items-center justify-center"
+                    >
+                      <CornerDownLeft className="h-3.5 w-3.5" />
+                    </button>
+                  )}
+                  <button
+                    type="button"
+                    onClick={() => hide(item)}
+                    aria-label="Dismiss"
                     className="text-muted-foreground hover:text-foreground flex size-11 shrink-0 items-center justify-center"
                   >
-                    <CornerDownLeft className="h-3.5 w-3.5" />
+                    <X className="h-3.5 w-3.5" />
                   </button>
+                </div>
+                {card && expanded && (
+                  <>
+                    <LearningCardsHost
+                      sessionId={card.sessionId}
+                      only={card.id}
+                      embedded
+                    />
+                    <button
+                      type="button"
+                      onClick={() => onGo(item)}
+                      className="text-muted-foreground hover:text-foreground min-h-11 px-3 text-left text-xs underline-offset-2 hover:underline"
+                    >
+                      Open {card.sessionName}
+                    </button>
+                  </>
                 )}
-                <button
-                  type="button"
-                  onClick={() => hide(item)}
-                  aria-label="Dismiss"
-                  className="text-muted-foreground hover:text-foreground flex size-11 shrink-0 items-center justify-center"
-                >
-                  <X className="h-3.5 w-3.5" />
-                </button>
               </li>
             );
           })}

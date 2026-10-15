@@ -72,4 +72,29 @@ describe("needsYouItems", () => {
     });
     expect(items[0].kind).toBe("chat");
   });
+
+  it("lists learning cards with the session and lesson, newest first, honouring hides", () => {
+    const card = (id: number, createdAt: number) => ({
+      id,
+      sessionId: `s${id}`,
+      sessionName: `Session ${id}`,
+      workspaceId: "w1",
+      kind: "lesson" as const,
+      title: `Lesson ${id}`,
+      destination: null,
+      createdAt,
+    });
+    const items = needsYouItems({
+      asks: [],
+      questions: [],
+      dismissed: ["card:3"],
+      cards: [card(1, 100), card(2, 200), card(3, 300)],
+    });
+    expect(items.map((i) => i.key)).toEqual(["card:2", "card:1"]);
+    expect(items[0]).toMatchObject({
+      kind: "card",
+      title: "Lesson 2",
+      sub: "Session 2",
+    });
+  });
 });

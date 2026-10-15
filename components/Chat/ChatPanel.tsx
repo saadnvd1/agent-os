@@ -739,11 +739,14 @@ export function ChatPanel({
             onGo={(item) => {
               if (item.kind === "ask") needsYouFocusActions.ask(item.ask.id);
               else if (item.kind === "chat") toEnd();
-              else if (item.kind === "task") {
+              else if (item.kind === "task" || item.kind === "card") {
                 window.history.pushState(
                   null,
                   "",
-                  hrefWithSession(location.href, item.sessionId)
+                  hrefWithSession(
+                    location.href,
+                    item.kind === "task" ? item.sessionId : item.card.sessionId
+                  )
                 );
                 window.dispatchEvent(new PopStateEvent("popstate"));
               } else

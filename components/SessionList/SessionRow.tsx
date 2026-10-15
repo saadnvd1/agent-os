@@ -14,6 +14,7 @@ import { compactTimeAgo } from "@/lib/session-meta";
 import { wakeLabel } from "@/lib/sidebar/snooze";
 import { sameRow, type SidebarRow } from "@/lib/sidebar/shelves";
 import { rowStatusBadge } from "@/lib/sidebar/row-badge";
+import { usePendingCardSessions } from "@/data/learning-cards";
 import { useMinuteTick } from "@/hooks/useMinuteTick";
 import { selectionStore, selectionActions } from "@/stores/sessionSelection";
 import { cn } from "@/lib/utils";
@@ -21,7 +22,7 @@ import { QuickChangeRow } from "./QuickChangeRow";
 import { useRowContext } from "./RowContext";
 import { SessionRowMenu } from "./SessionRowMenu";
 import { RowShell, type RowMenuKind } from "./RowShell";
-import { NestRail, RowDot, RowRename, UnreadDot } from "./RowParts";
+import { CardBadge, NestRail, RowDot, RowRename, UnreadDot } from "./RowParts";
 import { RowSubtitle } from "./RowSubtitle";
 import { OrchestratorAsks } from "./OrchestratorAsks";
 
@@ -63,6 +64,7 @@ export const SessionRow = memo(function SessionRow({
   };
 
   const badge = rowStatusBadge(row);
+  const cardCount = usePendingCardSessions().get(session.id) ?? 0;
 
   const menu = (kind: RowMenuKind) => (
     <SessionRowMenu
@@ -102,6 +104,7 @@ export const SessionRow = memo(function SessionRow({
                 />
               </span>
             )}
+            {cardCount > 0 && <CardBadge count={cardCount} />}
             {row.unread && !badge && <UnreadDot />}
             {isFork(session) && (
               <GitFork className="text-muted-foreground/60 h-3 w-3 shrink-0" />

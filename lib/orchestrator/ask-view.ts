@@ -1,6 +1,8 @@
 // What a client sees of the orchestrator's asks. Client-safe (no database),
 // so any client (the web, an API client) can import it.
 
+import type { PendingCardView } from "../learning-cards/types";
+
 export const ASK_KINDS = [
   "decision",
   "public",
@@ -49,4 +51,6 @@ export interface OrchestratorOverview {
   questions: QuestionView[];
   // Keys (ask:<id>, question:<id>) he hid from the Needs-you strip.
   dismissed: string[];
+  // Learning cards waiting on him; none while the experiment is off.
+  cards: PendingCardView[];
 }

@@ -6,6 +6,7 @@ import { useSessionsQuery } from "@/data/sessions/queries";
 import { useProjectsQuery } from "@/data/projects/queries";
 import { fetchStatuses } from "@/data/statuses/queries";
 import { statusKeys } from "@/data/sessions/keys";
+import { useExperiment } from "@/data/experiments";
 import { useOrchestratorOverview } from "@/data/orchestrators";
 import {
   needsYouItems,
@@ -20,6 +21,7 @@ export function useNeedsYou(
   chatWaiting: boolean
 ): NeedsYouItem[] {
   const overview = useOrchestratorOverview(workspaceId);
+  const cardsOn = useExperiment("learning-cards");
   const { data: sessions } = useSessionsQuery();
   const { data: projects = [] } = useProjectsQuery();
   const { data: statuses } = useQuery({
@@ -45,9 +47,10 @@ export function useNeedsYou(
         questions: overview?.questions ?? [],
         dismissed: overview?.dismissed ?? [],
         tasks,
+        cards: cardsOn ? (overview?.cards ?? []) : [],
         chatWaiting,
         chatKey: `approval:${workspaceId}`,
       }),
-    [overview, tasks, chatWaiting, workspaceId]
+    [overview, tasks, cardsOn, chatWaiting, workspaceId]
   );
 }
