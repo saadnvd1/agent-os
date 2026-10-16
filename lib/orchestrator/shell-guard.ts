@@ -1,7 +1,7 @@
 import fs from "fs";
 import os from "os";
 import path from "path";
-import { isSecretPath } from "../secret-paths";
+import { isOrchestratorSecretPath as isSecretPath } from "../secret-paths";
 import { TOOL_NAMES } from "./tool-names";
 import { parseShell, UNKNOWN, type SimpleCommand } from "./shell-parse";
 
@@ -26,6 +26,9 @@ export interface ShellContext {
   writeRefusal: (p: string) => Promise<string | null>;
   // Whether this file is AgentOS's database or other state of its own.
   isAgentOsState: (p: string) => Promise<boolean>;
+  // Whether this path is under ~/.agent-os/audits, where reports go and
+  // nothing may be made executable.
+  inAudits?: (p: string) => Promise<boolean>;
   // AgentOS's server and the tmux servers it runs sessions in.
   protectedPids: () => Promise<Set<number>>;
 }
@@ -319,6 +322,8 @@ const GIT_WRITES = new Set([
   "mv",
 ]);
 
+const READ_ONLY_STASH = new Set(["list", "show"]);
+
 async function gitRefusal(
   args: string[],
   ctx: ShellContext,
@@ -348,10 +353,13 @@ async function gitRefusal(
   if (sub === "push")
     return `Refused: ${T.quick_pr} pushes a quick change's branch and opens its PR, and tasks push their own; nothing pushes from the orchestrator's shell.`;
   if (!GIT_WRITES.has(sub)) return null;
+  if (sub === "stash" && READ_ONLY_STASH.has(args[i + 1])) return null;
   if (has(dir))
     return `Refused: git ${sub} in a folder only the shell knows (${show(dir)}); name the folder.`;
   const why = await ctx.writeRefusal(dir);
-  return why ? `Refused: git ${sub} would change ${dir}. ${why}` : null;
+  return why
+    ? `Refused: git ${sub} in ${dir}. Orchestrators don't change project checkouts (autodeploy runs from them). To see current code: \`git -C ${dir} fetch\` then \`git -C ${dir} show origin/main:<path>\` or \`git -C ${dir} log origin/main\`.`
+    : null;
 }
 
 // Commands whose every non-option argument is a file they change, and
@@ -371,6 +379,16 @@ const WRITES_ALL = new Set([
   "chgrp",
 ]);
 const WRITES_LAST = new Set(["cp", "ln", "install", "rsync", "ditto"]);
+
+// Whether this chmod mode adds an execute bit (or might: copying another
+// class's bits, or a mode it can't read).
+export function addsExecute(mode: string): boolean {
+  if (/^[0-7]{1,4}$/.test(mode)) return [...mode.slice(-3)].some((d) => +d & 1);
+  return mode.split(",").some((c) => {
+    const m = /^[ugoa]*([-+=])([rwxXst]*|[ugo])$/.exec(c);
+    return !m || (m[1] !== "-" && /[xXugo]/.test(m[2]));
+  });
+}
 
 function writtenFiles(inv: Invocation): string[] {
   const { name, args } = inv;
@@ -550,6 +568,15 @@ export async function shellRefusal(
         if (has(cwd) && !f.startsWith("/")) continue;
         const r = await ctx.writeRefusal(path.resolve(cwd, f));
         if (r) return `Refused: ${inv.name} would write ${f}. ${r}`;
+        if (
+          inv.name === "chmod" &&
+          ctx.inAudits &&
+          (await ctx.inAudits(path.resolve(cwd, f))) &&
+          addsExecute(
+            inv.args.find((a) => !/^(-[RHLPfvhc]+|--.*)$/.test(a)) ?? ""
+          )
+        )
+          return `Refused: chmod would make ${f} executable. ~/.agent-os/audits holds reports, not programs.`;
       }
     }
   }

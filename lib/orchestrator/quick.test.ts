@@ -328,7 +328,7 @@ describe("the write guard with a quick change open", () => {
       `cp ${wt}/README.md ${wt}/other-link/README.md`,
     ])
       expect(await bash(s, cmd), cmd).toMatch(
-        /project repository, task worktree/
+        /project repository, task worktree|don't change project checkouts/
       );
     // Its own quick worktree is its to change.
     expect(await bash(s, `echo x > ${wt}/notes.md`)).toBeNull();

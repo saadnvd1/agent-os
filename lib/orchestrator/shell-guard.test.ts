@@ -156,7 +156,7 @@ describe("the orchestrator's shell", () => {
         "find /work/repo -name '*.log' -delete",
         "cd /work/repo && find . -exec rm {} +",
       ],
-      /project repository or task worktree/
+      /project repository or task worktree|don't change project checkouts/
     );
     await expectRefused(
       ["cd $(git rev-parse --show-toplevel) && git commit -m x"],
