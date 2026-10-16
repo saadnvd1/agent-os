@@ -1,6 +1,14 @@
 import { JSDOM } from "jsdom";
-import { beforeEach, describe, expect, it } from "vitest";
-import { placeQuote, quotePick, rangeText } from "./quote-selection";
+import { beforeEach, describe, expect, it, vi } from "vitest";
+import { KeybindingRegistry } from "@/lib/keybindings/registry";
+import {
+  placeQuote,
+  quoteAction,
+  quoteEnter,
+  quoteIntoComposer,
+  quotePick,
+  rangeText,
+} from "./quote-selection";
 
 // The suite's setup needs node, so the DOM is built here.
 const { window } = new JSDOM("<!doctype html><body></body>");
@@ -163,5 +171,179 @@ describe("placeQuote", () => {
     expect(
       placeQuote({ top: 20, bottom: 80, left: 0, right: 10 }, view)
     ).toBeNull();
+  });
+});
+
+describe("Enter quotes", () => {
+  let root: HTMLElement;
+  beforeEach(() => {
+    root = chat();
+  });
+
+  const reply = () => text("#a2 p", 1);
+  const key = (target: EventTarget, extra: object = {}) =>
+    ({
+      key: "Enter",
+      code: "Enter",
+      target,
+      ctrlKey: false,
+      metaKey: false,
+      altKey: false,
+      shiftKey: false,
+      isComposing: false,
+      repeat: false,
+      preventDefault() {},
+      ...extra,
+    }) as unknown as KeyboardEvent;
+
+  // Runs a key through a real registry holding the binding.
+  function press(shown: boolean, e: KeyboardEvent) {
+    const run = vi.fn();
+    const reg = new KeybindingRegistry({
+      addEventListener() {},
+      removeEventListener() {},
+    });
+    reg.register("t", [quoteEnter(shown, run, () => window.getSelection())]);
+    return { handled: reg.handle(e), run };
+  }
+
+  it("fires with a selection in a reply and the button showing", () => {
+    select([reply(), 4], [reply(), 8]);
+    const { handled, run } = press(true, key(root));
+    expect(handled).toBe(true);
+    expect(run).toHaveBeenCalledOnce();
+  });
+
+  it("leaves Enter alone when the button isn't showing", () => {
+    select([reply(), 4], [reply(), 8]);
+    expect(press(false, key(root)).handled).toBe(false);
+  });
+
+  it("leaves Enter alone with no selection", () => {
+    window.getSelection()!.removeAllRanges();
+    expect(press(true, key(root)).handled).toBe(false);
+  });
+
+  it("leaves Enter alone in the composer, key or selection", () => {
+    const composer = document.getElementById("composer") as HTMLTextAreaElement;
+    select([reply(), 4], [reply(), 8]);
+    expect(press(true, key(composer)).handled).toBe(false);
+    composer.select();
+    select([composer.parentNode!, 0], [composer.parentNode!, 1]);
+    const inside = document.createElement("div");
+    inside.setAttribute("contenteditable", "true");
+    inside.textContent = "draft";
+    document.body.append(inside);
+    select([inside.firstChild!, 0], [inside.firstChild!, 3]);
+    expect(press(true, key(root)).handled).toBe(false);
+  });
+
+  it("leaves a focused button to its own Enter", () => {
+    select([reply(), 4], [reply(), 8]);
+    const button = document.querySelector("#a2 button")!;
+    expect(press(true, key(button)).handled).toBe(false);
+  });
+
+  it.each(["shiftKey", "metaKey", "ctrlKey", "altKey"])(
+    "ignores Enter with %s",
+    (mod) => {
+      select([reply(), 4], [reply(), 8]);
+      expect(press(true, key(root, { [mod]: true })).handled).toBe(false);
+    }
+  );
+
+  it("ignores IME composition and repeats", () => {
+    select([reply(), 4], [reply(), 8]);
+    expect(press(true, key(root, { isComposing: true })).handled).toBe(false);
+    expect(press(true, key(root, { repeat: true })).handled).toBe(false);
+  });
+});
+
+describe("quoteIntoComposer", () => {
+  it("puts the text in, then focuses the composer", () => {
+    const order: string[] = [];
+    quoteIntoComposer(
+      "hello",
+      (t) => order.push(`put:${t}`),
+      () => order.push("focus")
+    );
+    expect(order).toEqual(["put:hello", "focus"]);
+  });
+});
+
+describe("Enter quoting wiring", () => {
+  const sel = () => window.getSelection()!;
+  const enter = (): KeyboardEvent =>
+    ({
+      key: "Enter",
+      code: "Enter",
+      target: document.body,
+      ctrlKey: false,
+      metaKey: false,
+      altKey: false,
+      shiftKey: false,
+      isComposing: false,
+      repeat: false,
+      preventDefault() {},
+    }) as unknown as KeyboardEvent;
+  const registry = () =>
+    new KeybindingRegistry({
+      addEventListener() {},
+      removeEventListener() {},
+    });
+  const pick = () => {
+    const root = chat();
+    select([text("#a2 p", 1), 4], [text("#a2 p", 1), 8]);
+    return root;
+  };
+
+  it("Enter hands the text over, clears the selection, hides, focuses", () => {
+    pick();
+    const calls: string[] = [];
+    const action = quoteAction("very", {
+      onQuote: (t) =>
+        quoteIntoComposer(
+          t,
+          (m) => calls.push(`put:${m}`),
+          () => calls.push("focus")
+        ),
+      clearSelection: () => {
+        sel().removeAllRanges();
+        calls.push("clear");
+      },
+      hide: () => calls.push("hide"),
+    });
+    const reg = registry();
+    reg.register("a", [quoteEnter(true, action, sel)]);
+    expect(reg.handle(enter())).toBe(true);
+    expect(calls).toEqual(["put:very", "focus", "clear", "hide"]);
+    expect(sel().isCollapsed).toBe(true);
+  });
+
+  it("does nothing without picked text", () => {
+    const onQuote = vi.fn();
+    quoteAction(undefined, {
+      onQuote,
+      clearSelection: vi.fn(),
+      hide: vi.fn(),
+    })();
+    expect(onQuote).not.toHaveBeenCalled();
+  });
+
+  it("keeps one binding per source: panes don't replace each other", () => {
+    pick();
+    const reg = registry();
+    const a = vi.fn();
+    const b = vi.fn();
+    const offA = reg.register("chat-quote:a", [quoteEnter(true, a, sel)]);
+    const offB = reg.register("chat-quote:b", [quoteEnter(false, b, sel)]);
+    expect(reg.handle(enter())).toBe(true);
+    expect(a).toHaveBeenCalledOnce();
+    expect(b).not.toHaveBeenCalled();
+    offB();
+    expect(reg.handle(enter())).toBe(true);
+    expect(a).toHaveBeenCalledTimes(2);
+    offA();
+    expect(reg.handle(enter())).toBe(false);
   });
 });
