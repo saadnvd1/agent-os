@@ -61,6 +61,12 @@ export function CardBadge({ count }: { count: number }) {
   );
 }
 
+// For a menu's onCloseAutoFocus: while a rename is open, the input keeps the
+// focus instead of the menu's trigger getting it back.
+export const keepRenameFocus = (renaming: boolean) => (e: Event) => {
+  if (renaming) e.preventDefault();
+};
+
 export function RowRename({
   initial,
   onDone,
@@ -70,13 +76,26 @@ export function RowRename({
 }) {
   const [value, setValue] = useState(initial);
   const ref = useRef<HTMLInputElement>(null);
-  // The menu closing hands focus back to its trigger; take it after that.
+  const hadFocus = useRef(false);
+  // The menu closing hands focus back to its trigger (RowShell stops that
+  // while renaming); keep taking it until we hold it, then leave it alone.
   useEffect(() => {
-    const t = setTimeout(() => {
-      ref.current?.focus();
-      ref.current?.select();
-    }, 50);
-    return () => clearTimeout(t);
+    const take = () => {
+      const el = ref.current;
+      if (!el || hadFocus.current) return;
+      el.focus();
+      if (document.activeElement === el) {
+        hadFocus.current = true;
+        el.select();
+      }
+    };
+    take();
+    const t = setInterval(take, 50);
+    const stop = setTimeout(() => clearInterval(t), 1000);
+    return () => {
+      clearInterval(t);
+      clearTimeout(stop);
+    };
   }, []);
   return (
     <input
@@ -84,7 +103,13 @@ export function RowRename({
       value={value}
       aria-label="Session name"
       onChange={(e) => setValue(e.target.value)}
-      onBlur={() => onDone(value.trim() || null)}
+      onFocus={() => {
+        hadFocus.current = true;
+      }}
+      onBlur={() => {
+        // Only once we've held focus: the menu closing hands it to its trigger.
+        if (hadFocus.current) onDone(value.trim() || null);
+      }}
       onKeyDown={(e) => {
         e.stopPropagation();
         if (e.key === "Enter") onDone(value.trim() || null);
