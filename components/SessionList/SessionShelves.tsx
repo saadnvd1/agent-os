@@ -8,6 +8,7 @@ import {
   doneSummary,
   type Shelves,
 } from "@/lib/sidebar/shelves";
+import { shownShelves } from "@/lib/sidebar/visible-order";
 import type { MachineGroup } from "@/lib/sidebar/machines";
 import { sidebarUiActions } from "@/stores/sidebarUi";
 import { cn } from "@/lib/utils";
@@ -124,8 +125,10 @@ export function SessionShelves({
   snoozedCollapsed: boolean;
   donePages: number;
 }) {
+  const folds = { doneCollapsed, snoozedCollapsed, donePages };
   const shown = shelves.done.slice(0, doneLimit(donePages));
   const hidden = shelves.done.length - shown.length;
+  const visible = shownShelves(shelves, folds);
   const pendingCards = usePendingCardSessions();
   const doneCards = shelves.done.reduce(
     (n, r) => n + (pendingCards.get(r.session.id) ?? 0),
@@ -210,10 +213,9 @@ export function SessionShelves({
             collapsed={snoozedCollapsed}
             onToggle={sidebarUiActions.toggleSnoozed}
           />
-          {!snoozedCollapsed &&
-            shelves.snoozed.map((r) => (
-              <SessionRow key={r.session.id} row={r} muted />
-            ))}
+          {visible.snoozed.map((r) => (
+            <SessionRow key={r.session.id} row={r} muted />
+          ))}
         </section>
       )}
       {shelves.done.length > 0 && (
@@ -223,8 +225,9 @@ export function SessionShelves({
             collapsed={doneCollapsed}
             onToggle={sidebarUiActions.toggleDone}
           />
-          {!doneCollapsed &&
-            shown.map((r) => <SessionRow key={r.session.id} row={r} muted />)}
+          {visible.done.map((r) => (
+            <SessionRow key={r.session.id} row={r} muted />
+          ))}
           {!doneCollapsed && hidden > 0 && (
             <button
               type="button"

@@ -56,6 +56,7 @@ export const OrchestratorPinRow = memo(function OrchestratorPinRow({
 
   const content = (
     <RowFrame
+      data-session-row={session.id}
       data-tip={`${label}\n${summary}`}
       onActivate={() => !renaming && ctx.onSelect(session.id)}
       className={

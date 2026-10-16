@@ -7,12 +7,13 @@ import { useDocsWorkspace } from "@/data/lumifyhub/docs";
 import { useFreshStart, usePinSession } from "@/data/sessions";
 import { useOrchestratorsQuery } from "@/data/orchestrators";
 import { docsUiActions } from "@/stores/docsUi";
-import type { SidebarRow } from "@/lib/sidebar/shelves";
+import { visibleSessionIds } from "@/lib/sidebar/visible-order";
 import type { OrchestratorOverview } from "@/lib/orchestrator/overview";
 import { useSessionListMutations } from "./hooks/useSessionListMutations";
 import { useBulkDelete } from "./hooks/useBulkDelete";
 import { useSidebarData } from "./useSidebarData";
 import { useSessionTips } from "./useSessionTips";
+import { useSessionSwitching } from "./useSessionSwitching";
 import { RowProvider, type RowContextValue } from "./RowContext";
 import { SidebarHeader } from "./SidebarHeader";
 import { useAddProject } from "@/components/Projects/AddProject/useAddProject";
@@ -27,9 +28,6 @@ export type { SessionListProps } from "./SessionList.types";
 
 // Shared, so a query still loading doesn't hand rows a new array each render.
 const NO_ORCHESTRATORS: OrchestratorOverview[] = [];
-
-const flatten = (rows: SidebarRow[]): string[] =>
-  rows.flatMap((r) => [r.session.id, ...flatten(r.workers)]);
 
 // One flat list of the workspace's sessions, on shelves: Pinned, Needs
 // you, Working, In review, Done.
@@ -59,19 +57,20 @@ export function SessionList({
 
   const orderedIds = useMemo(
     () =>
-      flatten([
-        ...shelves.orchestrators,
-        ...shelves.pinned,
-        ...shelves.needsYou,
-        ...shelves.working,
-        ...shelves.inReview,
-        ...shelves.ongoing,
-        ...shelves.snoozed,
-        ...shelves.done,
-        ...data.machines.flatMap((g) => g.rows),
-      ]),
-    [shelves, data.machines]
+      visibleSessionIds(shelves, data.machines, {
+        doneCollapsed: ui.doneCollapsed,
+        snoozedCollapsed: ui.snoozedCollapsed,
+        donePages: ui.donePages,
+      }),
+    [
+      shelves,
+      data.machines,
+      ui.doneCollapsed,
+      ui.snoozedCollapsed,
+      ui.donePages,
+    ]
   );
+  useSessionSwitching(orderedIds, activeSessionId, onSelect);
 
   // Rows read their handlers through the latest render, so the context only
   // changes when what rows draw does: a status push redraws the rows it
