@@ -3,6 +3,7 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 import { KeybindingRegistry } from "@/lib/keybindings/registry";
 import {
   placeQuote,
+  quoteAction,
   quoteEnter,
   quoteIntoComposer,
   quotePick,
@@ -267,5 +268,82 @@ describe("quoteIntoComposer", () => {
       () => order.push("focus")
     );
     expect(order).toEqual(["put:hello", "focus"]);
+  });
+});
+
+describe("Enter quoting wiring", () => {
+  const sel = () => window.getSelection()!;
+  const enter = (): KeyboardEvent =>
+    ({
+      key: "Enter",
+      code: "Enter",
+      target: document.body,
+      ctrlKey: false,
+      metaKey: false,
+      altKey: false,
+      shiftKey: false,
+      isComposing: false,
+      repeat: false,
+      preventDefault() {},
+    }) as unknown as KeyboardEvent;
+  const registry = () =>
+    new KeybindingRegistry({
+      addEventListener() {},
+      removeEventListener() {},
+    });
+  const pick = () => {
+    const root = chat();
+    select([text("#a2 p", 1), 4], [text("#a2 p", 1), 8]);
+    return root;
+  };
+
+  it("Enter hands the text over, clears the selection, hides, focuses", () => {
+    pick();
+    const calls: string[] = [];
+    const action = quoteAction("very", {
+      onQuote: (t) =>
+        quoteIntoComposer(
+          t,
+          (m) => calls.push(`put:${m}`),
+          () => calls.push("focus")
+        ),
+      clearSelection: () => {
+        sel().removeAllRanges();
+        calls.push("clear");
+      },
+      hide: () => calls.push("hide"),
+    });
+    const reg = registry();
+    reg.register("a", [quoteEnter(true, action, sel)]);
+    expect(reg.handle(enter())).toBe(true);
+    expect(calls).toEqual(["put:very", "focus", "clear", "hide"]);
+    expect(sel().isCollapsed).toBe(true);
+  });
+
+  it("does nothing without picked text", () => {
+    const onQuote = vi.fn();
+    quoteAction(undefined, {
+      onQuote,
+      clearSelection: vi.fn(),
+      hide: vi.fn(),
+    })();
+    expect(onQuote).not.toHaveBeenCalled();
+  });
+
+  it("keeps one binding per source: panes don't replace each other", () => {
+    pick();
+    const reg = registry();
+    const a = vi.fn();
+    const b = vi.fn();
+    const offA = reg.register("chat-quote:a", [quoteEnter(true, a, sel)]);
+    const offB = reg.register("chat-quote:b", [quoteEnter(false, b, sel)]);
+    expect(reg.handle(enter())).toBe(true);
+    expect(a).toHaveBeenCalledOnce();
+    expect(b).not.toHaveBeenCalled();
+    offB();
+    expect(reg.handle(enter())).toBe(true);
+    expect(a).toHaveBeenCalledTimes(2);
+    offA();
+    expect(reg.handle(enter())).toBe(false);
   });
 });

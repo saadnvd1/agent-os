@@ -370,7 +370,9 @@ export function ChatPanel({
   const quote = (text: string) =>
     quoteIntoComposer(
       text,
-      (t) => setInsert({ text: quoteMarkdown(t), at: Date.now() }),
+      // After the draft, so the caret ends at the end of the composer.
+      (t) =>
+        setInsert({ text: quoteMarkdown(t), at: Date.now(), append: true }),
       focusComposer
     );
   const togglePlan = plan === null ? undefined : () => setPlan(!plan);

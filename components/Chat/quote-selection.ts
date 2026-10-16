@@ -166,3 +166,21 @@ export function quoteEnter(
     run,
   };
 }
+
+// What the button does with the picked text, by click or by Enter: hand it
+// over, clear the selection, hide the button.
+export function quoteAction(
+  text: string | undefined,
+  io: {
+    onQuote: (text: string) => void;
+    clearSelection: () => void;
+    hide: () => void;
+  }
+) {
+  return () => {
+    if (text === undefined) return;
+    io.onQuote(text);
+    io.clearSelection();
+    io.hide();
+  };
+}

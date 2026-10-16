@@ -1,11 +1,12 @@
 "use client";
 
-import { useEffect, useState, type RefObject } from "react";
+import { useEffect, useId, useState, type RefObject } from "react";
 import { Quote } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { useCoarsePointer } from "./composer/useCoarsePointer";
 import { useKeybindings } from "@/hooks/useKeybindings";
 import {
+  quoteAction,
   quoteEnter,
   placeQuote,
   quotePick,
@@ -64,13 +65,13 @@ export function QuoteButton({
   }, [rootRef]);
 
   const shown = !!picked && (coarse || !!picked.at);
-  const quote = () => {
-    if (!picked) return;
-    onQuote(picked.text);
-    window.getSelection()?.removeAllRanges();
-    setPicked(null);
-  };
-  useKeybindings("chat-quote", [quoteEnter(shown, quote)]);
+  const quote = quoteAction(picked?.text, {
+    onQuote,
+    clearSelection: () => window.getSelection()?.removeAllRanges(),
+    hide: () => setPicked(null),
+  });
+  // One source per button: each open chat pane has its own.
+  useKeybindings(`chat-quote:${useId()}`, [quoteEnter(shown, quote)]);
 
   if (!picked) return null;
   const button = (
