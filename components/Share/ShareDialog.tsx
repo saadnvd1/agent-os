@@ -3,7 +3,7 @@
 import { useEffect, useRef, useState } from "react";
 import { useSnapshot } from "valtio";
 import { toast } from "sonner";
-import { Check, Copy, Download, ExternalLink, Link2 } from "lucide-react";
+import { Check, Copy, ExternalLink, Link2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import {
   Dialog,
@@ -18,6 +18,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
+import { DownloadMenu } from "./DownloadMenu";
 import { Switch } from "@/components/ui/switch";
 import { writeClipboard } from "@/hooks/useCopyToClipboard";
 import {
@@ -32,7 +33,6 @@ import {
   EXPIRIES,
   EXPIRY_LABEL,
   TYPE_LABEL,
-  fileName,
   formatBytes,
   nothingLeft,
   redactionSummary,
@@ -40,7 +40,7 @@ import {
 } from "@/lib/share/view";
 
 // Opened from a menu or an artifact: the redacted page exactly as it would be
-// uploaded, with what to leave out, then Create link or Download HTML.
+// uploaded, with what to leave out, then Create link or Download.
 export function ShareDialog() {
   const { target } = useSnapshot(shareUi);
   return (
@@ -130,20 +130,6 @@ function ShareBody({
     } catch (err) {
       setError((err as Error).message);
     }
-  };
-
-  const download = (what: "html" | "md") => {
-    if (!preview) return;
-    const url = URL.createObjectURL(
-      new Blob([what === "md" ? preview.markdown : preview.html], {
-        type: what === "md" ? "text/markdown" : "text/html",
-      })
-    );
-    const a = document.createElement("a");
-    a.href = url;
-    a.download = fileName(target.title, what);
-    a.click();
-    URL.revokeObjectURL(url);
   };
 
   const copyAgain = async () => {
@@ -316,41 +302,39 @@ function ShareBody({
           </Button>
         </div>
       ) : (
-        <div className="flex flex-col-reverse items-stretch gap-2 sm:flex-row sm:items-center sm:justify-end">
+        <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-end">
           {preview && !linked && (
-            <p className="text-muted-foreground flex-1 text-xs">
+            <p className="text-muted-foreground order-last text-xs sm:order-first sm:flex-1">
               Link this machine in Settings → Devices &amp; access to share a
               link.
             </p>
           )}
-          <Button
-            variant="outline"
-            className="min-h-11"
-            disabled={!preview || preview.tooBig || empty}
-            onClick={() => download("html")}
-          >
-            <Download className="h-4 w-4" />
-            Download HTML
-          </Button>
-          <Button
-            variant="outline"
-            className="min-h-11"
-            disabled={!preview || preview.tooBig || empty}
-            onClick={() => download("md")}
-          >
-            <Download className="h-4 w-4" />
-            Download Markdown
-          </Button>
-          {linked && (
-            <Button
-              className="min-h-11"
-              disabled={!preview || preview.tooBig || empty || create.isPending}
-              onClick={makeLink}
-            >
-              <Link2 className="h-4 w-4" />
-              {create.isPending ? "Creating…" : "Create link"}
-            </Button>
-          )}
+          <div className="flex gap-2">
+            <DownloadMenu
+              preview={preview}
+              title={target.title}
+              disabled={!preview || preview.tooBig || empty}
+              request={{
+                kind,
+                sessionId,
+                artifactId,
+                includeTools: tools,
+                dropIds: dropped,
+              }}
+            />
+            {linked && (
+              <Button
+                className="min-h-11 flex-1 sm:flex-none"
+                disabled={
+                  !preview || preview.tooBig || empty || create.isPending
+                }
+                onClick={makeLink}
+              >
+                <Link2 className="h-4 w-4" />
+                {create.isPending ? "Creating…" : "Create link"}
+              </Button>
+            )}
+          </div>
         </div>
       )}
     </DialogContent>

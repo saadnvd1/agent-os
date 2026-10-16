@@ -40,6 +40,17 @@ export function useSharePreview() {
   });
 }
 
+/** The share as a PDF, printed by the server. */
+export function useSharePdf() {
+  return useMutation({
+    mutationFn: async (req: PreviewRequest): Promise<Blob> => {
+      const res = await post("/api/shares/pdf", req);
+      if (!res.ok) return json<Blob>(res);
+      return res.blob();
+    },
+  });
+}
+
 export function useCreateShare() {
   const queryClient = useQueryClient();
   return useMutation({
