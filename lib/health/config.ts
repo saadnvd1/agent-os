@@ -15,6 +15,11 @@ export const HEALTH_DEFAULTS = {
   armedStuckMinutes: 120,
   serverErrorsMin: 20,
   serverErrorsFactor: 5,
+  // An environment failure reaches the orchestrator when this many sessions
+  // hit one class inside the window, or when it returns after the quiet days.
+  envBurstSessions: 3,
+  envBurstHours: 24,
+  envQuietDays: 7,
   // The watchers stop waking past this share of the 5-hour usage window.
   wakeUsageCeilingPct: 90,
   // 0 turns the watchers off: anomalies still open and reach the chat.
@@ -35,6 +40,9 @@ export const HEALTH_LABELS: Record<HealthKey, string> = {
   armedStuckMinutes: "PR armed without merging for (minutes)",
   serverErrorsMin: "Server errors per 10 minutes, at least",
   serverErrorsFactor: "Server errors, times the usual rate",
+  envBurstSessions: "Environment failure: sessions in the window to alert",
+  envBurstHours: "Environment failure window (hours)",
+  envQuietDays: "Environment failure back after quiet for (days)",
   wakeUsageCeilingPct: "Stop waking watchers above usage (%)",
   watchersOn: "Watchers on (1) or off (0)",
 };

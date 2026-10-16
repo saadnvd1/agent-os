@@ -41,6 +41,7 @@ function setup(opts: { verdict?: Partial<Verdict>; fail?: boolean } = {}) {
       void phoned.push(text)) as RouteDeps["phone"],
     workspaces: () => ["w1", "w2"],
   };
+  const envSend = vi.fn(async () => {});
   const wake = vi.fn(async () => {
     if (opts.fail) throw new Error("boom");
     return {
@@ -59,12 +60,17 @@ function setup(opts: { verdict?: Partial<Verdict>; fail?: boolean } = {}) {
     facts: () => current,
     watch: { run: vi.fn(), usagePct: () => null },
     route,
+    env: {
+      notes: { send: envSend, blocked: () => false },
+      alerts: { queue: vi.fn(() => true), workspaces: () => [] },
+    },
     wake: wake as unknown as TickDeps["wake"],
   };
   return {
     queued,
     phoned,
     wake,
+    envSend,
     deps,
     set: (f: HealthFacts) => (current = f),
     tick: async (now: number) =>
@@ -100,6 +106,22 @@ describe("the health tick", () => {
     const [row] = openAnomalies();
     expect(row.tokens_in).toBe(7000);
     expect(row.delivered_at).not.toBeNull();
+  });
+
+  it("works through environment failures on its tick, beside the checks", async () => {
+    db.exec(`DELETE FROM env_failures`);
+    const t = setup();
+    t.set(red(NOW - 11 * MIN));
+    db.prepare(
+      `INSERT INTO env_failures (session_id, class, first_at, last_at)
+       VALUES ('gone', 'python-missing-module', ?, ?)`
+    ).run(NOW, NOW);
+    await t.tick(NOW);
+    expect(openAnomalies()).toHaveLength(1);
+    expect(
+      db.prepare(`SELECT nudge_skipped AS s FROM env_failures`).get()
+    ).toEqual({ s: "gone" });
+    db.exec(`DELETE FROM env_failures`);
   });
 
   it("ticks at most once a minute", async () => {

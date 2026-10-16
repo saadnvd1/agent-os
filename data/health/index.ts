@@ -1,6 +1,7 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import type { HealthView } from "@/lib/health/view";
 import type { NoteRow } from "@/lib/health/notes";
+import type { EnvSessionView, EnvSummary } from "@/lib/health/env/types";
 import type { Area } from "@/lib/health/types";
 
 export const healthKeys = {
@@ -9,6 +10,8 @@ export const healthKeys = {
   count: () => [...healthKeys.all, "count"] as const,
   notes: () => [...healthKeys.all, "notes"] as const,
   config: () => [...healthKeys.all, "config"] as const,
+  env: () => [...healthKeys.all, "env"] as const,
+  envSessions: (cls: string) => [...healthKeys.env(), cls] as const,
 };
 
 async function request<T>(url: string, init?: RequestInit): Promise<T> {
@@ -107,5 +110,33 @@ export function useSaveConfig() {
     mutationFn: (patch: Record<string, number | null>) =>
       request<ConfigResponse>("/api/health/config", json("PUT", { patch })),
     onSuccess: (data) => qc.setQueryData(healthKeys.config(), data),
+  });
+}
+
+export function useEnvFailures() {
+  return useQuery({
+    queryKey: healthKeys.env(),
+    queryFn: () => request<EnvSummary>("/api/health/env-failures"),
+    refetchInterval: POLL_MS,
+  });
+}
+
+export function useEnvSessions(cls: string, enabled: boolean) {
+  return useQuery({
+    queryKey: healthKeys.envSessions(cls),
+    queryFn: () =>
+      request<{ sessions: EnvSessionView[] }>(
+        `/api/health/env-failures?class=${encodeURIComponent(cls)}&days=30`
+      ),
+    enabled,
+  });
+}
+
+export function useSetEnvFix() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (v: { class: string; fix: string | null }) =>
+      request("/api/health/env-failures", json("PATCH", v)),
+    onSuccess: () => qc.invalidateQueries({ queryKey: healthKeys.env() }),
   });
 }

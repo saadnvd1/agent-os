@@ -10,6 +10,7 @@ import { leaveHeartbeat } from "./boots";
 import { healthConfig, type HealthConfig } from "./config";
 import { runDetectors } from "./detectors";
 import { gatherFacts, liveBackgroundJobs } from "./facts";
+import { envTick, realEnv, type EnvDeps } from "./env/envTick";
 import { addNote } from "./notes";
 import { closeResolvedPieces } from "./pieces";
 import { deliver, deliverClosed, type RouteDeps, realRoute } from "./route";
@@ -52,6 +53,7 @@ export interface TickDeps {
   facts: (now: number, c: HealthConfig) => HealthFacts;
   watch: WatchDeps;
   route: RouteDeps;
+  env: EnvDeps;
   wake: typeof wake;
 }
 
@@ -60,6 +62,7 @@ export const realTick: TickDeps = {
   facts: gatherFacts,
   watch: { run: runClaude, usagePct: currentUsagePct },
   route: realRoute,
+  env: realEnv,
   wake,
 };
 
@@ -137,6 +140,9 @@ export function healthTick(
   closeResolvedPieces(now);
   leaveHeartbeat(now, liveBackgroundJobs());
   giveUpStale(now, deps);
+  void envTick(now, c, deps.env).catch((error) =>
+    console.error("[health] environment failures:", error)
+  );
 
   const running: Promise<void>[] = [];
   for (const row of openAnomalies()) {

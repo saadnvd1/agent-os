@@ -51,6 +51,7 @@ import {
   saveItem,
   settle,
 } from "./store";
+import { noteToolResult } from "../health/env/recordHit";
 import { readPage, toolBody, type ItemPage } from "./page";
 import {
   deleteQueued,
@@ -189,6 +190,8 @@ function emitEnded(
 
 function onWorkerEvent(sessionId: string, live: Live, e: WorkerEvent): void {
   track(live, e);
+  if (e.type === "item" && e.item.kind === "tool")
+    noteToolResult(sessionId, e.item);
   if (
     e.type === "item" &&
     e.item.kind === "tool" &&
