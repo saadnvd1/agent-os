@@ -43,6 +43,7 @@ import { LearningCardsHost } from "@/components/LearningCards/LearningCard";
 import { composerCompacts } from "@/lib/chat/stale";
 import { useFreshStartQuery } from "@/data/fresh-start";
 import { QuoteButton } from "./QuoteButton";
+import { quoteIntoComposer } from "./quote-selection";
 import { ToolBodies, ToolGroup } from "./Tools";
 import { RowState, RowStore } from "./rowState";
 import { useKeybindings } from "@/hooks/useKeybindings";
@@ -365,6 +366,13 @@ export function ChatPanel({
         ?.focus(),
     []
   );
+  // Quote button or Enter: the text goes in, and the caret is ready to reply.
+  const quote = (text: string) =>
+    quoteIntoComposer(
+      text,
+      (t) => setInsert({ text: quoteMarkdown(t), at: Date.now() }),
+      focusComposer
+    );
   const togglePlan = plan === null ? undefined : () => setPlan(!plan);
   const sendText = (text: string) => {
     toEnd();
@@ -782,12 +790,7 @@ export function ChatPanel({
           onStop={stopTask}
           onLoadOutput={loadTaskOutput}
         />
-        <QuoteButton
-          rootRef={scrollRef}
-          onQuote={(text) =>
-            setInsert({ text: quoteMarkdown(text), at: Date.now() })
-          }
-        />
+        <QuoteButton rootRef={scrollRef} onQuote={quote} />
         <PausedBanner sessionId={sessionId} />
         <Queue
           queue={queue}

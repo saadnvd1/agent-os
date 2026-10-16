@@ -1,3 +1,4 @@
+import type { Keybinding } from "@/lib/keybindings/registry";
 // What a selection in the chat quotes: the parts of it inside replies
 // (elements marked data-quotable), whatever its ends touch. A triple-click
 // or a drag past a reply's last line ends the range outside the reply, in
@@ -112,5 +113,56 @@ export function placeQuote(sel: Box, view: Box, size = 48): Placement | null {
     x,
     y: Math.max(Math.min(sel.bottom, view.bottom - size), view.top),
     side: "below",
+  };
+}
+
+const TYPES_OR_ACTS =
+  'input, textarea, select, button, a[href], summary, [contenteditable]:not([contenteditable="false"])';
+
+function inTypingOrAction(node: Node | null): boolean {
+  const el =
+    node && (node.nodeType === 1 ? (node as Element) : node.parentElement);
+  return !!el?.closest(TYPES_OR_ACTS);
+}
+
+// Whether Enter quotes: the button is showing for a live selection, and
+// neither the key's target nor the selection sits in the composer or any
+// other field, where Enter keeps its own meaning.
+export function enterQuotes(
+  visible: boolean,
+  target: EventTarget | null,
+  sel: Selection | null
+): boolean {
+  if (!visible || !sel || sel.isCollapsed || !sel.rangeCount) return false;
+  if (!sel.toString().trim()) return false;
+  return (
+    !inTypingOrAction(target as Node | null) &&
+    !inTypingOrAction(sel.anchorNode) &&
+    !inTypingOrAction(sel.focusNode)
+  );
+}
+
+// What Quote does, from the button or from Enter: the text goes in the
+// composer, then the composer takes the caret so a reply can follow.
+export function quoteIntoComposer(
+  text: string,
+  put: (markdown: string) => void,
+  focus: () => void
+) {
+  put(text);
+  focus();
+}
+
+// Enter does what the Quote button does, while it's showing.
+export function quoteEnter(
+  shown: boolean,
+  run: () => void,
+  getSel: () => Selection | null = () => window.getSelection()
+): Keybinding {
+  return {
+    id: "chat.quote",
+    keys: "enter",
+    when: (e) => enterQuotes(shown, e.target, getSel()),
+    run,
   };
 }

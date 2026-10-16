@@ -4,7 +4,13 @@ import { useEffect, useState, type RefObject } from "react";
 import { Quote } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { useCoarsePointer } from "./composer/useCoarsePointer";
-import { placeQuote, quotePick, type Placement } from "./quote-selection";
+import { useKeybindings } from "@/hooks/useKeybindings";
+import {
+  quoteEnter,
+  placeQuote,
+  quotePick,
+  type Placement,
+} from "./quote-selection";
 
 interface Picked {
   text: string;
@@ -57,12 +63,16 @@ export function QuoteButton({
     };
   }, [rootRef]);
 
-  if (!picked) return null;
+  const shown = !!picked && (coarse || !!picked.at);
   const quote = () => {
+    if (!picked) return;
     onQuote(picked.text);
     window.getSelection()?.removeAllRanges();
     setPicked(null);
   };
+  useKeybindings("chat-quote", [quoteEnter(shown, quote)]);
+
+  if (!picked) return null;
   const button = (
     <button
       type="button"
@@ -73,6 +83,12 @@ export function QuoteButton({
     >
       <Quote className="h-3.5 w-3.5" />
       Quote
+      <kbd
+        aria-hidden
+        className="text-muted-foreground bg-muted hidden rounded px-1 font-mono text-[10px] leading-4 md:inline"
+      >
+        ↵
+      </kbd>
     </button>
   );
   if (coarse)
