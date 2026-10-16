@@ -7,7 +7,9 @@
 import { db, type Session } from "../db";
 import { getProject } from "../projects";
 import { statusDetector } from "../status-detector";
-import { sendChatConfirmed } from "../chat/runner";
+import { chatState, sendChatConfirmed } from "../chat/runner";
+import { chatActivityLine } from "../chat/activity";
+import { getWorkspace } from "../workspaces";
 import type { ChatOrigin, PeerMessage } from "../chat/events";
 import { sessionRowInfo } from "../session-meta";
 import { previousNames } from "../session-names";
@@ -38,6 +40,10 @@ export interface Peer {
   hostId: string;
   running: boolean;
   doing: string | null;
+  // The workspace it is the orchestrator of, else null.
+  orchestratorOf: string | null;
+  // The asking session's own workspace orchestrator.
+  yours?: boolean;
 }
 
 function liveSessions(): Session[] {
@@ -68,19 +74,41 @@ const sessionById = (id: string | null | undefined) =>
         | undefined)
     : undefined;
 
+// A chat has no pane: its worker is the state, and it can always take a
+// message (queued as its next prompt), so it is never "not running".
+async function peerState(
+  s: Session
+): Promise<{ running: boolean; subtitle: string | null }> {
+  if (s.view === "chat") {
+    const busy = chatState(s.id) === "running";
+    return {
+      running: true,
+      subtitle: chatActivityLine(s.id) ?? (busy ? "working" : "idle"),
+    };
+  }
+  const status = statusDetector.sessionExists(s.tmux_name)
+    ? await statusDetector.getStatus(s.tmux_name)
+    : "dead";
+  const info = sessionRowInfo(status, statusDetector.titleFor(s.tmux_name));
+  return { running: info.running, subtitle: info.subtitle };
+}
+
+const orchestratorOf = (s: Session) =>
+  s.role === "orchestrator" && s.workspace_id
+    ? (getWorkspace(s.workspace_id)?.name ?? "a workspace")
+    : null;
+
 // `callerId`: the asking session. A task its orchestrator moved here also
 // sees that orchestrator, which it can message though it runs elsewhere.
 export async function listPeers(callerId?: string): Promise<Peer[]> {
   await statusDetector.refreshCache();
   const sessions = liveSessions();
   const named = candidates(sessions);
-  const orchestrator = heldOrchestrator(sessionById(callerId));
+  const caller = sessionById(callerId);
+  const orchestrator = heldOrchestrator(caller);
   const listed = await Promise.all(
     sessions.map(async (s, i) => {
-      const status = statusDetector.sessionExists(s.tmux_name)
-        ? await statusDetector.getStatus(s.tmux_name)
-        : "dead";
-      const info = sessionRowInfo(status, statusDetector.titleFor(s.tmux_name));
+      const info = await peerState(s);
       return {
         id: s.id,
         name: s.name,
@@ -90,6 +118,10 @@ export async function listPeers(callerId?: string): Promise<Peer[]> {
         hostId: s.host_id,
         running: info.running,
         doing: info.subtitle,
+        orchestratorOf: orchestratorOf(s),
+        ...(caller?.workspace_id &&
+          s.role === "orchestrator" &&
+          s.workspace_id === caller.workspace_id && { yours: true }),
       };
     })
   );
@@ -105,6 +137,8 @@ export async function listPeers(callerId?: string): Promise<Peer[]> {
       hostId: "remote",
       running: true,
       doing: `your orchestrator, on ${orchestrator.heldFrom}`,
+      orchestratorOf: null,
+      yours: true,
     },
   ];
 }
@@ -116,28 +150,60 @@ export function resolveHeldOrchestrator(callerId: string, ref: string) {
 
 // A live session by name, old name, project/name, id or id prefix. The note
 // says when the name meant something other than its current owner.
-export function resolveTarget(ref: string): {
+export function resolveTarget(
+  ref: string,
+  callerId?: string | null
+): {
   session: Session;
   note?: string;
 } {
-  const found = tryResolveTarget(ref);
+  const found = tryResolveTarget(ref, callerId);
   if (!found.ok) throw new Error(found.error);
   return found;
 }
 
+// "orchestrator" / "my orchestrator": the caller's own workspace orchestrator.
+function ownOrchestrator(
+  ref: string,
+  sessions: Session[],
+  callerId?: string | null
+): Session | undefined {
+  if (!/^(my )?orchestrator$/i.test(ref.trim())) return undefined;
+  const workspace = sessionById(callerId)?.workspace_id;
+  if (!workspace) return undefined;
+  return sessions.find(
+    (s) => s.role === "orchestrator" && s.workspace_id === workspace
+  );
+}
+
 function tryResolveTarget(
-  ref: string
+  ref: string,
+  callerId?: string | null
 ):
   | { ok: true; session: Session; note?: string }
   | { ok: false; none: boolean; error: string } {
   const sessions = liveSessions();
+  const own = ownOrchestrator(ref, sessions, callerId);
+  if (own) return { ok: true, session: own };
   const r = resolveRef(ref, candidates(sessions));
-  if (!r.ok)
+  if (!r.ok) {
+    const orchestrators = /^(my )?orchestrator$/i.test(ref.trim())
+      ? sessions.filter((s) => s.role === "orchestrator")
+      : [];
+    if (orchestrators.length)
+      return {
+        ok: false,
+        none: true,
+        error: `You are in no workspace, so "${ref}" is ambiguous. Orchestrators: ${orchestrators
+          .map((s) => `${s.name} (id ${s.id.slice(0, 8)})`)
+          .join(", ")}`,
+      };
     return {
       ok: false,
       none: r.reason === "none",
       error: r.reason === "none" ? `${r.error}. Run: aos peers` : r.error,
     };
+  }
   return {
     ok: true,
     session: sessions.find((s) => s.id === r.id)!,
@@ -287,7 +353,7 @@ export async function sendMessage(opts: {
   // A held task's message to its orchestrator is kept for the holder to pull.
   const held = heldTarget(from, opts.to);
   if (from && held) return storeForHolder(from, held, body);
-  const target = tryResolveTarget(opts.to);
+  const target = tryResolveTarget(opts.to, opts.fromId);
   if (!target.ok) {
     // A task still in the start queue has no session yet: hold it.
     const queued = target.none ? findQueuedTarget(opts.to) : null;

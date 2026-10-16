@@ -12,7 +12,7 @@ export async function GET(request: NextRequest) {
   if (held)
     return NextResponse.json({ peer: { id: held.id, name: held.name } });
   try {
-    const { session, note } = resolveTarget(ref);
+    const { session, note } = resolveTarget(ref, from || null);
     return NextResponse.json({
       peer: { id: session.id, name: session.name },
       note,

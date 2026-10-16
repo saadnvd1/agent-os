@@ -2,6 +2,7 @@ import { randomUUID } from "crypto";
 import { updateSessionRow } from "@/lib/db";
 import { describe, expect, it, vi } from "vitest";
 
+const gonePanes = new Set<string>();
 let paneResult: import("./delivery").Delivery = { state: "delivered" };
 const typed: string[] = [];
 let chatResult: () => Promise<"delivered" | "queued"> = async () => "delivered";
@@ -9,7 +10,7 @@ let chatResult: () => Promise<"delivered" | "queued"> = async () => "delivered";
 vi.mock("@/lib/status-detector", () => ({
   statusDetector: {
     refreshCache: async () => {},
-    sessionExists: () => true,
+    sessionExists: (name: string) => !gonePanes.has(name),
     getStatus: async () => "idle",
     titleFor: () => "",
   },
@@ -23,11 +24,15 @@ vi.mock("@/lib/bus/delivery", async (importOriginal) => ({
 }));
 
 const sendChatConfirmed = vi.fn((..._args: unknown[]) => chatResult());
-vi.mock("@/lib/chat/runner", () => ({ sendChatConfirmed }));
+vi.mock("@/lib/chat/runner", () => ({
+  sendChatConfirmed,
+  chatState: () => null,
+}));
 
 const { db } = await import("@/lib/db");
 const { seedSession } = await import("@/lib/orchestrator/testing");
 const { createProject } = await import("@/lib/projects");
+const { createWorkspace } = await import("@/lib/workspaces");
 const { recordPreviousName } = await import("@/lib/session-names");
 const bus = await import(".");
 
@@ -272,5 +277,65 @@ describe("a paused terminal", () => {
         .prepare(`SELECT held_pause_id FROM bus_messages WHERE id = ?`)
         .get(sent.message.id)
     ).toEqual({ held_pause_id: pauseId });
+  });
+});
+
+describe("peers", () => {
+  const tmuxOf = (id: string) =>
+    (
+      db.prepare(`SELECT tmux_name FROM sessions WHERE id = ?`).get(id) as {
+        tmux_name: string;
+      }
+    ).tmux_name;
+
+  it("lists a chat session with no pane as idle, a terminal whose pane is gone as not running", async () => {
+    const { project } = setup();
+    const chat = seedSession({
+      projectId: project.id,
+      name: "chatty",
+      view: "chat",
+    });
+    const dead = seedSession({ projectId: project.id, name: "gone" });
+    gonePanes.add(tmuxOf(dead));
+    gonePanes.add(tmuxOf(chat));
+    const peers = await bus.listPeers();
+    expect(peers.find((p) => p.id === chat)).toMatchObject({
+      running: true,
+      doing: "idle",
+    });
+    expect(peers.find((p) => p.id === dead)).toMatchObject({ running: false });
+  });
+
+  it("resolves 'orchestrator' to the caller's workspace orchestrator and labels it yours", async () => {
+    const { project, sender } = setup();
+    const ws = createWorkspace(`ws-${randomUUID().slice(0, 6)}`);
+    const orch = seedSession({
+      projectId: project.id,
+      name: "AgentOS orchestrator",
+      view: "chat",
+    });
+    updateSessionRow(db, orch, { role: "orchestrator", workspace_id: ws.id });
+    updateSessionRow(db, sender, { workspace_id: ws.id });
+    expect(bus.resolveTarget("Orchestrator", sender).session.id).toBe(orch);
+    expect(bus.resolveTarget("my orchestrator", sender).session.id).toBe(orch);
+    const peers = await bus.listPeers(sender);
+    expect(peers.find((p) => p.id === orch)).toMatchObject({
+      yours: true,
+      orchestratorOf: ws.name,
+    });
+  });
+
+  it("lists the orchestrators when the caller is in no workspace", () => {
+    const { project, sender } = setup();
+    const ws = createWorkspace(`ws-${randomUUID().slice(0, 6)}`);
+    const orch = seedSession({
+      projectId: project.id,
+      name: "Lonely orchestrator",
+      view: "chat",
+    });
+    updateSessionRow(db, orch, { role: "orchestrator", workspace_id: ws.id });
+    expect(() => bus.resolveTarget("orchestrator", sender)).toThrow(
+      /Lonely orchestrator/
+    );
   });
 });
