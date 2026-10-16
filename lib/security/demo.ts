@@ -66,6 +66,7 @@ export const STATIC_SIBLINGS = [
   "me",
   "items",
   "network",
+  "pdf",
   "preview",
   "queue",
   "status",
