@@ -10,7 +10,7 @@ const usage = `aos: talk to other agent sessions in AgentOS
 
   aos peers                          sessions, their project and what each is doing
   aos send <session> <message...>    message a session (name, old name, project/name,
-                                     id or id prefix); says delivered, queued or
+                                     id or id prefix; "orchestrator" is yours); says delivered, queued or
                                      FAILED (exit 2: it waits in their inbox)
   aos inbox                          read messages sent to you
   aos history <session>              your conversation with a session
@@ -434,9 +434,14 @@ async function main() {
         if (p.id === me) continue;
         const where = p.projectName ? `${p.projectName}/` : "";
         const state = p.running ? p.doing || "running" : "not running";
+        const role = p.yours
+          ? '  ·  your orchestrator (aos send orchestrator "...")'
+          : p.orchestratorOf
+            ? `  ·  orchestrator of ${p.orchestratorOf}`
+            : "";
         const was = p.was.length ? ` (was ${p.was.join(", ")})` : "";
         console.log(
-          `${p.id.slice(0, 8)}  ${where}${p.name}${was}  ·  ${state}`
+          `${p.id.slice(0, 8)}  ${where}${p.name}${was}  ·  ${state}${role}`
         );
       }
       return;

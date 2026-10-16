@@ -21,7 +21,10 @@ sender's name, rather than as one you typed.
 
 ```bash
 aos peers                         # sessions, their project, what each is doing
+                                  # (chats show idle/busy, never "not running";
+                                  # orchestrators are marked, yours as "your orchestrator")
 aos send <session> "message"      # wakes the other session with the message
+                                  # (`aos send orchestrator "..."` reaches your workspace's own)
 aos inbox                         # read messages sent to you
 aos history <session>             # your conversation with a session
 aos spawn <project> "prompt"      # start a new agent session in a project
