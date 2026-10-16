@@ -2,7 +2,7 @@
 
 import { useEffect, useRef } from "react";
 import { useSnapshot } from "valtio";
-import { ListChecks, Minimize2, Square } from "lucide-react";
+import { Layers, ListChecks, Minimize2, Square } from "lucide-react";
 import type { ChatContext } from "@/lib/chat/events";
 import { usePaletteCommands } from "@/hooks/usePaletteCommands";
 import { chatMeta, chatMetaActions, type ChatActions } from "@/stores/chatMeta";
@@ -15,6 +15,7 @@ export function useChatCommands({
   running,
   context,
   plan,
+  background,
   ...handlers
 }: ChatActions & {
   sessionId: string;
@@ -22,10 +23,12 @@ export function useChatCommands({
   running: boolean;
   context: ChatContext | null;
   plan: boolean | null;
+  // Set while a running call can move to the background.
+  background?: () => void;
 }) {
-  const latest = useRef(handlers);
+  const latest = useRef({ ...handlers, background });
   useEffect(() => {
-    latest.current = handlers;
+    latest.current = { ...handlers, background };
   });
 
   useEffect(() => {
@@ -69,6 +72,19 @@ export function useChatCommands({
             icon: Minimize2,
             run: () => latest.current.send("/compact"),
           },
+          ...(background
+            ? [
+                {
+                  id: "chat.background",
+                  title: "Run in background",
+                  group: "Chat",
+                  keywords: ["move", "detach", "task"],
+                  hint: "Ctrl+B",
+                  icon: Layers,
+                  run: () => latest.current.background?.(),
+                },
+              ]
+            : []),
           ...(running
             ? [
                 {

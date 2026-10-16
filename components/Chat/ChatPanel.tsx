@@ -45,8 +45,8 @@ import { useFreshStartQuery } from "@/data/fresh-start";
 import { QuoteButton } from "./QuoteButton";
 import { ToolBodies, ToolGroup } from "./Tools";
 import { RowState, RowStore } from "./rowState";
+import { useKeybindings } from "@/hooks/useKeybindings";
 import { Background, type BackgroundValue } from "./background";
-import { backgroundKey } from "@/lib/chat/background";
 import { FindBar } from "./FindBar";
 import { FIND_EVENT, isFindKey, useFind } from "./useFind";
 import { McpServers } from "./McpServers";
@@ -377,39 +377,24 @@ export function ChatPanel({
   const asIs = asIsFor === sessionId;
   const setAsIs = (on: boolean) => setAsIsFor(on ? sessionId : null);
 
+  const inPanel = (e: KeyboardEvent) =>
+    !!rootRef.current?.contains(e.target as Node);
   // Shift+Tab switches plan mode from the composer, as in the terminal.
-  const shiftTab = useRef(togglePlan);
-  useEffect(() => {
-    shiftTab.current = togglePlan;
-  });
-  useEffect(() => {
-    const onKey = (e: KeyboardEvent) => {
-      if (e.key !== "Tab" || !e.shiftKey || e.metaKey || e.ctrlKey) return;
-      const target = e.target as HTMLElement;
-      if (
-        !shiftTab.current ||
-        !rootRef.current?.contains(target) ||
-        !(target === rootRef.current || target.closest(".chat-composer"))
-      )
-        return;
-      e.preventDefault();
-      shiftTab.current();
-    };
-    window.addEventListener("keydown", onKey, true);
-    return () => window.removeEventListener("keydown", onKey, true);
-  }, []);
-
-  useChatCommands({
-    sessionId,
-    connected,
-    running,
-    context,
-    plan,
-    send: sendText,
-    setPlan,
-    interrupt,
-    focusComposer,
-  });
+  useKeybindings(`chat-plan:${sessionId}`, [
+    {
+      id: "chat.plan",
+      keys: "shift+tab",
+      when: (e) => {
+        const target = e.target as HTMLElement;
+        return (
+          !!togglePlan &&
+          inPanel(e) &&
+          (target === rootRef.current || !!target.closest(".chat-composer"))
+        );
+      },
+      run: () => togglePlan?.(),
+    },
+  ]);
 
   const blocks = useMemo(
     () => groupTimeline(items, { foldEvents: !!orchestratorOf }),
@@ -466,20 +451,27 @@ export function ChatPanel({
       ),
     [canBackground, foregroundTasks]
   );
-  const moveRef = useRef({ canMove, backgroundTask });
-  useEffect(() => {
-    moveRef.current = { canMove, backgroundTask };
+  useKeybindings(`chat:${sessionId}`, [
+    {
+      id: "chat.background",
+      keys: "ctrl+b",
+      when: (e) => canMove && inPanel(e),
+      run: () => backgroundTask(),
+    },
+  ]);
+  useChatCommands({
+    sessionId,
+    connected,
+    running,
+    context,
+    plan,
+    send: sendText,
+    setPlan,
+    interrupt,
+    focusComposer,
+    background: canMove ? () => backgroundTask() : undefined,
   });
-  useEffect(() => {
-    const onKey = (e: KeyboardEvent) => {
-      if (!rootRef.current?.contains(e.target as Node)) return;
-      if (!backgroundKey(e, moveRef.current.canMove)) return;
-      e.preventDefault();
-      moveRef.current.backgroundTask();
-    };
-    window.addEventListener("keydown", onKey, true);
-    return () => window.removeEventListener("keydown", onKey, true);
-  }, []);
+
   const itemsById = useMemo(
     () => new Map(items.map((i) => [i.id, i])),
     [items]

@@ -2,7 +2,6 @@ import { describe, expect, it } from "vitest";
 import {
   backgroundable,
   backgroundFailure,
-  backgroundKey,
   outputTail,
   outputLines,
   exitCode,
@@ -48,30 +47,6 @@ describe("backgroundable", () => {
         9000
       )
     ).toBe(false);
-  });
-});
-
-describe("backgroundKey", () => {
-  const key = (o: object = {}) => ({
-    key: "b",
-    ctrlKey: true,
-    metaKey: false,
-    altKey: false,
-    shiftKey: false,
-    ...o,
-  });
-
-  it("takes Ctrl+B only while something can move", () => {
-    expect(backgroundKey(key(), true)).toBe(true);
-    expect(backgroundKey(key(), false)).toBe(false);
-  });
-
-  it("leaves every other combination alone", () => {
-    expect(backgroundKey(key({ ctrlKey: false }), true)).toBe(false);
-    expect(backgroundKey(key({ metaKey: true }), true)).toBe(false);
-    expect(backgroundKey(key({ shiftKey: true }), true)).toBe(false);
-    expect(backgroundKey(key({ key: "c" }), true)).toBe(false);
-    expect(backgroundKey(key({ repeat: true }), true)).toBe(false);
   });
 });
 
