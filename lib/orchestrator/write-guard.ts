@@ -18,7 +18,7 @@ import os from "os";
 import path from "path";
 import { db, type Session } from "../db";
 import { git, GitError } from "../git-exec";
-import { isSecretPath } from "../secret-paths";
+import { isOrchestratorSecretPath as isSecretPath } from "../secret-paths";
 import { WORKTREES_DIR } from "../worktrees";
 import { orchestratorDir } from "./home";
 import { LIMITS_FILE } from "./usage";
@@ -49,6 +49,11 @@ export interface WriteBounds {
   // Its own quick changes' worktrees (quick.ts): the one place in a
   // project it may write, everything else in `repos` still refused.
   quick?: string[];
+  // Its own Claude Code auto-memory folder (~/.claude/projects/<mangled
+  // cwd>/memory), as named, and the one `audits` folder in `state`: the only
+  // two places in a protected area it may write.
+  memory?: string[];
+  audits?: string;
 }
 
 // Wherever they are, files that configure what an agent, git or a
@@ -124,6 +129,21 @@ const within = (p: string, root: string) => {
   return a === b || a.startsWith(b === "/" ? b : b + "/");
 };
 
+// How Claude Code names a project's folder under ~/.claude/projects.
+export const mangleCwd = (cwd: string) => cwd.replace(/[^a-zA-Z0-9]/g, "-");
+
+// A folder that must sit exactly where its name says under `parent` (no
+// link in it or between leading elsewhere). Returns the roots a write may go
+// under, or none.
+async function plainRoot(dir: string, parent: string): Promise<string[]> {
+  const byName = path.join(
+    await physicalPath(parent),
+    path.relative(parent, dir)
+  );
+  const real = await physicalPath(dir);
+  return key(real) === key(byName) ? [byName, path.resolve(dir)] : [];
+}
+
 const expandHome = (p: string) => p.replace(/^~(?=$|\/)/, os.homedir());
 
 // Why a write to this path is refused, or null when it may go ahead. For a
@@ -145,6 +165,8 @@ export async function writeRefusal(
   let home: string[];
   let runs: string[];
   let quick: string[][];
+  let memory: string[];
+  let audits: string[];
   try {
     // Where it lands as written, and with `..` taken by name first, as a
     // tool that normalises the path before opening it would; and where it
@@ -168,6 +190,14 @@ export async function writeRefusal(
     ownDir = await both(bounds.ownDir);
     home = await both(bounds.home);
     quick = await Promise.all((bounds.quick ?? []).map(both));
+    memory = (
+      await Promise.all(
+        (bounds.memory ?? []).map((m) =>
+          plainRoot(m, path.join(bounds.home, ".claude", "projects"))
+        )
+      )
+    ).flat();
+    audits = bounds.audits ? await plainRoot(bounds.audits, bounds.state) : [];
   } catch (e) {
     return `Couldn't resolve ${filePath}: ${(e as Error).message}.`;
   }
@@ -178,27 +208,40 @@ export async function writeRefusal(
     const ownQuick = quick.find((q) => q.some((d) => within(target, d)));
     const holdsQuick = (r: string) =>
       !!ownQuick && ownQuick.some((d) => within(d, r));
-    const repo = repos.find((r) => within(target, r) && !holdsQuick(r));
+    const inAudits = audits.find((d) => within(target, d));
+    const holdsAudits = (r: string) =>
+      !!inAudits && within(inAudits, r) && !within(r, inAudits);
+    const repo = repos.find(
+      (r) => within(target, r) && !holdsQuick(r) && !holdsAudits(r)
+    );
     if (repo)
-      return `${filePath} is inside ${repo}, a project repository, task worktree or AgentOS itself. Change code there through a task (start_task), or for a small edit, in a quick change's worktree (quick_change), so its PR goes through the merge gates.`;
+      return `${key(filePath) === key(repo) ? repo : `${filePath} is inside ${repo}`} is a project repository, task worktree or AgentOS itself. Change code there through a task (start_task), or for a small edit, in a quick change's worktree (quick_change), so its PR goes through the merge gates.`;
     if (ownQuick && !shell && GIT_LAYOUT_FILE.test(target))
       return `${filePath} is part of a git repository's layout (HEAD, .git/, .gitattributes); git config can run programs, so orchestrators never write those.`;
     if (AGENTOS_TEMP.test(target))
       return `${filePath} is in a checkout AgentOS is reviewing or rebasing; orchestrators never write there.`;
     // Its folder, or a quick worktree (which sits in ~/.agent-os/worktrees):
     // AgentOS's state and the home's dot-folders hold it, but it's its own.
-    const own = ownDir.some((d) => within(target, d)) || !!ownQuick;
+    const own =
+      ownDir.some((d) => within(target, d)) || !!ownQuick || !!inAudits;
     if (state.some((d) => within(target, d)) && !own)
       return `${filePath} is in AgentOS's own state (${bounds.state}); you may write only in your folder, ${bounds.ownDir}.`;
     if (shell) continue;
     if (isSecretPath(target) || isSecretPath(filePath))
       return `${filePath} holds or guards secrets; orchestrators never write those.`;
     const runsIn = runs.find((r) => within(target, r));
+    // In its memory folder or audits, the rest of the path is what counts:
+    // the `.claude` and `.agent-os` above it are why it's allowed.
+    const inMemory = memory.find((d) => within(target, d));
+    const sub = inMemory ?? inAudits;
+    const rest = sub ? target.slice(sub.length) : null;
     if (
-      RUNS_CODE.test(target) ||
-      RUNS_CODE.test(filePath) ||
+      (rest === null
+        ? RUNS_CODE.test(target) || RUNS_CODE.test(filePath)
+        : RUNS_CODE.test(rest)) ||
       runsIn ||
       (!own &&
+        !inMemory &&
         home.some(
           (h) =>
             within(target, h) &&
@@ -235,8 +278,9 @@ export async function orchestratorWriteBounds(
     .all() as { dir: string }[];
   const dbPath = agentOsDbPath();
   const repos = projects.map((p) => expandHome(p.dir)).filter((d) => d !== "");
+  const cwd = expandHome(session.working_directory);
   return {
-    cwd: expandHome(session.working_directory),
+    cwd,
     home: os.homedir(),
     runs: [
       path.join(os.homedir(), "Library"),
@@ -248,6 +292,10 @@ export async function orchestratorWriteBounds(
       ...(process.env.PATH ?? "").split(":").filter((d) => d.startsWith("/")),
     ],
     ownDir: orchestratorDir(session.workspace_id ?? ""),
+    memory: [...new Set([cwd, await physicalPath(cwd)])].map((c) =>
+      path.join(os.homedir(), ".claude", "projects", mangleCwd(c), "memory")
+    ),
+    audits: path.join(os.homedir(), ".agent-os", "audits"),
     quick: quickWorktrees(session.id),
     state: path.join(os.homedir(), ".agent-os"),
     repos: [...repos, WORKTREES_DIR, process.cwd(), path.dirname(dbPath)],
@@ -343,6 +391,12 @@ async function commandRefusal(
       const own = await physicalPath(bounds.ownDir);
       const state = await physicalPath(bounds.state);
       return within(real, state) && !within(real, own);
+    },
+    inAudits: async (p) => {
+      const roots = bounds.audits
+        ? await plainRoot(bounds.audits, bounds.state)
+        : [];
+      return roots.some((r) => within(p, r));
     },
     protectedPids,
   });
