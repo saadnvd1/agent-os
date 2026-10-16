@@ -76,7 +76,7 @@ export const SessionRow = memo(function SessionRow({
   );
 
   return (
-    <div>
+    <div data-session-row={session.id}>
       <RowShell
         title={session.name}
         tipKey={`session:${session.id}`}

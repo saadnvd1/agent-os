@@ -28,11 +28,19 @@ const KEY_NAMES: Record<string, string> = {
   esc: "escape",
   space: " ",
   return: "enter",
+  up: "arrowup",
+  down: "arrowdown",
+  left: "arrowleft",
+  right: "arrowright",
 };
 
+export const isMac = () =>
+  typeof navigator !== "undefined" &&
+  /mac|iphone|ipad/i.test(navigator.platform);
+
 // "ctrl+b", "shift+tab", "meta+k". Modifiers must match exactly: ctrl+b is
-// not cmd+b and not ctrl+shift+b.
-export function parseChord(keys: string): Chord {
+// not cmd+b and not ctrl+shift+b. "mod" is Cmd on a Mac and Ctrl elsewhere.
+export function parseChord(keys: string, mac: boolean = isMac()): Chord {
   const chord: Chord = {
     key: "",
     ctrl: false,
@@ -42,7 +50,7 @@ export function parseChord(keys: string): Chord {
   };
   for (const raw of keys.toLowerCase().split("+")) {
     const part = raw.trim();
-    const mod = MODS[part];
+    const mod = part === "mod" ? (mac ? "meta" : "ctrl") : MODS[part];
     if (mod) chord[mod] = true;
     else if (chord.key) throw new Error(`Two keys in chord "${keys}"`);
     else chord.key = KEY_NAMES[part] ?? part;
@@ -72,4 +80,35 @@ export function formatChord(keys: string): string {
         : t[0].toUpperCase() + t.slice(1).toLowerCase();
     })
     .join("+");
+}
+
+const SYMBOLS: Record<string, string> = {
+  up: "↑",
+  down: "↓",
+  left: "←",
+  right: "→",
+};
+
+// "mod+up" as a hint: "⌘↑" on a Mac, "Ctrl+↑" elsewhere.
+export function chordHint(keys: string, mac: boolean = isMac()): string {
+  const parts = keys.split("+").map((p) => p.trim().toLowerCase());
+  const label = (p: string) =>
+    SYMBOLS[p] ??
+    (p.length === 1 ? p.toUpperCase() : p[0].toUpperCase() + p.slice(1));
+  if (!mac)
+    return parts
+      .map((p) =>
+        p === "mod" || p === "cmd" || p === "meta" ? "Ctrl" : label(p)
+      )
+      .join("+");
+  const sym: Record<string, string> = {
+    mod: "⌘",
+    cmd: "⌘",
+    meta: "⌘",
+    ctrl: "⌃",
+    alt: "⌥",
+    option: "⌥",
+    shift: "⇧",
+  };
+  return parts.map((p) => sym[p] ?? label(p)).join("");
 }
