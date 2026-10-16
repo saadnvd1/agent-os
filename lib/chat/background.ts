@@ -24,28 +24,6 @@ export function backgroundable(
   );
 }
 
-// Ctrl+B, nothing else held, and only while there is something to move;
-// otherwise the key is left to the page.
-export function backgroundKey(
-  e: {
-    key: string;
-    ctrlKey: boolean;
-    metaKey: boolean;
-    altKey: boolean;
-    shiftKey: boolean;
-    repeat?: boolean;
-    isComposing?: boolean;
-  },
-  available: boolean
-): boolean {
-  return (
-    available &&
-    e.key.toLowerCase() === "b" &&
-    e.ctrlKey &&
-    !(e.metaKey || e.altKey || e.shiftKey || e.repeat || e.isComposing)
-  );
-}
-
 // Errors that mean the agent never got the request.
 const UNREACHED = new Set(["unsupported", "unavailable", "timeout"]);
 
