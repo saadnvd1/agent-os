@@ -78,6 +78,11 @@ import { failInterruptedSetups } from "./lib/sessions/worktree-setup";
 import { sweepOrphanTmux } from "./lib/tmux/orphans";
 import { releaseInterruptedClaims } from "./lib/orchestrator/ask-approvals";
 import { resumeReviews } from "./lib/orchestrator/review";
+import {
+  isLiveServer,
+  readLiveRecord,
+  writeLiveRecord,
+} from "./lib/dev-instance";
 import { claimAgentosEnv } from "./lib/agents/self-env";
 import { wslNotes, wslVersion } from "./lib/wsl";
 import { getAllProjects } from "./lib/projects";
@@ -89,6 +94,19 @@ const hostname = "127.0.0.1";
 
 // Support: npm run dev -- -p 3012
 const port = serverPort();
+const live = isLiveServer();
+// A distinct title keeps `pkill -f server.ts` and `pkill tsx` off the
+// production server; an AgentOS in a worktree can't take its port.
+process.title = live ? "agentos-server" : "agentos-dev";
+if (!live) {
+  const rec = readLiveRecord();
+  if (rec && rec.port === port && rec.pid !== process.pid) {
+    console.error(
+      `Refusing to start: port ${port} is the live AgentOS server (pid ${rec.pid}). Use npm run dev:task.`
+    );
+    process.exit(1);
+  }
+}
 claimAgentosEnv(port);
 // Demo mode: seeded data, nothing that runs code (lib/security/demo).
 const demo = demoMode();
@@ -302,6 +320,13 @@ app.prepare().then(async () => {
     });
     server.listen(port, address, () => {
       console.log(`> Agent-OS ready on http://${address}:${port}`);
+      if (live)
+        writeLiveRecord({
+          pid: process.pid,
+          port,
+          cwd: process.cwd(),
+          startedAt: Date.now(),
+        });
     });
   };
   const stopListening = (address: string) => {
