@@ -7,7 +7,12 @@ import { ensureMcpConfig } from "../mcp-config";
 import { agentEnv } from "./launch";
 import { claimAgentosEnv } from "./self-env";
 
-const KEYS = ["AGENTOS_URL", "AGENTOS_PORT", "AGENTOS_SESSION_ID"] as const;
+const KEYS = [
+  "AGENTOS_URL",
+  "AGENTOS_PORT",
+  "AGENTOS_SESSION_ID",
+  "AGENTOS_SERVER",
+] as const;
 const saved = Object.fromEntries(KEYS.map((k) => [k, process.env[k]]));
 
 afterEach(() => {
@@ -22,7 +27,9 @@ describe("claimAgentosEnv", () => {
     process.env.AGENTOS_URL = "http://127.0.0.1:3011";
     process.env.AGENTOS_PORT = "3011";
     process.env.AGENTOS_SESSION_ID = "live-session";
+    process.env.AGENTOS_SERVER = "live";
     claimAgentosEnv(3999);
+    expect(process.env.AGENTOS_SERVER).toBeUndefined();
 
     const own = "http://127.0.0.1:3999";
     const child = JSON.parse(

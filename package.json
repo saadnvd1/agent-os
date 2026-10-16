@@ -31,10 +31,12 @@
   "scripts": {
     "predev": "node scripts/ensure-native.mjs && node scripts/gen-migrations-index.mjs",
     "dev": "AGENTOS_DEV=1 tsx server.ts",
+    "dev:task": "tsx scripts/dev-task.ts",
+    "dev:stop": "tsx scripts/dev-stop.ts",
     "prebuild": "node scripts/gen-migrations-index.mjs",
     "build": "next build",
     "prestart": "node scripts/ensure-native.mjs && node scripts/gen-migrations-index.mjs",
-    "start": "NODE_ENV=production tsx server.ts",
+    "start": "NODE_ENV=production AGENTOS_SERVER=live node --import tsx server.ts",
     "pretypecheck": "node scripts/gen-migrations-index.mjs",
     "typecheck": "tsc --noEmit",
     "setup": "bash scripts/setup.sh",

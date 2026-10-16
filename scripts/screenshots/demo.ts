@@ -11,7 +11,7 @@
  */
 import fs from "fs";
 import path from "path";
-import { execFileSync, spawn } from "child_process";
+import { spawnServer } from "@/lib/dev-instance";
 import { PORT, REPO, demoEnv } from "./config";
 import { seed, teardownTmux } from "./seed";
 import { startPeer } from "./peer";
@@ -35,13 +35,9 @@ async function main() {
       process.env[k] ? [[k, process.env[k]!]] : []
     )
   );
-  // server.ts imports the generated migrations index.
-  execFileSync(process.execPath, ["scripts/gen-migrations-index.mjs"], {
-    cwd: REPO,
-  });
-  const tsx = path.join(REPO, "node_modules", "tsx", "dist", "cli.mjs");
-  const server = spawn(process.execPath, [tsx, "server.ts"], {
-    cwd: REPO,
+  const server = spawnServer({
+    repo: REPO,
+    port: PORT,
     env: demoEnv({
       AGENTOS_BIND: "127.0.0.1",
       ...passed,

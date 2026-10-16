@@ -3,6 +3,8 @@
 ```bash
 npm run screenshots  # regenerate screenshots/ from a demo instance with fake data
 npm run dev          # http://localhost:3011
+npm run dev:task     # a task's own server: free port, own database and tmux, pid in .agentos/dev-server.json
+npm run dev:stop     # stops only that server (never pkill by pattern: it can match the live one)
 npm test             # vitest
 npm run lint         # eslint
 npm run check        # typecheck, lint, format and tests: what CI runs

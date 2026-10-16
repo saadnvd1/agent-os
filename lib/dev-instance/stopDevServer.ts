@@ -1,0 +1,98 @@
+import fs from "fs";
+import path from "path";
+import { execFileSync } from "child_process";
+import { readLiveRecord } from "./liveServer";
+import { pidAlive, looksLive, processCwd, samePath } from "./processInfo";
+import { readDevRecord, recordFile } from "./startDevServer";
+
+export interface StopDeps {
+  kill: (pid: number, signal: NodeJS.Signals) => void;
+  cwdOf: (pid: number) => string | null;
+  looksLive: (pid: number) => boolean;
+  livePid: () => number | null;
+  alive: (pid: number) => boolean;
+  sleep: (ms: number) => Promise<void>;
+  killTmux: (socket: string) => void;
+}
+
+const realDeps: StopDeps = {
+  kill: (pid, signal) => process.kill(pid, signal),
+  cwdOf: processCwd,
+  looksLive,
+  livePid: () => readLiveRecord()?.pid ?? null,
+  alive: pidAlive,
+  sleep: (ms) => new Promise((r) => setTimeout(r, ms)),
+  killTmux: (socket) => {
+    const env = { ...process.env };
+    delete env.TMUX;
+    try {
+      execFileSync("tmux", ["-S", socket, "kill-server"], {
+        env,
+        stdio: "ignore",
+      });
+    } catch {
+      // No server on it.
+    }
+  },
+};
+
+export interface StopResult {
+  ok: boolean;
+  message: string;
+}
+
+// Stops only the process this worktree's dev:task started, after checking
+// it is still that process: same working directory, not the live server.
+export async function stopDevServer(
+  worktree: string,
+  deps: Partial<StopDeps> = {}
+): Promise<StopResult> {
+  const d = { ...realDeps, ...deps };
+  const rec = readDevRecord(worktree);
+  if (!rec) return { ok: true, message: "No dev server recorded here." };
+  const drop = () => fs.rmSync(recordFile(worktree), { force: true });
+  if (!d.alive(rec.pid)) {
+    drop();
+    return { ok: true, message: `Dev server ${rec.pid} is not running.` };
+  }
+  const refuse = (why: string): StopResult => ({
+    ok: false,
+    message: `Refusing to stop pid ${rec.pid}: ${why}. Nothing was killed.`,
+  });
+  const cwd = d.cwdOf(rec.pid);
+  if (cwd === null || !samePath(cwd, worktree))
+    return refuse(
+      `its working directory (${cwd ?? "unknown"}) is not ${worktree}`
+    );
+  if (rec.pid === process.pid || rec.pid === process.ppid)
+    return refuse("that is this command's own process");
+  if (rec.pid === d.livePid() || d.looksLive(rec.pid))
+    return refuse("it is the live AgentOS server");
+
+  const signal = (s: NodeJS.Signals) => {
+    try {
+      d.kill(-rec.pid, s);
+    } catch {
+      try {
+        d.kill(rec.pid, s);
+      } catch {
+        // Already gone.
+      }
+    }
+  };
+  signal("SIGTERM");
+  for (let i = 0; i < 50 && d.alive(rec.pid); i++) await d.sleep(100);
+  if (d.alive(rec.pid)) signal("SIGKILL");
+  const sock = path.join(
+    worktree,
+    ".dev-tmux",
+    `tmux-${process.getuid?.() ?? 0}`,
+    "default"
+  );
+  if (fs.existsSync(sock)) d.killTmux(sock);
+  drop();
+  return {
+    ok: true,
+    message: `Stopped dev server ${rec.pid} (port ${rec.port}).`,
+  };
+}

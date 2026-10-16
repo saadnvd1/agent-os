@@ -14,4 +14,5 @@ export function claimAgentosEnv(
   env.AGENTOS_PORT = String(port);
   env.AGENTOS_URL = selfUrl(env);
   delete env.AGENTOS_SESSION_ID;
+  delete env.AGENTOS_SERVER;
 }

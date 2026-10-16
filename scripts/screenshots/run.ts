@@ -8,7 +8,8 @@
  */
 import fs from "fs";
 import path from "path";
-import { execFileSync, spawn, type ChildProcess } from "child_process";
+import { type ChildProcess } from "child_process";
+import { spawnServer } from "@/lib/dev-instance";
 import { BASE_URL, PORT, REPO, ROOT, demoEnv } from "./config";
 import { seed, teardownTmux } from "./seed";
 import { shoot } from "./shoot";
@@ -38,14 +39,10 @@ async function waitForServer(server: ChildProcess): Promise<void> {
 
 function startServer(): ChildProcess {
   const log = fs.openSync(path.join(ROOT, "server.log"), "w");
-  // server.ts imports the generated migrations index.
-  execFileSync(process.execPath, ["scripts/gen-migrations-index.mjs"], {
-    cwd: REPO,
-  });
-  const tsx = path.join(REPO, "node_modules", "tsx", "dist", "cli.mjs");
   // Loopback only: the demo never listens on another network.
-  return spawn(process.execPath, [tsx, "server.ts"], {
-    cwd: REPO,
+  return spawnServer({
+    repo: REPO,
+    port: PORT,
     // No watchers: the seeded orchestrator and tasks must sit still, never
     // start an agent.
     env: demoEnv({
