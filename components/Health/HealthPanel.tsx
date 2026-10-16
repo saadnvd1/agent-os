@@ -19,13 +19,22 @@ import {
   type CheckSummary,
 } from "@/lib/health/view";
 import { cn } from "@/lib/utils";
+import { EnvFailures } from "./EnvFailures";
 import { SweepRuns } from "./SweepRuns";
 
-const TABS = ["open", "history", "notes", "thresholds", "cleanup"] as const;
+const TABS = [
+  "open",
+  "history",
+  "env",
+  "notes",
+  "thresholds",
+  "cleanup",
+] as const;
 type Tab = (typeof TABS)[number];
 const TAB_LABEL: Record<Tab, string> = {
   open: "Open",
   history: "History",
+  env: "Environment",
   notes: "Notes",
   thresholds: "Thresholds",
   cleanup: "Clean-up",
@@ -407,6 +416,7 @@ export function HealthPanel() {
           empty="Nothing has closed in the last 7 days."
         />
       )}
+      {tab === "env" && <EnvFailures />}
       {tab === "notes" && <Notes />}
       {tab === "thresholds" && <Thresholds />}
       {tab === "cleanup" && <SweepRuns />}
