@@ -22,6 +22,9 @@ export interface PreviewItem {
   excerpt: string;
 }
 
+/** Download formats a server can make; the client lists what it is told. */
+export type ShareFormat = "pdf" | "html" | "md";
+
 export interface SharePreview {
   html: string;
   markdown: string;
@@ -33,6 +36,8 @@ export interface SharePreview {
   hits: Record<"secret" | "path" | "ip" | "host" | "email", number>;
   tooBig: boolean;
   connectLinked: boolean;
+  /** Best first. pdf only when this machine has a browser to print with. */
+  formats: ShareFormat[];
 }
 
 export interface SharedLinkRow {
@@ -103,7 +108,10 @@ export function formatBytes(n: number): string {
 }
 
 /** A file name for a download: the title, plain, with .html (or `ext`). */
-export function fileName(title: string, ext: "html" | "md" = "html"): string {
+export function fileName(
+  title: string,
+  ext: "html" | "md" | "pdf" = "html"
+): string {
   const slug = title
     .toLowerCase()
     .replace(/[^a-z0-9]+/g, "-")

@@ -58,15 +58,31 @@ turned them on. Pages inside a chat, and shared pages, are converted to plain
 Markdown: scripts, styles and frames are dropped, images become `[image: alt]`
 and links that aren't web or mail links lose the link.
 
-**Download Markdown** saves it as a `.md` file, with or without Connect. The
-shared page has a **Copy for agent** button and a `.md` link to hand to an
-agent. Links made before this existed have neither.
+## Download
 
-## Without Connect
+**Download** in the dialog lists PDF, HTML page and Markdown, with or without
+Connect. The PDF is printed on this machine from the same masked page as the
+preview (A4, white background, long code lines wrapped so nothing is cut off)
+and honours the same options and left-out messages. The shared page has a
+**Copy for agent** button and a `.md` link to hand to an agent. Links made
+before this existed have neither.
 
-If this machine isn't linked to Connect, the dialog offers **Download HTML**
-instead: the same page, saved as one file that opens in any browser. It is
-available when Connect is linked too, as is **Download Markdown**.
+## For other clients (the API)
+
+`POST /api/shares/preview` takes `{kind, sessionId | artifactId, includeTools,
+dropIds}` and answers with `html`, `markdown`, `title`, `bytes`, `hash`,
+`items`, `hits`, `tooBig`, `connectLinked` and **`formats`**: the downloads this
+machine can make, best first, such as `["pdf", "html", "md"]`. `pdf` is missing
+when the machine has no Chromium or Chrome to print with. Show only what
+`formats` lists.
+
+`POST /api/shares/pdf` takes the same body and returns `application/pdf` with
+`Content-Disposition: attachment; filename="<title>.pdf"`. Errors are JSON
+`{error}`: 400 for a bad body or every message left out, 404 for an unknown
+chat, 413 when the page is too big (the same limit as `tooBig`), 501 when there
+is no browser. Printing takes a second or two, so show a spinner. HTML and
+Markdown need no endpoint: save the `html` and `markdown` strings from the
+preview.
 
 ## What the page can do
 
