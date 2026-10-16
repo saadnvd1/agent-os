@@ -55,13 +55,25 @@ const keys = (over: Partial<KeyHandlers> = {}): KeyHandlers => ({
 
 function press(
   key: string,
-  opts: { shift?: boolean; coarse?: boolean } = {},
+  opts: {
+    shift?: boolean;
+    coarse?: boolean;
+    alt?: boolean;
+    ctrl?: boolean;
+    meta?: boolean;
+  } = {},
   h = keys()
 ) {
   window.matchMedia = ((q: string) => ({
     matches: Boolean(opts.coarse) && q.includes("coarse"),
   })) as never;
-  const event = new KeyboardEvent("keydown", { key, shiftKey: opts.shift });
+  const event = new KeyboardEvent("keydown", {
+    key,
+    shiftKey: opts.shift,
+    altKey: opts.alt,
+    ctrlKey: opts.ctrl,
+    metaKey: opts.meta,
+  });
   if (!handleKeyDown(editor, event, h)) {
     editor.view.someProp("handleKeyDown", (f) => f(editor.view, event));
   }
@@ -287,6 +299,31 @@ describe("Enter", () => {
     editor.commands.setTextSelection(2);
     press("ArrowRight", {}, h);
     expect(taken).toBe(2);
+  });
+
+  it("→ leaves the caret alone with no suggestion, a modifier, or an open menu", () => {
+    make();
+    let taken = 0;
+    const on = keys({ suggestion: true, onAcceptSuggestion: () => taken++ });
+    const off = keys({ suggestion: false, onAcceptSuggestion: () => taken++ });
+    press("ArrowRight", {}, off);
+    for (const mod of [
+      { shift: true },
+      { alt: true },
+      { ctrl: true },
+      { meta: true },
+    ])
+      press("ArrowRight", mod, on);
+    const open = keys({
+      suggestion: true,
+      menuOpen: true,
+      menuHasMatches: true,
+      onAcceptSuggestion: () => taken++,
+    });
+    press("ArrowRight", {}, open);
+    expect(taken).toBe(0);
+    press("ArrowRight", {}, on);
+    expect(taken).toBe(1);
   });
 
   it("Tab picks from an open menu before taking ghost text", () => {
