@@ -4,12 +4,26 @@
  * carries. A database goes only if its token belongs to no live session,
  * nobody is connected, it isn't a project's declared source, and it is more
  * than a day old. Anything without the token is never looked at.
+ *
+ * A session is over only when it is merged, dropped, done or moved away, or
+ * its row is gone: archiving and settling can be undone, and an interactive
+ * session has no end of its own, so neither keeps a database off the list.
+ *
+ * Proof of who made it: a copy must carry the `agentos session <id>` comment
+ * AgentOS gave it, and the id must hash to the token. Something a project
+ * derived from a copy (`<copy>_test`) has no such comment, so it also needs
+ * its token to belong to no session this machine has ever known, and the
+ * server to be local (a host that isn't localhost or a socket is never
+ * reaped on a name alone).
  */
 
 import { db } from "../db";
 import { loadProjectConfig } from "../project-config";
 import { expandHome } from "../project-config/session";
 import {
+  LOCAL_HOSTS,
+  MARK,
+  SOCKET_DIR,
   pgEnv,
   pgRun,
   sessionHash,
@@ -31,6 +45,8 @@ export interface DatabaseDeps {
   servers: PgServer[];
   // Hashes of the sessions that still need their database.
   live: Set<string>;
+  // Hashes of every session this machine has a row for, over or not.
+  known: Set<string>;
   // Databases a project declares as its source, never reaped.
   froms: Set<string>;
 }
@@ -38,21 +54,34 @@ export interface DatabaseDeps {
 const where = (s: PgServer) =>
   `${s.host ?? "local server"}${s.port ? `:${s.port}` : ""}`;
 
-// Sessions whose work isn't over on this machine: a deleted, merged, dropped,
-// done, archived or moved one no longer needs a database.
+// Sessions whose work isn't over: everything with a row except a task that
+// merged, was dropped, finished or moved away.
 export function liveSessionIds(): Set<string> {
   const rows = db
     .prepare(
       `SELECT id FROM session_rows
-       WHERE archived_at IS NULL AND settled_at IS NULL
-         AND (task_status IS NULL OR task_status IN ('running', 'moving'))`
+       WHERE task_status IS NULL
+          OR task_status NOT IN ('merged', 'dropped', 'done', 'moved')`
     )
     .all() as Array<{ id: string }>;
   return new Set(rows.map((r) => r.id));
 }
 
-export const liveHashes = (ids = liveSessionIds()): Set<string> =>
+export const knownSessionIds = (): Set<string> =>
+  new Set(
+    (
+      db.prepare(`SELECT id FROM session_rows`).all() as Array<{ id: string }>
+    ).map((r) => r.id)
+  );
+
+export const hashesOf = (ids: Iterable<string>): Set<string> =>
   new Set([...ids].map(sessionHash));
+
+export const liveHashes = (ids = liveSessionIds()): Set<string> =>
+  hashesOf(ids);
+
+const isLocal = (s: PgServer) =>
+  !s.host || LOCAL_HOSTS.has(s.host) || SOCKET_DIR.test(s.host);
 
 // Every project's declared database source and server.
 export function declaredDatabases(): {
@@ -84,10 +113,28 @@ export function declaredDatabases(): {
 }
 
 const LIST = (age: boolean) =>
-  `select d.datname, pg_database_size(d.oid),
+  `select d.datname, pg_database_size(d.oid), coalesce(shobj_description(d.oid, 'pg_database'), ''),
      (select count(*) from pg_stat_activity a where a.datname = d.datname),
      ${age ? `extract(epoch from (pg_stat_file('base/' || d.oid || '/PG_VERSION')).modification)::bigint` : "0"}
    from pg_database d where d.datname ~ '_aos_[0-9a-f]{12}'`;
+
+// Why this database can't be shown to be a session's, or null when it can.
+function whoMade(
+  hash: string,
+  note: string,
+  known: Set<string>,
+  server: PgServer
+): string | null {
+  const m = /^agentos session (\S+?)(?: \(copying\))?$/.exec(note);
+  if (m)
+    return sessionHash(m[1]) === hash
+      ? null
+      : "its comment names another session";
+  if (note) return "it has a comment that isn't AgentOS's";
+  if (known.has(hash))
+    return "no AgentOS comment on it, and its session is known here";
+  return isLocal(server) ? null : "no AgentOS comment, and not a local server";
+}
 
 async function list(deps: DatabaseDeps, server: PgServer) {
   const env = pgEnv(server);
@@ -102,10 +149,11 @@ async function list(deps: DatabaseDeps, server: PgServer) {
         .split("\n")
         .filter(Boolean)
         .map((line) => {
-          const [name, size, conns, at] = line.split("\t");
+          const [name, size, note, conns, at] = line.split("\t");
           return {
             name,
             bytes: Number(size) || 0,
+            note: note ?? "",
             conns: Number(conns) || 0,
             madeAt: Number(at) * 1000 || 0,
           };
@@ -137,7 +185,9 @@ export async function findTaskDatabases(deps: DatabaseDeps): Promise<{
       const skip = (reason: string) =>
         skipped.push({ path: d.name, kind: "database", reason });
       if (!hash) continue;
+      const proof = whoMade(hash, d.note, deps.known, server);
       if (deps.froms.has(d.name)) skip("a project's declared source");
+      else if (proof) skip(proof);
       else if (deps.live.has(hash)) skip("its session is still running");
       else if (d.conns > 0) skip(`${d.conns} connection(s) open`);
       else if (d.madeAt && deps.now - d.madeAt < DAY_MS)

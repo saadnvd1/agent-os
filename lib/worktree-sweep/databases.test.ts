@@ -7,6 +7,7 @@ import {
   declaredDatabases,
   dropTaskDatabase,
   findTaskDatabases,
+  knownSessionIds,
   liveHashes,
   type DatabaseDeps,
 } from "./databases";
@@ -17,8 +18,12 @@ import type { PgRun } from "@/lib/project-config/database";
 
 const DAY = 24 * 3600;
 const NOW = 1_800_000_000_000;
-const dead = "0123456789ab";
-const alive = "ba9876543210";
+const deadId = "dead-session";
+const aliveId = "alive-session";
+const dead = sessionHash(deadId);
+const alive = sessionHash(aliveId);
+// What the server answers per database: name, size, comment, connections, age.
+const said = (id: string) => `agentos session ${id}`;
 
 function fake(rows: string[][], psqlCode = 0) {
   const dropped: string[][] = [];
@@ -38,6 +43,7 @@ const deps = (run: PgRun, over: Partial<DatabaseDeps> = {}): DatabaseDeps => ({
   run,
   servers: [{}],
   live: new Set([alive]),
+  known: new Set([alive, dead]),
   froms: new Set(["lumifyhub_development"]),
   ...over,
 });
@@ -46,11 +52,13 @@ const old = String(NOW / 1000 - 3 * DAY);
 describe("finding task databases", () => {
   it("takes a dead session's copy and what was derived from it", async () => {
     const { run } = fake([
-      [`app_aos_${dead}`, "100", "0", old],
-      [`app_test_aos_${dead}`, "50", "0", old],
-      [`app_development_aos_${dead}_test`, "25", "0", old],
+      [`app_aos_${dead}`, "100", said(deadId), "0", old],
+      [`app_test_aos_${dead}`, "50", "", "0", old],
+      [`app_development_aos_${dead}_test`, "25", "", "0", old],
     ]);
-    const { candidates } = await findTaskDatabases(deps(run));
+    const { candidates } = await findTaskDatabases(
+      deps(run, { known: new Set() })
+    );
     expect(candidates.map((c) => [c.path, c.bytes])).toEqual([
       [`app_aos_${dead}`, 100],
       [`app_test_aos_${dead}`, 50],
@@ -60,13 +68,16 @@ describe("finding task databases", () => {
 
   it("keeps a live session's, a connected one, a young one and a declared source", async () => {
     const { run } = fake([
-      [`app_aos_${alive}`, "1", "0", old],
-      [`app_aos_${dead}`, "1", "2", old],
-      [`app_test_aos_${dead}`, "1", "0", String(NOW / 1000 - 3600)],
-      ["lumifyhub_development_aos_" + dead, "1", "0", old],
+      [`app_aos_${alive}`, "1", said(aliveId), "0", old],
+      [`app_aos_${dead}`, "1", said(deadId), "2", old],
+      [`app_test_aos_${dead}`, "1", "", "0", String(NOW / 1000 - 3600)],
+      ["lumifyhub_development_aos_" + dead, "1", "", "0", old],
     ]);
     const { candidates, skipped } = await findTaskDatabases(
-      deps(run, { froms: new Set([`lumifyhub_development_aos_${dead}`]) })
+      deps(run, {
+        known: new Set(),
+        froms: new Set([`lumifyhub_development_aos_${dead}`]),
+      })
     );
     expect(candidates).toEqual([]);
     expect(skipped.map((s) => s.reason)).toEqual([
@@ -81,10 +92,10 @@ describe("finding task databases", () => {
     // The server is asked only for names with the token; this guards the
     // parse as well, for a server that answers with more.
     const { run } = fake([
-      ["agenda", "1", "0", old],
-      ["crm_test", "1", "0", old],
-      ["workstak_test_ws_wor_6", "1", "0", old],
-      ["lumifyhub_aos_short", "1", "0", old],
+      ["agenda", "1", "", "0", old],
+      ["crm_test", "1", "", "0", old],
+      ["workstak_test_ws_wor_6", "1", "", "0", old],
+      ["lumifyhub_aos_short", "1", "", "0", old],
     ]);
     const { candidates, skipped } = await findTaskDatabases(deps(run));
     expect([candidates, skipped]).toEqual([[], []]);
@@ -98,9 +109,63 @@ describe("finding task databases", () => {
   });
 
   it("an unknown age still counts, and says so", async () => {
-    const { run } = fake([[`app_aos_${dead}`, "7", "0", "0"]]);
+    const { run } = fake([[`app_aos_${dead}`, "7", said(deadId), "0", "0"]]);
     const { candidates } = await findTaskDatabases(deps(run));
     expect(candidates[0].why).toMatch(/age unknown/);
+  });
+});
+
+describe("proof that AgentOS made it", () => {
+  const reasons = async (
+    rows: string[][],
+    over: Partial<DatabaseDeps> = {}
+  ) => {
+    const { candidates, skipped } = await findTaskDatabases(
+      deps(fake(rows).run, over)
+    );
+    return {
+      names: candidates.map((c) => c.path),
+      why: skipped.map((s) => s.reason),
+    };
+  };
+
+  it("keeps a copy with no AgentOS comment, or another session's", async () => {
+    const r = await reasons([
+      [`a_aos_${dead}`, "1", "", "0", old],
+      [`b_aos_${dead}`, "1", said("someone-else"), "0", old],
+      [`c_aos_${dead}`, "1", "my own notes", "0", old],
+    ]);
+    expect(r.names).toEqual([]);
+    expect(r.why).toEqual([
+      "no AgentOS comment on it, and its session is known here",
+      "its comment names another session",
+      "it has a comment that isn't AgentOS's",
+    ]);
+  });
+
+  it("keeps a derived one whose session this machine knows", async () => {
+    const r = await reasons([[`a_test_aos_${dead}`, "1", "", "0", old]]);
+    expect(r.names).toEqual([]);
+    expect(r.why[0]).toMatch(/its session is known here/);
+  });
+
+  it("takes a derived one of an unknown session only on a local server", async () => {
+    const rows = [[`a_test_aos_${dead}`, "1", "", "0", old]];
+    const unknown = new Set<string>();
+    expect(
+      (
+        await reasons(rows, {
+          known: unknown,
+          servers: [{ host: "localhost" }],
+        })
+      ).names
+    ).toHaveLength(1);
+    const remote = await reasons(rows, {
+      known: unknown,
+      servers: [{ host: "db.example.com" }],
+    });
+    expect(remote.names).toEqual([]);
+    expect(remote.why).toEqual(["no AgentOS comment, and not a local server"]);
   });
 });
 
@@ -138,20 +203,40 @@ describe("dropping", () => {
 });
 
 describe("which sessions are live", () => {
-  it("counts running tasks and plain sessions, not finished ones", () => {
+  it("is over only for a merged, dropped, done or moved task, or a deleted row", () => {
     const project = createProject({
       name: "live-hashes",
       workingDirectory: process.cwd(),
     });
-    const running = seedSession({ projectId: project.id, name: "running" });
-    const done = seedSession({ projectId: project.id, name: "done" });
-
+    const task = (name: string, status: string | null) => {
+      const id = seedSession({ projectId: project.id, name });
+      if (status)
+        db.prepare(
+          `INSERT INTO session_tasks (session_id, task_status) VALUES (?, ?)`
+        ).run(id, status);
+      return id;
+    };
+    const running = task("running", "running");
+    const moving = task("moving", "moving");
+    const plain = task("plain", null);
+    const archived = task("archived", null);
     db.prepare(
-      `INSERT INTO session_tasks (session_id, task_status) VALUES (?, 'merged')`
-    ).run(done);
+      `UPDATE sessions SET archived_at = datetime('now') WHERE id = ?`
+    ).run(archived);
+    const archivedTask = task("archived-task", "running");
+    db.prepare(
+      `UPDATE sessions SET archived_at = datetime('now') WHERE id = ?`
+    ).run(archivedTask);
+    const over = ["merged", "dropped", "done", "moved"].map((st) =>
+      task(st, st)
+    );
+
     const live = liveHashes();
-    expect(live.has(sessionHash(running))).toBe(true);
-    expect(live.has(sessionHash(done))).toBe(false);
+    // Unarchive brings these back, so their databases stay.
+    for (const id of [running, moving, plain, archived, archivedTask])
+      expect(live.has(sessionHash(id))).toBe(true);
+    for (const id of over) expect(live.has(sessionHash(id))).toBe(false);
+    expect(knownSessionIds().has(over[0])).toBe(true);
   });
 });
 

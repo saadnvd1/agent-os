@@ -50,14 +50,17 @@ describe("cache leftovers", () => {
   it("takes a dead task's temp folder but not a running one's or a young one", async () => {
     const t = setup();
     t.age(t.dir("tmp", `${SESSION_TMP_PREFIX}deadbeef`), 3);
-    t.age(t.dir("tmp", `${SESSION_TMP_PREFIX}1ive1234`), 3);
+    t.age(t.dir("tmp", `${SESSION_TMP_PREFIX}1ive1234-aaaa-bbbb`), 3);
     t.age(t.dir("tmp", `${SESSION_TMP_PREFIX}ffffffff`), 0);
+    // Same first eight characters as a running session, but another session.
+    t.age(t.dir("tmp", `${SESSION_TMP_PREFIX}1ive1234-cccc-dddd`), 3);
     t.age(t.dir("tmp", "agentos-preview-x1"), 3);
     t.age(t.dir("tmp", "agentos-preview-x2"), 0);
     t.age(t.dir("tmp", "somebody-elses"), 30);
     const d = t.deps(["1ive1234-aaaa-bbbb"]);
     expect((await names(d)).sort()).toEqual([
       "agentos-preview-x1",
+      `${SESSION_TMP_PREFIX}1ive1234-cccc-dddd`,
       `${SESSION_TMP_PREFIX}deadbeef`,
     ]);
     const { skipped } = await findCacheLeftovers(d);

@@ -66,10 +66,10 @@ export const pgRun: PgRun = (cmd, args, env) =>
 // A plain database name: never a connection string (`host=…`,
 // `postgres://…`) or an option, which pg_dump would take as one.
 const DB_NAME = /^[A-Za-z0-9_][A-Za-z0-9_$.-]{0,62}$/;
-const LOCAL_HOSTS = new Set(["localhost", "127.0.0.1", "::1"]);
+export const LOCAL_HOSTS = new Set(["localhost", "127.0.0.1", "::1"]);
 // One socket folder: libpq reads a comma as a list of hosts to try in turn,
 // so `/nope,db.example.com` would reach the second.
-const SOCKET_DIR = /^\/[^,=\s'"\\]*$/;
+export const SOCKET_DIR = /^\/[^,=\s'"\\]*$/;
 
 // Why `declared` can't be used, or null. A socket folder is local too.
 export function refusal(declared: DatabaseDecl): string | null {
@@ -86,7 +86,7 @@ export function refusal(declared: DatabaseDecl): string | null {
   return null;
 }
 
-const MARK = (sessionId: string) => `agentos session ${sessionId}`;
+export const MARK = (sessionId: string) => `agentos session ${sessionId}`;
 const PENDING = (sessionId: string) => `${MARK(sessionId)} (copying)`;
 
 export const sessionHash = (sessionId: string) =>

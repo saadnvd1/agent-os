@@ -9,7 +9,7 @@
 import fs from "fs";
 import path from "path";
 import { execFile } from "child_process";
-import { SESSION_TMP_PREFIX } from "../sessions/leftovers";
+import { SESSION_TMP_PREFIX, tmpName } from "../sessions/leftovers";
 import type { Candidate, SweepSkipped } from "./types";
 
 const DAY_MS = 24 * 3600_000;
@@ -89,9 +89,7 @@ export async function findCacheLeftovers(deps: CacheDeps): Promise<{
       );
   }
 
-  const livePrefixes = [...deps.liveIds].map((id) =>
-    id.replace(/[^\w-]/g, "").slice(0, 8)
-  );
+  const livePrefixes = [...deps.liveIds].map(tmpName);
   for (const dir of subdirs(deps.tmpRoot)) {
     const name = path.basename(dir);
     const isSession = name.startsWith(SESSION_TMP_PREFIX);

@@ -37,7 +37,7 @@ export interface SweepDeps {
   // Stop early when the machine is busy.
   busy: () => boolean;
   // Task databases, spares, temp folders and build caches.
-  extras: () => Promise<Extras>;
+  extras: (opts?: { fresh?: boolean }) => Promise<Extras>;
   // Written by a dry run: where its list goes.
   report: (summary: SweepSummary) => string | null;
 }
@@ -174,7 +174,10 @@ export async function sweep(
         summary.pending!.push({
           path: c.path,
           kind: c.kind,
-          why: "a test's throwaway repository",
+          why:
+            c.kind === "test-leak"
+              ? "a test's throwaway repository"
+              : "an orphan worktree",
           bytes: await deps.size(c.path),
         });
         continue;

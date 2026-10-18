@@ -35,7 +35,7 @@ export async function startDevServer(opts: {
   if (
     existing &&
     pidAlive(existing.pid) &&
-    samePath(processCwd(existing.pid) ?? "", worktree)
+    samePath((await processCwd(existing.pid)) ?? "", worktree)
   )
     return { ...existing, reused: true };
 

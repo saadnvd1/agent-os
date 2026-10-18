@@ -14,6 +14,8 @@ import {
   declaredDatabases,
   dropTaskDatabase,
   findTaskDatabases,
+  hashesOf,
+  knownSessionIds,
   liveHashes,
   liveSessionIds,
 } from "./databases";
@@ -45,7 +47,30 @@ const dirCount = (root: string) => {
   }
 };
 
-export async function defaultExtras(): Promise<Extras> {
+// The size of a whole root (every worktree, every spare) takes minutes of
+// disk reading, so it is measured at most every six hours, or again on a
+// dry run, which is what asks for fresh numbers.
+const ROOT_SIZE_TTL_MS = 6 * 3600_000;
+const rootSizes = new Map<string, { at: number; bytes: number }>();
+
+export async function cachedRootSize(
+  dir: string,
+  size: (dir: string) => Promise<number>,
+  fresh: boolean,
+  now = Date.now()
+): Promise<number> {
+  const hit = rootSizes.get(dir);
+  if (hit && !fresh && now - hit.at < ROOT_SIZE_TTL_MS) return hit.bytes;
+  const bytes = await size(dir);
+  rootSizes.set(dir, { at: now, bytes });
+  return bytes;
+}
+
+export const forgetRootSizes = () => rootSizes.clear();
+
+export async function defaultExtras(
+  opts: { fresh?: boolean } = {}
+): Promise<Extras> {
   const { servers, froms } = declaredDatabases();
   const ids = liveSessionIds();
   const size = (dir: string) => duBytes(dir);
@@ -54,6 +79,7 @@ export async function defaultExtras(): Promise<Extras> {
     run: pgRun,
     servers,
     live: liveHashes(ids),
+    known: hashesOf(knownSessionIds()),
     froms,
   });
   const derivedRoot = path.join(
@@ -77,7 +103,10 @@ export async function defaultExtras(): Promise<Extras> {
   return {
     candidates: [...dbs.candidates, ...caches.candidates],
     skipped: [...dbs.skipped, ...caches.skipped],
-    spares: { count: dirCount(SPARE_ROOT), bytes: await size(SPARE_ROOT) },
+    spares: {
+      count: dirCount(SPARE_ROOT),
+      bytes: await cachedRootSize(SPARE_ROOT, size, !!opts.fresh),
+    },
     drop: async (c) => {
       if (c.kind === "database") return dropTaskDatabase(c, froms);
       const target = path.resolve(c.path);
@@ -95,7 +124,7 @@ export async function findExtras(
   summary: SweepSummary,
   opts: { armed: boolean; dryRun: boolean }
 ): Promise<{ totals: SweepTotals }> {
-  const x = await deps.extras();
+  const x = await deps.extras({ fresh: opts.dryRun });
   summary.skipped.push(...x.skipped);
   for (const c of x.candidates) {
     const item: SweepRemoved = {
@@ -140,7 +169,7 @@ export async function findExtras(
     totals: {
       worktrees: {
         count: dirCount(deps.root),
-        bytes: await deps.size(deps.root),
+        bytes: await cachedRootSize(deps.root, deps.size, opts.dryRun),
       },
       databases: found("database"),
       spares: x.spares,

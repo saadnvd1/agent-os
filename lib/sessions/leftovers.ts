@@ -13,11 +13,11 @@ import { dropSessionDatabase } from "../project-config/database";
 
 export const SESSION_TMP_PREFIX = "agentos-s-";
 
+// The whole id: a shortened one could name two sessions' folders alike.
+export const tmpName = (sessionId: string) => sessionId.replace(/[^\w-]/g, "");
+
 export const sessionTmpDir = (sessionId: string) =>
-  path.join(
-    os.tmpdir(),
-    `${SESSION_TMP_PREFIX}${sessionId.replace(/[^\w-]/g, "").slice(0, 8)}`
-  );
+  path.join(os.tmpdir(), `${SESSION_TMP_PREFIX}${tmpName(sessionId)}`);
 
 export interface LeftoverDeps {
   stopDev: (worktree: string) => Promise<unknown>;

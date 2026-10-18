@@ -79,7 +79,8 @@ describe("removing a worktree with a dev server running in it", () => {
       expect(pidAlive(child.pid!)).toBe(true);
       await deleteWorktree(wt, repo, true);
       expect(fs.existsSync(wt)).toBe(false);
-      await new Promise((r) => setTimeout(r, 200));
+      for (let i = 0; i < 50 && pidAlive(child.pid!); i++)
+        await new Promise((r) => setTimeout(r, 100));
       expect(pidAlive(child.pid!)).toBe(false);
     } finally {
       child.kill("SIGKILL");
