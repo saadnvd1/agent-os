@@ -1,3 +1,4 @@
+import { sessionBaseEnv } from "../../agents/server-env";
 import type { ChatConversation, ChatDriver } from "../driver";
 import type { ChatImage, DriverEvent } from "../events";
 import { InputQueue } from "../queue";
@@ -16,7 +17,7 @@ export const codexDriver: ChatDriver = {
 
   async discover({ cwd, env }) {
     const rpc = new CodexRpc(
-      { cwd, env: { ...process.env, ...env } },
+      { cwd, env: { ...sessionBaseEnv(), ...env } },
       { notify: () => {}, request: () => {}, exit: () => {} }
     );
     try {
@@ -51,7 +52,7 @@ export const codexDriver: ChatDriver = {
     let starting = false;
     let stopOnStart = false;
     const rpc: CodexRpc = new CodexRpc(
-      { cwd: options.cwd, env: { ...process.env, ...options.env } },
+      { cwd: options.cwd, env: { ...sessionBaseEnv(), ...options.env } },
       {
         notify(method, params) {
           if (method === "item/started") approvals.sawItem(params.item as P);

@@ -6,7 +6,7 @@ describe("buildTmuxAttachCommand", () => {
   it("creates or attaches in one step and expands ~ on the target", () => {
     assert.equal(
       buildTmuxAttachCommand({ sessionName: "claude-1", cwd: "~/dev/app" }),
-      `tmux start-server \\; set -g mouse on \\; new-session -A -s claude-1 -c "$HOME"'/dev/app'`
+      `tmux start-server \\; set -g mouse on \\; set-environment -gu NODE_ENV \\; set-environment -gu PORT \\; set-environment -gu AGENTOS_SERVER \\; set-environment -gu AGENTOS_DEV \\; new-session -A -s claude-1 -c "$HOME"'/dev/app'`
     );
   });
 
@@ -20,7 +20,7 @@ describe("buildTmuxAttachCommand", () => {
   it("reattaches by exact name without creating", () => {
     assert.equal(
       buildTmuxAttachCommand({ sessionName: "s", attachOnly: true }),
-      `tmux start-server \\; set -g mouse on \\; attach-session -t '=s'`
+      `tmux start-server \\; set -g mouse on \\; set-environment -gu NODE_ENV \\; set-environment -gu PORT \\; set-environment -gu AGENTOS_SERVER \\; set-environment -gu AGENTOS_DEV \\; attach-session -t '=s'`
     );
   });
 

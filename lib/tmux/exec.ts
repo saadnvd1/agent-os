@@ -1,5 +1,6 @@
 import { execFile } from "child_process";
 import { promisify } from "util";
+import { sessionBaseEnv } from "../agents/server-env";
 
 const execFileAsync = promisify(execFile);
 
@@ -9,6 +10,7 @@ export async function tmux(args: string[], timeout = 10_000): Promise<string> {
   const { stdout } = await execFileAsync("tmux", args, {
     timeout,
     maxBuffer: 8 << 20,
+    env: sessionBaseEnv(),
   });
   return stdout;
 }
@@ -24,7 +26,7 @@ export async function pasteText(
     const child = execFile(
       "tmux",
       ["load-buffer", "-b", buffer, "-"],
-      { timeout: 10_000 },
+      { timeout: 10_000, env: sessionBaseEnv() },
       (err) => (err ? reject(err) : resolve())
     );
     // tmux gone before it read everything is a failed paste, not a crash.

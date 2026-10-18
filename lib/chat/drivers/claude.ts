@@ -1,3 +1,4 @@
+import { sessionBaseEnv } from "../../agents/server-env";
 import { randomUUID } from "crypto";
 import {
   getSessionMessages,
@@ -145,7 +146,7 @@ export const claudeDriver: ChatDriver = {
         cwd,
         permissionMode: "bypassPermissions",
         allowDangerouslySkipPermissions: true,
-        env: { ...process.env, ...env },
+        env: { ...sessionBaseEnv(), ...env },
       },
     });
     try {
@@ -235,7 +236,7 @@ export const claudeDriver: ChatDriver = {
           append: options.systemAppend,
         },
         env: {
-          ...process.env,
+          ...sessionBaseEnv(),
           ...options.env,
           // When the agent is done with every turn it had queued: the end
           // of a turn that never sent its result.

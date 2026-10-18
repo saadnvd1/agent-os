@@ -1,3 +1,4 @@
+import { sessionBaseEnv } from "../../agents/server-env";
 import type { ChatConversation, ChatDriver, ChatStartOptions } from "../driver";
 import type { ChatImage, DriverEvent } from "../events";
 import { InputQueue } from "../queue";
@@ -52,7 +53,7 @@ export const copilotDriver: ChatDriver = {
     const held: { text: string; images?: ChatImage[] }[] = [];
     const rpc: CopilotRpc = new CopilotRpc(
       copilotArgs(options),
-      { cwd: options.cwd, env: { ...process.env, ...options.env } },
+      { cwd: options.cwd, env: { ...sessionBaseEnv(), ...options.env } },
       {
         notify(method, params) {
           if (method === "session/update")

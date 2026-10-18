@@ -10,6 +10,7 @@ import { runInBackground } from "../async-operations";
 import { trustPromptKeys } from "../tasks/state";
 import { BUS_BRIEF } from "./brief";
 import { selfUrl } from "./self-env";
+import { sessionBaseEnv, UNSET_SERVER_ENV } from "./server-env";
 import { sessionPath } from "./tool-path";
 import { autoCompactEnv } from "../chat/refresh";
 import { subagentEnv } from "../models/subagents";
@@ -106,7 +107,7 @@ export async function launchClaude(opts: {
     model_provider: opts.provider ?? null,
   });
   const mcpFlags = routedMcpFlags(opts.provider);
-  const agent = `export PATH=${shellQuote(AOS_BIN_DIR)}:"$HOME/.local/bin:$PATH"; ${routing.exportKey} ${provider.command} ${flags} ${mcpFlags}${CLAUDE_STATUS_SETTINGS_FLAG} --append-system-prompt-file ${shellQuote(briefFile)} "$(cat ${shellQuote(promptFile)})"; exec "\${SHELL:-/bin/sh}" -l`;
+  const agent = `${UNSET_SERVER_ENV}export PATH=${shellQuote(AOS_BIN_DIR)}:"$HOME/.local/bin:$PATH"; ${routing.exportKey} ${provider.command} ${flags} ${mcpFlags}${CLAUDE_STATUS_SETTINGS_FLAG} --append-system-prompt-file ${shellQuote(briefFile)} "$(cat ${shellQuote(promptFile)})"; exec "\${SHELL:-/bin/sh}" -l`;
   await execFileAsync(
     "tmux",
     [
@@ -119,7 +120,7 @@ export async function launchClaude(opts: {
       ...envArgs({ ...agentEnv(opts.sessionId), ...routing.env }),
       agent,
     ],
-    { cwd: opts.cwd }
+    { cwd: opts.cwd, env: sessionBaseEnv() }
   );
   runInBackground(
     () => acceptTrustPrompt(opts.tmuxName),
