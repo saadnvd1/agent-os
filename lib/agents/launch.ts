@@ -10,6 +10,7 @@ import { runInBackground } from "../async-operations";
 import { trustPromptKeys } from "../tasks/state";
 import { BUS_BRIEF } from "./brief";
 import { selfUrl } from "./self-env";
+import { sessionPath } from "./tool-path";
 import { autoCompactEnv } from "../chat/refresh";
 import { subagentEnv } from "../models/subagents";
 import { COMPACT_BRIEF } from "../chat/working-state";
@@ -43,7 +44,7 @@ export function agentEnv(sessionId: string): Record<string, string> {
     ...subagentEnv(),
     AGENTOS_SESSION_ID: sessionId,
     AGENTOS_URL: selfUrl(),
-    PATH: `${AOS_BIN_DIR}:${process.env.PATH ?? ""}`,
+    PATH: `${AOS_BIN_DIR}:${sessionPath()}`,
   };
 }
 
