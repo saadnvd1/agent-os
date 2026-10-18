@@ -1,9 +1,8 @@
-import fs from "fs";
 import os from "os";
-import path from "path";
 import { beforeAll, beforeEach, describe, expect, it, vi } from "vitest";
 import { NextRequest } from "next/server";
 import { seedWorkspace } from "./testing";
+import { tempDir } from "@/lib/test-temp";
 
 const mocks = vi.hoisted(() => ({
   sweepNow: vi.fn(async () => undefined),
@@ -44,7 +43,7 @@ const { POST } =
   await import("@/app/api/workspaces/[id]/orchestrator/tools/route");
 
 beforeAll(() => {
-  const home = fs.mkdtempSync(path.join(os.tmpdir(), "aos-orch-sweep-"));
+  const home = tempDir("aos-orch-sweep-");
   vi.spyOn(os, "homedir").mockReturnValue(home);
 });
 
