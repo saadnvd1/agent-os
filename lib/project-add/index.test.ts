@@ -1,5 +1,5 @@
 import fs from "fs";
-import os, { tmpdir } from "os";
+import os from "os";
 import path from "path";
 import { execFileSync } from "child_process";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";

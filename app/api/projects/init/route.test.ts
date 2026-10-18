@@ -1,4 +1,3 @@
-import path from "path";
 import { describe, expect, it } from "vitest";
 import type { NextRequest } from "next/server";
 import { getProject } from "@/lib/projects";

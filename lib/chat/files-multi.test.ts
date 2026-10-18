@@ -1,6 +1,5 @@
 import { execFileSync } from "child_process";
 import fs from "fs";
-import os from "os";
 import path from "path";
 import { describe, expect, it, vi } from "vitest";
 import {

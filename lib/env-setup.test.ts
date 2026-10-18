@@ -1,6 +1,5 @@
 import { describe, expect, it } from "vitest";
 import * as fs from "fs";
-import * as os from "os";
 import * as path from "path";
 import { execFileSync } from "child_process";
 import { setupWorktree } from "./env-setup";

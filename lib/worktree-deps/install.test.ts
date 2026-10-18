@@ -1,6 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import * as fs from "fs";
-import * as os from "os";
 import * as path from "path";
 import { detectPackageManager, setupEnv } from "./install";
 import { setupWorktree, type SetupResult } from "../env-setup";

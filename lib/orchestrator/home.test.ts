@@ -1,6 +1,5 @@
 import fs from "fs";
 import os from "os";
-import path from "path";
 import { randomUUID } from "crypto";
 import { beforeAll, describe, expect, it, vi } from "vitest";
 import { db } from "@/lib/db";

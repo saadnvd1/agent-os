@@ -1,6 +1,5 @@
 import Database from "better-sqlite3";
 import fs from "fs";
-import os from "os";
 import path from "path";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import { getDb, insertSessionRow } from "@/lib/db";

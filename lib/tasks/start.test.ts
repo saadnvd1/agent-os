@@ -1,6 +1,5 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import * as fs from "fs";
-import * as os from "os";
 import * as path from "path";
 import type { SetupResult } from "../env-setup";
 import { tempDir } from "@/lib/test-temp";
@@ -58,7 +57,7 @@ vi.mock("../chat/runner", () => ({
     sendQueuedNow(sessionId, id),
 }));
 
-const { db, insertSessionRow, updateSessionRow } = await import("../db");
+const { db, updateSessionRow } = await import("../db");
 const { seedSession, seedWorkspace } = await import("../orchestrator/testing");
 const { setPaused } = await import("../orchestrator/pause");
 const { taskSetupOf } = await import("./setup");

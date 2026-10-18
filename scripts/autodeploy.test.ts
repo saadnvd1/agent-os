@@ -1,6 +1,5 @@
 import { execFileSync } from "child_process";
 import * as fs from "fs";
-import * as os from "os";
 import * as path from "path";
 import { describe, expect, it } from "vitest";
 import { tempDir } from "@/lib/test-temp";

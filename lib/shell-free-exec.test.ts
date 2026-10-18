@@ -458,7 +458,6 @@ describe("docker dev server reads", async () => {
     await import("@/lib/dev-servers");
   const { createProject } = await import("@/lib/projects");
   const fs = await import("fs");
-  const os = await import("os");
   const path = await import("path");
   const project = createProject({ name: "q", workingDirectory: "/tmp" });
   const container = EVIL[1];
@@ -527,7 +526,6 @@ describe("docker dev server reads", async () => {
 describe("summarize reads Claude's session id as an id", async () => {
   const { POST } = await import("@/app/api/sessions/[id]/summarize/route");
   const fs = await import("fs");
-  const os = await import("os");
   const path = await import("path");
 
   // A home of our own, with a transcript planted wherever each id would

@@ -1,4 +1,3 @@
-import { join } from "path";
 import { describe, expect, it, vi } from "vitest";
 import { db, stackQueries as q } from "../db";
 import { restackAfterMerge, stackNotice, type RestackDeps } from "./restack";

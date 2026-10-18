@@ -1,4 +1,3 @@
-import path from "path";
 import { randomUUID } from "crypto";
 import { describe, expect, it } from "vitest";
 import type { ChatItem } from "@/lib/chat/events";

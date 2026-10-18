@@ -1,5 +1,4 @@
 import fs from "fs";
-import os from "os";
 import path from "path";
 import { beforeAll, describe, expect, it } from "vitest";
 import { isOrchestratorSecretPath, isSecretPath } from "@/lib/secret-paths";
