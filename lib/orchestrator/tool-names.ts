@@ -40,6 +40,7 @@ export const TOOL_NAMES = {
   archive: name("archive"),
   resurrect: name("resurrect"),
   add_project: name("add_project"),
+  project_tier: name("project_tier"),
   note: name("note"),
   question: name("question"),
   resolve_question: name("resolve_question"),

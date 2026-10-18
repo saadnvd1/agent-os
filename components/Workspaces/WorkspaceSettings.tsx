@@ -7,6 +7,7 @@ import { RulesForm } from "./RulesForm";
 import { FreshStartForm } from "./FreshStartForm";
 import { McpServersForm } from "./McpServersForm";
 import { HqFolderForm } from "./HqFolderForm";
+import { ProjectTiersForm } from "./ProjectTiersForm";
 import { StallForm } from "./StallForm";
 import { WorkspaceModelsForm } from "./WorkspaceModelsForm";
 import { AwayWindowForm } from "@/components/Away/AwayWindowForm";
@@ -49,6 +50,7 @@ export function WorkspaceSettings() {
           <WorkspaceModelsForm workspaceId={w.id} />
           <McpServersForm workspace={w} />
           <HqFolderForm workspaceId={w.id} />
+          <ProjectTiersForm workspaceId={w.id} />
           <SettingToggle
             title="Wake tasks on CI failures and reviews"
             detail="A task's agent is messaged once when a check fails on its PR's head, with the log's tail, and when someone reviews or comments on it."

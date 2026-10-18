@@ -39,11 +39,11 @@ describe("orchestrator tool schemas", () => {
     expect(model.safeParse("deepseek").success).toBe(false);
   });
 
-  it("makes start_task state its plan decision and why", () => {
+  it("leaves start_task's plan decision optional, but a stated reason must say something", () => {
     const task = z.object(TOOL_SHAPES.start_task);
     const base = { project: "app", prompt: "do it" };
-    expect(task.safeParse(base).success).toBe(false);
-    expect(task.safeParse({ ...base, plan: false }).success).toBe(false);
+    expect(task.safeParse(base).success).toBe(true);
+    expect(task.safeParse({ ...base, plan: false }).success).toBe(true);
     expect(
       task.safeParse({ ...base, plan: false, plan_reason: "  " }).success
     ).toBe(false);

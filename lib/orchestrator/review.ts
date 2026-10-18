@@ -55,6 +55,7 @@ import {
 import { noteQuickReview } from "./quick";
 import { workspaceTask } from "./targets";
 import { untrusted } from "./untrusted";
+import { isFast } from "../project-tier/getProjectTier";
 
 const short = (sha: string) => sha.slice(0, 7);
 // The most diff one reviewer is given, and the most parts a change too big
@@ -267,6 +268,8 @@ export async function reviewAt(
   sha: string,
   opts: ReviewOpts = {}
 ): Promise<string> {
+  if (target.task && isFast(target.task))
+    return `${target.task.name} is in a fast project: no independent review; it merges through the fast gates.`;
   const known = getCheck(target.id, sha, "review");
   // A card task's scope check runs after its review; one never stored (a
   // restart between the two) means running the job again.

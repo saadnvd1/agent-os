@@ -26,6 +26,7 @@ import { sessionFacts } from "./facts";
 import { describeExternal, externalSessions } from "./external-sessions";
 import { resolveStaleAsks } from "./ask-settle";
 import { addNote } from "./notes";
+import { projectTierTool } from "./project-tier-tool";
 import { addProject } from "./add-project";
 import { addRule, removeRule } from "./rules";
 import { askSaad } from "./ask-tool";
@@ -237,6 +238,10 @@ export async function runTool(
       const a = p(tool, raw);
       return addProject(w, a.path, a.name);
     }
+    case "project_tier": {
+      const a = p(tool, raw);
+      return projectTierTool(w, a.project, a.tier);
+    }
     case "note":
       addNote(w, p(tool, raw).text);
       return "Noted.";
@@ -277,7 +282,7 @@ export async function runTool(
       return signOffTarget(w, a.task, { direct: a.direct, reason: a.reason });
     }
     case "arm":
-      return arm(w, p(tool, raw).task);
+      return await arm(w, p(tool, raw).task);
     case "disarm":
       return disarm(w, p(tool, raw).task);
     case "ask_saad":

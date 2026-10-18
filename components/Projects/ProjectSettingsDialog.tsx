@@ -12,6 +12,8 @@ import {
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
+import { ProjectTierField } from "./ProjectTierField";
+import type { ProjectTier } from "@/lib/project-tier/types";
 import {
   Select,
   SelectContent,
@@ -95,6 +97,7 @@ export function ProjectSettingsDialog({
     getDefaultModelForAgent("claude")
   );
   const [initialPrompt, setInitialPrompt] = useState("");
+  const [tier, setTier] = useState<ProjectTier>("fast");
   const [devServers, setDevServers] = useState<DevServerConfig[]>([]);
   const [repositories, setRepositories] = useState<RepositoryConfig[]>([]);
   const [isLoading, setIsLoading] = useState(false);
@@ -118,6 +121,7 @@ export function ProjectSettingsDialog({
       setName(project.name);
       setWorkingDirectory(project.working_directory);
       setAgentType(project.agent_type);
+      setTier(project.tier);
       setDefaultModel(
         isSupportedModelForAgent(project.agent_type, project.default_model)
           ? project.default_model
@@ -336,6 +340,7 @@ export function ProjectSettingsDialog({
         agentType,
         defaultModel,
         initialPrompt: initialPrompt.trim() || null,
+        tier,
       });
 
       // Handle dev server changes
@@ -525,6 +530,8 @@ export function ProjectSettingsDialog({
                 </SelectContent>
               </Select>
             </div>
+
+            <ProjectTierField value={tier} onChange={setTier} />
 
             {/* Initial Prompt */}
             <div className="space-y-2">

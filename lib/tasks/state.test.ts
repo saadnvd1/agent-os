@@ -86,6 +86,12 @@ describe("canSignOff", () => {
     expect(canSignOff(pr({ checks: "none" })).ok).toBe(true);
     expect(canSignOff(pr()).ok).toBe(true);
   });
+
+  it("ignores checks that fail or run when ci is off (a fast project)", () => {
+    expect(canSignOff(pr({ checks: "fail" }), { ci: false }).ok).toBe(true);
+    expect(canSignOff(pr({ checks: "pending" }), { ci: false }).ok).toBe(true);
+    expect(canSignOff(pr({ state: "CLOSED" }), { ci: false }).ok).toBe(false);
+  });
 });
 
 describe("checksVerdict", () => {

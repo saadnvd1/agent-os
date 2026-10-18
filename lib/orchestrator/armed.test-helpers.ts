@@ -125,6 +125,10 @@ export function setup() {
     workingDirectory: repo,
   });
   setProjectWorkspace(project.id, workspace.id);
+  // These tests judge today's gates; fast-lane.test.ts flips it.
+  db.prepare(`UPDATE projects SET tier = 'production' WHERE id = ?`).run(
+    project.id
+  );
   ensureOrchestrator(workspace.id);
   const task = seedSession({
     projectId: project.id,

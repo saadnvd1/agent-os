@@ -3,6 +3,7 @@ import type {
   ProjectWithRepositories,
   DetectedDevServer,
 } from "@/lib/projects";
+import type { ProjectTier } from "@/lib/db/types";
 import { projectKeys } from "./keys";
 import { sessionKeys } from "../sessions/keys";
 
@@ -131,6 +132,7 @@ export function useUpdateProject() {
       agentType,
       defaultModel,
       initialPrompt,
+      tier,
     }: {
       projectId: string;
       name?: string;
@@ -138,6 +140,7 @@ export function useUpdateProject() {
       agentType?: string;
       defaultModel?: string;
       initialPrompt?: string | null;
+      tier?: ProjectTier;
     }) => {
       const res = await fetch(`/api/projects/${projectId}`, {
         method: "PATCH",
@@ -148,6 +151,7 @@ export function useUpdateProject() {
           agentType,
           defaultModel,
           initialPrompt,
+          tier,
         }),
       });
       if (!res.ok) throw new Error("Failed to update project");

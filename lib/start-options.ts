@@ -40,7 +40,14 @@ export async function startOptions(
     const opts = { workspaceId: project?.workspace_id ?? null };
     roles.plan = resolveRole("plan", opts, models).ref;
     roles.implement = resolveRole("implement", opts, models).ref;
-    planDefault = taskRouting(opts.workspaceId, "chat", undefined).plan;
+    planDefault = taskRouting(
+      opts.workspaceId,
+      "chat",
+      undefined,
+      undefined,
+      undefined,
+      project?.tier
+    ).plan;
   } catch (error) {
     planError = error instanceof Error ? error.message : String(error);
   }

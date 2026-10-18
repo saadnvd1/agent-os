@@ -5,6 +5,7 @@ import { z } from "zod";
 import { BRANCH_NAME } from "../git";
 import { RAISED_KINDS } from "./asks";
 import { MAX_RULE_CHARS } from "./rules";
+import { PROJECT_TIERS } from "../project-tier/types";
 import { PROJECT_NAME } from "../project-add/name";
 import { TASK_ROLES, type ModelRole } from "../models/roles";
 import { PRIORITIES } from "../tasks/schedule-types";
@@ -160,8 +161,9 @@ export const TOOL_SHAPES = {
     model: modelOverride,
     plan: z
       .boolean()
+      .optional()
       .describe(
-        "Your decision for this job: true to plan first on the planning model, then implement on the implementation model; false to skip the plan and put the steps in the prompt yourself"
+        "Your decision for this job: true to plan first on the planning model, then implement on the implementation model; false to skip the plan and put the steps in the prompt yourself. Default: false in a fast project, the workspace's setting in a production one"
       ),
     plan_only: z
       .boolean()
@@ -174,6 +176,7 @@ export const TOOL_SHAPES = {
       .trim()
       .min(3)
       .max(200)
+      .optional()
       .describe(
         'Why, in a few words Saad reads on the task card: "touches 6 files across gates and UI", "one-line default change"'
       ),
@@ -337,6 +340,10 @@ export const TOOL_SHAPES = {
       .regex(PROJECT_NAME, "use letters, numbers, dots, dashes or underscores")
       .optional()
       .describe("A new project's name (default: the folder's)"),
+  },
+  project_tier: {
+    project: z.string().trim().min(1).max(200).optional(),
+    tier: z.enum(PROJECT_TIERS).optional(),
   },
   note: { text: z.string().trim().min(1).max(2000) },
   question: {

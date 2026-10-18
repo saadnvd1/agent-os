@@ -5,6 +5,7 @@
  * every 15s while anything in the workspace is working, every 60s when not.
  */
 
+import { autoArmFast, followFastMerges } from "./fast-lane";
 import { chatState, chatStateNow, sendChat } from "../chat/runner";
 import type { ChatState } from "../chat/events";
 import { getWorkspace } from "../workspaces";
@@ -96,7 +97,11 @@ function mergePipeline(workspaceId: string, facts: SessionFacts[]): void {
       console.error(`Judging asked commits in ${workspaceId}:`, error)
     );
     await rebaseConflicting(workspaceId, facts);
+    await autoArmFast(workspaceId, facts);
     await mergeArmed(workspaceId, facts);
+    await followFastMerges(workspaceId).catch((error) =>
+      console.error(`Following fast merges in ${workspaceId}:`, error)
+    );
   })()
     .catch((error) =>
       console.error(`Merge pipeline for ${workspaceId}:`, error)

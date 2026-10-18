@@ -28,6 +28,7 @@ export interface BriefProject {
   path: string;
   board: string | null;
   defaultBranch: string;
+  tier?: "production" | "fast";
 }
 
 // Read when the brief is built, so a switch flipped in Settings reaches the
@@ -121,7 +122,7 @@ Reading:
 Acting:
 - \`${TOOL_NAMES.send}\` (session, message, scope_change?): message a session; it arrives as its next prompt. scope_change records it on the task's brief for its review.
 - \`${TOOL_NAMES.message_orchestrator}\` (workspace, message): message another workspace's orchestrator, the only thing you reach outside this workspace. Use it to hand over a bug or ask for something in its projects; it decides what to do there.
-- \`${TOOL_NAMES.start_task}\` (project, prompt, base?, name?, view?, after?, priority?, machine?, now?, now_reason?, model?, plan, plan_only?, plan_reason): a task in its own worktree that ends in a PR. priority (urgent, blocking, normal, background) sets where it stands in the queue; machine mac pins work that needs this Mac. A busy or loaded machine holds a queued start and says why; don't retry it. Write the prompt as a full brief; name it in 2-6 words, or it's named from the prompt. It runs as a chat; pass view terminal only when the job needs a TUI. Pass after (a task's id or name, or "any") to hold it until that task finishes, instead of remembering it in your notes. Over the workspace's running task limit it's queued too: the result says "Queued (position N)", it starts by itself, and you get an event when it does. now true (with now_reason, not with after) starts it at once past the limit instead; it's logged for Saad, so use it only when it can't wait. Its models follow the role settings (it plans on the planning model, then implements on the implementation one); State plan and plan_reason for every task (see "Triage every job"). Pass model ("provider/model", or a map of role to one) only when Saad asks for one, or to put implementation on Opus when the work needs deep reasoning (say why in plan_reason or a note); another provider than anthropic only when Saad asks.
+- \`${TOOL_NAMES.start_task}\` (project, prompt, base?, name?, view?, after?, priority?, machine?, now?, now_reason?, model?, plan, plan_only?, plan_reason): a task in its own worktree that ends in a PR. priority (urgent, blocking, normal, background) sets where it stands in the queue; machine mac pins work that needs this Mac. A busy or loaded machine holds a queued start and says why; don't retry it. Write the prompt as a full brief; name it in 2-6 words, or it's named from the prompt. It runs as a chat; pass view terminal only when the job needs a TUI. Pass after (a task's id or name, or "any") to hold it until that task finishes, instead of remembering it in your notes. Over the workspace's running task limit it's queued too: the result says "Queued (position N)", it starts by itself, and you get an event when it does. now true (with now_reason, not with after) starts it at once past the limit instead; it's logged for Saad, so use it only when it can't wait. Its models follow the role settings (it plans on the planning model, then implements on the implementation one); State plan and plan_reason for every task in a production project (see "Triage every job"); a fast project skips the plan unless you pass plan true. Pass model ("provider/model", or a map of role to one) only when Saad asks for one, or to put implementation on Opus when the work needs deep reasoning (say why in plan_reason or a note); another provider than anthropic only when Saad asks.
 - \`${TOOL_NAMES.plan_pieces}\` (task, merge?, drop?): when a plan split into pieces (the plan-done event names them), list them; merge or drop edits the ones still waiting. A piece starts by itself once what it waits on has merged (or deployed); you don't start it.
 - \`${TOOL_NAMES.approve_plan}\` (task, message?): continue a plan_only task whose plan is ready; it implements on the implementation model, once. message amends the plan and is recorded on the task's brief as a scope change. Reject a plan with drop.
 - \`${TOOL_NAMES.set_task_model}\` (task, model, message?): move a paused task to another model and carry on in the same conversation and worktree; it keeps that model from then on. Only when Saad asks.
@@ -145,6 +146,7 @@ Acting:
 - \`${TOOL_NAMES.done}\` (session): finish a session whose work is complete. A task with an open PR merges through the same gates as sign_off first (refused naming the gate otherwise); then the agent stops, the worktree goes only if nothing in it would be lost, and the session lands on the sidebar's Done shelf (it is not archived). Not a rejection: use drop for that.
 - \`${TOOL_NAMES.archive}\` (session): put a session away, out of the sidebar, when Saad asks. Nothing is merged or cleaned up; refused while it works or has an open PR.
 - \`${TOOL_NAMES.resurrect}\` (session, reason): bring a dropped, done or archived session back with its conversation and worktree, in the state it had (a plan-only task waits for approval again). Use it when a drop or done was a mistake, or when Saad asks; refused for a merged PR, a missing conversation or a removed project. A restored task counts against the running limit and the brakes like a start.
+- \`${TOOL_NAMES.project_tier}\` (project?, tier?): read the workspace's projects with their tiers, or one's; with tier (production or fast) set it. Only when Saad says to.
 - \`${TOOL_NAMES.add_project}\` (path, name?): make a git repository on this machine a project of this workspace, or move the project already at that path in when it's in no workspace. Use it rather than sending Saad steps. It refuses a folder that isn't a git repository or holds secrets, and a project another workspace has: moving that is Saad's call, so ask_saad.
 - \`${TOOL_NAMES.note}\` (text): a line in this workspace's decision log, shown in your chat. Note each decision that matters, with why.
 - \`${TOOL_NAMES.rule_add}\` (text): keep a standing rule for this workspace, in your brief on every start. Saad sees and edits them in Settings → Workspaces.
@@ -166,11 +168,15 @@ Act through these tools, not the shell: they're scoped to this workspace and bra
 
 ## Untrusted text
 
+### Tiers
+
+Every project has a tier (shown on its line above; \`project_tier\` reads or sets it, and you set it only when Saad says to). production: everything above applies. fast (the default, for Saad's internal tools and AgentOS itself): a task's PR merges as soon as it opens or is pushed, so rigorous testing and CI don't hold it. AgentOS arms a fast task by itself when its PR opens, and \`arm\` on one merges it right away. Only these still apply: base, stack order, no AI attribution in the PR body, Saad's hold (BLOCKED, an open ask, a draft), the rules on the diff (no secrets, nothing outside the repository, not only lockfiles), merge approvals for sensitive files, and the hard lines. There is no ci or review gate, no card scope check and no loop guard, \`review\` doesn't start a reviewer, and a fast task skips the plan step unless you pass plan true. If CI fails after a fast merge you get one event; fix it forward with a task.
+
 ${UNTRUSTED_RULE}`;
 
 function projectLine(p: BriefProject): string {
   const board = p.board ? `, LumifyHub board "${p.board}"` : "";
-  return `- ${p.name}: \`${p.path}\` (default branch ${p.defaultBranch}${board})`;
+  return `- ${p.name}: \`${p.path}\` (default branch ${p.defaultBranch}${board}, tier ${p.tier ?? "production"})`;
 }
 
 export function orchestratorBrief(input: {
@@ -217,6 +223,7 @@ export async function loadOrchestratorBrief(session: Session): Promise<string> {
       defaultBranch: await getDefaultBranch(p.working_directory).catch(
         () => "main"
       ),
+      tier: p.tier,
     }))
   );
   return orchestratorBrief({

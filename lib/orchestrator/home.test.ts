@@ -121,9 +121,11 @@ describe("orchestratorBrief", () => {
   it("lists each project with its path, board and default branch", () => {
     expect(brief).toContain('orchestrator for the "Work" workspace');
     expect(brief).toContain(
-      '- app: `~/dev/app` (default branch main, LumifyHub board "Roadmap")'
+      '- app: `~/dev/app` (default branch main, LumifyHub board "Roadmap", tier production)'
     );
-    expect(brief).toContain("- api: `~/dev/api` (default branch trunk)");
+    expect(brief).toContain(
+      "- api: `~/dev/api` (default branch trunk, tier production)"
+    );
   });
 
   it("carries the gates, the hard lines and the tools", () => {

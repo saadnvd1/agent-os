@@ -26,6 +26,7 @@ import { getOrchestrator } from "./home";
 import { isPaused } from "./pause";
 import { review } from "./review";
 import { judge, mergeJudged } from "./signoff";
+import { isFast } from "../project-tier/getProjectTier";
 import { workspaceTask } from "./targets";
 import { markStatusDirty } from "../status/dirty";
 import { setPr } from "../db/session-parts";
@@ -88,9 +89,10 @@ export const anyArmed = (workspaceId: string) =>
   armedTasks(workspaceId).length > 0;
 
 // The orchestrator's `arm` and `disarm`.
-export function arm(workspaceId: string, ref: string): string {
+export async function arm(workspaceId: string, ref: string): Promise<string> {
   const task = workspaceTask(workspaceId, ref);
   armTask(task);
+  if (isFast(task)) return armedNow(workspaceId, task);
   return `Armed ${task.name}: AgentOS merges its PR the moment every sign_off gate passes at its head, and tells you with one event. A gate failure also comes as one event; it stays armed for the fix, unless the failure goes to Saad. No need to call sign_off.`;
 }
 
@@ -122,6 +124,17 @@ export function armTask(task: Session): void {
       `${task.name}'s project isn't in a workspace with an orchestrator, which an armed merge reports to`
     );
   setArmed(task.id, true);
+}
+
+// A fast task merges the moment it's armed, if its PR is open.
+async function armedNow(workspaceId: string, task: Session): Promise<string> {
+  const verdict = await judge(workspaceId, task, false, { count: false });
+  if (!verdict.ok)
+    return `Armed ${task.name} (fast project); not merged yet.\n${verdict.text}\nIt stays armed and merges once that is fixed.`;
+  await merge(workspaceId, task, verdict, defaults);
+  return stillArmed(workspaceId, task.id)
+    ? `Armed ${task.name} (fast project); the merge was refused, see the event. It stays armed.`
+    : `Merged ${task.name} (fast project): PR #${verdict.pr} at ${short(verdict.sha)}, no CI wait or review.`;
 }
 
 export function disarm(workspaceId: string, ref: string): string {
