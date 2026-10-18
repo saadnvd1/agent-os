@@ -138,3 +138,35 @@ declare module "vitest" {
     tmpRoot: string;
   }
 }
+
+/**
+ * Folders in `dir` (a worktrees folder) that weren't there in `before` and
+ * whose `.git` file points into this run's temp root: a test's throwaway
+ * repository whose worktree landed in the real home. A live task's new
+ * worktree points at its own repository, so it never matches.
+ */
+export function worktreeLeaks(
+  dir: string,
+  before: ReadonlySet<string>,
+  tmpRoots: readonly string[]
+): string[] {
+  const out: string[] = [];
+  let names: string[] = [];
+  try {
+    names = readdirSync(dir);
+  } catch {
+    return out;
+  }
+  for (const name of names) {
+    if (before.has(name)) continue;
+    try {
+      const m = /^gitdir:\s*(.+)$/m.exec(
+        readFileSync(join(dir, name, ".git"), "utf8")
+      );
+      if (m && tmpRoots.some((r) => m[1].trim().startsWith(r))) out.push(name);
+    } catch {
+      // Not a worktree: not a test's.
+    }
+  }
+  return out.sort();
+}

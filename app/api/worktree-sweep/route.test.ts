@@ -30,6 +30,14 @@ describe("/api/worktree-sweep", () => {
     expect((await (await put({ days: null })).json()).days).toBeNull();
   });
 
+  it("turns the full clean-up on and off, off by default", async () => {
+    expect((await (await GET()).json()).armed).toBe(false);
+    expect((await (await put({ armed: true })).json()).armed).toBe(true);
+    expect((await (await GET()).json()).armed).toBe(true);
+    expect((await (await put({ armed: false })).json()).armed).toBe(false);
+    expect((await put({ armed: "yes" })).status).toBe(400);
+  });
+
   it("refuses a number that isn't a whole 0-365", async () => {
     for (const days of [-1, 1.5, 400, "7", undefined]) {
       const res = await put({ days });

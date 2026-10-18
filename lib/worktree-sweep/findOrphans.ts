@@ -61,8 +61,16 @@ function gitdirOf(dir: string): string | null {
   }
 }
 
+// The server's own temp folder differs from a test run's (launchd, systemd),
+// so the usual system ones count too.
+const TEMP_ROOTS = [
+  /^\/(?:private\/)?tmp(?:\/|$)/,
+  /^\/(?:private\/)?var\/folders\/[^/]+\/[^/]+\/T(?:\/|$)/,
+  /^\/var\/tmp(?:\/|$)/,
+];
 const inTemp = (p: string) =>
-  [os.tmpdir(), real(os.tmpdir())].some((t) => inFolder(p, t));
+  [os.tmpdir(), real(os.tmpdir())].some((t) => inFolder(p, t)) ||
+  TEMP_ROOTS.some((r) => r.test(p));
 
 // Nothing in it but what AgentOS placed or rebuilds: no work to lose.
 export const holdsNothing = (dir: string) =>
@@ -103,7 +111,16 @@ export async function findOrphans(deps: OrphanDeps): Promise<{
     if (mine.has(real(dir))) continue;
     const skip = (reason: string) =>
       skipped.push({ path: dir, kind: "orphan", reason });
-    if (deps.now - newestMs(dir) < days * DAY_MS) {
+    const gitdir = gitdirOf(dir);
+    const registered = !!gitdir && fs.existsSync(gitdir);
+    const leak =
+      TEST_LEAK.test(entry.name) &&
+      !!gitdir &&
+      inTemp(real(path.dirname(gitdir)));
+    // A test's folder whose repository is gone is nobody's, however young:
+    // new ones arrive with every run of an old checkout's tests.
+    const abandoned = leak && !registered;
+    if (!abandoned && deps.now - newestMs(dir) < days * DAY_MS) {
       skip(`touched less than ${days} day${days === 1 ? "" : "s"} ago`);
       continue;
     }
@@ -111,12 +128,6 @@ export async function findOrphans(deps: OrphanDeps): Promise<{
       skip("a terminal is open in it");
       continue;
     }
-    const gitdir = gitdirOf(dir);
-    const registered = !!gitdir && fs.existsSync(gitdir);
-    const leak =
-      TEST_LEAK.test(entry.name) &&
-      !!gitdir &&
-      inTemp(real(path.dirname(gitdir)));
     if (leak) {
       candidates.push({
         path: dir,

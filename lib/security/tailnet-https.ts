@@ -10,10 +10,10 @@
  * address. AgentOS never runs `tailscale serve` or funnel.
  */
 
+import { agentosHome } from "../agentos-home";
 import { execFile } from "child_process";
 import fs from "fs";
 import https from "https";
-import os from "os";
 import path from "path";
 import type { IncomingMessage, ServerResponse } from "http";
 import type { Socket } from "net";
@@ -76,7 +76,7 @@ function runCert(
 /** Gets (or refreshes) the certificate; null when the tailnet can't issue one. */
 export async function tailnetCert(
   log: (line: string) => void = console.log,
-  dir = path.join(os.homedir(), ".agent-os", "tls")
+  dir = agentosHome("tls")
 ) {
   const ts = await tailscaleStatus();
   const bin = tailscaleBinary();

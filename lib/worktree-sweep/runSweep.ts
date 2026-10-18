@@ -6,7 +6,6 @@
 
 import fs from "fs";
 import path from "path";
-import { execFile } from "child_process";
 import { db, type Session } from "../db";
 import { git as runGit } from "../git-exec";
 import { run as runCmd } from "../tasks/gh";
@@ -19,10 +18,14 @@ import {
   type SettledDeps,
 } from "./findSettled";
 import { findOrphans, holdsNothing } from "./findOrphans";
+import duBytes from "./du";
+import { findExtras, defaultExtras, type Extras } from "./extras";
+import { reaperArmed } from "./settings";
+import { writeDiskReport } from "./report";
 import { judgeWorktree } from "./judge";
 import { openPaneFolders } from "./panes";
 import { finishRun, recordSwept, startRun } from "./store";
-import type { Candidate, SweepSummary } from "./types";
+import { ARMED_KINDS, type Candidate, type SweepSummary } from "./types";
 
 export interface SweepDeps {
   now: number;
@@ -33,18 +36,14 @@ export interface SweepDeps {
   prHead: (repo: string, number: number) => Promise<string | null>;
   // Stop early when the machine is busy.
   busy: () => boolean;
+  // Task databases, spares, temp folders and build caches.
+  extras: () => Promise<Extras>;
+  // Written by a dry run: where its list goes.
+  report: (summary: SweepSummary) => string | null;
 }
 
 const git = (cwd: string, ...args: string[]) =>
   runGit(cwd, args, { timeout: 30_000 }).then((o) => o.trim());
-
-function duBytes(dir: string): Promise<number> {
-  return new Promise((resolve) =>
-    execFile("du", ["-sk", dir], { timeout: 120_000 }, (error, stdout) =>
-      resolve(error ? 0 : (parseInt(String(stdout), 10) || 0) * 1024)
-    )
-  );
-}
 
 async function prHeadOf(repo: string, number: number): Promise<string | null> {
   try {
@@ -73,9 +72,18 @@ export const defaultSweepDeps = (): SweepDeps => ({
   root: WORKTREES_DIR,
   panes: openPaneFolders,
   settled: defaultSettledDeps(),
-  size: duBytes,
+  size: (dir) => duBytes(dir, 120_000),
   prHead: prHeadOf,
   busy: () => currentLevel() === "red",
+  extras: defaultExtras,
+  report: (summary) => {
+    try {
+      return writeDiskReport(summary);
+    } catch (error) {
+      console.error("[worktree-sweep] report not written:", error);
+      return null;
+    }
+  },
 });
 
 // A path under the root, never the root itself or something outside it.
@@ -123,7 +131,14 @@ export async function sweep(
 ): Promise<{ runId: number; summary: SweepSummary }> {
   const dryRun = !!opts.dryRun;
   const runId = startRun(dryRun);
-  const summary: SweepSummary = { removed: [], skipped: [], freedBytes: 0 };
+  const armed = reaperArmed();
+  const summary: SweepSummary = {
+    removed: [],
+    skipped: [],
+    freedBytes: 0,
+    pending: [],
+    armed,
+  };
   let error: string | null = null;
   try {
     const panes = await deps.panes();
@@ -155,6 +170,15 @@ export async function sweep(
           reason,
           sessionId: c.sessionId,
         });
+      if (ARMED_KINDS.has(c.kind) && !armed) {
+        summary.pending!.push({
+          path: c.path,
+          kind: c.kind,
+          why: "a test's throwaway repository",
+          bytes: await deps.size(c.path),
+        });
+        continue;
+      }
       const repo = await repoOfSession(c);
       const why =
         c.kind === "test-leak"
@@ -203,9 +227,12 @@ export async function sweep(
       summary.freedBytes += bytes;
     }
     if (!dryRun) await pruneProjects([...pruned]);
+    const extras = await findExtras(deps, summary, { armed, dryRun });
+    summary.totals = extras.totals;
   } catch (e) {
     error = e instanceof Error ? e.message : String(e);
   }
+  if (dryRun) summary.report = deps.report(summary) ?? undefined;
   finishRun(runId, summary, error);
   console.log(describeRun(summary, dryRun, error));
   return { runId, summary };
@@ -239,5 +266,8 @@ export function describeRun(
   }
   const why = [...reasons].map(([r, n]) => `${n} ${r}`).join("; ");
   const leaks = s.removed.filter((r) => r.kind === "test-leak").length;
-  return `[worktree-sweep] ${dryRun ? "would remove" : "removed"} ${s.removed.length} (${gb(s.freedBytes)}${leaks ? `, ${leaks} test leftovers` : ""}), skipped ${s.skipped.length}${why ? `: ${why}` : ""}${error ? `; failed: ${error}` : ""}`;
+  const pending = s.pending?.length
+    ? `, ${s.pending.length} more (${gb(s.pending.reduce((n, p) => n + p.bytes, 0))}) wait for the full clean-up to be turned on`
+    : "";
+  return `[worktree-sweep] ${dryRun ? "would remove" : "removed"} ${s.removed.length} (${gb(s.freedBytes)}${leaks ? `, ${leaks} test leftovers` : ""})${pending}, skipped ${s.skipped.length}${why ? `: ${why}` : ""}${error ? `; failed: ${error}` : ""}`;
 }

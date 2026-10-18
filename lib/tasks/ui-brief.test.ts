@@ -84,6 +84,8 @@ describe("uiVerifyBrief", () => {
     expect(text).toContain("chrome-devtools");
     expect(text).toMatch(/Don't load or call `mcp__claude-in-chrome__\*`/);
     expect(text).toContain(".agentos/screenshots");
+    expect(text).toContain("never a worktree path");
+    expect(text).toContain("AgentOS keeps these files");
     expect(text).toContain("1440x900 and 390x844");
     expect(text).toContain("One snapshot to find a uid");
     expect(text).toContain("Verify the thing that would be wrong");

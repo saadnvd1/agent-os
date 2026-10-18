@@ -41,7 +41,7 @@ export type PgRun = (
   env: NodeJS.ProcessEnv
 ) => Promise<{ code: number; out: string }>;
 
-const pgRun: PgRun = (cmd, args, env) =>
+export const pgRun: PgRun = (cmd, args, env) =>
   new Promise((resolve) => {
     execFile(
       cmd,
@@ -89,10 +89,19 @@ export function refusal(declared: DatabaseDecl): string | null {
 const MARK = (sessionId: string) => `agentos session ${sessionId}`;
 const PENDING = (sessionId: string) => `${MARK(sessionId)} (copying)`;
 
+export const sessionHash = (sessionId: string) =>
+  createHash("sha256").update(sessionId).digest("hex").slice(0, 12);
+
+// The token a session's copy carries, and so does anything a project derives
+// from it (`<copy>_test`, `<from>_test_aos_<hash>`): the one convention that
+// says AgentOS's session made a database.
+const TASK_DB = /_aos_([0-9a-f]{12})(?:_[A-Za-z0-9]+)*$/;
+export const taskHashOf = (name: string): string | null =>
+  TASK_DB.exec(name)?.[1] ?? null;
+
 // `<from>_aos_<12 hex of the session id>`, within Postgres's 63 bytes.
 export function databaseName(from: string, sessionId: string): string {
-  const hash = createHash("sha256").update(sessionId).digest("hex");
-  const suffix = `_aos_${hash.slice(0, 12)}`;
+  const suffix = `_aos_${sessionHash(sessionId)}`;
   return `${from.slice(0, 63 - suffix.length)}${suffix}`;
 }
 
@@ -122,7 +131,7 @@ const oneLine = (s: string, n = 200) => {
 };
 
 // Every database on the server with its comment, or why there's no answer.
-async function listDatabases(
+export async function listDatabases(
   run: PgRun,
   env: NodeJS.ProcessEnv
 ): Promise<Map<string, string> | string> {
@@ -399,7 +408,10 @@ async function dropDatabase(
     console.warn(`[database] ${name} left: ${listed}`);
     return;
   }
-  if (!listed.has(name)) return void forget();
+  if (!listed.has(name)) {
+    await dropDerived(sessionId, state, listed, run, env);
+    return void forget();
+  }
   const comment = listed.get(name);
   if (comment !== MARK(sessionId) && comment !== PENDING(sessionId)) {
     console.warn(`[database] ${name} left: AgentOS didn't make it`);
@@ -411,6 +423,27 @@ async function dropDatabase(
   let dropped = await run("dropdb", ["--if-exists", "--force", name], env);
   if (dropped.code !== 0)
     dropped = await run("dropdb", ["--if-exists", name], env);
-  if (dropped.code === 0) forget();
-  else console.warn(`[database] ${name} left: ${oneLine(dropped.out)}`);
+  if (dropped.code === 0) {
+    await dropDerived(sessionId, state, listed, run, env);
+    forget();
+  } else console.warn(`[database] ${name} left: ${oneLine(dropped.out)}`);
+}
+
+// What the project's own tooling made from the copy (a Rails `_test`
+// database): same session token, never the declared source.
+async function dropDerived(
+  sessionId: string,
+  state: SessionDatabase,
+  listed: Map<string, string>,
+  run: PgRun,
+  env: NodeJS.ProcessEnv
+): Promise<void> {
+  const hash = sessionHash(sessionId);
+  for (const other of listed.keys()) {
+    if (other === state.from || other === state.name) continue;
+    if (taskHashOf(other) !== hash) continue;
+    const done = await run("dropdb", ["--if-exists", "--force", other], env);
+    if (done.code !== 0)
+      console.warn(`[database] ${other} left: ${oneLine(done.out)}`);
+  }
 }

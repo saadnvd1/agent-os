@@ -1,6 +1,7 @@
 // A plan that split into pieces: the feature, its pieces, and the one-time
 // checks that turn a plan file into rows. A one-piece plan makes none.
 
+import { agentosHome } from "../agentos-home";
 import fs from "fs";
 import os from "os";
 import path from "path";
@@ -61,8 +62,7 @@ export interface FeaturePiece {
 const expandHome = (p: string) => p.replace(/^~/, os.homedir());
 
 export const plansDir = () =>
-  process.env.AGENTOS_PLANS_DIR ||
-  path.join(os.homedir(), ".agent-os", "plans");
+  process.env.AGENTOS_PLANS_DIR || agentosHome("plans");
 export const planPathOf = (featureId: string) =>
   path.join(plansDir(), `${featureId}.md`);
 

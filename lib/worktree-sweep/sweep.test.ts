@@ -14,6 +14,8 @@ const { createProject } = await import("@/lib/projects");
 const { seedSession } = await import("@/lib/orchestrator/testing");
 const { setTask, updateSessionRow } = await import("@/lib/db/session-parts");
 const { sweep } = await import("./runSweep");
+const { noExtras } = await import("./extras");
+const { setReaperArmed } = await import("./settings");
 const { recentRuns, sweptAt } = await import("./store");
 const { setGlobalSweepDays, setProjectSweepDays } = await import("./settings");
 import type { SweepDeps } from "./runSweep";
@@ -84,6 +86,8 @@ function setup() {
     size: async () => 1000,
     prHead: async () => null,
     busy: () => busy,
+    extras: noExtras,
+    report: () => null,
   });
   return {
     r,
@@ -319,5 +323,89 @@ describe("sweeping settled sessions", () => {
     expect(summary.removed).toEqual([]);
     expect(reasonFor(summary, s.dir)).toMatch(/busy/);
     t.set.busy(false);
+  });
+});
+
+describe("sweeping what tasks leave beside their worktrees", () => {
+  const found = [
+    { path: "app_aos_0123456789ab", kind: "database" as const, bytes: 40 },
+    { path: "/spare/x-1", kind: "spare" as const, bytes: 60 },
+  ];
+  function withExtras() {
+    const t = setup();
+    const dropped: string[] = [];
+    const reports: unknown[] = [];
+    const deps = (): SweepDeps => ({
+      ...t.deps(),
+      extras: async () => ({
+        candidates: found.map((c) => ({ ...c, why: "dead" })),
+        skipped: [],
+        drop: async (c) => (dropped.push(c.path), true),
+        spares: { count: 3, bytes: 99 },
+      }),
+      report: (summary) => (reports.push(summary), "/r.md"),
+    });
+    return { dropped, reports, deps };
+  }
+
+  it("only lists them while the full clean-up is off", async () => {
+    setReaperArmed(false);
+    const x = withExtras();
+    const { summary } = await sweep({}, x.deps());
+    expect(x.dropped).toEqual([]);
+    expect(summary.removed).toEqual([]);
+    expect(summary.pending?.map((p) => [p.path, p.bytes])).toEqual([
+      ["app_aos_0123456789ab", 40],
+      ["/spare/x-1", 60],
+    ]);
+    expect(summary.armed).toBe(false);
+  });
+
+  it("removes them once it is on, and counts the bytes freed", async () => {
+    setReaperArmed(true);
+    const x = withExtras();
+    const { summary } = await sweep({}, x.deps());
+    setReaperArmed(false);
+    expect(x.dropped).toEqual(["app_aos_0123456789ab", "/spare/x-1"]);
+    expect(summary.freedBytes).toBe(100);
+    expect(summary.totals).toMatchObject({
+      databases: { count: 1, bytes: 40 },
+      spares: { count: 3, bytes: 99 },
+    });
+  });
+
+  it("a dry run removes none of it and writes its list", async () => {
+    setReaperArmed(true);
+    const x = withExtras();
+    const { summary } = await sweep({ dryRun: true }, x.deps());
+    setReaperArmed(false);
+    expect(x.dropped).toEqual([]);
+    expect(summary.removed).toHaveLength(2);
+    expect(x.reports).toHaveLength(1);
+    expect(summary.report).toBe("/r.md");
+  });
+
+  it("leaves them for the next run when the machine is busy", async () => {
+    setReaperArmed(true);
+    const x = withExtras();
+    const { summary } = await sweep({}, { ...x.deps(), busy: () => true });
+    setReaperArmed(false);
+    expect(x.dropped).toEqual([]);
+    expect(
+      summary.skipped
+        .filter((k) => k.kind === "database" || k.kind === "spare")
+        .map((k) => k.reason)
+    ).toEqual([
+      "the machine is busy; left for the next run",
+      "the machine is busy; left for the next run",
+    ]);
+  });
+
+  it("a person's own plain session is never a candidate for its worktree", async () => {
+    const t = setup();
+    const s = t.session({ task: null, commits: { "a.txt": "a\n" } });
+    const { summary } = await sweep({}, t.deps());
+    expect(summary.removed.map((r) => r.path)).not.toContain(s.dir);
+    expect(fs.existsSync(s.dir)).toBe(true);
   });
 });

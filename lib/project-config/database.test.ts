@@ -487,6 +487,33 @@ describe("dropSessionDatabase", () => {
     expect(dropped).not.toContain("app_dev");
   });
 
+  it("also drops what the project derived from the copy, and only this session's", async () => {
+    const id = session();
+    const other = session();
+    const hash = databaseName("x", id).slice(-12);
+    await ensureSessionDatabase(id, decl, pg.run);
+    for (const n of [
+      `app_dev_test_aos_${hash}`,
+      `app_dev_aos_${hash}_test`,
+      databaseName("app_dev", other),
+      `app_dev_test_aos_${databaseName("x", other).slice(-12)}`,
+      "app_dev_test",
+      "crm_test",
+    ])
+      pg.dbs.set(n, "");
+    await dropSessionDatabase(id, pg.run);
+    expect([...pg.dbs.keys()].sort()).toEqual(
+      [
+        "app_dev",
+        "app_dev_test",
+        "app_dev_test_aos_" + databaseName("x", other).slice(-12),
+        "crm_test",
+        databaseName("app_dev", other),
+        "postgres",
+      ].sort()
+    );
+  });
+
   it("ends a straggler's connection with --force", async () => {
     const id = session();
     await ensureSessionDatabase(id, decl, pg.run);

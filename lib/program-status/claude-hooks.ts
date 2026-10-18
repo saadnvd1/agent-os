@@ -1,9 +1,9 @@
+import { agentosHome } from "../agentos-home";
 import fs from "fs";
-import os from "os";
 import path from "path";
 import { NO_ATTRIBUTION } from "../agents/attribution";
 
-const DIR = path.join(os.homedir(), ".agent-os");
+const DIR = agentosHome();
 const HOOK = path.join(DIR, "bin", "agentos-status");
 const SETTINGS = path.join(DIR, "claude-status-hooks.json");
 const SUBAGENT_HOOK = path.join(DIR, "bin", "agentos-subagent-model.mjs");

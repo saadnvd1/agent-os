@@ -26,7 +26,7 @@ import {
 } from "./move-bundle";
 import { stepProgress } from "./move-progress";
 import { PLAN_FILE } from "../models/plan-step";
-import { dropSessionDatabase } from "../project-config/database";
+import { releaseSessionLeftovers } from "../sessions/leftovers";
 import { releaseChat } from "../chat/runner";
 import { collectWhileMoving } from "../chat/hold";
 import { packChat, stopChatForMove } from "./move-chat";
@@ -258,7 +258,7 @@ export function markMoved(id: string, to: string): void {
     { task_status: ["running", "moving"] }
   );
   // It goes on there with a copy of its own.
-  if (moved) void dropSessionDatabase(id);
+  if (moved) void releaseSessionLeftovers({ id });
 }
 
 /**

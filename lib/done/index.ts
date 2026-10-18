@@ -28,7 +28,7 @@ import { deleteMergedRemote } from "./remote";
 import { settleWorktree, type WorktreeFate } from "./worktree";
 import { sessionMergePolicy } from "../tasks/finish";
 import { releasePorts } from "../ports";
-import { dropSessionDatabase } from "../project-config/database";
+import { releaseSessionLeftovers } from "../sessions/leftovers";
 import { doneOnPeer, peerSessionLink } from "../hosts/peer-actions";
 import { hostLink } from "../hosts/remote-api";
 import { doneHeldTask, isHeldRemote } from "../tasks/contract/held-calls";
@@ -70,7 +70,7 @@ async function stopAgent(s: Session): Promise<void> {
   clearQueue(s.id);
   releasePorts(s.id);
   // Never waited on: the row is read now, and Postgres can't hold this up.
-  void dropSessionDatabase(s.id);
+  void releaseSessionLeftovers(s);
 }
 
 function worktreeLine(f: WorktreeFate): string {

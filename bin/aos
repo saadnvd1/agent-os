@@ -59,6 +59,12 @@ const usage = `aos: talk to other agent sessions in AgentOS
   aos branches prune [--yes]         list the stale remote branches of your workspace's
                                      task PRs (merged or closed, head unchanged);
                                      --yes deletes them (default is a dry run)
+  aos sweep [--dry-run | --arm | --disarm]
+                                     clean up what finished tasks left on this machine
+                                     (worktrees, task databases, spares, temp folders);
+                                     --dry-run writes the list to
+                                     ~/.agent-os/audits/disk-cleanup and removes nothing;
+                                     the parts beyond old worktrees stay off until --arm
   aos archive <session>              put a session away, out of the sidebar (still
                                      in Archived, and Unarchive brings it back);
                                      refused while it works or has an open PR
@@ -785,6 +791,39 @@ async function main() {
       const { summary } = await post("/api/bus/branches", { from: me, yes });
       console.log(summary);
       return;
+    }
+    case "sweep": {
+      const flags = new Set(args);
+      const known = ["--dry-run", "--arm", "--disarm"];
+      if (args.some((a) => !known.includes(a)) || flags.size > 1)
+        fail("usage: aos sweep [--dry-run | --arm | --disarm]");
+      const put = (body) =>
+        call("/api/worktree-sweep", {
+          method: "PUT",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(body),
+        });
+      if (flags.has("--arm") || flags.has("--disarm")) {
+        const state = await put({ armed: flags.has("--arm") });
+        console.log(`full clean-up is ${state.armed ? "on" : "off"}`);
+        return;
+      }
+      const before = (await call("/api/worktree-sweep")).runs[0]?.id ?? 0;
+      await post("/api/worktree-sweep/run", { dryRun: flags.has("--dry-run") });
+      for (let i = 0; i < 360; i++) {
+        await new Promise((r) => setTimeout(r, 5000));
+        const run = (await call("/api/worktree-sweep")).runs[0];
+        if (!run || run.id === before || !run.finishedAt) continue;
+        const gb = (b) => (b / 1024 ** 3).toFixed(2) + " GB";
+        const d = run.details ?? {};
+        console.log(
+          `${run.dryRun ? "would remove" : "removed"} ${run.removed} (${gb(run.freedBytes)}), ${d.pendingTotal?.count ?? 0} waiting for --arm, ${run.skipped} kept`
+        );
+        if (d.report) console.log(`list: ${d.report}`);
+        if (run.error) fail(run.error);
+        return;
+      }
+      fail("the run is still going; look in Health, Clean-up");
     }
     case "archive": {
       const session = args.join(" ");

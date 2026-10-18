@@ -13,6 +13,12 @@ vi.mock("../worktrees", async (orig) => ({
   isAgentOSWorktree: () => true,
 }));
 vi.mock("../env-setup", () => ({ setupWorktree: vi.fn(async () => ({})) }));
+const released = vi.hoisted(() => [] as string[]);
+vi.mock("../sessions/leftovers", () => ({
+  releaseSessionLeftovers: async (s: { id: string }) => {
+    released.push(s.id);
+  },
+}));
 const ended = vi.hoisted(() => [] as string[]);
 vi.mock("../sessions/end", () => ({
   endSessionAgent: async (s: { id: string }) => {
@@ -74,6 +80,7 @@ describe("a held task that went back", () => {
     expect(fate.action).toBe("removed");
     expect(fs.existsSync(t.cwd)).toBe(false);
     expect(ended).toContain(t.id);
+    expect(released).toContain(t.id);
     expect(archived(t.id)).toBeTruthy();
   });
 

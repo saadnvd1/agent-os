@@ -3,8 +3,8 @@
  * worker's Unix socket: one JSON message per line.
  */
 
+import { agentosHome } from "../../agentos-home";
 import crypto from "crypto";
-import os from "os";
 import path from "path";
 import type {
   ApprovalDecision,
@@ -116,7 +116,7 @@ export function workerDir(): string {
     process.env.DB_PATH || path.join(process.cwd(), "agent-os.db")
   );
   const key = crypto.createHash("sha1").update(db).digest("hex").slice(0, 8);
-  return path.join(os.homedir(), ".agent-os", "chat", key);
+  return agentosHome("chat", key);
 }
 
 export const socketPath = (sessionId: string) =>

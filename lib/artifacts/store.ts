@@ -3,8 +3,8 @@
  * ~/.agent-os/artifacts/<session id>/, and a row saying whose it is.
  */
 
+import { agentosHome } from "../agentos-home";
 import fs from "fs";
-import os from "os";
 import path from "path";
 import { randomUUID } from "crypto";
 import { db } from "../db";
@@ -23,10 +23,7 @@ export const MAX_TITLE_CHARS = 120;
 const ID = /^[0-9a-f-]{36}$/;
 
 export function artifactsDir(): string {
-  return (
-    process.env.AGENTOS_ARTIFACTS_DIR ||
-    path.join(os.homedir(), ".agent-os", "artifacts")
-  );
+  return process.env.AGENTOS_ARTIFACTS_DIR || agentosHome("artifacts");
 }
 
 // Session ids are UUIDs; anything else must not become a path segment.

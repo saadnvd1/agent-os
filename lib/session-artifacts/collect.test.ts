@@ -10,6 +10,7 @@ import { saveItem } from "@/lib/chat/store";
 import * as listRoute from "@/app/api/sessions/[id]/artifacts/route";
 import * as oneRoute from "@/app/api/sessions/[id]/artifacts/[artifactId]/route";
 import { collectArtifacts, keepSessionFiles, getSession } from "./collect";
+import { sessionKeptDir } from "./keep";
 import type { SessionArtifact } from "./types";
 
 const PNG = Buffer.from(
@@ -181,6 +182,18 @@ describe("session artifacts", () => {
     expect((await one(other.id, notes.id)).status).toBe(404);
     expect((await one(s.id, "0123456789abcdef")).status).toBe(404);
     expect((await one(randomUUID(), notes.id)).status).toBe(404);
+  });
+
+  it("keeps the screenshots a terminal session saved, though no tool call named them", async () => {
+    const dir = repo();
+    const s = session(dir);
+    const shots = path.join(dir, ".agentos", "screenshots");
+    fs.mkdirSync(shots, { recursive: true });
+    fs.writeFileSync(path.join(shots, "home-390.png"), "png");
+    fs.writeFileSync(path.join(shots, "notes.txt"), "not an image");
+    await keepSessionFiles(s.id);
+    const kept = path.join(sessionKeptDir(s.id), ".agentos", "screenshots");
+    expect(fs.readdirSync(kept)).toEqual(["home-390.png"]);
   });
 
   it("keeps uncommitted files when the worktree goes, and says where the rest are", async () => {

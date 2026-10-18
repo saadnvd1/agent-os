@@ -33,6 +33,21 @@ export function useSetSweepDays() {
   });
 }
 
+export function useSetReaperArmed() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: async (armed: boolean) =>
+      json<SweepState>(
+        await fetch("/api/worktree-sweep", {
+          method: "PUT",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ armed }),
+        })
+      ),
+    onSuccess: (data) => queryClient.setQueryData(sweepKeys.all, data),
+  });
+}
+
 export function useRunSweep() {
   const queryClient = useQueryClient();
   return useMutation({

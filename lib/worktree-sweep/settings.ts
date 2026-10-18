@@ -81,3 +81,27 @@ export function projectSweepOverrides(): Array<{
     return days === null ? [] : [{ projectId, days }];
   });
 }
+
+// The full clean-up (test leftovers, task databases, spares, temp folders,
+// build caches) removes nothing until a person turns it on for this machine,
+// after reading what a dry run found.
+const ARMED_KEY = "worktree_sweep.reaper";
+
+export function reaperArmed(): boolean {
+  const row = db
+    .prepare(`SELECT value FROM settings WHERE key = ?`)
+    .get(ARMED_KEY) as { value: string } | undefined;
+  if (!row) return false;
+  try {
+    return JSON.parse(row.value)?.armed === true;
+  } catch {
+    return false;
+  }
+}
+
+export function setReaperArmed(armed: boolean): void {
+  db.prepare(
+    `INSERT INTO settings (key, value) VALUES (?, ?)
+     ON CONFLICT(key) DO UPDATE SET value = excluded.value`
+  ).run(ARMED_KEY, JSON.stringify({ armed, at: new Date().toISOString() }));
+}

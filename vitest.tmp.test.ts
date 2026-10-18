@@ -9,6 +9,7 @@ import {
   snapshot,
   sweepStale,
   testTmpPrefixes,
+  worktreeLeaks,
 } from "./vitest.tmp";
 
 const old = (path: string) => {
@@ -77,5 +78,28 @@ describe("the run's temp root", () => {
     expect(tmpdir().startsWith(fileDir)).toBe(true);
     for (const v of ["DB_PATH", "HOME", "AGENTOS_KEPT_DIR"])
       expect(process.env[v]!.startsWith(fileDir)).toBe(true);
+  });
+});
+
+describe("worktreeLeaks", () => {
+  const worktree = (dir: string, name: string, gitdir: string) => {
+    mkdirSync(join(dir, name));
+    writeFileSync(join(dir, name, ".git"), `gitdir: ${gitdir}\n`);
+  };
+
+  it("flags a new worktree whose repository is in this run's temp root", () => {
+    const dir = mkdtempSync(join(tmpdir(), "aos-wl-"));
+    const root = "/var/folders/xx/T/aos-t-run";
+    worktree(dir, "old-one", `${root}/f-1/repo/.git/worktrees/old-one`);
+    worktree(dir, "repo-quick-a", `${root}/f-1/repo/.git/worktrees/a`);
+    worktree(dir, "live-task", "/Users/someone/proj/.git/worktrees/live-task");
+    mkdirSync(join(dir, "no-git"));
+    expect(worktreeLeaks(dir, new Set(["old-one"]), [root])).toEqual([
+      "repo-quick-a",
+    ]);
+  });
+
+  it("is empty for a folder that isn't there", () => {
+    expect(worktreeLeaks("/nope/nowhere", new Set(), ["/x"])).toEqual([]);
   });
 });

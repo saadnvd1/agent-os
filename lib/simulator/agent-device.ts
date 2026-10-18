@@ -5,9 +5,9 @@
  * here, so it can only drive its own simulator.
  */
 
+import { agentosHome } from "../agentos-home";
 import { execFile } from "child_process";
 import fs from "fs";
-import os from "os";
 import path from "path";
 import { promisify } from "util";
 
@@ -15,7 +15,7 @@ const execFileAsync = promisify(execFile);
 
 export const AGENT_DEVICE_VERSION = "0.21.27";
 
-const root = () => path.join(os.homedir(), ".agent-os");
+const root = () => agentosHome();
 export const toolDir = () =>
   path.join(root(), "tools", `agent-device-${AGENT_DEVICE_VERSION}`);
 export const toolBin = () =>

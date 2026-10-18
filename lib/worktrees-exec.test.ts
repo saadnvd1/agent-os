@@ -1,8 +1,9 @@
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
-import { execFileSync } from "child_process";
+import { execFileSync, spawn } from "child_process";
 import fs from "fs";
 import os from "os";
 import path from "path";
+import { pidAlive } from "./dev-instance/processInfo";
 import { deleteWorktree, listWorktrees, mainCheckoutOf } from "./worktrees";
 
 // Worktree paths and branch names come from session rows: git gets them as
@@ -51,5 +52,37 @@ describe("worktrees with shell syntax in their path and branch", () => {
   it("answers no main checkout for a path that isn't a repository", async () => {
     expect(await mainCheckoutOf(path.join(root, "$(touch pwned)"))).toBe("");
     expect(fs.existsSync(path.join(process.cwd(), "pwned"))).toBe(false);
+  });
+});
+
+describe("removing a worktree with a dev server running in it", () => {
+  it("stops the server first, so it doesn't outlive its folder", async () => {
+    const wt = path.join(root, "wt-dev");
+    git("worktree", "add", "-q", "-b", "feature/dev", wt);
+    const child = spawn(process.execPath, ["-e", "setInterval(()=>{},1000)"], {
+      cwd: wt,
+      detached: true,
+      stdio: "ignore",
+    });
+    try {
+      fs.mkdirSync(path.join(wt, ".agentos"));
+      fs.writeFileSync(
+        path.join(wt, ".agentos", "dev-server.json"),
+        JSON.stringify({
+          pid: child.pid,
+          port: 3200,
+          cwd: wt,
+          startedAt: 1,
+          log: "",
+        })
+      );
+      expect(pidAlive(child.pid!)).toBe(true);
+      await deleteWorktree(wt, repo, true);
+      expect(fs.existsSync(wt)).toBe(false);
+      await new Promise((r) => setTimeout(r, 200));
+      expect(pidAlive(child.pid!)).toBe(false);
+    } finally {
+      child.kill("SIGKILL");
+    }
   });
 });

@@ -1,6 +1,13 @@
 import { execFileSync } from "node:child_process";
-import { mkdtempSync, statSync, utimesSync, writeFileSync } from "node:fs";
-import { tmpdir } from "node:os";
+import {
+  mkdtempSync,
+  readdirSync,
+  realpathSync,
+  statSync,
+  utimesSync,
+  writeFileSync,
+} from "node:fs";
+import { tmpdir, userInfo } from "node:os";
 import { join } from "node:path";
 import type { TestProject } from "vitest/node";
 import {
@@ -11,6 +18,7 @@ import {
   snapshot,
   sweepStale,
   testTmpPrefixes,
+  worktreeLeaks,
 } from "./vitest.tmp";
 
 const SWEEP_EVERY_MS = 60 * 60 * 1000;
@@ -57,6 +65,20 @@ export default function setup(project: TestProject) {
   ];
   const before = new Map(watched.map((d) => [d, snapshot(d, prefixes)]));
 
+  // The real worktrees folder, by the account's home (HOME is replaced in
+  // each test file). A test whose throwaway repository's worktree lands here
+  // fails the run: it is how 3,800 folders piled up.
+  const realWorktrees = join(userInfo().homedir, ".agent-os", "worktrees");
+  const worktreesBefore = new Set(
+    (() => {
+      try {
+        return readdirSync(realWorktrees);
+      } catch {
+        return [];
+      }
+    })()
+  );
+
   const root = mkdtempSync(join(real, RUN_PREFIX));
   process.env.TMPDIR = root;
   project.provide("tmpRoot", root);
@@ -74,6 +96,13 @@ export default function setup(project: TestProject) {
     for (const dir of watched)
       for (const name of leaks(dir, prefixes, before.get(dir) ?? new Set()))
         problems.push(`left behind: ${join(dir, name)}`);
+    for (const name of worktreeLeaks(realWorktrees, worktreesBefore, [
+      root,
+      realpathSync(real) + root.slice(real.length),
+    ]))
+      problems.push(
+        `worktree left in the real home: ${join(realWorktrees, name)}`
+      );
     process.env.TMPDIR = real;
     if (problems.length) {
       process.exitCode = 1;

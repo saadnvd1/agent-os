@@ -12,6 +12,7 @@
  * `..` resolved the way the system will resolve it.
  */
 
+import { agentosHome } from "../agentos-home";
 import { execFile } from "child_process";
 import fs from "fs";
 import os from "os";
@@ -296,9 +297,9 @@ export async function orchestratorWriteBounds(
     memory: [...new Set([cwd, await physicalPath(cwd)])].map((c) =>
       path.join(os.homedir(), ".claude", "projects", mangleCwd(c), "memory")
     ),
-    audits: path.join(os.homedir(), ".agent-os", "audits"),
+    audits: agentosHome("audits"),
     quick: quickWorktrees(session.id),
-    state: path.join(os.homedir(), ".agent-os"),
+    state: agentosHome(),
     repos: [...repos, WORKTREES_DIR, process.cwd(), path.dirname(dbPath)],
   };
 }

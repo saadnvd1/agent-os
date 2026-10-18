@@ -5,8 +5,8 @@
  * copy; the manifest records them so the view can say "in the PR".
  */
 
+import { agentosHome } from "../agentos-home";
 import fs from "fs";
-import os from "os";
 import path from "path";
 import { git } from "../git-exec";
 import { isSecretPath } from "../secret-paths";
@@ -23,9 +23,7 @@ export interface Manifest {
 }
 
 export function keptDir(): string {
-  return (
-    process.env.AGENTOS_KEPT_DIR || path.join(os.homedir(), ".agent-os", "kept")
-  );
+  return process.env.AGENTOS_KEPT_DIR || agentosHome("kept");
 }
 
 const safeId = (sessionId: string) => sessionId.replace(/[^\w-]/g, "_");

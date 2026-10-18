@@ -51,6 +51,17 @@ export function finishRun(
     summary.skipped.length,
     JSON.stringify({
       ...summary,
+      // The biggest first: they are what a person looks for.
+      removed: [...summary.removed]
+        .sort((a, b) => b.bytes - a.bytes)
+        .slice(0, DETAIL_CAP),
+      pending: [...(summary.pending ?? [])]
+        .sort((a, b) => b.bytes - a.bytes)
+        .slice(0, DETAIL_CAP),
+      pendingTotal: {
+        count: summary.pending?.length ?? 0,
+        bytes: (summary.pending ?? []).reduce((n, p) => n + p.bytes, 0),
+      },
       skipped: summary.skipped.slice(0, DETAIL_CAP),
     }),
     error,

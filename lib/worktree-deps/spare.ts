@@ -8,13 +8,13 @@
  * one made before the dependencies changed is never taken, and is pruned.
  */
 
+import { agentosHome } from "../agentos-home";
 import { createHash } from "crypto";
 import { spawn } from "child_process";
 import * as fs from "fs";
-import * as os from "os";
 import * as path from "path";
 
-export const SPARE_ROOT = path.join(os.homedir(), ".agent-os", "spare");
+export const SPARE_ROOT = agentosHome("spare");
 
 // A half-built spare left by a restart is removed after this long.
 const BUILDING_TTL_MS = 30 * 60 * 1000;

@@ -1,13 +1,13 @@
+import { agentosHome } from "../agentos-home";
 import type Database from "better-sqlite3";
 import Sqlite from "better-sqlite3";
 import { randomBytes } from "crypto";
 import fs from "fs";
-import os from "os";
 import path from "path";
 import { refuseRealStateUnderTest } from "../test-home-guard";
 
 export const backupsDir = (): string =>
-  refuseRealStateUnderTest(path.join(os.homedir(), ".agent-os", "backups"));
+  refuseRealStateUnderTest(agentosHome("backups"));
 
 // A full copy of the database (VACUUM INTO) under ~/.agent-os/backups, taken
 // before a destructive migration. Throws, and the migration must stop, unless

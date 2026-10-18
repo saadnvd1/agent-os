@@ -9,7 +9,8 @@ vi.mock("@/lib/worktrees", async (importOriginal) => ({
 }));
 
 const { sweep } = await import("./runSweep");
-const { setGlobalSweepDays } = await import("./settings");
+const { noExtras } = await import("./extras");
+const { setGlobalSweepDays, setReaperArmed } = await import("./settings");
 import type { SweepDeps } from "./runSweep";
 
 const DAY = 24 * 3600_000;
@@ -38,6 +39,8 @@ function setup() {
     size: async () => 10,
     prHead: async () => null,
     busy: () => false,
+    extras: noExtras,
+    report: () => null,
   });
   // A worktree no session row names.
   const orphan = (name: string, days = 30) => {
@@ -101,6 +104,7 @@ describe("sweeping orphan folders", () => {
   });
 
   it("removes a test's leftover without looking inside, even with its repo gone", async () => {
+    setReaperArmed(true);
     const t = setup();
     const live = t.orphan("aos-quick-repo-AbC123-other");
     const gone = t.orphan("repo-quick-fix-typo-0a1b");
@@ -110,6 +114,33 @@ describe("sweeping orphan folders", () => {
     const s = await t.run();
     expect(s.removed.map((x) => x.kind)).toEqual(["test-leak", "test-leak"]);
     expect(fs.existsSync(live) || fs.existsSync(gone)).toBe(false);
+    setReaperArmed(false);
+  });
+
+  it("only lists test leftovers while the full clean-up is off", async () => {
+    setReaperArmed(false);
+    const t = setup();
+    const gone = t.orphan("repo-quick-fix-typo-0a1b");
+    fs.rmSync(t.r.repo, { recursive: true, force: true });
+    const s = await t.run();
+    expect(s.removed).toEqual([]);
+    expect(s.pending?.map((x) => [x.kind, x.bytes])).toEqual([
+      ["test-leak", 10],
+    ]);
+    expect(fs.existsSync(gone)).toBe(true);
+  });
+
+  it("a young leftover goes once its repository is gone, and not before", async () => {
+    setReaperArmed(true);
+    const t = setup();
+    const young = t.orphan("repo-quick-young-0001", 0);
+    let s = await t.run();
+    expect(s.removed).toEqual([]);
+    expect(reasonFor(s, young)).toMatch(/less than/);
+    fs.rmSync(t.r.repo, { recursive: true, force: true });
+    s = await t.run();
+    expect(s.removed.map((x) => x.path)).toEqual([young]);
+    setReaperArmed(false);
   });
 
   it("an unregistered folder goes only when it holds nothing git could check", async () => {
