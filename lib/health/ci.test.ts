@@ -1,6 +1,10 @@
 import { beforeEach, describe, expect, it } from "vitest";
 import { db } from "@/lib/db";
 import { baseline, observeCi, pendingCi } from "./ci";
+import { ciSlow } from "./detectors";
+import { config, facts } from "./fixtures";
+import { setPr } from "@/lib/db/session-parts/prs";
+import { setTask } from "@/lib/db/session-parts/tasks";
 import { MIN } from "./types";
 
 const NOW = Date.parse("2026-10-14T18:00:00Z");
@@ -18,7 +22,23 @@ const f = (
   },
 });
 
-beforeEach(() => db.exec(`DELETE FROM ci_runs`));
+beforeEach(() => {
+  db.exec(`DELETE FROM ci_runs`);
+  db.exec(`DELETE FROM sessions WHERE id = 'ci-s'`);
+  db.exec(`DELETE FROM projects WHERE id = 'ci-p'`);
+});
+
+function sessionWith(prStatus: string, taskStatus: string | null = null) {
+  db.prepare(
+    `INSERT INTO projects (id, name, working_directory) VALUES ('ci-p', 'api', '/tmp/api')`
+  ).run();
+  db.prepare(
+    `INSERT INTO sessions (id, name, tmux_name, working_directory, project_id)
+     VALUES ('ci-s', 's', 'ci-s', '/tmp', 'ci-p')`
+  ).run();
+  if (taskStatus) setTask(db, "ci-s", { task_status: taskStatus as "merged" });
+  setPr(db, "ci-s", { pr_number: 7, pr_status: prStatus as "open" });
+}
 
 describe("CI runs", () => {
   it("starts timing at the first pending look and stops when it settles", () => {
@@ -47,5 +67,33 @@ describe("CI runs", () => {
   it("ignores a run pending for over a day: that one is lost, not slow", () => {
     observeCi("w", [f("pending")], NOW);
     expect(pendingCi(NOW + 25 * 60 * MIN)).toEqual([]);
+  });
+
+  it("gives no alarm for a merged PR that was pending", () => {
+    observeCi("w", [f("pending")], NOW);
+    sessionWith("merged", "merged");
+    expect(pendingCi(NOW + 58 * MIN)).toEqual([]);
+    const ci = pendingCi(NOW + 58 * MIN);
+    expect(ciSlow(facts({ ci, now: NOW + 58 * MIN }), config())).toEqual([]);
+  });
+
+  it("forgets a run whose PR left the workspace's facts", () => {
+    observeCi("w", [f("pending")], NOW);
+    observeCi("other", [], NOW + MIN);
+    expect(pendingCi(NOW + 2 * MIN)).toHaveLength(1);
+    observeCi("w", [], NOW + 2 * MIN);
+    expect(pendingCi(NOW + 3 * MIN)).toEqual([]);
+  });
+
+  it("still alarms on an open PR's pending check past the threshold", () => {
+    observeCi("w", [f("pending")], NOW);
+    sessionWith("open", "running");
+    const at = (min: number) =>
+      ciSlow(
+        facts({ ci: pendingCi(NOW + min * MIN), now: NOW + min * MIN }),
+        config()
+      );
+    expect(at(10)).toEqual([]);
+    expect(at(30)).toHaveLength(1);
   });
 });

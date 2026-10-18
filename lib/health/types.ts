@@ -105,6 +105,8 @@ export interface HealthFacts {
   ci: CiFact[];
   // Server start times inside the restart window.
   boots: number[];
+  // Autodeploy's planned restarts inside the same window.
+  deploys: number[];
   errors: { recent: number; baselineMean: number };
 }
 

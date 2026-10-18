@@ -96,7 +96,7 @@ function pipelineSnapshot(f: HealthFacts): string {
   lines.push("Recent server starts:");
   for (const b of recentBoots(6))
     lines.push(
-      `- ${ago(f.now, b.started_at)}${b.head ? ` at ${b.head}` : ""}${b.prev_seen_at ? `; the previous run was last seen ${ago(f.now, b.prev_seen_at)}` : ""}`
+      `- ${ago(f.now, b.started_at)}${b.deploy ? " (autodeploy restart)" : ""}${b.head ? ` at ${b.head}` : ""}${b.prev_seen_at ? `; the previous run was last seen ${ago(f.now, b.prev_seen_at)}` : ""}`
     );
   lines.push(
     `Server errors in the last 10 minutes: ${f.errors.recent} (usual ${Math.round(f.errors.baselineMean)}).`

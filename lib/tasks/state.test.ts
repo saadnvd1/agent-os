@@ -262,6 +262,49 @@ describe("reruns of the same check", () => {
     ).toBeNull();
   });
 
+  it("reads a check skipped on several runs as settled, with no lookup", () => {
+    const byId = {
+      1: run("pull_request", "2026-10-07T02:47:10Z"),
+      2: run("push", "2026-10-07T02:47:15Z", "other"),
+      3: run("pull_request", "2026-10-07T02:47:10Z"),
+    };
+    const rollup = [
+      review(1, "SKIPPED"),
+      review(2, "SKIPPED"),
+      { ...review(3, "SUCCESS"), name: "Specs" },
+    ];
+    expect(rerunsToLookUp(rollup)).toEqual([]);
+    expect(judge(rollup, byId).checks).toBe("pass");
+    expect(
+      judge([review(1, "NEUTRAL"), review(2, "SUCCESS")], byId).checks
+    ).toBe("pass");
+  });
+
+  it("doesn't let a skipped job with no start hide a rerun's attempt", () => {
+    const skipped = {
+      ...review(1, "SKIPPED"),
+      name: "GHCR login smoke",
+      startedAt: "0001-01-01T00:00:00Z",
+    };
+    const rollup = [skipped, review(1, "FAILURE"), review(2, "SUCCESS")].map(
+      (c, i) => (i ? { ...c, startedAt: "2026-10-07T02:48:35Z" } : c)
+    );
+    expect(rerunsToLookUp(rollup).every((r) => r.attempt !== null)).toBe(true);
+  });
+
+  it("still waits on a queued check next to a skipped one", () => {
+    const byId = {
+      1: run("pull_request", "2026-10-07T02:47:10Z"),
+      3: run("pull_request", "2026-10-07T02:47:10Z"),
+    };
+    expect(
+      judge(
+        [review(1, "SKIPPED"), { ...review(3, "", "QUEUED"), name: "Specs" }],
+        byId
+      ).checks
+    ).toBe("pending");
+  });
+
   it("passes on PR #102: a body edit's green run, then the rerun's green", () => {
     // Run 1 failed at 02:47, an edited body started run 2 at 02:48, and run 1
     // was then rerun (attempt 2) at 02:51.

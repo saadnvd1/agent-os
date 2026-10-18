@@ -90,12 +90,13 @@ export function restarts(f: HealthFacts, c: HealthConfig): Trip[] {
     (t) => f.now - t <= c.restartsWindowMinutes * MIN
   );
   if (recent.length <= c.restartsMax) return [];
+  const deploys = f.deploys.length;
   return [
     trip({
       check: "restarts",
       subject: "server",
       severity: "high",
-      line: `AgentOS restarted ${recent.length} times in the last ${c.restartsWindowMinutes} minutes.`,
+      line: `AgentOS restarted ${recent.length} times in the last ${c.restartsWindowMinutes} minutes${deploys ? ` (besides ${deploys} autodeploy ${deploys === 1 ? "restart" : "restarts"})` : ""}.`,
       detail: { boots: recent },
     }),
   ];

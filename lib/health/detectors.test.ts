@@ -99,6 +99,18 @@ describe("restarts", () => {
     const [t] = restarts(facts({ boots: boots(3) }), config());
     expect(t).toMatchObject({ subject: "server", severity: "high" });
   });
+  it("leaves autodeploy's planned restarts out of the count", () => {
+    const boots = (n: number) =>
+      Array.from({ length: n }, (_, i) => NOW - i * 5 * MIN);
+    expect(
+      restarts(facts({ boots: boots(2), deploys: boots(3) }), config())
+    ).toEqual([]);
+    const [t] = restarts(
+      facts({ boots: boots(3), deploys: [NOW - MIN] }),
+      config()
+    );
+    expect(t.line).toContain("besides 1 autodeploy restart)");
+  });
   it("ignores starts outside the window", () => {
     expect(
       restarts(

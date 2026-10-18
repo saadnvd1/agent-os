@@ -6,6 +6,9 @@
  * next boot reads it back.
  */
 
+import fs from "fs";
+import os from "os";
+import path from "path";
 import { db } from "../db";
 import { gitSync } from "../git-exec";
 import { getSetting, putSetting } from "../settings-store";
@@ -62,6 +65,7 @@ export interface BootRow {
   head: string | null;
   prev_seen_at: number | null;
   prev_bg: string | null;
+  deploy: number | null;
 }
 
 export const bootsSince = (since: number) =>
@@ -75,5 +79,38 @@ export const recentBoots = (n = 6) =>
   db
     .prepare(`SELECT * FROM health_boots ORDER BY started_at DESC LIMIT ?`)
     .all(n) as BootRow[];
+
+export const DEPLOY_RESTART_FILE = path.join(
+  os.homedir(),
+  ".agent-os",
+  "autodeploy",
+  "restarted"
+);
+
+// When autodeploy last restarted the server (it writes epoch seconds once the
+// server is back up), or null.
+export function lastDeployRestart(file = DEPLOY_RESTART_FILE): number | null {
+  try {
+    const s = Number.parseInt(fs.readFileSync(file, "utf8").trim(), 10);
+    return Number.isFinite(s) && s > 0 ? s * 1000 : null;
+  } catch {
+    return null;
+  }
+}
+
+// Autodeploy writes its file up to the startup wait after the restart.
+const DEPLOY_LOOKBACK_MS = 15 * MIN;
+
+// Stamps the latest boot that lines up with a planned restart, so it isn't
+// counted as an unexpected one. A crash loop during a deploy keeps its extra
+// boots.
+export function markDeployBoot(restartedAt: number | null): void {
+  if (restartedAt === null) return;
+  db.prepare(
+    `UPDATE health_boots SET deploy = 1 WHERE id = (
+       SELECT id FROM health_boots WHERE started_at BETWEEN ? AND ?
+       ORDER BY started_at DESC LIMIT 1)`
+  ).run(restartedAt - DEPLOY_LOOKBACK_MS, restartedAt + MIN);
+}
 
 export const BOOT_WINDOW_MS = 24 * 60 * MIN;

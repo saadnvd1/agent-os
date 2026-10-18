@@ -1,6 +1,16 @@
 import { beforeEach, describe, expect, it } from "vitest";
 import { db } from "@/lib/db";
-import { bootsSince, leaveHeartbeat, recentBoots, recordBoot } from "./boots";
+import fs from "fs";
+import os from "os";
+import path from "path";
+import {
+  bootsSince,
+  lastDeployRestart,
+  leaveHeartbeat,
+  markDeployBoot,
+  recentBoots,
+  recordBoot,
+} from "./boots";
 import { MIN } from "./types";
 
 const NOW = Date.parse("2026-10-14T18:00:00Z");
@@ -32,5 +42,27 @@ describe("boots", () => {
       NOW - 30 * MIN,
       NOW,
     ]);
+  });
+  it("labels the latest boot before a planned restart as a deploy", () => {
+    for (const t of [NOW - 40 * MIN, NOW - 5 * MIN, NOW - 2 * MIN])
+      recordBoot(t, 1);
+    markDeployBoot(NOW);
+    markDeployBoot(NOW);
+    expect(bootsSince(NOW - 60 * MIN).map((b) => b.deploy)).toEqual([
+      null,
+      null,
+      1,
+    ]);
+    markDeployBoot(null);
+  });
+  it("reads autodeploy's restarted file in seconds", () => {
+    const dir = fs.mkdtempSync(path.join(os.tmpdir(), "boots-"));
+    const file = path.join(dir, "restarted");
+    expect(lastDeployRestart(file)).toBeNull();
+    fs.writeFileSync(file, "1760000000\n");
+    expect(lastDeployRestart(file)).toBe(1760000000000);
+    fs.writeFileSync(file, "nope");
+    expect(lastDeployRestart(file)).toBeNull();
+    fs.rmSync(dir, { recursive: true });
   });
 });

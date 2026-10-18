@@ -15,6 +15,7 @@ export const facts = (over: Partial<HealthFacts> = {}): HealthFacts => ({
   armed: [],
   ci: [],
   boots: [],
+  deploys: [],
   errors: { recent: 0, baselineMean: 0 },
   ...over,
 });
