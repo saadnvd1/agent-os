@@ -805,7 +805,7 @@ async function main() {
         });
       if (flags.has("--arm") && process.env.AGENTOS_SESSION_ID)
         fail(
-          "a person turns the full clean-up on: Health, Clean-up, Turn on (or aos sweep --arm in their own terminal)"
+          "a session can't turn the full clean-up on: Saad does (Health, Clean-up, Turn on, or aos sweep --arm in his own terminal), or the orchestrator's sweep_arm tool when he has said to"
         );
       if (flags.has("--arm") || flags.has("--disarm")) {
         const state = await put({ armed: flags.has("--arm") });

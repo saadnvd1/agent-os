@@ -21,6 +21,13 @@ const view = z
     "How its agent runs: chat (the default), or terminal only when the job needs a TUI (an interactive program, a full-screen tool)"
   );
 
+const sweepMachine = z
+  .string()
+  .trim()
+  .min(1)
+  .max(200)
+  .describe('A linked machine\'s name (see Machines), or "here" for this one');
+
 const modelRef = z
   .string()
   .trim()
@@ -267,6 +274,17 @@ export const TOOL_SHAPES = {
       .describe(
         'A linked machine\'s name (see Machines), or "here" to bring the task back'
       ),
+  },
+  sweep_dry_run: { machine: sweepMachine },
+  sweep_arm: {
+    machine: sweepMachine,
+    on: z.boolean().describe("true turns the full clean-up on, false off"),
+    reason: z
+      .string()
+      .trim()
+      .min(1)
+      .max(500)
+      .describe("What Saad said, and when; it goes in the decision log"),
   },
   set_priority: {
     task: ref("A queued or running task: name, project/name or id"),

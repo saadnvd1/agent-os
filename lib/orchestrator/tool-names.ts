@@ -29,6 +29,8 @@ export const TOOL_NAMES = {
   plan_pieces: name("plan_pieces"),
   drop: name("drop"),
   move: name("move"),
+  sweep_dry_run: name("sweep_dry_run"),
+  sweep_arm: name("sweep_arm"),
   set_priority: name("set_priority"),
   start_now: name("start_now"),
   pause_task: name("pause_task"),

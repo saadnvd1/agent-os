@@ -83,8 +83,8 @@ export function projectSweepOverrides(): Array<{
 }
 
 // The full clean-up (test leftovers, task databases, spares, temp folders,
-// build caches) removes nothing until a person turns it on for this machine,
-// after reading what a dry run found.
+// build caches) removes nothing until Saad turns it on for this machine, or
+// the orchestrator does on his word after a dry run from the last hour.
 const ARMED_KEY = "worktree_sweep.reaper";
 
 export function reaperArmed(): boolean {
