@@ -295,3 +295,11 @@ worktree was cleaned up and brings back the conversation alone. Health >
 Clean-up lists every run (removed, space freed, skipped and why), and **Dry
 run** shows what the next one would remove. Only production servers run it
 (`AGENTOS_WORKTREE_SWEEP=1` turns it on elsewhere, `0` off).
+
+The full clean-up (test leftovers, stale task databases, spares, temp folders and
+build caches) is off until you turn it on, and only lists what it would remove.
+Read a dry run, then use Health > Clean-up > Turn on, `aos sweep --arm` in your
+own terminal, or tell the orchestrator: its `sweep_arm` tool turns it on or off
+for this machine or a linked one, refuses unless that machine has a dry run from
+the last hour, and logs it in the decision log with the run's totals. Task and
+other sessions can't turn it on.

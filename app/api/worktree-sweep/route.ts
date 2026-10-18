@@ -33,9 +33,11 @@ export async function PUT(request: NextRequest) {
       { status: 400 }
     );
   if ("armed" in got.data) {
-    // Turning the removal on is a person's call, made on this machine or
-    // over Tailscale: a stolen device token must not be able to. Turning it
-    // off stays on the ordinary gate.
+    // Turning the removal on is Saad's call, made on this machine or over
+    // Tailscale: a stolen device token must not be able to. The orchestrator
+    // arms through its sweep_arm tool (a linked machine over ssh to its own
+    // loopback), never with a device token. Turning it off stays on the
+    // ordinary gate.
     if (got.data.armed) {
       const refused = requireLocalTrust(request);
       if (refused) return refused;
