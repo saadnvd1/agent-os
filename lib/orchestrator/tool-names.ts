@@ -69,7 +69,8 @@ export const TOOL_NAMES = {
 // task worktree other than its own quick changes, writing AgentOS's state,
 // stopping AgentOS or its tmux, and reading secrets. That catches honest
 // mistakes, not a determined bypass. Its file writes are checked the same
-// way, against a longer list (write-guard.ts).
+// way, against a longer list (write-guard.ts). All of that applies only with
+// the workspace's Orchestrator full access off (full-access.ts).
 export const ORCHESTRATOR_PERMISSIONS: {
   permissionMode: PermissionMode;
   allowedTools: string[];

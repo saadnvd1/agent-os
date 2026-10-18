@@ -48,6 +48,27 @@ describe("/api/worktree-sweep", () => {
     expect((await (await GET()).json()).armed).toBe(false);
   });
 
+  it("lets a session turn it on only as an orchestrator with full access", async () => {
+    const { createWorkspace, updateWorkspace } =
+      await import("@/lib/workspaces");
+    const { ensureOrchestrator } = await import("@/lib/orchestrator/home");
+    const { db } = await import("@/lib/db");
+    const w = createWorkspace(`sw-${randomUUID().slice(0, 6)}`);
+    const o = ensureOrchestrator(w.id);
+    expect((await put({ armed: true, session: o.id })).status).toBe(200);
+    await put({ armed: false });
+    // A task agent's session, in the same workspace.
+    db.prepare(`UPDATE sessions SET role = NULL WHERE id = ?`).run(o.id);
+    expect((await put({ armed: true, session: o.id })).status).toBe(403);
+    db.prepare(`UPDATE sessions SET role = 'orchestrator' WHERE id = ?`).run(
+      o.id
+    );
+    updateWorkspace(w.id, { orchFullAccess: false });
+    expect((await put({ armed: true, session: o.id })).status).toBe(403);
+    expect((await put({ armed: true, session: "nobody" })).status).toBe(403);
+    expect((await (await GET()).json()).armed).toBe(false);
+  });
+
   it("refuses a number that isn't a whole 0-365", async () => {
     for (const days of [-1, 1.5, 400, "7", undefined]) {
       const res = await put({ days });

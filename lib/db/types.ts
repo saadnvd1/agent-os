@@ -296,6 +296,9 @@ export interface Workspace {
   // Tasks are messaged about failing checks and reviews on their PRs
   // (orchestrator/pr-wake.ts).
   wake_tasks_on_pr: boolean;
+  // Its orchestrator's shell and file writes aren't checked, and it may merge
+  // directly (orchestrator/full-access.ts).
+  orch_full_access: boolean;
   created_at: string;
 }
 

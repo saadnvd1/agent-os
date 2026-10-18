@@ -803,12 +803,13 @@ async function main() {
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify(body),
         });
-      if (flags.has("--arm") && process.env.AGENTOS_SESSION_ID)
-        fail(
-          "a session can't turn the full clean-up on: Saad does (Health, Clean-up, Turn on, or aos sweep --arm in his own terminal), or the orchestrator's sweep_arm tool when he has said to"
-        );
       if (flags.has("--arm") || flags.has("--disarm")) {
-        const state = await put({ armed: flags.has("--arm") });
+        // AgentOS decides whether this session may turn it on (an
+        // orchestrator with full access; no other session).
+        const state = await put({
+          armed: flags.has("--arm"),
+          ...(me && { session: me }),
+        });
         console.log(`full clean-up is ${state.armed ? "on" : "off"}`);
         return;
       }

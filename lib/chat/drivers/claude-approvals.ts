@@ -248,6 +248,13 @@ export function guardHook(guard: ToolGuard): HookCallback {
       (input.tool_input ?? {}) as Record<string, unknown>
     ).catch((e: Error) => `Couldn't check this call: ${e.message}`);
     if (reason === null) return {};
+    if (typeof reason !== "string")
+      return {
+        hookSpecificOutput: {
+          hookEventName: "PreToolUse",
+          additionalContext: reason.warning,
+        },
+      };
     return {
       hookSpecificOutput: {
         hookEventName: "PreToolUse",

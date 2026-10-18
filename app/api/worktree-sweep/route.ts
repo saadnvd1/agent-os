@@ -7,6 +7,8 @@ import {
   sweepDays,
 } from "@/lib/worktree-sweep/settings";
 import { requireLocalTrust } from "@/lib/security/route-guard";
+import { db, type Session } from "@/lib/db";
+import { orchestratorFullAccess } from "@/lib/orchestrator/full-access";
 import { sweepState } from "@/lib/worktree-sweep/state";
 
 const body = z.union([
@@ -15,7 +17,8 @@ const body = z.union([
     days: sweepDays.nullable(),
     projectId: z.string().min(1).optional(),
   }),
-  z.object({ armed: z.boolean() }),
+  // `session`: the AgentOS session the `aos` command runs in, if any.
+  z.object({ armed: z.boolean(), session: z.string().min(1).optional() }),
 ]);
 
 export async function GET() {
@@ -41,6 +44,21 @@ export async function PUT(request: NextRequest) {
     if (got.data.armed) {
       const refused = requireLocalTrust(request);
       if (refused) return refused;
+      // A session turns it on only as an orchestrator whose workspace has
+      // Orchestrator full access on.
+      if (got.data.session) {
+        const s = db
+          .prepare(`SELECT * FROM session_rows WHERE id = ?`)
+          .get(got.data.session) as Session | undefined;
+        if (!s || !orchestratorFullAccess(s))
+          return NextResponse.json(
+            {
+              error:
+                "a session can't turn the full clean-up on: Saad does (Health, Clean-up, Turn on), or the orchestrator's sweep_arm tool when he has said to",
+            },
+            { status: 403 }
+          );
+      }
     }
     setReaperArmed(got.data.armed);
     return NextResponse.json(sweepState());

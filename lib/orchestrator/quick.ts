@@ -25,13 +25,16 @@ import { expandHome, forgetPR, prFor, projectPathFor } from "../tasks/session";
 import { inBackground } from "../lumifyhub/task-cards";
 import type { CheckRow } from "./checks";
 import { getOrchestrator } from "./home";
+import { fullAccessOn } from "./full-access";
+import { setupWorktree } from "../env-setup";
 import { addNote } from "./notes";
 import { quickWorktrees } from "./quick-store";
 import { findWorkspaceSession } from "./read";
 import { workspaceProject } from "./targets";
 import { recordPr, setTask } from "../db/session-parts";
 
-// Open quick changes one orchestrator may hold at once.
+// Open quick changes one orchestrator may hold at once, unless its workspace
+// has Orchestrator full access on (the default).
 export const MAX_OPEN_QUICK = 5;
 
 // Git with no hooks: a hook is a script in the project (or one it calls,
@@ -62,7 +65,13 @@ export async function startQuickChange(
   workspaceId: string,
   projectRef: string,
   name: string
-): Promise<{ id: string; worktreePath: string; text: string }> {
+): Promise<{
+  id: string;
+  worktreePath: string;
+  text: string;
+  // Dependencies and the project's setup, running in the background.
+  setup: Promise<void>;
+}> {
   const owner = ownerOf(workspaceId);
   const project = workspaceProject(workspaceId, projectRef);
   if (isRemoteHost(project.host_id))
@@ -70,7 +79,7 @@ export async function startQuickChange(
       `${project.name} runs on another machine; quick changes are made on this one only`
     );
   const open = quickWorktrees(owner.id);
-  if (open.length >= MAX_OPEN_QUICK)
+  if (!fullAccessOn(workspaceId) && open.length >= MAX_OPEN_QUICK)
     throw new Error(
       `You have ${open.length} quick changes open (${MAX_OPEN_QUICK} at most): finish one with quick_pr, or drop it, first`
     );
@@ -122,11 +131,45 @@ export async function startQuickChange(
     workspaceId,
     `Quick change "${label}" in ${project.name} on ${wt.branchName}.`
   );
+  const full = fullAccessOn(workspaceId);
+  const setup = installDependencies(
+    workspaceId,
+    label,
+    wt.worktreePath,
+    projectPath
+  );
+  inBackground(`setup of quick change ${id}`, () => setup);
   return {
     id,
     worktreePath: wt.worktreePath,
-    text: `Quick change "${label}" (id ${id.slice(0, 8)}) in ${project.name}: worktree ${wt.worktreePath} on ${wt.branchName}, cut from ${baseBranch}. Edit files there with Write and Edit; git there only as \`git -C ${wt.worktreePath} <status|diff|add|...>\`. Then quick_pr commits, pushes and opens its PR.`,
+    setup,
+    text: `Quick change "${label}" (id ${id.slice(0, 8)}) in ${project.name}: worktree ${wt.worktreePath} on ${wt.branchName}, cut from ${baseBranch}. Dependencies are installing in the background (a note says when they're ready). Edit files there with Write and Edit; ${full ? "run any git there" : "git there only as `git -C " + wt.worktreePath + " <status|diff|add|...>`"}. Then quick_pr commits, pushes and opens its PR.`,
   };
+}
+
+// The project's own worktree setup (dependencies, env files), so tests and
+// the build run in the quick change. One note when it ends.
+async function installDependencies(
+  workspaceId: string,
+  label: string,
+  worktreePath: string,
+  projectPath: string
+): Promise<void> {
+  try {
+    const r = await setupWorktree({ worktreePath, sourcePath: projectPath });
+    const failed = r.steps.find((s) => !s.success);
+    addNote(
+      workspaceId,
+      failed
+        ? `Quick change "${label}": setup failed at ${failed.name}: ${failed.error ?? "see its worktree"}.`
+        : `Quick change "${label}": dependencies installed, ready to build and test.`
+    );
+  } catch (e) {
+    addNote(
+      workspaceId,
+      `Quick change "${label}": setup failed: ${(e as Error).message}.`
+    );
+  }
 }
 
 // A quick change of this workspace's orchestrator, by name, id or PR.

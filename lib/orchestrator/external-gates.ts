@@ -25,6 +25,9 @@ import { addNote } from "./notes";
 import { commitTime } from "./repo";
 import { review, reviewAt, type ReviewOpts } from "./review";
 import { gateVerdict, signOff, type Verdict } from "./signoff";
+import { fullAccessOn } from "./full-access";
+import { signOffTask } from "../tasks";
+import { prFor } from "../tasks/session";
 import { ciSettleIn } from "./task-state";
 import { untrusted } from "./untrusted";
 
@@ -186,12 +189,70 @@ export async function reviewExternal(
 // sign_off: a task, or a PR no task owns in one of the workspace's repos.
 export async function signOffTarget(
   workspaceId: string,
-  ref: string
+  ref: string,
+  opts: { direct?: boolean; reason?: string } = {}
 ): Promise<string> {
+  if (opts.direct) {
+    if (!fullAccessOn(workspaceId))
+      throw new Error(
+        "A direct merge needs Orchestrator full access (Settings → Workspaces); merge through the gates"
+      );
+    if (!opts.reason?.trim()) throw new Error("A direct merge needs a reason");
+    return signOffDirect(
+      workspaceId,
+      await gateTarget(workspaceId, ref),
+      opts.reason
+    );
+  }
   const t = await gateTarget(workspaceId, ref);
   return t.kind === "external"
     ? signOffExternal(workspaceId, t.pr)
     : signOff(workspaceId, t.task.id);
+}
+
+// Orchestrator full access: merge now at the PR's current head, skipping the
+// gates. The task's own non-gate checks still run (it's running, its PR is
+// open and on its base, the head is the one merged); a task with Saad (the
+// loop guard, no CI) is his to decide, not skipped here.
+async function signOffDirect(
+  workspaceId: string,
+  t: Awaited<ReturnType<typeof gateTarget>>,
+  reason: string
+): Promise<string> {
+  if (t.kind === "external") {
+    const { pr, method } = {
+      pr: t.pr,
+      method: mergePolicy(t.pr.project).method,
+    };
+    if (!pr.pr.head) throw new Error(`${pr.name}'s head commit is unknown`);
+    await mergePR({
+      repo: pr.repo,
+      number: pr.number,
+      slug: pr.slug,
+      method,
+      head: pr.pr.head,
+    });
+    resolveAsks(workspaceId, pr.id, `${pr.name} merged directly`);
+    addNote(
+      workspaceId,
+      `Merged ${pr.name} directly at ${short(pr.pr.head)}, skipping the gates: ${reason.trim()}`
+    );
+    return `Merged ${pr.name}: ${MERGED_AS[method]} at ${short(pr.pr.head)}, without the gates.`;
+  }
+  const task = t.task;
+  if (holdingEscalations(task.id).length)
+    throw new Error(
+      `${task.name} is with Saad; he signs it off or drops it, a direct merge doesn't go around that`
+    );
+  const pr = await prFor(task, true);
+  if (!pr || pr.state !== "OPEN" || !pr.head)
+    throw new Error(`${task.name} has no open PR`);
+  const method = await signOffTask(task.id, { head: pr.head });
+  addNote(
+    workspaceId,
+    `Merged ${task.name} directly (PR #${pr.number}, ${short(pr.head)}), skipping the gates: ${reason.trim()}`
+  );
+  return `Merged ${task.name}: PR #${pr.number} ${method ? MERGED_AS[method] : "merged"} at ${short(pr.head)}, without the gates.`;
 }
 
 // review: the same targets as sign_off.

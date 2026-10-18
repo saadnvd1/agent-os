@@ -56,7 +56,8 @@ export interface ChatStartOptions {
   // can't be changed for this conversation.
   permissionMode?: PermissionMode;
   // Checked before every tool call, whatever the permissions say: why it's
-  // refused, or null to let it go on to them.
+  // refused, null to let it go on to them, or a warning the agent is shown
+  // while the call still goes on.
   toolGuard?: ToolGuard;
   // The note handed back to the agent right after its context is compacted
   // (lib/chat/compact-context), empty for none. Only Claude Code has a hook
@@ -64,10 +65,12 @@ export interface ChatStartOptions {
   compactContext?: () => Promise<string>;
 }
 
+export type ToolGuardResult = string | null | { warning: string };
+
 export type ToolGuard = (
   tool: string,
   input: Record<string, unknown>
-) => Promise<string | null>;
+) => Promise<ToolGuardResult>;
 
 // One live conversation with an agent. Messages sent while a turn runs are
 // queued by the provider and folded into the conversation.

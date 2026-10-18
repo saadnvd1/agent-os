@@ -86,7 +86,7 @@ vi.mock("@/lib/status-detector", () => ({
 
 const { db, updateSessionRow } = await import("@/lib/db");
 const { createProject } = await import("@/lib/projects");
-const { createWorkspace, setProjectWorkspace } =
+const { createWorkspace, setProjectWorkspace, updateWorkspace } =
   await import("@/lib/workspaces");
 const { ensureOrchestrator } = await import("./home");
 const { runTool } = await import("./serve");
@@ -130,7 +130,11 @@ function setup() {
   git(root, "init", "-q", "--bare", "-b", "main", remote);
   git(root, "clone", "-q", remote, repo);
   const base = commit(repo, "README.md", "hello\n");
-  const workspace = createWorkspace(`ws-${path.basename(root)}`);
+  // The guards as they are with Orchestrator full access off.
+  const workspace = updateWorkspace(
+    createWorkspace(`ws-${path.basename(root)}`).id,
+    { orchFullAccess: false }
+  )!;
   const project = createProject({
     name: `app-${path.basename(root)}`,
     workingDirectory: repo,
@@ -212,6 +216,21 @@ describe("quick_change", () => {
     expect(text).toContain(wt);
     expect(git(wt, "rev-parse", "HEAD")).toBe(s.base);
     expect(git(wt, "branch", "--show-current")).toBe(r.branch_name);
+  });
+
+  it("caps open quick changes only with full access off, and installs dependencies", async () => {
+    const s = setup();
+    for (let i = 0; i < 5; i++) await quickChange(s, `capped ${i}`);
+    await expect(
+      runTool(s.w, "quick_change", { project: s.project.name, name: "sixth" })
+    ).rejects.toThrow(/5 at most/);
+    updateWorkspace(s.w, { orchFullAccess: true });
+    const text = await runTool(s.w, "quick_change", {
+      project: s.project.name,
+      name: "sixth",
+    });
+    expect(text).toMatch(/Dependencies are installing/);
+    expect(text).toMatch(/run any git there/);
   });
 
   it("refuses a project outside the workspace", async () => {
