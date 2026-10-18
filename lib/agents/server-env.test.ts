@@ -78,14 +78,13 @@ describe.skipIf(!hasTmux)("a pane started the way AgentOS starts one", () => {
         "pane",
         "-e",
         "AGENTOS_SESSION_ID=s1",
-        `${UNSET_SERVER_ENV}env > ${out}; sleep 1`,
+        `${UNSET_SERVER_ENV}env > ${out}.tmp && mv ${out}.tmp ${out}; sleep 1`,
       ]);
-      // The shell creates the file before env writes to it: wait for content.
-      for (
-        let i = 0;
-        i < 50 && !(fs.existsSync(out) && fs.statSync(out).size > 0);
-        i++
-      )
+      // The pane renames the finished dump into place, so existence means
+      // complete. Wait on that, not on a fixed delay: a loaded machine can
+      // take seconds to start tmux and the pane shell.
+      const deadline = Date.now() + 20_000;
+      while (!fs.existsSync(out) && Date.now() < deadline)
         execFileSync("sleep", ["0.1"]);
       return fs.readFileSync(out, "utf8");
     } finally {
@@ -105,5 +104,5 @@ describe.skipIf(!hasTmux)("a pane started the way AgentOS starts one", () => {
           k
         ).toBe(false);
       expect(lines).toContain("AGENTOS_SESSION_ID=s1");
-    });
+    }, 30_000);
 });
