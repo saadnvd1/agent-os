@@ -1,11 +1,10 @@
-import fs from "fs";
 import { updateSessionRow, insertSessionRow } from "@/lib/db";
 import os from "os";
-import path from "path";
 import { randomUUID } from "crypto";
 import { beforeAll, describe, expect, it, vi } from "vitest";
 import type { Session } from "@/lib/db";
 import { seedSession, seedWorkspace } from "./testing";
+import { tempDir } from "@/lib/test-temp";
 
 // These tests start tasks; the machine's real load must not decide whether they queue.
 process.env.AGENTOS_LOAD = "off";
@@ -152,7 +151,7 @@ const { amendmentsOf } = await import("./amendments");
 const { listItems } = await import("@/lib/chat/store");
 
 beforeAll(() => {
-  const home = fs.mkdtempSync(path.join(os.tmpdir(), "aos-orch-act-"));
+  const home = tempDir("aos-orch-act-");
   vi.spyOn(os, "homedir").mockReturnValue(home);
 });
 

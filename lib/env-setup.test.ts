@@ -1,12 +1,12 @@
 import { describe, expect, it } from "vitest";
 import * as fs from "fs";
-import * as os from "os";
 import * as path from "path";
 import { execFileSync } from "child_process";
 import { setupWorktree } from "./env-setup";
 import { unsavedChanges } from "./worktree-placed";
+import { tempDir } from "@/lib/test-temp";
 
-const tmp = (p: string) => fs.mkdtempSync(path.join(os.tmpdir(), p));
+const tmp = (p: string) => tempDir(p);
 
 function checkout(config: unknown, files: Record<string, string> = {}) {
   const source = tmp("aos-src-");

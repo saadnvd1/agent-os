@@ -1,6 +1,4 @@
 import net from "node:net";
-import { mkdtempSync } from "node:fs";
-import { tmpdir } from "node:os";
 import { join } from "node:path";
 import {
   afterAll,
@@ -14,8 +12,9 @@ import {
 import { getDb } from "@/lib/db";
 import { acceptTapConnection, covered, eventKey } from "./tap";
 import { programSummary, reloadProgramStatus } from "./store";
+import { tempDir } from "@/lib/test-temp";
 
-const path = join(mkdtempSync(join(tmpdir(), "osc7501-tap-")), "t.sock");
+const path = join(tempDir("osc7501-tap-"), "t.sock");
 const server = net.createServer(acceptTapConnection);
 const NAME = "shell-tap-test";
 

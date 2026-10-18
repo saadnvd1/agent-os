@@ -1,14 +1,10 @@
-import fs from "fs";
-import os from "os";
-import path from "path";
 import { randomUUID } from "crypto";
 import { describe, expect, it } from "vitest";
 import type { ChatItem } from "@/lib/chat/events";
 import type { ShareContext } from "./redact";
+import { tempDir } from "@/lib/test-temp";
 
-process.env.AGENTOS_ARTIFACTS_DIR = fs.mkdtempSync(
-  path.join(os.tmpdir(), "agentos-share-art-")
-);
+process.env.AGENTOS_ARTIFACTS_DIR = tempDir("agentos-share-art-");
 const { saveItem } = await import("@/lib/chat/store");
 const { seedSession } = await import("@/lib/orchestrator/testing");
 const { createProject } = await import("@/lib/projects");

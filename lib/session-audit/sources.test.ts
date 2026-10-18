@@ -1,11 +1,11 @@
 import Database from "better-sqlite3";
 import fs from "fs";
-import os from "os";
 import path from "path";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import { getDb, insertSessionRow } from "@/lib/db";
 import { claudeProjectDir } from "@/lib/tasks/transcript";
 import { loadSessions, loadSignals, subagentFiles } from "./sources";
+import { tempDir } from "@/lib/test-temp";
 
 const SINCE = Date.parse("2026-10-10T00:00:00Z");
 const UNTIL = Date.parse("2026-10-11T00:00:00Z");
@@ -15,7 +15,7 @@ let home: string;
 const db = () => getDb();
 
 beforeEach(() => {
-  home = fs.mkdtempSync(path.join(os.tmpdir(), "audit-home-"));
+  home = tempDir("audit-home-");
   process.env.CLAUDE_CONFIG_DIR = path.join(home, ".claude");
   for (const t of [
     "sessions",

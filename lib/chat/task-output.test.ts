@@ -1,11 +1,11 @@
 import fs from "fs";
-import os from "os";
 import path from "path";
 import { describe, expect, it } from "vitest";
 import { taskOutputTail } from "./task-output";
+import { tempDir } from "@/lib/test-temp";
 
 describe("taskOutputTail", () => {
-  const dir = fs.mkdtempSync(path.join(os.tmpdir(), "task-out-"));
+  const dir = tempDir("task-out-");
 
   it("reads only the end of a big file, with its mtime", () => {
     const file = path.join(dir, "big.output");

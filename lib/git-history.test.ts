@@ -1,5 +1,4 @@
 import fs from "fs";
-import os from "os";
 import path from "path";
 import { NextRequest } from "next/server";
 import { afterAll, describe, expect, it } from "vitest";
@@ -12,8 +11,9 @@ import {
 import { gitSync } from "./git-exec";
 import { GET as detailRoute } from "@/app/api/git/history/[hash]/route";
 import { GET as diffRoute } from "@/app/api/git/history/[hash]/diff/route";
+import { tempDir } from "@/lib/test-temp";
 
-const dir = fs.mkdtempSync(path.join(os.tmpdir(), "git-history-"));
+const dir = tempDir("git-history-");
 const git = (...args: string[]) => gitSync(dir, args).trim();
 git("init", "-q", "-b", "main");
 fs.writeFileSync(path.join(dir, "a.txt"), "hello\n");

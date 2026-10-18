@@ -1,5 +1,4 @@
 import fs from "fs";
-import os from "os";
 import path from "path";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { db, updateSessionRow } from "../db";
@@ -21,6 +20,7 @@ import {
   planPrompt,
   preparePlanDir,
 } from "./plan-step";
+import { tempDir } from "@/lib/test-temp";
 
 const turn = {
   costUsd: 0.5,
@@ -38,7 +38,7 @@ function planningTask() {
     view: "chat",
     task: true,
   });
-  const worktree = fs.mkdtempSync(path.join(os.tmpdir(), "plan-step-"));
+  const worktree = tempDir("plan-step-");
   updateSessionRow(db, id, {
     worktree_path: worktree,
     model: "claude-opus-5-5",

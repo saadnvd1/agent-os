@@ -21,6 +21,7 @@ const TITLES: Record<SweepKind, string> = {
   database: "Task databases",
   spare: "Dependency spares",
   temp: "Temp folders",
+  "test-temp": "Test temp folders",
   "derived-data": "Xcode build folders of removed worktrees",
 };
 

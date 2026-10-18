@@ -1,5 +1,4 @@
 import fs from "fs";
-import os from "os";
 import path from "path";
 import { randomUUID } from "crypto";
 import { beforeAll, describe, expect, it } from "vitest";
@@ -12,11 +11,10 @@ import {
 } from "./store";
 import { readSource, renderPage } from "./tools";
 import type { Artifact } from "./store";
+import { tempDir } from "@/lib/test-temp";
 
 beforeAll(() => {
-  process.env.AGENTOS_ARTIFACTS_DIR = fs.mkdtempSync(
-    path.join(os.tmpdir(), "agentos-artifacts-")
-  );
+  process.env.AGENTOS_ARTIFACTS_DIR = tempDir("agentos-artifacts-");
 });
 
 describe("artifacts", () => {
@@ -94,7 +92,7 @@ describe("html_render", () => {
   });
 
   it("reads a page from a file relative to the working directory", () => {
-    const dir = fs.mkdtempSync(path.join(os.tmpdir(), "agentos-page-"));
+    const dir = tempDir("agentos-page-");
     fs.writeFileSync(path.join(dir, "chart.html"), "<svg/>");
     expect(readSource({ path: "chart.html" }, dir)).toBe("<svg/>");
     expect(() => readSource({ path: "missing.html" }, dir)).toThrow(/No file/);

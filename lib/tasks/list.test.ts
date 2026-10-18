@@ -1,7 +1,5 @@
-import { mkdtempSync } from "fs";
-import { tmpdir } from "os";
-import { join } from "path";
 import { describe, expect, it, vi } from "vitest";
+import { tempDir } from "@/lib/test-temp";
 
 const lookups: string[] = [];
 vi.mock("./pr-poll", () => ({
@@ -34,7 +32,7 @@ function seed(
 ): string {
   const project = createProject({
     name: `p-${crypto.randomUUID().slice(0, 6)}`,
-    workingDirectory: mkdtempSync(join(tmpdir(), "list-tasks-")),
+    workingDirectory: tempDir("list-tasks-"),
   });
   const id = crypto.randomUUID();
   insertSessionRow(db, {

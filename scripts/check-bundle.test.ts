@@ -1,13 +1,13 @@
 import { describe, expect, it } from "vitest";
 import { spawnSync } from "child_process";
 import fs from "fs";
-import os from "os";
 import path from "path";
+import { tempDir } from "@/lib/test-temp";
 
 const script = path.join(__dirname, "check-bundle.mjs");
 
 function run(stats: unknown) {
-  const dir = fs.mkdtempSync(path.join(os.tmpdir(), "bundle-"));
+  const dir = tempDir("bundle-");
   const file = path.join(dir, "stats.json");
   fs.writeFileSync(file, JSON.stringify(stats));
   const r = spawnSync(process.execPath, [script, file], { encoding: "utf-8" });

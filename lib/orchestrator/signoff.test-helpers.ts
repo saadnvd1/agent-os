@@ -6,6 +6,7 @@ import { beforeAll, beforeEach, expect, vi } from "vitest";
 import type { TaskPR } from "@/lib/tasks/state";
 import type { ClaudeRun } from "./claude-cli";
 import type { SessionFacts } from "./facts";
+import { tempDir } from "@/lib/test-temp";
 
 // Shared fixtures for the signoff*.test.ts files: a real repository with a
 // local bare remote, gh faked around it. Import this before anything it mocks.
@@ -162,7 +163,7 @@ export const askUp = async (
 export const POLL = { timeout: 20000, interval: 20 };
 
 beforeAll(() => {
-  const home = fs.mkdtempSync(path.join(os.tmpdir(), "aos-orch-signoff-"));
+  const home = tempDir("aos-orch-signoff-");
   vi.spyOn(os, "homedir").mockReturnValue(home);
 });
 beforeEach(() => {
@@ -212,7 +213,7 @@ export function setup(
   } = {}
 ) {
   setMergeApprovals(opts.approvals ?? false);
-  const root = fs.mkdtempSync(path.join(os.tmpdir(), "aos-orch-repo-"));
+  const root = tempDir("aos-orch-repo-");
   const remote = path.join(root, "remote.git");
   const repo = path.join(root, "repo");
   git(root, "init", "-q", "--bare", "-b", "main", remote);

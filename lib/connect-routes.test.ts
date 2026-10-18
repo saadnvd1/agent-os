@@ -1,13 +1,13 @@
 import fs from "fs";
 import http from "http";
-import os from "os";
 import path from "path";
 import type { AddressInfo } from "net";
 import { NextRequest } from "next/server";
 import { afterAll, beforeEach, describe, expect, it, vi } from "vitest";
 import { TRUST_HEADER } from "./security/auth";
+import { tempDir } from "@/lib/test-temp";
 
-const dir = fs.mkdtempSync(path.join(os.tmpdir(), "agentos-link-route-"));
+const dir = tempDir("agentos-link-route-");
 let delay = 0;
 const server = http.createServer((req, res) => {
   let body = "";

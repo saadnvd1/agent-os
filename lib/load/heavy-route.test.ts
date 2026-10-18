@@ -1,6 +1,5 @@
 import http from "http";
 import fs from "fs";
-import os from "os";
 import path from "path";
 import { execFile } from "child_process";
 import type { AddressInfo } from "net";
@@ -8,6 +7,7 @@ import { NextRequest } from "next/server";
 import { afterEach, describe, expect, it } from "vitest";
 import { POST } from "@/app/api/load/heavy/route";
 import { heavyRegistry } from "./monitor";
+import { tempDir } from "@/lib/test-temp";
 
 const post = (body: unknown) =>
   POST(
@@ -89,10 +89,7 @@ describe("aos heavy", () => {
     });
     await new Promise<void>((r) => server.listen(0, "127.0.0.1", r));
     const { port } = server.address() as AddressInfo;
-    const stamp = path.join(
-      fs.mkdtempSync(path.join(os.tmpdir(), "aos-heavy-")),
-      "started"
-    );
+    const stamp = path.join(tempDir("aos-heavy-"), "started");
     try {
       const r = await aosHeavy(
         ["sh", "-c", `: > '${stamp}'; sleep 0.5`],

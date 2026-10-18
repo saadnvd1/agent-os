@@ -4,9 +4,9 @@ import path from "path";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { allowedRoots, resolveAllowed, within } from "./access";
 import { cleanPeerArtifact, peerContent, peerHeaders } from "./peer";
+import { tempDir } from "@/lib/test-temp";
 
-const tmp = () =>
-  fs.realpathSync(fs.mkdtempSync(path.join(os.tmpdir(), "aos-acc-")));
+const tmp = () => fs.realpathSync(tempDir("aos-acc-"));
 
 describe("allowed roots", () => {
   afterEach(() => vi.restoreAllMocks());

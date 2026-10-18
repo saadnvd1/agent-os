@@ -12,6 +12,7 @@ import {
   isMovedColumn,
   setTask,
 } from "./session-parts";
+import { tempDir } from "@/lib/test-temp";
 
 const BEFORE = "20261015T1600_plan_waits_for_caller";
 const SPLIT = "20261015T1800_split_sessions_tables";
@@ -138,7 +139,7 @@ function seed(db: Database.Database) {
 }
 
 function migrated(upTo?: string) {
-  const dir = fs.mkdtempSync(path.join(os.tmpdir(), "split-sessions-"));
+  const dir = tempDir("split-sessions-");
   const db = new Database(path.join(dir, "old.db"));
   createSchema(db);
   runMigrations(db, upTo ?? BEFORE);
@@ -270,7 +271,7 @@ describe("dropping the moved columns from sessions", () => {
     const db = migrated();
     seed(db);
     const home = process.env.HOME;
-    const blocked = fs.mkdtempSync(path.join(os.tmpdir(), "no-backups-"));
+    const blocked = tempDir("no-backups-");
     fs.mkdirSync(path.join(blocked, ".agent-os"));
     fs.writeFileSync(path.join(blocked, ".agent-os", "backups"), "a file");
     process.env.HOME = blocked;

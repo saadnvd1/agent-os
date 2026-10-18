@@ -1,5 +1,5 @@
 import fs from "fs";
-import os, { tmpdir } from "os";
+import os from "os";
 import path from "path";
 import { execFileSync } from "child_process";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
@@ -15,8 +15,9 @@ import {
   repoNameOf,
   startClone,
 } from "./index";
+import { tempDir } from "@/lib/test-temp";
 
-const temp = () => fs.mkdtempSync(path.join(tmpdir(), "aos-add-"));
+const temp = () => tempDir("aos-add-");
 
 async function until(check: () => boolean, ms = 15_000) {
   const end = Date.now() + ms;

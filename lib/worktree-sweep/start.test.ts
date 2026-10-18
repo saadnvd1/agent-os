@@ -1,10 +1,8 @@
-import fs from "fs";
-import os from "os";
-import path from "path";
 import { describe, expect, it } from "vitest";
 import { ownsWorktrees, sweepEnabled } from "./start";
+import { tempDir } from "@/lib/test-temp";
 
-const folder = () => fs.mkdtempSync(path.join(os.tmpdir(), "aos-sweep-own-"));
+const folder = () => tempDir("aos-sweep-own-");
 
 describe("who may sweep", () => {
   it("only a production server, or one asked to, and never under the test runner", () => {

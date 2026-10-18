@@ -35,12 +35,13 @@ import {
   startSetup,
 } from "./setup-progress";
 import { failInterruptedSetups } from "./worktree-setup";
+import { tempDir } from "@/lib/test-temp";
 
 const git = (cwd: string, ...args: string[]) =>
   execFileSync("git", args, { cwd, encoding: "utf8", stdio: "pipe" }).trim();
 
 function makeRepo(): string {
-  const dir = fs.mkdtempSync(path.join(tmpdir(), "aos-launch-repo-"));
+  const dir = tempDir("aos-launch-repo-");
   git(dir, "init", "-q", "-b", "main");
   git(dir, "config", "user.email", "t@example.com");
   git(dir, "config", "user.name", "T");
@@ -279,7 +280,7 @@ describe("launchSession (a draft's first send)", () => {
   });
 
   it("leaves the message queued and falls back to the project's folder when the worktree fails", async () => {
-    const notRepo = fs.mkdtempSync(path.join(tmpdir(), "aos-launch-plain-"));
+    const notRepo = tempDir("aos-launch-plain-");
     const project = createProject({ name: "plain", workingDirectory: notRepo });
     const { session } = await launchSession({
       projectId: project.id,

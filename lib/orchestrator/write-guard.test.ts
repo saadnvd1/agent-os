@@ -18,6 +18,7 @@ import {
   writeRefusal,
   type WriteBounds,
 } from "./write-guard";
+import { tempDir } from "@/lib/test-temp";
 
 // These tests are the guards as they are with Orchestrator full access off.
 const createWorkspace = (name: string) => {
@@ -34,7 +35,7 @@ const at = (...p: string[]) => path.join(home, ...p);
 const raw = (p: string) => `${home}/${p}`;
 
 beforeAll(() => {
-  home = fs.realpathSync(fs.mkdtempSync(path.join(os.tmpdir(), "aos-wg-")));
+  home = fs.realpathSync(tempDir("aos-wg-"));
   vi.spyOn(os, "homedir").mockReturnValue(home);
   for (const d of [
     "dev/app/src",
@@ -286,9 +287,7 @@ describe("an orchestrator's writes", () => {
   });
 
   it("are refused in PATH, XDG config, ~/Library and the usage brake's folder", async () => {
-    const outside = fs.realpathSync(
-      fs.mkdtempSync(path.join(os.tmpdir(), "aos-wg-path-"))
-    );
+    const outside = fs.realpathSync(tempDir("aos-wg-path-"));
     for (const d of ["bin", "xdg"]) fs.mkdirSync(path.join(outside, d));
     vi.stubEnv("PATH", `${path.join(outside, "bin")}:relative/bin`);
     vi.stubEnv("XDG_CONFIG_HOME", path.join(outside, "xdg"));

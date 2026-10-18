@@ -1,10 +1,8 @@
 // The places a session ends drop its private database, while its row is
 // still there to name it. gh, git, tmux and Postgres are faked.
-import { mkdtempSync } from "fs";
-import { tmpdir } from "os";
-import { join } from "path";
 import { NextRequest } from "next/server";
 import { beforeEach, describe, expect, it, vi } from "vitest";
+import { tempDir } from "@/lib/test-temp";
 
 const drops: { id: string; rowThere: boolean }[] = [];
 
@@ -44,7 +42,7 @@ const { dropTask } = await import("./finish");
 const { DELETE } = await import("@/app/api/sessions/[id]/route");
 
 const task = () => {
-  const repo = mkdtempSync(join(tmpdir(), "aos-db-drops-"));
+  const repo = tempDir("aos-db-drops-");
   return seedTask(repo, `feature/${crypto.randomUUID().slice(0, 6)}`, repo);
 };
 

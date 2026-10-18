@@ -1,6 +1,5 @@
 import { execFileSync } from "child_process";
 import fs from "fs";
-import os from "os";
 import path from "path";
 import { describe, expect, it } from "vitest";
 import {
@@ -8,6 +7,7 @@ import {
   SERVER_ONLY_ENV,
   UNSET_SERVER_ENV,
 } from "./server-env";
+import { tempDir } from "@/lib/test-temp";
 
 describe("sessionBaseEnv", () => {
   const parent = {
@@ -57,7 +57,7 @@ describe.skipIf(!hasTmux)("a pane started the way AgentOS starts one", () => {
   } as unknown as NodeJS.ProcessEnv;
 
   function paneEnv(prewarm: boolean): string {
-    const dir = fs.mkdtempSync(path.join(os.tmpdir(), "aos-env-"));
+    const dir = tempDir("aos-env-");
     const sock = path.join(dir, "t.sock");
     const out = path.join(dir, "env.txt");
     // env -u TMUX: never reach the real tmux server.

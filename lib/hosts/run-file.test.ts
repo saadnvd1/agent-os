@@ -1,8 +1,8 @@
-import { chmodSync, mkdtempSync, writeFileSync } from "node:fs";
-import { tmpdir } from "node:os";
+import { chmodSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import { afterEach, describe, expect, it } from "vitest";
 import { runFileOnTarget } from "./ssh";
+import { tempDir } from "@/lib/test-temp";
 
 const PATH = process.env.PATH;
 afterEach(() => {
@@ -21,7 +21,7 @@ describe("runFileOnTarget", () => {
 
   it("quotes every argument for the remote shell", async () => {
     // A fake ssh that runs the remote command line with a plain sh.
-    const dir = mkdtempSync(join(tmpdir(), "fake-ssh-"));
+    const dir = tempDir("fake-ssh-");
     writeFileSync(
       join(dir, "ssh"),
       '#!/bin/sh\nfor a; do last=$a; done\nSHELL=/bin/sh exec /bin/sh -c "$last"\n'

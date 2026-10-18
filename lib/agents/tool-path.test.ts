@@ -1,12 +1,12 @@
 import fs from "fs";
-import os from "os";
 import path from "path";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import { sessionPath } from "./tool-path";
+import { tempDir } from "@/lib/test-temp";
 
 let home: string;
 beforeEach(() => {
-  home = fs.mkdtempSync(path.join(os.tmpdir(), "aos-path-"));
+  home = tempDir("aos-path-");
 });
 afterEach(() => fs.rmSync(home, { recursive: true, force: true }));
 

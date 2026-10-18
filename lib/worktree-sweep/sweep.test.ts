@@ -1,6 +1,7 @@
 import { randomUUID } from "crypto";
 import fs from "fs";
 import path from "path";
+import { tempDir } from "@/lib/test-temp";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { commitFile, git, makeRepo, WORKTREE_MARK } from "@/lib/done/testing";
 
@@ -399,6 +400,62 @@ describe("sweeping what tasks leave beside their worktrees", () => {
       "the machine is busy; left for the next run",
       "the machine is busy; left for the next run",
     ]);
+  });
+
+  it("removes old test temp folders once it is on, and nothing else in the temp folder", async () => {
+    const { findCacheLeftovers } = await import("./caches");
+    const { dropFolderIn } = await import("./extras");
+    const root = path.join(tempDir("aos-sweep-own-"), "tmp");
+    fs.mkdirSync(root);
+    const old = new Date(Date.now() - 3 * 24 * 3600_000);
+    const mk = (name: string, when = old) => {
+      const dir = path.join(root, name);
+      fs.mkdirSync(dir);
+      fs.utimesSync(dir, when, when);
+      return dir;
+    };
+    const stale = mk("aos-orch-repo-stale");
+    const fresh = mk("aos-orch-repo-fresh", new Date());
+    const other = mk("somebody-elses-old");
+    const review = mk("aos-review-old");
+    const t = setup();
+    const extras = async () => {
+      const found = await findCacheLeftovers({
+        now: Date.now(),
+        spareRoot: "",
+        tmpRoot: root,
+        derivedRoot: "",
+        worktreesRoot: "",
+        liveIds: new Set(),
+        workspaceOf: async () => null,
+        size: async () => 7,
+      });
+      return {
+        ...found,
+        drop: (c: { path: string }) => dropFolderIn([root], c.path),
+        spares: { count: 0, bytes: 0 },
+      };
+    };
+    const run = (armed: boolean, dryRun = false) => {
+      setReaperArmed(armed);
+      return sweep({ dryRun }, { ...t.deps(), extras });
+    };
+    try {
+      const off = await run(false);
+      expect(off.summary.pending?.map((p) => p.path)).toEqual([stale]);
+      expect(fs.existsSync(stale)).toBe(true);
+      await run(true, true);
+      expect(fs.existsSync(stale)).toBe(true);
+      const on = await run(true);
+      expect(on.summary.removed.map((r) => [r.path, r.kind])).toEqual([
+        [stale, "test-temp"],
+      ]);
+      expect(fs.existsSync(stale)).toBe(false);
+      for (const kept of [fresh, other, review])
+        expect(fs.existsSync(kept)).toBe(true);
+    } finally {
+      setReaperArmed(false);
+    }
   });
 
   it("a person's own plain session is never a candidate for its worktree", async () => {

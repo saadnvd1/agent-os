@@ -17,6 +17,7 @@ const KIND: Record<string, string> = {
   database: "task database",
   spare: "dependency spare",
   temp: "temp folder",
+  "test-temp": "test temp folder",
   "derived-data": "Xcode build folder",
 };
 

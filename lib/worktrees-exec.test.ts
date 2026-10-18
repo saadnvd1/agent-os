@@ -1,10 +1,10 @@
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import { execFileSync, spawn } from "child_process";
 import fs from "fs";
-import os from "os";
 import path from "path";
 import { pidAlive } from "./dev-instance/processInfo";
 import { deleteWorktree, listWorktrees, mainCheckoutOf } from "./worktrees";
+import { tempDir } from "@/lib/test-temp";
 
 // Worktree paths and branch names come from session rows: git gets them as
 // arguments, so shell syntax in either is only ever a name.
@@ -15,7 +15,7 @@ const git = (...args: string[]) =>
 
 beforeEach(() => {
   // realpath: macOS's /var is /private/var, and git reports the real one.
-  root = fs.realpathSync(fs.mkdtempSync(path.join(os.tmpdir(), "wt-exec-")));
+  root = fs.realpathSync(tempDir("wt-exec-"));
   repo = path.join(root, "repo");
   fs.mkdirSync(repo);
   git("init", "-q", "-b", "main");

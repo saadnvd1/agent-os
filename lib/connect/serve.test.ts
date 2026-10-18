@@ -4,7 +4,6 @@ import { EventEmitter } from "events";
 import fs from "fs";
 import http from "http";
 import net, { type AddressInfo } from "net";
-import os from "os";
 import path from "path";
 import { PassThrough } from "stream";
 import { gateRequest, gateUpgrade } from "@/lib/security/gate";
@@ -23,6 +22,7 @@ import {
   type Handlers,
 } from "./serve";
 import type { Spawn } from "./supervise";
+import { tempDir } from "@/lib/test-temp";
 
 const HOST = "m-0123456789abcdef.runagentos.com";
 // A paired device's token, made per run.
@@ -215,7 +215,7 @@ describe("startConnect", () => {
 
   /** A linked machine with an old relay name, and a cloudflared stand-in. */
   async function machine() {
-    const dir = fs.mkdtempSync(path.join(os.tmpdir(), "connect-serve-"));
+    const dir = tempDir("connect-serve-");
     process.env.AGENTOS_CONNECT_DIR = dir;
     const { privateKey } = crypto.generateKeyPairSync("ed25519");
     fs.writeFileSync(

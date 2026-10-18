@@ -1,6 +1,5 @@
 import { execFileSync } from "child_process";
 import fs from "fs";
-import os from "os";
 import path from "path";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import {
@@ -12,6 +11,7 @@ import {
   type CheckDeps,
   type CheckResult,
 } from "./check";
+import { tempDir } from "@/lib/test-temp";
 
 const sh = (cwd: string, ...args: string[]) =>
   execFileSync("git", args, {
@@ -60,7 +60,7 @@ beforeEach(() => {
   saved = null;
   gitCalls = [];
   now = 1_000_000;
-  tmp = fs.mkdtempSync(path.join(os.tmpdir(), "aos-upd-"));
+  tmp = tempDir("aos-upd-");
   origin = path.join(tmp, "origin.git");
   pusher = path.join(tmp, "pusher");
   install = path.join(tmp, "install");
@@ -112,7 +112,7 @@ describe("checkForUpdate", () => {
   });
 
   it("says unknown, with the error, outside a git checkout", async () => {
-    const plain = fs.mkdtempSync(path.join(os.tmpdir(), "aos-plain-"));
+    const plain = tempDir("aos-plain-");
     try {
       const { result } = await checkForUpdate({}, deps(plain));
       expect(result.status).toBe("unknown");

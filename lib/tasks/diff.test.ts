@@ -1,12 +1,12 @@
 import { execFileSync } from "child_process";
 import fs from "fs";
-import os from "os";
 import path from "path";
 import { NextRequest } from "next/server";
 import { afterAll, beforeAll, describe, expect, it, vi } from "vitest";
 import { db, updateSessionRow, type Session } from "../db";
 import { TRUST_HEADER } from "../security/auth";
 import { seedSession, seedWorkspace } from "../orchestrator/testing";
+import { tempDir } from "@/lib/test-temp";
 
 vi.mock("./gh", async (orig) => ({
   ...(await orig<typeof import("./gh")>()),
@@ -17,7 +17,7 @@ const gh = await import("./gh");
 const { taskDiff, validDiffPath, capPatch } = await import("./diff");
 const route = await import("@/app/api/tasks/[id]/diff/route");
 
-const root = fs.mkdtempSync(path.join(os.tmpdir(), "aos-task-diff-"));
+const root = tempDir("aos-task-diff-");
 const repo = path.join(root, "repo");
 const git = (...args: string[]) =>
   execFileSync("git", ["-c", "user.name=t", "-c", "user.email=t@t", ...args], {

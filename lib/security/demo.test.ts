@@ -1,5 +1,4 @@
 import fs from "fs";
-import os from "os";
 import path from "path";
 import { EventEmitter } from "events";
 import { describe, expect, it, vi } from "vitest";
@@ -19,6 +18,7 @@ import {
   demoAllowsUpgrade,
   demoMode,
 } from "./demo";
+import { tempDir } from "@/lib/test-temp";
 
 const HOME = "/srv/demo/home/alex";
 const allows = (method: string, url: string) =>
@@ -148,7 +148,7 @@ describe("demo gate: refused", () => {
   });
 
   it("a symlink in the home that points out of it", () => {
-    const root = fs.mkdtempSync(path.join(os.tmpdir(), "demo-gate-"));
+    const root = tempDir("demo-gate-");
     const home = path.join(root, "home");
     fs.mkdirSync(path.join(home, "code", "a"), { recursive: true });
     fs.symlinkSync("/", path.join(home, "out"));

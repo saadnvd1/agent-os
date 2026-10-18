@@ -4,11 +4,12 @@ import fs from "fs";
 import os from "os";
 import path from "path";
 import { GENERIC_TERMS, loadTerms, matcher, scanTree } from "./banned-terms";
+import { tempDir } from "@/lib/test-temp";
 
 const generic = GENERIC_TERMS[0];
 
 function tempRepo() {
-  const repo = fs.mkdtempSync(path.join(os.tmpdir(), "banned-terms-"));
+  const repo = tempDir("banned-terms-");
   const git = (...args: string[]) =>
     execFileSync("git", args, { cwd: repo, stdio: "pipe" });
   git("init", "-q");
@@ -22,7 +23,7 @@ describe("loadTerms", () => {
   });
 
   it("adds the private regexes, skipping blanks and comments", () => {
-    const dir = fs.mkdtempSync(path.join(os.tmpdir(), "banned-names-"));
+    const dir = tempDir("banned-names-");
     const file = path.join(dir, "banned-names");
     fs.writeFileSync(file, "# names\nacme[ -]?widgets\n\n  zorp  \n");
     try {

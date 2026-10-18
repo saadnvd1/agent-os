@@ -2,7 +2,6 @@ import { describe, it, expect } from "vitest";
 import crypto from "crypto";
 import { execFileSync } from "child_process";
 import fs from "fs";
-import os from "os";
 import path from "path";
 import {
   CLOUDFLARED_VERSION,
@@ -10,9 +9,10 @@ import {
   pinFor,
   type Pin,
 } from "./cloudflared";
+import { tempDir } from "@/lib/test-temp";
 
 const sha = (b: Buffer) => crypto.createHash("sha256").update(b).digest("hex");
-const tmp = () => fs.mkdtempSync(path.join(os.tmpdir(), "connect-cfd-"));
+const tmp = () => tempDir("connect-cfd-");
 
 /** A stand-in for the release: serves `asset`, counting downloads. */
 function release(asset: Buffer) {

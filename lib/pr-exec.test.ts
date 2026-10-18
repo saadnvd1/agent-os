@@ -1,6 +1,5 @@
 import { execFileSync } from "child_process";
 import fs from "fs";
-import os from "os";
 import path from "path";
 import { describe, expect, it, vi } from "vitest";
 import {
@@ -10,6 +9,7 @@ import {
   getPRForBranch,
 } from "./pr";
 import { generatePRContent } from "./pr-generation";
+import { tempDir } from "@/lib/test-temp";
 
 const git = (cwd: string, ...args: string[]) =>
   execFileSync("git", args, { cwd, encoding: "utf8", stdio: "pipe" }).trim();
@@ -17,7 +17,7 @@ const git = (cwd: string, ...args: string[]) =>
 // A cloned repository picks its own branch names, and git allows shell
 // syntax in them: they must reach git and gh as arguments, never as shell.
 describe("PR reads with names a repository chose", () => {
-  const dir = fs.mkdtempSync(path.join(os.tmpdir(), "aos-pr-"));
+  const dir = tempDir("aos-pr-");
   const marker = path.join(dir, "ran");
   const hostile = `x$(touch${"${IFS}"}${marker})`;
   git(dir, "init", "-q", "-b", "main");
@@ -58,7 +58,7 @@ describe("PR reads with names a repository chose", () => {
   });
 
   it("falls back to main with no remote default", async () => {
-    const plain = fs.mkdtempSync(path.join(os.tmpdir(), "aos-pr-"));
+    const plain = tempDir("aos-pr-");
     git(plain, "init", "-q", "-b", "main");
     expect(await getBaseBranch(plain)).toBe("main");
   });
@@ -66,7 +66,7 @@ describe("PR reads with names a repository chose", () => {
 
 describe("createPR", () => {
   it("passes the title, base and body to gh as single arguments", async () => {
-    const dir = fs.mkdtempSync(path.join(os.tmpdir(), "aos-pr-create-"));
+    const dir = tempDir("aos-pr-create-");
     const bin = path.join(dir, "bin");
     const record = path.join(dir, "gh-args.json");
     const marker = path.join(dir, "ran");
@@ -110,7 +110,7 @@ console.log("https://github.com/o/r/pull/7");
 
 describe("generatePRContent", () => {
   it("never runs a branch name or commit subject, and sends the prompt on stdin", async () => {
-    const dir = fs.mkdtempSync(path.join(os.tmpdir(), "aos-pr-gen-"));
+    const dir = tempDir("aos-pr-gen-");
     const bin = path.join(dir, "bin");
     const record = path.join(dir, "claude.json");
     const marker = path.join(dir, "ran");

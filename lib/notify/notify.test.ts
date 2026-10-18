@@ -1,5 +1,4 @@
 import fs from "fs";
-import os from "os";
 import path from "path";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { db } from "../db";
@@ -8,6 +7,7 @@ import { seedSession } from "../orchestrator/testing";
 import { createProject } from "../projects";
 import { collapse, Limiter, MAX_HELD } from "./limiter";
 import { commandNotifier, selectNotifier, telegramNotifier } from "./notifiers";
+import { tempDir } from "@/lib/test-temp";
 
 const TOKEN = "123456:SECRET-bot-token-abc";
 
@@ -18,7 +18,7 @@ const project = () =>
   });
 
 function tmpFile() {
-  const dir = fs.mkdtempSync(path.join(os.tmpdir(), "aos-notify-"));
+  const dir = tempDir("aos-notify-");
   return path.join(dir, "out.txt");
 }
 

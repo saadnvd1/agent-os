@@ -1,14 +1,14 @@
 import fs from "fs";
-import os from "os";
 import path from "path";
 import Database from "better-sqlite3";
 import { describe, expect, it } from "vitest";
 import { createSchema } from "./schema";
 import { runMigrations } from "./migrations";
+import { tempDir } from "@/lib/test-temp";
 
 describe("migration 59 (gate_failure_commits)", () => {
   it("carries each counted head over, so judging it again after the upgrade isn't a second failure", () => {
-    const dir = fs.mkdtempSync(path.join(os.tmpdir(), "gate-commits-"));
+    const dir = tempDir("gate-commits-");
     const db = new Database(path.join(dir, "old.db"));
     createSchema(db);
     runMigrations(db, 58);

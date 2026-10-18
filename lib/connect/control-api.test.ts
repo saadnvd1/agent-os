@@ -2,7 +2,6 @@ import { describe, it, expect, afterAll } from "vitest";
 import crypto from "crypto";
 import fs from "fs";
 import http, { type IncomingMessage } from "http";
-import os from "os";
 import path from "path";
 import type { AddressInfo } from "net";
 import {
@@ -14,6 +13,7 @@ import {
   signedHeaders,
 } from "./control-api";
 import { enrol, machineKeys } from "./enrol";
+import { tempDir } from "@/lib/test-temp";
 
 const HOST = "m-3f9a1c07d2b84e61.runagentos.com";
 // Shaped like a connector token (base64 of JSON); made per run, never real.
@@ -111,7 +111,7 @@ describe("control plane API client", () => {
 
   it("enrols with a link code and its tunnel port, saving only id, name and service", async () => {
     const cp = await controlPlane();
-    const dir = fs.mkdtempSync(path.join(os.tmpdir(), "connect-api-"));
+    const dir = tempDir("connect-api-");
 
     await expect(
       enrol({
@@ -149,7 +149,7 @@ describe("control plane API client", () => {
 
   it("relinks a key the account already has through the signed tunnel endpoint", async () => {
     const cp = await controlPlane();
-    const dir = fs.mkdtempSync(path.join(os.tmpdir(), "connect-api-"));
+    const dir = tempDir("connect-api-");
     await enrol({
       dir,
       register: registerWithCode(cp.api, "ABCD-EFGH", "Mac", 3444),
@@ -174,7 +174,7 @@ describe("control plane API client", () => {
 
   it("gets a fresh token on every signed ask, and only for the machine's own key", async () => {
     const cp = await controlPlane();
-    const dir = fs.mkdtempSync(path.join(os.tmpdir(), "connect-api-"));
+    const dir = tempDir("connect-api-");
     const config = await enrol({
       dir,
       register: registerWithCode(cp.api, "ABCD-EFGH", "Mac", 3444),

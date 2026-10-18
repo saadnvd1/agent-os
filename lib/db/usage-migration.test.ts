@@ -1,17 +1,13 @@
 import Database from "better-sqlite3";
-import fs from "fs";
-import os from "os";
 import path from "path";
 import { describe, expect, it } from "vitest";
 import { createSchema } from "./schema";
 import { runMigrations } from "./migrations";
+import { tempDir } from "@/lib/test-temp";
 
 describe("usage ledger migration", () => {
   it("adds the ledger tables on top of an older database, and runs again as a no-op", () => {
-    const file = path.join(
-      fs.mkdtempSync(path.join(os.tmpdir(), "aos-mig-")),
-      "t.db"
-    );
+    const file = path.join(tempDir("aos-mig-"), "t.db");
     const db = new Database(file);
     createSchema(db);
     runMigrations(db, 67);

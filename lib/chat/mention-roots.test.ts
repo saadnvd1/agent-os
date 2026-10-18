@@ -9,9 +9,9 @@ import { createProject, addProjectRepository } from "../projects";
 import { setHq } from "../session-logs/hq";
 import { createWorkspace, setProjectWorkspace } from "../workspaces";
 import { mentionRoots } from "./mention-roots";
+import { tempDir } from "@/lib/test-temp";
 
-const tmp = () =>
-  fs.realpathSync(fs.mkdtempSync(path.join(os.tmpdir(), "roots-")));
+const tmp = () => fs.realpathSync(tempDir("roots-"));
 const repo = () => {
   const dir = tmp();
   execFileSync("git", ["init", "-q"], { cwd: dir });

@@ -1,14 +1,13 @@
-import fs from "fs";
-import os from "os";
 import path from "path";
 import Database from "better-sqlite3";
 import { describe, expect, it } from "vitest";
 import { createSchema } from "./schema";
 import { runMigrations } from "./migrations";
+import { tempDir } from "@/lib/test-temp";
 
 describe("migration 47 (pin_orchestrators)", () => {
   it("pins existing orchestrators and nothing else", () => {
-    const dir = fs.mkdtempSync(path.join(os.tmpdir(), "pin-orch-"));
+    const dir = tempDir("pin-orch-");
     const db = new Database(path.join(dir, "old.db"));
     createSchema(db);
     runMigrations(db, 46);

@@ -1,6 +1,3 @@
-import { mkdtempSync } from "fs";
-import { tmpdir } from "os";
-import { join } from "path";
 import { describe, expect, it, vi } from "vitest";
 import { db, insertSessionRow, stackQueries as q } from "../db";
 import { retryItem } from "./index";
@@ -14,8 +11,9 @@ import {
   type TickDeps,
 } from "./tick";
 import { startItem } from "./start";
+import { tempDir } from "@/lib/test-temp";
 
-const repo = () => mkdtempSync(join(tmpdir(), "stack-tick-"));
+const repo = () => tempDir("stack-tick-");
 const noRestack = { restack: vi.fn().mockResolvedValue(undefined) };
 
 describe("starting items", () => {

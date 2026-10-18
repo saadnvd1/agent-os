@@ -5,11 +5,10 @@ import path from "path";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import type { TaskPR } from "@/lib/tasks/state";
 import { git, makeRepo, WORKTREE_MARK } from "@/lib/done/testing";
+import { tempDir } from "@/lib/test-temp";
 
 // Real repositories; gh, tmux, chat workers and LumifyHub are faked.
-process.env.CLAUDE_CONFIG_DIR = fs.mkdtempSync(
-  path.join(os.tmpdir(), "aos-resurrect-claude-")
-);
+process.env.CLAUDE_CONFIG_DIR = tempDir("aos-resurrect-claude-");
 
 const prs = new Map<string, TaskPR>();
 const ghCalls: string[][] = [];
@@ -89,9 +88,7 @@ vi.mock("@/lib/env-setup", async (importOriginal) => ({
   ...(await importOriginal<typeof import("@/lib/env-setup")>()),
   setupWorktree: async () => ({}),
 }));
-vi.spyOn(os, "homedir").mockReturnValue(
-  fs.mkdtempSync(path.join(os.tmpdir(), "aos-resurrect-home-"))
-);
+vi.spyOn(os, "homedir").mockReturnValue(tempDir("aos-resurrect-home-"));
 
 const { db, updateSessionRow } = await import("@/lib/db");
 const { createProject } = await import("@/lib/projects");

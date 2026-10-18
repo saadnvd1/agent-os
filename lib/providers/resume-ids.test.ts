@@ -1,5 +1,4 @@
 import fs from "fs";
-import os from "os";
 import path from "path";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import Database from "better-sqlite3";
@@ -9,12 +8,13 @@ import {
   opencodeResumeId,
   piResumeId,
 } from "./resume-ids";
+import { tempDir } from "@/lib/test-temp";
 
 let home: string;
 const saved = { ...process.env };
 
 beforeEach(() => {
-  home = fs.mkdtempSync(path.join(os.tmpdir(), "resume-ids-"));
+  home = tempDir("resume-ids-");
   process.env.CODEX_HOME = path.join(home, "codex");
   process.env.PI_CODING_AGENT_DIR = path.join(home, "pi");
   process.env.COPILOT_HOME = path.join(home, "copilot");

@@ -1,6 +1,5 @@
 import { describe, expect, it } from "vitest";
 import * as fs from "fs";
-import * as os from "os";
 import * as path from "path";
 import {
   CONFIG_FILES,
@@ -13,9 +12,10 @@ import {
 } from "./index";
 import { jsonSchema } from "./schema";
 import { runningBrief } from "./brief";
+import { tempDir } from "@/lib/test-temp";
 
 const project = (files: Record<string, unknown>) => {
-  const dir = fs.mkdtempSync(path.join(os.tmpdir(), "aos-config-"));
+  const dir = tempDir("aos-config-");
   for (const [name, body] of Object.entries(files)) {
     fs.mkdirSync(path.dirname(path.join(dir, name)), { recursive: true });
     fs.writeFileSync(

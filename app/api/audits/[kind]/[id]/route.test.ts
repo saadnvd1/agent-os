@@ -1,14 +1,14 @@
 import fs from "fs";
-import os from "os";
 import path from "path";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import type { NextRequest } from "next/server";
 import { GET as list } from "../../route";
 import { GET } from "./route";
+import { tempDir } from "@/lib/test-temp";
 
 let dir: string;
 beforeEach(() => {
-  dir = fs.mkdtempSync(path.join(os.tmpdir(), "audits-route-"));
+  dir = tempDir("audits-route-");
   process.env.AGENTOS_AUDITS_DIR = dir;
   fs.mkdirSync(path.join(dir, "sessions"));
   fs.mkdirSync(path.join(dir, "gaps"));

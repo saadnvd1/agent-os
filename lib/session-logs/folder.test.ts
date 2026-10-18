@@ -11,8 +11,9 @@ import {
   writeLogFile,
   type FileTarget,
 } from "./folder";
+import { tempDir } from "@/lib/test-temp";
 
-const tmp = () => fs.mkdtempSync(path.join(os.tmpdir(), "log-folder-"));
+const tmp = () => tempDir("log-folder-");
 
 function project() {
   const repo = tmp();

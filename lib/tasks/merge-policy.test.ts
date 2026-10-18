@@ -1,5 +1,4 @@
 import fs from "fs";
-import os from "os";
 import path from "path";
 import { beforeEach, describe, expect, it } from "vitest";
 import { createProject } from "@/lib/projects";
@@ -10,9 +9,10 @@ import {
   setGlobalMergeSettings,
   setProjectMergeSettings,
 } from "./merge-policy";
+import { tempDir } from "@/lib/test-temp";
 
 function project(agentosJson?: unknown) {
-  const dir = fs.mkdtempSync(path.join(os.tmpdir(), "aos-merge-policy-"));
+  const dir = tempDir("aos-merge-policy-");
   if (agentosJson !== undefined)
     fs.writeFileSync(
       path.join(dir, "agentos.json"),

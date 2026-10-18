@@ -1,14 +1,14 @@
 import fs from "fs";
-import os from "os";
 import path from "path";
 import Database from "better-sqlite3";
 import { describe, expect, it } from "vitest";
 import { createSchema } from "./schema";
 import { runMigrations } from "./migrations";
+import { tempDir } from "@/lib/test-temp";
 
 describe("migration 20261015T1733_gate_loop_guard", () => {
   it("starts each recorded gate's streak at its count, and runs twice harmlessly", () => {
-    const dir = fs.mkdtempSync(path.join(os.tmpdir(), "gate-loop-guard-"));
+    const dir = tempDir("gate-loop-guard-");
     const db = new Database(path.join(dir, "old.db"));
     createSchema(db);
     runMigrations(db, "20261015T1600_plan_waits_for_caller");

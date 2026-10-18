@@ -1,8 +1,8 @@
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import * as fs from "fs";
-import * as os from "os";
 import * as path from "path";
 import { defaultCaches, seedBuildCaches } from "./caches";
+import { tempDir } from "@/lib/test-temp";
 
 let tmp: string, source: string, worktree: string;
 const write = (root: string, rel: string, body = "x") => {
@@ -13,7 +13,7 @@ const read = (root: string, rel: string) =>
   fs.readFileSync(path.join(root, rel), "utf-8");
 
 beforeEach(() => {
-  tmp = fs.realpathSync(fs.mkdtempSync(path.join(os.tmpdir(), "aos-caches-")));
+  tmp = fs.realpathSync(tempDir("aos-caches-"));
   source = path.join(tmp, "source");
   worktree = path.join(tmp, "worktree");
   fs.mkdirSync(source);

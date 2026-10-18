@@ -12,13 +12,14 @@ import {
   stageFile,
   unstageFile,
 } from "./git-status";
+import { tempDir } from "@/lib/test-temp";
 
 let repo: string;
 const git = (...args: string[]) =>
   execFileSync("git", args, { cwd: repo, stdio: "pipe" });
 
 beforeAll(() => {
-  repo = fs.mkdtempSync(path.join(os.tmpdir(), "git-status-"));
+  repo = tempDir("git-status-");
   git("init", "-q", "-b", "main");
   git("config", "user.email", "t@example.com");
   git("config", "user.name", "t");

@@ -6,6 +6,7 @@ export type SweepKind =
   | "database"
   | "spare"
   | "temp"
+  | "test-temp"
   | "derived-data";
 
 // Kinds that go only once the full clean-up is turned on.
@@ -14,6 +15,7 @@ export const ARMED_KINDS: ReadonlySet<SweepKind> = new Set([
   "database",
   "spare",
   "temp",
+  "test-temp",
   "derived-data",
 ]);
 

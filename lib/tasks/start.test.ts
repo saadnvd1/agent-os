@@ -1,11 +1,11 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import * as fs from "fs";
-import * as os from "os";
 import * as path from "path";
 import type { SetupResult } from "../env-setup";
+import { tempDir } from "@/lib/test-temp";
 
 // Prompt files land here, not in the real ~/.agent-os.
-const prompts = fs.mkdtempSync(path.join(os.tmpdir(), "aos-prompts-"));
+const prompts = tempDir("aos-prompts-");
 const promptFile = (id: string) => path.join(prompts, `${id}.prompt.md`);
 // Every tmux call start.ts makes, in order.
 const tmuxCalls: string[][] = [];
@@ -57,7 +57,7 @@ vi.mock("../chat/runner", () => ({
     sendQueuedNow(sessionId, id),
 }));
 
-const { db, insertSessionRow, updateSessionRow } = await import("../db");
+const { db, updateSessionRow } = await import("../db");
 const { seedSession, seedWorkspace } = await import("../orchestrator/testing");
 const { setPaused } = await import("../orchestrator/pause");
 const { taskSetupOf } = await import("./setup");
@@ -145,7 +145,7 @@ describe("finishTaskStart", () => {
     updateSessionRow(db, id, {
       plan_phase: "planning",
       plan_only: 1,
-      worktree_path: fs.mkdtempSync(path.join(os.tmpdir(), "aos-wt-")),
+      worktree_path: tempDir("aos-wt-"),
     });
     db.prepare(
       `INSERT INTO bus_messages (from_id, from_name, to_id, to_name, body, held_queued) VALUES (NULL, 'you', ?, 'task', 'use CSV', 1)`

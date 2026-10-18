@@ -1,10 +1,10 @@
 import fs from "fs";
-import os from "os";
 import path from "path";
 import { describe, expect, it } from "vitest";
 import { git, makeRepo } from "@/lib/done/testing";
 import { preparePlanDir, PLAN_FILE } from "@/lib/models/plan-step";
 import { snapshotRef, snapshotWorktree } from "./snapshot";
+import { tempDir } from "@/lib/test-temp";
 
 describe("snapshotWorktree", () => {
   it("saves tracked changes, untracked files and the ignored plan under a hidden ref, touching nothing", async () => {
@@ -37,7 +37,7 @@ describe("snapshotWorktree", () => {
   });
 
   it("never throws, whatever it's given", async () => {
-    const dir = fs.mkdtempSync(path.join(os.tmpdir(), "aos-nogit-"));
+    const dir = tempDir("aos-nogit-");
     expect(await snapshotWorktree(dir, "x")).toBeNull();
     expect(await snapshotWorktree(null, "x")).toBeNull();
     expect(await snapshotWorktree("/does/not/exist", "x")).toBeNull();

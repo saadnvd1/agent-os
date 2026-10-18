@@ -1,8 +1,8 @@
 import fs from "fs";
-import os from "os";
 import path from "path";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import { parseVersion, probeAgent } from "./probe";
+import { tempDir } from "@/lib/test-temp";
 
 describe("parseVersion", () => {
   it("reads each CLI's way of printing its version", () => {
@@ -47,7 +47,7 @@ let home: string;
 let bin: string;
 
 beforeEach(() => {
-  home = fs.mkdtempSync(path.join(os.tmpdir(), "probe-"));
+  home = tempDir("probe-");
   bin = path.join(home, "bin");
   fs.mkdirSync(bin);
   process.env.HOME = home;

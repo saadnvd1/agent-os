@@ -1,13 +1,13 @@
 // The branch and rebase mechanics against real git, with a local bare repo
 // as origin. Only gh is absent: these moves pass no PR to retarget.
 
-import { mkdtempSync, writeFileSync } from "fs";
-import { tmpdir } from "os";
+import { writeFileSync } from "fs";
 import { join } from "path";
 import { beforeEach, describe, expect, it } from "vitest";
 import { run } from "../tasks/gh";
 import { restackBranch, type Runner } from "./git";
 import { MERGE_METHODS, type MergeMethod } from "../tasks/merge-methods";
+import { tempDir } from "@/lib/test-temp";
 
 const runner: Runner = (cmd, args, cwd) => run(cmd, args, cwd);
 const git = async (cwd: string, ...args: string[]) =>
@@ -70,7 +70,7 @@ const subjects = async (range: string) =>
   (await git(repo, "log", "--format=%s", range)).split("\n").filter(Boolean);
 
 beforeEach(async () => {
-  root = mkdtempSync(join(tmpdir(), "stack-git-"));
+  root = tempDir("stack-git-");
   const origin = join(root, "origin.git");
   await git(root, "init", "-q", "--bare", "-b", "main", origin);
   repo = join(root, "repo");

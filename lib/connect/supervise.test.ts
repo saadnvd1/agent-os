@@ -2,7 +2,6 @@ import { describe, it, expect, afterEach, vi } from "vitest";
 import crypto from "crypto";
 import { EventEmitter } from "events";
 import fs from "fs";
-import os from "os";
 import path from "path";
 import { PassThrough } from "stream";
 import { ApiError } from "./control-api";
@@ -13,6 +12,7 @@ import {
   superviseTunnel,
   type Spawn,
 } from "./supervise";
+import { tempDir } from "@/lib/test-temp";
 
 const fakeToken = () =>
   Buffer.from(
@@ -55,7 +55,7 @@ class FakeChild extends EventEmitter {
 }
 
 function harness(prepare?: () => Promise<{ bin: string; token: string }>) {
-  const dir = fs.mkdtempSync(path.join(os.tmpdir(), "connect-sup-"));
+  const dir = tempDir("connect-sup-");
   const children: FakeChild[] = [];
   const tokens: string[] = [];
   const logs: string[] = [];
@@ -251,7 +251,7 @@ describe("cloudflared never outlives AgentOS", () => {
 
   describe("reapTunnel", () => {
     const setup = (pid: string) => {
-      const dir = fs.mkdtempSync(path.join(os.tmpdir(), "connect-reap-"));
+      const dir = tempDir("connect-reap-");
       fs.writeFileSync(path.join(dir, "cloudflared.pid"), pid);
       return dir;
     };
@@ -292,7 +292,7 @@ describe("cloudflared never outlives AgentOS", () => {
     });
 
     it("does nothing without a pid file", async () => {
-      const dir = fs.mkdtempSync(path.join(os.tmpdir(), "connect-reap-"));
+      const dir = tempDir("connect-reap-");
       expect(await reapTunnel(dir, undefined, { kill: () => true })).toBe(
         false
       );
@@ -313,7 +313,7 @@ describe("cloudflared never outlives AgentOS", () => {
 
       // A stand-in cloudflared: notes its pid, then waits.
       function fakeBin() {
-        const dir = fs.mkdtempSync(path.join(os.tmpdir(), "connect-spawn-"));
+        const dir = tempDir("connect-spawn-");
         const bin = path.join(dir, "cloudflared");
         const pidOut = path.join(dir, "child.pid");
         fs.writeFileSync(

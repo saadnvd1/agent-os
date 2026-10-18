@@ -1,8 +1,7 @@
-import fs from "fs";
 import os from "os";
-import path from "path";
 import { beforeAll, describe, expect, it, vi } from "vitest";
 import { seedWorkspace } from "./testing";
+import { tempDir } from "@/lib/test-temp";
 
 const started: Record<string, unknown>[] = [];
 vi.mock("@/lib/sessions/launch", async (orig) => ({
@@ -21,7 +20,7 @@ const { TOOL_SHAPES, parseArgs } = await import("./tool-schemas");
 const { db } = await import("@/lib/db");
 
 beforeAll(() => {
-  const home = fs.mkdtempSync(path.join(os.tmpdir(), "aos-orch-recipes-"));
+  const home = tempDir("aos-orch-recipes-");
   vi.spyOn(os, "homedir").mockReturnValue(home);
 });
 

@@ -1,11 +1,11 @@
 import { EventEmitter } from "events";
 import { PassThrough } from "stream";
 import { execFileSync, spawn, type ChildProcess } from "child_process";
-import { mkdtempSync, rmSync } from "fs";
-import { tmpdir } from "os";
+import { rmSync } from "fs";
 import { join } from "path";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { ControlManager, type ControlDeps } from "./control";
+import { tempDir } from "@/lib/test-temp";
 
 // A tmux -C client that the test speaks for.
 function fakeClient() {
@@ -291,7 +291,7 @@ const hasTmux = (() => {
 
 // Against a real tmux, on a server of its own (never the default one).
 describe.skipIf(!hasTmux)("ControlManager with tmux", () => {
-  const dir = mkdtempSync(join(tmpdir(), "agentos-ctl-"));
+  const dir = tempDir("agentos-ctl-");
   const sock = join(dir, "s");
   const env = { ...process.env };
   delete env.TMUX;

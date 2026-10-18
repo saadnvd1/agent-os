@@ -1,15 +1,15 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import * as fs from "fs";
-import * as os from "os";
 import * as path from "path";
 import { detectPackageManager, setupEnv } from "./install";
 import { setupWorktree, type SetupResult } from "../env-setup";
 import { bringDependencies } from ".";
 import { NO_FAST_COPY } from "./clone";
+import { tempDir } from "@/lib/test-temp";
 
 let dir: string;
 beforeEach(() => {
-  dir = fs.mkdtempSync(path.join(os.tmpdir(), "aos-install-"));
+  dir = tempDir("aos-install-");
 });
 afterEach(() => fs.rmSync(dir, { recursive: true, force: true }));
 

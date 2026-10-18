@@ -1,12 +1,10 @@
 import fs from "fs";
-import os from "os";
 import path from "path";
 import { execFileSync } from "child_process";
 import { afterAll, describe, expect, it } from "vitest";
+import { tempDir } from "@/lib/test-temp";
 
-const home = fs.realpathSync(
-  fs.mkdtempSync(path.join(os.tmpdir(), "aos-kind-"))
-);
+const home = fs.realpathSync(tempDir("aos-kind-"));
 process.env.HOME = home;
 process.env.AGENT_OS_HOME = path.join(home, ".agent-os");
 afterAll(() => fs.rmSync(home, { recursive: true, force: true }));

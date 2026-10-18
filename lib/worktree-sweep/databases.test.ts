@@ -1,6 +1,5 @@
 import { db } from "@/lib/db";
 import fs from "fs";
-import os from "os";
 import path from "path";
 import { describe, expect, it } from "vitest";
 import {
@@ -15,6 +14,7 @@ import { sessionHash } from "@/lib/project-config/database";
 import { createProject } from "@/lib/projects";
 import { seedSession } from "@/lib/orchestrator/testing";
 import type { PgRun } from "@/lib/project-config/database";
+import { tempDir } from "@/lib/test-temp";
 
 const DAY = 24 * 3600;
 const NOW = 1_800_000_000_000;
@@ -242,7 +242,7 @@ describe("which sessions are live", () => {
 
 describe("declared databases", () => {
   it("asks the default server once, and a project's own host and port too", () => {
-    const dir = fs.mkdtempSync(path.join(os.tmpdir(), "aos-decl-"));
+    const dir = tempDir("aos-decl-");
     fs.writeFileSync(
       path.join(dir, "agentos.json"),
       JSON.stringify({ database: { from: "decl_dev" } })

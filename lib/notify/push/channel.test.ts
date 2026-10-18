@@ -1,8 +1,8 @@
 import fs from "fs";
-import os from "os";
 import path from "path";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { db } from "../../db";
+import { tempDir } from "@/lib/test-temp";
 
 const relaySend = vi.fn();
 vi.mock("./relay", () => ({
@@ -16,7 +16,7 @@ const { sendPhone, notifyFrom } = await import("../index");
 const { sender } = await import("./index");
 const { outboxRows, pairPhone, resetPush } = await import("./testing");
 
-const dir = fs.mkdtempSync(path.join(os.tmpdir(), "aos-channel-"));
+const dir = tempDir("aos-channel-");
 const out = path.join(dir, "telegram.txt");
 const delivered = () =>
   fs.existsSync(out) ? fs.readFileSync(out, "utf8") : "";

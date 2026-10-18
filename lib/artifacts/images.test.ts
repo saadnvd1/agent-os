@@ -1,12 +1,12 @@
 import fs from "fs";
-import os from "os";
 import path from "path";
 import { beforeAll, describe, expect, it } from "vitest";
 import { MAX_IMAGE_BYTES, readImage } from "./images";
+import { tempDir } from "@/lib/test-temp";
 
 let dir: string;
 beforeAll(() => {
-  dir = fs.realpathSync(fs.mkdtempSync(path.join(os.tmpdir(), "agentos-img-")));
+  dir = fs.realpathSync(tempDir("agentos-img-"));
   fs.writeFileSync(path.join(dir, "chart.svg"), "<svg/>");
   fs.writeFileSync(path.join(dir, "notes.txt"), "secret");
   fs.writeFileSync(path.join(dir, "page.html"), "<p/>");

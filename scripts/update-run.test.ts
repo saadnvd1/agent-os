@@ -1,16 +1,16 @@
 import { execFile } from "child_process";
 import fs from "fs";
-import os from "os";
 import path from "path";
 import { promisify } from "util";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
+import { tempDir } from "@/lib/test-temp";
 
 const exec = promisify(execFile);
 const runner = path.join(__dirname, "update-run.mjs");
 
 let dir: string;
 beforeEach(() => {
-  dir = fs.mkdtempSync(path.join(os.tmpdir(), "aos-runner-"));
+  dir = tempDir("aos-runner-");
   fs.writeFileSync(
     path.join(dir, "state.json"),
     JSON.stringify({ id: "r1", phase: "starting", from: "a" })

@@ -1,10 +1,10 @@
 import { describe, it, expect, beforeEach, afterEach } from "vitest";
 import { execFileSync } from "child_process";
 import fs from "fs";
-import os from "os";
 import path from "path";
 import { git } from "./git-exec";
 import { addWorktree, GitCryptLockedError, usesGitCrypt } from "./worktree-add";
+import { tempDir } from "@/lib/test-temp";
 
 const run = (args: string[], cwd: string) => git(cwd, args);
 const sh = (cwd: string, ...args: string[]) =>
@@ -44,7 +44,7 @@ const unlock = () => {
 };
 
 beforeEach(() => {
-  root = fs.realpathSync(fs.mkdtempSync(path.join(os.tmpdir(), "aos-crypt-")));
+  root = fs.realpathSync(tempDir("aos-crypt-"));
   repo = path.join(root, "repo");
 });
 afterEach(() => fs.rmSync(root, { recursive: true, force: true }));

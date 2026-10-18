@@ -1,12 +1,12 @@
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import * as fs from "fs";
-import * as os from "os";
 import * as path from "path";
 import { pruneSpares, replenishSpare, sparePath, takeSpare } from "./spare";
+import { tempDir } from "@/lib/test-temp";
 
 let tmp: string, source: string, root: string;
 beforeEach(() => {
-  tmp = fs.mkdtempSync(path.join(os.tmpdir(), "aos-spare-"));
+  tmp = tempDir("aos-spare-");
   source = path.join(tmp, "source");
   root = path.join(tmp, "spare");
   fs.mkdirSync(path.join(source, "node_modules", "dep"), { recursive: true });

@@ -1,12 +1,12 @@
 import { execFileSync } from "child_process";
 import fs from "fs";
-import os from "os";
 import path from "path";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { db } from "../db";
 import { setExperiment } from "../experiments";
 import { listRules } from "../orchestrator/rules";
 import { clearCards, seedSession } from "./__fixtures__/db";
+import { tempDir } from "@/lib/test-temp";
 
 const quickPR = vi.fn(async () => ({ id: "q", text: "" }));
 let quickDir = "";
@@ -79,7 +79,7 @@ beforeEach(() => {
   startQuickChange.mockClear();
   createTask.mockClear();
   dropTask.mockClear();
-  quickDir = fs.mkdtempSync(path.join(os.tmpdir(), "lc-quick-"));
+  quickDir = tempDir("lc-quick-");
 });
 
 describe("withLesson", () => {
@@ -161,7 +161,7 @@ describe("applyCard", () => {
   });
 
   function repoFor(s: ReturnType<typeof seedSession>, ignored: boolean) {
-    const dir = fs.mkdtempSync(path.join(os.tmpdir(), "lc-repo-"));
+    const dir = tempDir("lc-repo-");
     repos.push(dir);
     const env = { ...process.env };
     delete env.GIT_DIR;

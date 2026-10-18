@@ -1,4 +1,3 @@
-import fs from "fs";
 import os from "os";
 import path from "path";
 import Database from "better-sqlite3";
@@ -7,6 +6,7 @@ import { NextRequest } from "next/server";
 import { DEVICE_HEADER, TRUST_HEADER } from "@/lib/security/auth";
 import { createSchema } from "@/lib/db/schema";
 import { runMigrations } from "@/lib/db/migrations";
+import { tempDir } from "@/lib/test-temp";
 
 vi.mock("@/lib/status-detector", () => ({
   checkWaitingPatterns: () => false,
@@ -46,7 +46,7 @@ const keyOptionsRoute =
 const keyRoute = await import("@/app/api/presence/device-key/route");
 
 beforeAll(() => {
-  const home = fs.mkdtempSync(path.join(os.tmpdir(), "aos-device-keys-"));
+  const home = tempDir("aos-device-keys-");
   vi.spyOn(os, "homedir").mockReturnValue(home);
 });
 beforeEach(() => {
@@ -554,7 +554,7 @@ describe("No approvals mode", () => {
 
 describe("migration 89 (passkeys_device_keys)", () => {
   it("adds the columns and reads old keys as browser passkeys", () => {
-    const dir = fs.mkdtempSync(path.join(os.tmpdir(), "device-keys-mig-"));
+    const dir = tempDir("device-keys-mig-");
     const old = new Database(path.join(dir, "old.db"));
     createSchema(old);
     runMigrations(old, 87);

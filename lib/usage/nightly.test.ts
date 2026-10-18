@@ -1,7 +1,4 @@
 import { randomUUID } from "crypto";
-import fs from "fs";
-import os from "os";
-import path from "path";
 import { beforeEach, describe, expect, it } from "vitest";
 import { db, insertSessionRow } from "../db";
 import { callFromAssistant, recordCall, sessionContext } from "./calls";
@@ -21,6 +18,7 @@ import {
 import { loadBaseline } from "./ratchet";
 import { dayKey, dayStart, loadRollups, rollupDay } from "./rollup";
 import { computeRollup, type CallGroup } from "./span";
+import { tempDir } from "@/lib/test-temp";
 
 const HOUR = 3_600_000;
 const DAY = 24 * HOUR;
@@ -297,7 +295,7 @@ describe("usageRollupEnabled", () => {
 });
 
 describe("nightly", () => {
-  const empty = fs.mkdtempSync(path.join(os.tmpdir(), "aos-usage-"));
+  const empty = tempDir("aos-usage-");
   const sent: string[] = [];
   const deps = (now: number): NightlyDeps => ({
     now: () => now,

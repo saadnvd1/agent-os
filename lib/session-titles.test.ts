@@ -1,11 +1,11 @@
 import fs from "fs";
-import os from "os";
 import path from "path";
 import { randomUUID } from "crypto";
 import { execFileSync } from "child_process";
 import { NextRequest } from "next/server";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import type { ClaudeRunner } from "./orchestrator/claude-cli";
+import { tempDir } from "@/lib/test-temp";
 
 // Renaming tries tmux; no tmux here.
 vi.mock("@/lib/hosts", async (importOriginal) => ({
@@ -38,7 +38,7 @@ const failing: ClaudeRunner = async () => {
 };
 
 function briefFile(content: string): string {
-  const dir = fs.mkdtempSync(path.join(os.tmpdir(), "brief-"));
+  const dir = tempDir("brief-");
   const file = path.join(dir, "web-perf-brief.md");
   fs.writeFileSync(file, content);
   return file;
@@ -224,7 +224,7 @@ describe("reading a brief", () => {
 
   it("returns null for a missing file or a FIFO, without hanging", async () => {
     expect(await t.readBrief("/nonexistent/x.md", "/")).toBeNull();
-    const dir = fs.mkdtempSync(path.join(os.tmpdir(), "fifo-"));
+    const dir = tempDir("fifo-");
     const fifo = path.join(dir, "brief.md");
     execFileSync("mkfifo", [fifo]);
     expect(await t.readBrief(fifo, "/")).toBeNull();

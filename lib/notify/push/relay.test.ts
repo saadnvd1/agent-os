@@ -1,12 +1,12 @@
 import crypto from "crypto";
 import fs from "fs";
 import http from "http";
-import os from "os";
 import path from "path";
 import type { AddressInfo } from "net";
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from "vitest";
 import { relaySend } from "./relay";
 import type { PushRequestBody } from "@/lib/connect/control-api";
+import { tempDir } from "@/lib/test-temp";
 
 const keys = crypto.generateKeyPairSync("ed25519");
 const publicPem = keys.publicKey
@@ -54,7 +54,7 @@ beforeAll(async () => {
     });
   });
   await new Promise<void>((r) => server.listen(0, "127.0.0.1", r));
-  dir = fs.mkdtempSync(path.join(os.tmpdir(), "aos-relay-"));
+  dir = tempDir("aos-relay-");
   fs.writeFileSync(
     path.join(dir, "connect.json"),
     JSON.stringify({
@@ -132,7 +132,7 @@ describe("relaySend", () => {
   });
 
   it("a machine that isn't linked is unavailable without any call", async () => {
-    const empty = fs.mkdtempSync(path.join(os.tmpdir(), "aos-relay-none-"));
+    const empty = tempDir("aos-relay-none-");
     process.env.AGENTOS_CONNECT_DIR = empty;
     try {
       expect(await relaySend(body)).toEqual({

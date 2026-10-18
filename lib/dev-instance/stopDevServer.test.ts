@@ -1,14 +1,13 @@
 import fs from "fs";
-import os from "os";
 import path from "path";
 import { spawn, type ChildProcess } from "child_process";
 import { afterEach, describe, expect, it } from "vitest";
 import { stopDevServer } from "./stopDevServer";
 import { pidAlive } from "./processInfo";
+import { tempDir } from "@/lib/test-temp";
 
 const children: ChildProcess[] = [];
-const dir = () =>
-  fs.realpathSync(fs.mkdtempSync(path.join(os.tmpdir(), "stop-")));
+const dir = () => fs.realpathSync(tempDir("stop-"));
 
 function sleeper(cwd: string): ChildProcess {
   const c = spawn(process.execPath, ["-e", "setInterval(()=>{},1000)"], {

@@ -1,8 +1,7 @@
-import fs from "fs";
 import os from "os";
-import path from "path";
 import { beforeAll, describe, expect, it, vi } from "vitest";
 import { seedWorkspace } from "./testing";
+import { tempDir } from "@/lib/test-temp";
 
 const moved = vi.hoisted(() => ({ calls: [] as string[][], fail: false }));
 vi.mock("@/lib/tasks", async (orig) => ({
@@ -23,7 +22,7 @@ const { pendingEvents } = await import("./events");
 const { scopeOf } = await import("@/lib/done/bulk");
 
 beforeAll(() => {
-  const home = fs.mkdtempSync(path.join(os.tmpdir(), "aos-orch-move-"));
+  const home = tempDir("aos-orch-move-");
   vi.spyOn(os, "homedir").mockReturnValue(home);
 });
 

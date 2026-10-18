@@ -1,5 +1,4 @@
 import fs from "fs";
-import os from "os";
 import path from "path";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import { summarize } from "./aggregate";
@@ -7,6 +6,7 @@ import { compare, renderSummary } from "./render";
 import type { DbSignals } from "./sources";
 import { latestAudit, recordAudit, readIndex, writeSummary } from "./store";
 import { findExcerpts, formatExcerpts, scanTranscript } from "./transcript";
+import { tempDir } from "@/lib/test-temp";
 
 // A transcript the way Claude Code writes one: an assistant turn is one line
 // per content block, each repeating the turn's usage.
@@ -70,7 +70,7 @@ const NO_SIGNALS: DbSignals = {
 
 let dir: string;
 beforeEach(() => {
-  dir = fs.mkdtempSync(path.join(os.tmpdir(), "session-audit-"));
+  dir = tempDir("session-audit-");
 });
 afterEach(() => {
   fs.rmSync(dir, { recursive: true, force: true });

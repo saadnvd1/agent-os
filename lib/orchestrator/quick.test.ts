@@ -1,5 +1,4 @@
 import fs from "fs";
-import os from "os";
 import path from "path";
 import { execFileSync } from "child_process";
 import {
@@ -12,13 +11,12 @@ import {
   vi,
 } from "vitest";
 import type { TaskPR } from "@/lib/tasks/state";
+import { tempDir } from "@/lib/test-temp";
 
 // A home of its own before anything reads it: the worktrees folder is
 // fixed when lib/worktrees loads. HOME, not a spy on os.homedir, which
 // modules that `import * as os` never see.
-const home = fs.realpathSync(
-  fs.mkdtempSync(path.join(os.tmpdir(), "aos-quick-"))
-);
+const home = fs.realpathSync(tempDir("aos-quick-"));
 process.env.HOME = home;
 const roots: string[] = [home];
 afterAll(() => {
@@ -121,9 +119,7 @@ function commit(repo: string, file: string, text: string): string {
 // local bare remote, and another task's worktree in the worktrees folder.
 function setup() {
   setMergeApprovals(false);
-  const root = fs.realpathSync(
-    fs.mkdtempSync(path.join(os.tmpdir(), "aos-quick-repo-"))
-  );
+  const root = fs.realpathSync(tempDir("aos-quick-repo-"));
   roots.push(root);
   const remote = path.join(root, "remote.git");
   const repo = path.join(root, "repo");

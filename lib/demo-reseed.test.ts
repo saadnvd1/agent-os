@@ -1,12 +1,12 @@
 import { randomUUID } from "crypto";
 import fs from "fs";
-import os from "os";
 import path from "path";
 import Database from "better-sqlite3";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { restoreDemo, snapshotDemo, startDemoReseed } from "./demo-reseed";
+import { tempDir } from "@/lib/test-temp";
 
-const tmp = () => fs.mkdtempSync(path.join(os.tmpdir(), "demo-reseed-"));
+const tmp = () => tempDir("demo-reseed-");
 
 function scratch() {
   const dir = tmp();

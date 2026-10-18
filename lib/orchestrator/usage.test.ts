@@ -9,6 +9,7 @@ import {
   type Series,
   type UsageState,
 } from "./usage";
+import { tempDir } from "@/lib/test-temp";
 
 const now = 1_800_000_000;
 const none = () => null;
@@ -18,7 +19,7 @@ const series = (window: number, ...samples: [number, number][]): Series => ({
 });
 
 function limitsFile(...samples: [number, number][]) {
-  const dir = fs.mkdtempSync(path.join(os.tmpdir(), "aos-limits-"));
+  const dir = tempDir("aos-limits-");
   const file = path.join(dir, "limits.json");
   fs.writeFileSync(file, JSON.stringify({ window: now + 3600, samples }));
   return file;

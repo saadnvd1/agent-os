@@ -1,7 +1,6 @@
-import fs from "fs";
 import os from "os";
-import path from "path";
 import { beforeAll, describe, expect, it, vi } from "vitest";
+import { tempDir } from "@/lib/test-temp";
 
 vi.mock("@/lib/status-detector", () => ({
   checkWaitingPatterns: () => false,
@@ -30,7 +29,7 @@ const { dismissItem, resolveQuestion, undismissItem, MAX_OPEN_QUESTIONS } =
   await import("./questions");
 
 beforeAll(() => {
-  const home = fs.mkdtempSync(path.join(os.tmpdir(), "aos-orch-questions-"));
+  const home = tempDir("aos-orch-questions-");
   vi.spyOn(os, "homedir").mockReturnValue(home);
 });
 

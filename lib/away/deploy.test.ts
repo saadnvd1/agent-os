@@ -1,6 +1,4 @@
 import { execFileSync } from "child_process";
-import fs from "fs";
-import os from "os";
 import path from "path";
 import { describe, expect, it } from "vitest";
 import {
@@ -9,6 +7,7 @@ import {
   HEALTH_GRACE_MS,
   type DeployDeps,
 } from "./deploy";
+import { tempDir } from "@/lib/test-temp";
 
 const NOW = Date.parse("2026-10-10T20:00:00Z");
 // Commits are built here rather than written out.
@@ -176,7 +175,7 @@ describe("whether a deployed commit has the merge, in a real repository", () => 
     execFileSync("git", args, { cwd, encoding: "utf-8" }).trim();
 
   function repo() {
-    const dir = fs.mkdtempSync(path.join(os.tmpdir(), "away-deploy-"));
+    const dir = tempDir("away-deploy-");
     git(dir, "init", "-q");
     git(dir, "config", "user.email", "test@example.test");
     git(dir, "config", "user.name", "test");

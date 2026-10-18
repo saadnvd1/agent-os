@@ -3,6 +3,7 @@ import { EventEmitter } from "events";
 import { promisify } from "util";
 import { NextRequest } from "next/server";
 import { beforeEach, describe, expect, it, onTestFinished, vi } from "vitest";
+import { tempDir } from "@/lib/test-temp";
 
 // What reaches child_process from the routes and helpers that used to build
 // shell strings out of request and session data: each value must arrive as
@@ -457,7 +458,6 @@ describe("docker dev server reads", async () => {
     await import("@/lib/dev-servers");
   const { createProject } = await import("@/lib/projects");
   const fs = await import("fs");
-  const os = await import("os");
   const path = await import("path");
   const project = createProject({ name: "q", workingDirectory: "/tmp" });
   const container = EVIL[1];
@@ -491,7 +491,7 @@ describe("docker dev server reads", async () => {
   });
 
   it("lists a compose file's services in a hostile directory, as the cwd", async () => {
-    const dir = fs.mkdtempSync(path.join(os.tmpdir(), "$(touch pwned)"));
+    const dir = tempDir("$(touch pwned)");
     onTestFinished(() => fs.rmSync(dir, { recursive: true, force: true }));
     fs.writeFileSync(path.join(dir, "compose.yml"), "services: {}\n");
     answer.fn = () => "web\n";
@@ -526,12 +526,11 @@ describe("docker dev server reads", async () => {
 describe("summarize reads Claude's session id as an id", async () => {
   const { POST } = await import("@/app/api/sessions/[id]/summarize/route");
   const fs = await import("fs");
-  const os = await import("os");
   const path = await import("path");
 
   // A home of our own, with a transcript planted wherever each id would
   // lead: only a plain id may be read.
-  const home = fs.mkdtempSync(path.join(os.tmpdir(), "summarize-home-"));
+  const home = tempDir("summarize-home-");
   const projects = path.join(home, ".claude", "projects", "-tmp");
   const line = (text: string) =>
     JSON.stringify({ type: "user", message: { content: text } });

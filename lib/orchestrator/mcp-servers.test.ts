@@ -17,10 +17,11 @@ import {
 } from "./mcp-servers";
 import { ORCHESTRATOR_PERMISSIONS } from "./tool-names";
 import { GET } from "@/app/api/mcp-servers/route";
+import { tempDir } from "@/lib/test-temp";
 
 let home: string;
 beforeAll(() => {
-  home = fs.mkdtempSync(path.join(os.tmpdir(), "aos-mcp-"));
+  home = tempDir("aos-mcp-");
   vi.spyOn(os, "homedir").mockReturnValue(home);
 });
 afterEach(() => vi.unstubAllEnvs());

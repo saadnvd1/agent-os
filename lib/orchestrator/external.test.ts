@@ -5,6 +5,7 @@ import { execFileSync } from "child_process";
 import { beforeAll, beforeEach, describe, expect, it, vi } from "vitest";
 import type { TmuxSessionInfo } from "@/lib/status-detector";
 import type { ClaudeRun } from "./claude-cli";
+import { tempDir } from "@/lib/test-temp";
 
 // A real clone whose origin reads as github.com/o/r (git rewrites it to a
 // local bare remote); gh is faked around it.
@@ -104,7 +105,7 @@ const { seedSession } = await import("./testing");
 const { setProjectMergeSettings } = await import("@/lib/tasks/merge-policy");
 
 beforeAll(() => {
-  const home = fs.mkdtempSync(path.join(os.tmpdir(), "aos-orch-external-"));
+  const home = tempDir("aos-orch-external-");
   vi.spyOn(os, "homedir").mockReturnValue(home);
 });
 beforeEach(() => {
@@ -166,9 +167,7 @@ function clone(root: string, slug: string, name: string) {
 // A workspace whose project is a clone of o/r, with a branch pushed that
 // dispatch opened PR #50 from (no AgentOS task behind it).
 function setup(opts: { files?: Array<[string, string]> } = {}) {
-  const root = fs.realpathSync(
-    fs.mkdtempSync(path.join(os.tmpdir(), "aos-orch-ext-repo-"))
-  );
+  const root = fs.realpathSync(tempDir("aos-orch-ext-repo-"));
   const repo = clone(root, "o/r", "repo");
   git(repo, "checkout", "-qb", "ws-wor-52");
   let sha = commit(repo, "src/a.ts", "export const a = 1;\n");
