@@ -1,3 +1,4 @@
+import { agentosHome } from "./agentos-home";
 import { spawn, execFile } from "child_process";
 import { promisify } from "util";
 import fs from "fs";
@@ -12,7 +13,7 @@ const run = async (file: string, args: string[], cwd?: string) =>
 // A compose service is a name, never an option or more than one word.
 const COMPOSE_SERVICE = /^[A-Za-z0-9][A-Za-z0-9_.-]*$/;
 
-const LOGS_DIR = path.join(process.env.HOME || "~", ".agent-os", "logs");
+const LOGS_DIR = agentosHome("logs");
 
 // Ensure logs directory exists
 if (!fs.existsSync(LOGS_DIR)) {

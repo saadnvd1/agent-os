@@ -1,18 +1,24 @@
 import fs from "fs";
 import path from "path";
-import { execFileSync } from "child_process";
 import { readLiveRecord } from "./liveServer";
-import { pidAlive, looksLive, processCwd, samePath } from "./processInfo";
+import {
+  pidAlive,
+  looksLive,
+  processCwd,
+  samePath,
+  probe,
+  ProbeTimeout,
+} from "./processInfo";
 import { readDevRecord, recordFile } from "./startDevServer";
 
 export interface StopDeps {
   kill: (pid: number, signal: NodeJS.Signals) => void;
-  cwdOf: (pid: number) => string | null;
-  looksLive: (pid: number) => boolean;
+  cwdOf: (pid: number) => string | null | Promise<string | null>;
+  looksLive: (pid: number) => boolean | Promise<boolean>;
   livePid: () => number | null;
   alive: (pid: number) => boolean;
   sleep: (ms: number) => Promise<void>;
-  killTmux: (socket: string) => void;
+  killTmux: (socket: string) => void | Promise<void>;
 }
 
 const realDeps: StopDeps = {
@@ -22,16 +28,13 @@ const realDeps: StopDeps = {
   livePid: () => readLiveRecord()?.pid ?? null,
   alive: pidAlive,
   sleep: (ms) => new Promise((r) => setTimeout(r, ms)),
-  killTmux: (socket) => {
-    const env = { ...process.env };
-    delete env.TMUX;
+  killTmux: async (socket) => {
     try {
-      execFileSync("tmux", ["-S", socket, "kill-server"], {
-        env,
-        stdio: "ignore",
-      });
-    } catch {
-      // No server on it.
+      await probe("env", ["-u", "TMUX", "tmux", "-S", socket, "kill-server"]);
+    } catch (e) {
+      // No server on it, or tmux did not answer in time.
+      if (e instanceof ProbeTimeout)
+        console.warn(`[dev-server] tmux on ${socket} did not answer; left`);
     }
   },
 };
@@ -59,14 +62,14 @@ export async function stopDevServer(
     ok: false,
     message: `Refusing to stop pid ${rec.pid}: ${why}. Nothing was killed.`,
   });
-  const cwd = d.cwdOf(rec.pid);
+  const cwd = await d.cwdOf(rec.pid);
   if (cwd === null || !samePath(cwd, worktree))
     return refuse(
       `its working directory (${cwd ?? "unknown"}) is not ${worktree}`
     );
   if (rec.pid === process.pid || rec.pid === process.ppid)
     return refuse("that is this command's own process");
-  if (rec.pid === d.livePid() || d.looksLive(rec.pid))
+  if (rec.pid === d.livePid() || (await d.looksLive(rec.pid)))
     return refuse("it is the live AgentOS server");
 
   const signal = (s: NodeJS.Signals) => {
@@ -89,7 +92,7 @@ export async function stopDevServer(
     `tmux-${process.getuid?.() ?? 0}`,
     "default"
   );
-  if (fs.existsSync(sock)) d.killTmux(sock);
+  if (fs.existsSync(sock)) await d.killTmux(sock);
   drop();
   return {
     ok: true,

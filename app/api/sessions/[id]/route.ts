@@ -7,7 +7,7 @@ import {
   mainCheckoutOf,
 } from "@/lib/worktrees";
 import { releasePort } from "@/lib/ports";
-import { dropSessionDatabase } from "@/lib/project-config/database";
+import { releaseSessionLeftovers } from "@/lib/sessions/leftovers";
 import { killWorker } from "@/lib/orchestration";
 import { endSessionAgent } from "@/lib/sessions/end";
 import { endTmuxSession } from "@/lib/tmux/end";
@@ -261,7 +261,7 @@ export async function DELETE(request: NextRequest, { params }: RouteParams) {
       } catch (error) {
         console.error(`Failed to kill worker ${worker.id}:`, error);
       }
-      void dropSessionDatabase(worker.id);
+      void releaseSessionLeftovers(worker);
       queries.deleteSession(db).run(worker.id);
     }
 
@@ -271,7 +271,7 @@ export async function DELETE(request: NextRequest, { params }: RouteParams) {
     }
 
     // Its private Postgres copy: the row is read now, the drop runs on.
-    void dropSessionDatabase(id);
+    void releaseSessionLeftovers(existing);
 
     // Delete from database immediately for instant UI feedback
     // The agent's tmux and processes go on in the background; the worktree

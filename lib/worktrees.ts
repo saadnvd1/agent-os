@@ -2,6 +2,7 @@
  * Git Worktree management for isolated feature development
  */
 
+import { stopDevServer } from "./dev-instance/stopDevServer";
 import * as path from "path";
 import * as fs from "fs";
 import * as os from "os";
@@ -301,6 +302,8 @@ export function deleteWorktree(
   let marker: string | null = null;
   const done = (async () => {
     await branch;
+    // A dev server left running would outlive the folder it runs in.
+    await stopDevServer(key).catch(() => {});
     // Before anything is removed, so no reader catches it half-deleted.
     marker = markRemoving(key);
     await removeWorktree(key, repo);

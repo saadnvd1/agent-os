@@ -11,8 +11,8 @@
  * each time the tunnel starts.
  */
 
+import { agentosHome } from "../agentos-home";
 import fs from "fs";
-import os from "os";
 import path from "path";
 
 export interface ConnectConfig {
@@ -32,8 +32,7 @@ export interface ConnectFiles {
 export const MACHINE_HOST = /^m-[0-9a-f]{16}\.runagentos\.com$/;
 
 export const connectDir = () =>
-  process.env.AGENTOS_CONNECT_DIR ||
-  path.join(os.homedir(), ".agent-os", "connect");
+  process.env.AGENTOS_CONNECT_DIR || agentosHome("connect");
 
 export type ConnectRead =
   | { ok: true; files: ConnectFiles; enabled: boolean }

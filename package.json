@@ -33,6 +33,7 @@
     "dev": "AGENTOS_DEV=1 tsx server.ts",
     "dev:task": "tsx scripts/dev-task.ts",
     "dev:stop": "tsx scripts/dev-stop.ts",
+    "disk:dry-run": "tsx scripts/disk-dry-run.ts",
     "prebuild": "node scripts/gen-migrations-index.mjs",
     "build": "next build",
     "prestart": "node scripts/ensure-native.mjs && node scripts/gen-migrations-index.mjs",

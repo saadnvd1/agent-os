@@ -3,10 +3,10 @@
  * then (for a worktree) the setup in the background, then the first message.
  */
 
+import { agentosHome } from "../agentos-home";
 import type { StartVia } from "../tasks/starter";
 import fs from "fs";
 import os from "os";
-import path from "path";
 import { randomUUID } from "crypto";
 import { db, queries, type Session } from "../db";
 import type { AgentType } from "../providers";
@@ -45,7 +45,7 @@ export const DEFAULT_START_VIEW: StartView = "chat";
 export const startView = (v: unknown): StartView | undefined =>
   v === "chat" || v === "terminal" ? v : undefined;
 
-export const SCRATCH_DIR = path.join(os.homedir(), ".agent-os", "scratch");
+export const SCRATCH_DIR = agentosHome("scratch");
 
 export interface LaunchInput {
   // The client's key for this start (a draft's id): it becomes the

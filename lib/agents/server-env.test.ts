@@ -80,7 +80,12 @@ describe.skipIf(!hasTmux)("a pane started the way AgentOS starts one", () => {
         "AGENTOS_SESSION_ID=s1",
         `${UNSET_SERVER_ENV}env > ${out}; sleep 1`,
       ]);
-      for (let i = 0; i < 50 && !fs.existsSync(out); i++)
+      // The shell creates the file before env writes to it: wait for content.
+      for (
+        let i = 0;
+        i < 50 && !(fs.existsSync(out) && fs.statSync(out).size > 0);
+        i++
+      )
         execFileSync("sleep", ["0.1"]);
       return fs.readFileSync(out, "utf8");
     } finally {

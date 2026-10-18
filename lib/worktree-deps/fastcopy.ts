@@ -5,9 +5,9 @@
  * none works, and the caller installs or copies plainly instead.
  */
 
+import { agentosHome } from "../agentos-home";
 import { execFile } from "child_process";
 import * as fs from "fs";
-import * as os from "os";
 import * as path from "path";
 import { promisify } from "util";
 import type { CopyMode } from "./spare";
@@ -18,7 +18,7 @@ export type FastMode = Exclude<CopyMode, "copy">;
 
 // Where hardlinked dependencies are kept: one real copy per lockfile, so a
 // write through a link can only ever reach this, never the main checkout.
-export const STORE_ROOT = path.join(os.homedir(), ".agent-os", "deps-store");
+export const STORE_ROOT = agentosHome("deps-store");
 
 // Files tools rewrite in place. A hardlink would carry the write back into
 // the store, so these are real copies in every worktree.

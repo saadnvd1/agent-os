@@ -292,3 +292,9 @@
 
 - Cover terminal sessions: tail their Claude transcript each minute with the tool_use/tool_result pairing in `lib/session-audit/transcript.ts` and feed `classifyToolResult`.
 - File a board card automatically when an escalated class stays hot for a week.
+
+## Disk clean-up follow-ups
+
+- Cap the shared `~/.agent-os/simulators/{ccache,derived,modulecache}` caches by size (they are shared, not per task, so the reaper leaves them).
+- A per-project hook for test databases that don't carry `_aos_<hash>` (they can only clean up after themselves today).
+- Reap the user-level chrome-devtools wrapper's old named profiles (lives outside this repo).

@@ -3,6 +3,7 @@ import {
   DEFAULT_SWEEP_DAYS,
   globalSweepDays,
   projectSweepOverrides,
+  reaperArmed,
 } from "./settings";
 import { recentRuns } from "./store";
 import type { SweepRun } from "./types";
@@ -13,6 +14,9 @@ export interface SweepState {
   defaultDays: number;
   overrides: Array<{ projectId: string; name: string; days: number }>;
   runs: SweepRun[];
+  // Whether the full clean-up (test leftovers, task databases, spares, temp
+  // folders, build caches) removes anything on this machine.
+  armed: boolean;
 }
 
 export function sweepState(): SweepState {
@@ -32,5 +36,6 @@ export function sweepState(): SweepState {
         : []
     ),
     runs: recentRuns(),
+    armed: reaperArmed(),
   };
 }

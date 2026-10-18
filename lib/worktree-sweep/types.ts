@@ -1,4 +1,21 @@
-export type SweepKind = "settled" | "orphan" | "test-leak";
+export type SweepKind =
+  | "settled"
+  | "orphan"
+  | "test-leak"
+  // What a task left beside its checkout, found by the full clean-up.
+  | "database"
+  | "spare"
+  | "temp"
+  | "derived-data";
+
+// Kinds that go only once the full clean-up is turned on.
+export const ARMED_KINDS: ReadonlySet<SweepKind> = new Set([
+  "test-leak",
+  "database",
+  "spare",
+  "temp",
+  "derived-data",
+]);
 
 export interface SweepRemoved {
   path: string;
@@ -15,10 +32,31 @@ export interface SweepSkipped {
   sessionId?: string;
 }
 
+export interface CategoryTotal {
+  count: number;
+  bytes: number;
+}
+
+// What is on disk after the run, for the one-line summary.
+export interface SweepTotals {
+  worktrees: CategoryTotal;
+  databases: CategoryTotal;
+  spares: CategoryTotal;
+  temp: CategoryTotal;
+}
+
 export interface SweepSummary {
   removed: SweepRemoved[];
   skipped: SweepSkipped[];
   freedBytes: number;
+  // Found but left, because the full clean-up isn't turned on.
+  pending?: SweepRemoved[];
+  // The whole of pending, once a stored run keeps only its biggest.
+  pendingTotal?: CategoryTotal;
+  totals?: SweepTotals;
+  armed?: boolean;
+  // Where a dry run wrote its list.
+  report?: string;
 }
 
 export interface SweepRun {
@@ -50,4 +88,9 @@ export interface Candidate {
   // The PR head a merge took, when the session has one.
   prNumber?: number | null;
   branch?: string | null;
+  // A database: the server it lives on, and why it's reapable.
+  server?: { host?: string; port?: number };
+  why?: string;
+  // Known without measuring (a database's size).
+  bytes?: number;
 }

@@ -41,7 +41,7 @@ export type PgRun = (
   env: NodeJS.ProcessEnv
 ) => Promise<{ code: number; out: string }>;
 
-const pgRun: PgRun = (cmd, args, env) =>
+export const pgRun: PgRun = (cmd, args, env) =>
   new Promise((resolve) => {
     execFile(
       cmd,
@@ -66,10 +66,10 @@ const pgRun: PgRun = (cmd, args, env) =>
 // A plain database name: never a connection string (`host=…`,
 // `postgres://…`) or an option, which pg_dump would take as one.
 const DB_NAME = /^[A-Za-z0-9_][A-Za-z0-9_$.-]{0,62}$/;
-const LOCAL_HOSTS = new Set(["localhost", "127.0.0.1", "::1"]);
+export const LOCAL_HOSTS = new Set(["localhost", "127.0.0.1", "::1"]);
 // One socket folder: libpq reads a comma as a list of hosts to try in turn,
 // so `/nope,db.example.com` would reach the second.
-const SOCKET_DIR = /^\/[^,=\s'"\\]*$/;
+export const SOCKET_DIR = /^\/[^,=\s'"\\]*$/;
 
 // Why `declared` can't be used, or null. A socket folder is local too.
 export function refusal(declared: DatabaseDecl): string | null {
@@ -86,13 +86,22 @@ export function refusal(declared: DatabaseDecl): string | null {
   return null;
 }
 
-const MARK = (sessionId: string) => `agentos session ${sessionId}`;
+export const MARK = (sessionId: string) => `agentos session ${sessionId}`;
 const PENDING = (sessionId: string) => `${MARK(sessionId)} (copying)`;
+
+export const sessionHash = (sessionId: string) =>
+  createHash("sha256").update(sessionId).digest("hex").slice(0, 12);
+
+// The token a session's copy carries, and so does anything a project derives
+// from it (`<copy>_test`, `<from>_test_aos_<hash>`): the one convention that
+// says AgentOS's session made a database.
+const TASK_DB = /_aos_([0-9a-f]{12})(?:_[A-Za-z0-9]+)*$/;
+export const taskHashOf = (name: string): string | null =>
+  TASK_DB.exec(name)?.[1] ?? null;
 
 // `<from>_aos_<12 hex of the session id>`, within Postgres's 63 bytes.
 export function databaseName(from: string, sessionId: string): string {
-  const hash = createHash("sha256").update(sessionId).digest("hex");
-  const suffix = `_aos_${hash.slice(0, 12)}`;
+  const suffix = `_aos_${sessionHash(sessionId)}`;
   return `${from.slice(0, 63 - suffix.length)}${suffix}`;
 }
 
@@ -122,7 +131,7 @@ const oneLine = (s: string, n = 200) => {
 };
 
 // Every database on the server with its comment, or why there's no answer.
-async function listDatabases(
+export async function listDatabases(
   run: PgRun,
   env: NodeJS.ProcessEnv
 ): Promise<Map<string, string> | string> {
@@ -165,7 +174,7 @@ async function copy(
   // recognised and remade rather than left or reused half-filled.
   const created = await run(
     "createdb",
-    ["-T", "template0", target, PENDING(sessionId)],
+    ["-T", "template0", "--", target, PENDING(sessionId)],
     env
   );
   if (created.code !== 0)
@@ -175,7 +184,7 @@ async function copy(
   try {
     let step = await run(
       "pg_dump",
-      ["--no-owner", "--no-privileges", "-f", dump, from],
+      ["--no-owner", "--no-privileges", "-f", dump, "--", from],
       env
     );
     if (step.code === 0) {
@@ -191,7 +200,7 @@ async function copy(
       );
     }
     if (step.code !== 0) {
-      await run("dropdb", ["--if-exists", target], env);
+      await run("dropdb", ["--if-exists", "--", target], env);
       return `could not copy ${from} into ${target} (${oneLine(step.out, 300)}); ${target} was dropped again`;
     }
     return null;
@@ -243,7 +252,7 @@ async function makeDatabase(
     // An interrupted copy of ours: made again from the start.
     if (!record({ ...state, name: target, pending: true }))
       return { ...state, error: ENDED };
-    const dropped = await run("dropdb", ["--if-exists", target], env);
+    const dropped = await run("dropdb", ["--if-exists", "--", target], env);
     if (dropped.code !== 0)
       return {
         ...state,
@@ -399,7 +408,10 @@ async function dropDatabase(
     console.warn(`[database] ${name} left: ${listed}`);
     return;
   }
-  if (!listed.has(name)) return void forget();
+  if (!listed.has(name)) {
+    await dropDerived(sessionId, state, listed, run, env);
+    return void forget();
+  }
   const comment = listed.get(name);
   if (comment !== MARK(sessionId) && comment !== PENDING(sessionId)) {
     console.warn(`[database] ${name} left: AgentOS didn't make it`);
@@ -408,9 +420,52 @@ async function dropDatabase(
   // The session is over: a dev server left running in its worktree and
   // still connected is a straggler, ended by --force (Postgres 13+; a plain
   // drop for an older server).
-  let dropped = await run("dropdb", ["--if-exists", "--force", name], env);
+  let dropped = await run(
+    "dropdb",
+    ["--if-exists", "--force", "--", name],
+    env
+  );
   if (dropped.code !== 0)
-    dropped = await run("dropdb", ["--if-exists", name], env);
-  if (dropped.code === 0) forget();
-  else console.warn(`[database] ${name} left: ${oneLine(dropped.out)}`);
+    dropped = await run("dropdb", ["--if-exists", "--", name], env);
+  if (dropped.code === 0) {
+    await dropDerived(sessionId, state, listed, run, env);
+    forget();
+  } else console.warn(`[database] ${name} left: ${oneLine(dropped.out)}`);
+}
+
+// What the project's own tooling made from the copy (a Rails `_test`
+// database): same session token, never the declared source.
+async function dropDerived(
+  sessionId: string,
+  state: SessionDatabase,
+  listed: Map<string, string>,
+  run: PgRun,
+  env: NodeJS.ProcessEnv
+): Promise<void> {
+  const hash = sessionHash(sessionId);
+  for (const other of listed.keys()) {
+    if (other === state.from || other === state.name) continue;
+    if (taskHashOf(other) !== hash) continue;
+    // A plain drop, and not while anyone is connected: it is another
+    // task's or a person's session if the token matches by accident.
+    const busy = await run(
+      "psql",
+      [
+        "-X",
+        "-d",
+        "postgres",
+        "-tAq",
+        "-c",
+        `select count(*) from pg_stat_activity where datname = ${quoteLiteral(other)}`,
+      ],
+      env
+    );
+    if (busy.code !== 0 || Number(busy.out.trim()) > 0) {
+      console.warn(`[database] ${other} left: connected or unreadable`);
+      continue;
+    }
+    const done = await run("dropdb", ["--if-exists", "--", other], env);
+    if (done.code !== 0)
+      console.warn(`[database] ${other} left: ${oneLine(done.out)}`);
+  }
 }

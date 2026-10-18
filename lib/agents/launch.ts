@@ -1,5 +1,5 @@
+import { agentosHome } from "../agentos-home";
 import fs from "fs";
-import os from "os";
 import path from "path";
 import { execFile } from "child_process";
 import { promisify } from "util";
@@ -22,12 +22,8 @@ import {
 } from "../project-config/session";
 
 const execFileAsync = promisify(execFile);
-const PROMPTS_DIR = path.join(os.homedir(), ".agent-os", "prompts");
-export const BUS_BRIEF_FILE = path.join(
-  os.homedir(),
-  ".agent-os",
-  "bus-brief.md"
-);
+const PROMPTS_DIR = agentosHome("prompts");
+export const BUS_BRIEF_FILE = agentosHome("bus-brief.md");
 
 export function ensureBusBrief(): void {
   fs.mkdirSync(path.dirname(BUS_BRIEF_FILE), { recursive: true });

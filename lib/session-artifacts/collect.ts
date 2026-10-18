@@ -14,6 +14,7 @@ import { git } from "../git-exec";
 import { PLAN_FILE } from "../models/plan-step";
 import { listArtifacts } from "../artifacts/store";
 import { allowedRoots, within } from "./access";
+import { SCREENSHOT_DIR } from "../tasks/ui-brief";
 import {
   fromItems,
   fromPr,
@@ -293,6 +294,20 @@ export async function collectArtifacts(
 
 export const cachedCount = () => cache.size;
 
+// What the UI brief has a terminal session save, whether or not a chat tool
+// call named it: the PR names these files and the worktree is about to go.
+export function screenshotsIn(worktree: string): string[] {
+  const dir = path.join(worktree, SCREENSHOT_DIR);
+  try {
+    return fs
+      .readdirSync(dir)
+      .filter((f) => /\.(png|jpe?g|webp)$/i.test(f))
+      .map((f) => path.join(dir, f));
+  } catch {
+    return [];
+  }
+}
+
 /**
  * Before a session's worktree is removed: copy what it made there that git
  * doesn't hold. Never throws, and never holds up the removal for long.
@@ -309,7 +324,9 @@ export async function keepSessionFiles(sessionId: string): Promise<void> {
     const files = entries
       .map((e) => e.read)
       .filter((f): f is string => !!f && !!relInside(worktree, f));
-    await keepFiles(sessionId, worktree, files);
+    await keepFiles(sessionId, worktree, [
+      ...new Set([...files, ...screenshotsIn(worktree)]),
+    ]);
   } catch (error) {
     console.error(`[session-artifacts] keeping ${sessionId}:`, error);
   } finally {

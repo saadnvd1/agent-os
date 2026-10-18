@@ -9,9 +9,9 @@
  * Remote-host sessions are not tapped: their output never passes through
  * this machine except while attached. They keep reading the screen.
  */
+import { agentosHome } from "../agentos-home";
 import fs from "fs";
 import net from "net";
-import os from "os";
 import path from "path";
 import { execFile } from "child_process";
 import { promisify } from "util";
@@ -50,7 +50,7 @@ const replied = new Map<string, number>();
 
 // In a directory only this user can enter: only they can write reports.
 export function tapSocketPath(port: number): string {
-  return path.join(os.homedir(), ".agent-os", "run", `osc-${port}.sock`);
+  return agentosHome("run", `osc-${port}.sock`);
 }
 
 async function foreground(name: string): Promise<string | undefined> {

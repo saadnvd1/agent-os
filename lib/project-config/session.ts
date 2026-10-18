@@ -4,7 +4,9 @@
  * an agent editing agentos.json on its branch can't change its own launch.
  */
 
+import fs from "fs";
 import os from "os";
+import { sessionTmpDir } from "../sessions/leftovers";
 import { db } from "../db";
 import { getProject } from "../projects";
 import { sessionPorts } from "../ports";
@@ -35,6 +37,21 @@ export function sessionConfig(
   return { ...loaded, ports: sessionPorts(sessionId) };
 }
 
+// A task's own temp folder, so what it leaves there is removed with it.
+// Only a session in a worktree: an orchestrator or a terminal in a checkout
+// is long-lived and keeps the system's.
+function taskTmpEnv(sessionId: string): Record<string, string> {
+  const row = db
+    .prepare(`SELECT worktree_path FROM sessions WHERE id = ?`)
+    .get(sessionId) as { worktree_path: string | null } | undefined;
+  if (!row?.worktree_path) return {};
+  const dir = sessionTmpDir(sessionId);
+  fs.mkdirSync(dir, { recursive: true, mode: 0o700 });
+  // A folder left by an earlier run keeps its old mode otherwise.
+  fs.chmodSync(dir, 0o700);
+  return { TMPDIR: dir };
+}
+
 // The project's env and the session's ports. Never throws: a terminal or a
 // chat must still open when the config can't be read.
 export function sessionProjectEnv(sessionId: string): Record<string, string> {
@@ -43,6 +60,7 @@ export function sessionProjectEnv(sessionId: string): Record<string, string> {
     return {
       ...projectEnv(config, ports),
       ...(config.database ? databaseEnv(sessionDatabase(sessionId)) : {}),
+      ...taskTmpEnv(sessionId),
     };
   } catch (error) {
     console.error(`[project-config] env for ${sessionId}:`, error);

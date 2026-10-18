@@ -116,6 +116,14 @@ describe("the orchestrator's shell", () => {
     await expectAllowed(["aos peers", "aos inbox"]);
   });
 
+  it("refuses aos sweep --arm, allows a dry run and disarming", async () => {
+    await expectRefused(
+      ["aos sweep --arm", "env aos sweep --arm"],
+      /Health, Clean-up, Turn on/
+    );
+    await expectAllowed(["aos sweep --dry-run", "aos sweep --disarm"]);
+  });
+
   it("refuses git push, however it's wrapped", async () => {
     await expectRefused(
       [

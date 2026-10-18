@@ -5,6 +5,7 @@
  * no commit a remote lacks). The row stays, archived, as history.
  */
 
+import { releaseSessionLeftovers } from "../sessions/leftovers";
 import { db, type Session } from "../db";
 import { endSessionAgent } from "../sessions/end";
 import { releasePorts } from "../ports";
@@ -28,6 +29,7 @@ export async function cleanUpMovedAway(id: string): Promise<WorktreeFate> {
       path: s.worktree_path ?? "",
     })
   );
+  void releaseSessionLeftovers(s);
   archiveSession(id);
   if (fate.action === "kept")
     console.warn(

@@ -8,8 +8,8 @@
  * one before.
  */
 
+import { agentosHome } from "../agentos-home";
 import fs from "fs";
-import os from "os";
 import path from "path";
 import type { Summary } from "./aggregate";
 
@@ -19,10 +19,7 @@ export const AUDIT_NAME = /^[a-z0-9][a-z0-9-]{0,80}$/;
 export const SESSIONS_KIND = "sessions";
 
 export function auditsRoot(): string {
-  return (
-    process.env.AGENTOS_AUDITS_DIR ||
-    path.join(os.homedir(), ".agent-os", "audits")
-  );
+  return process.env.AGENTOS_AUDITS_DIR || agentosHome("audits");
 }
 
 export function auditsDir(): string {

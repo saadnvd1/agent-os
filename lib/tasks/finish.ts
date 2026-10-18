@@ -34,7 +34,7 @@ import {
   prFor,
   projectPathFor,
 } from "./session";
-import { dropSessionDatabase } from "../project-config/database";
+import { releaseSessionLeftovers } from "../sessions/leftovers";
 import { captureMergedTask } from "../session-logs";
 import { sessionEnded } from "../experiments/hooks";
 import { snapshotWorktree } from "../resurrect/snapshot";
@@ -62,7 +62,7 @@ async function cleanup(
   const keepRemoteBranch = opts.keepRemoteBranch ?? false;
   await endSessionAgent(session);
   // Never waited on: the row is read now, and Postgres can't hold this up.
-  void dropSessionDatabase(session.id);
+  void releaseSessionLeftovers(session);
   if (session.worktree_path && opts.merged) {
     const fate = await settleWorktree(session, opts.merged).catch(() => null);
     if (fate?.action === "kept")

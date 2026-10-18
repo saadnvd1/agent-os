@@ -1,5 +1,5 @@
+import { agentosHome } from "../../agentos-home";
 import fs from "fs";
-import os from "os";
 import path from "path";
 import { randomUUID } from "crypto";
 import type { ChatAccess, DriverEvent } from "../events";
@@ -9,7 +9,7 @@ import { piTool } from "./pi-mapper";
 type P = Record<string, unknown>;
 const str = (v: unknown) => (typeof v === "string" ? v : "");
 
-const DIR = path.join(os.homedir(), ".agent-os", "pi");
+const DIR = agentosHome("pi");
 const MARK = "agentos:";
 
 // Pi runs every tool without asking. This extension asks the chat first,

@@ -6,8 +6,8 @@
  * can be public, and a log holds briefs and reviews.
  */
 
+import { agentosHome } from "../agentos-home";
 import fs from "fs";
-import os from "os";
 import path from "path";
 import { db } from "../db";
 import { slugify } from "../git";
@@ -17,8 +17,7 @@ import { expand, repoPaths, resolved, within } from "./paths";
 
 // AGENTOS_SESSION_LOGS_DIR moves the default (tests keep it off the real one).
 export const DEFAULT_ROOT = () =>
-  process.env.AGENTOS_SESSION_LOGS_DIR ||
-  path.join(os.homedir(), ".agent-os", "session-logs");
+  process.env.AGENTOS_SESSION_LOGS_DIR || agentosHome("session-logs");
 
 const key = (projectId: string) => `session-logs.folder.${projectId}`;
 
