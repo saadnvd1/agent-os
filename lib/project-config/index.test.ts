@@ -424,6 +424,7 @@ describe("agentos.json over .dispatch.json", () => {
       })
     );
     expect(loaded.error).toContain("browse.port: names API");
+    expect(loaded.config).toEqual({});
   });
 
   it("reports a broken file on either side", () => {
@@ -457,7 +458,7 @@ describe("agentos.json over .dispatch.json", () => {
     expect(loadProjectConfig(dir).config.dev).toBe("bin/dev");
     fs.writeFileSync(
       path.join(dir, ".dispatch.json"),
-      JSON.stringify({ dev: "something/else/longer" })
+      JSON.stringify({ ports: { PORT: 3000 }, dev: "something/else/longer" })
     );
     expect(loadProjectConfig(dir).config.dev).toBe("something/else/longer");
   });

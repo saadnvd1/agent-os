@@ -52,13 +52,13 @@ export interface LoadedConfig {
   warning: string | null;
 }
 
-export const NONE: LoadedConfig = {
+export const NONE: LoadedConfig = Object.freeze({
   config: {},
   source: null,
   error: null,
-  inherited: [],
+  inherited: Object.freeze([]) as unknown as string[],
   warning: null,
-};
+});
 
 function describe(file: string, error: z.ZodError): string {
   const fields = error.issues.map((i) => {
@@ -117,12 +117,8 @@ function parse(file: string, text: string, checked = true): LoadedConfig {
     : { ...NONE, source: file, error: describe(file, got.error) };
 }
 
-export function bothFilesWarning(inherited: string[]): string {
-  const both = "This repo has both agentos.json and .dispatch.json;";
-  return inherited.length
-    ? `${both} keys ${inherited.join(", ")} come from .dispatch.json. Move them into agentos.json and delete .dispatch.json.`
-    : `${both} agentos.json sets every key, so .dispatch.json is unused. Delete it.`;
-}
+export const bothFilesWarning = (inherited: string[]): string =>
+  `This repo has both agentos.json and .dispatch.json; keys ${inherited.join(", ")} come from .dispatch.json. Move them into agentos.json and delete .dispatch.json.`;
 
 function merge(agentos: ProjectConfig, dispatch: ProjectConfig): LoadedConfig {
   const inherited = Object.keys(dispatch).filter((k) => !(k in agentos));
@@ -133,14 +129,18 @@ function merge(agentos: ProjectConfig, dispatch: ProjectConfig): LoadedConfig {
     ...agentos,
   } as ProjectConfig;
   const got = mergedJson.safeParse(config);
+  if (!got.success)
+    return {
+      ...NONE,
+      source: "agentos.json",
+      error: describe("agentos.json with .dispatch.json", got.error),
+    };
   return {
+    ...NONE,
     config,
     source: "agentos.json",
-    error: got.success
-      ? null
-      : describe("agentos.json with .dispatch.json", got.error),
     inherited,
-    warning: bothFilesWarning(inherited),
+    warning: inherited.length ? bothFilesWarning(inherited) : null,
   };
 }
 
