@@ -10,6 +10,10 @@ export const SERVER_ONLY_ENV = [
   "AGENTOS_DEV",
 ] as const;
 
+// Shell text that clears them inside a pane. `tmux new-session -e` can only
+// add variables, and an already-running tmux server may hold them globally.
+export const UNSET_SERVER_ENV = `unset ${SERVER_ONLY_ENV.join(" ")}; `;
+
 // The server's environment as an agent or its tools should see it.
 export function sessionBaseEnv(
   env: NodeJS.ProcessEnv = process.env
