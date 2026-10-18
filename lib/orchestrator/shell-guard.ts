@@ -29,6 +29,10 @@ export interface ShellContext {
   // Whether this path is under ~/.agent-os/audits, where reports go and
   // nothing may be made executable.
   inAudits?: (p: string) => Promise<boolean>;
+  // What a folder is for fast-forwarding: a project checkout of this
+  // workspace ("own"), the checkout AgentOS's live server and autodeploy run
+  // from ("live"), or anything else.
+  checkoutKind?: (dir: string) => Promise<"own" | "live" | "other">;
   // AgentOS's server and the tmux servers it runs sessions in.
   protectedPids: () => Promise<Set<number>>;
 }
@@ -324,22 +328,40 @@ const GIT_WRITES = new Set([
 
 const READ_ONLY_STASH = new Set(["list", "show"]);
 
+// What an orchestrator may do to a project checkout of its own workspace:
+// bring it up to date and move its branch (Saad, 2026-10-18). Commits, stash,
+// clean and file edits still go through tasks and quick changes.
+const CHECKOUT_UPDATES = new Set([
+  "pull",
+  "merge",
+  "reset",
+  "checkout",
+  "switch",
+  "rebase",
+]);
+
 async function gitRefusal(
-  args: string[],
+  inv: Invocation,
   ctx: ShellContext,
   cwd: string
 ): Promise<string | null> {
+  const args = inv.args;
+  // Every repository the command names: the folder after each -C, and each
+  // git dir and work tree, by option or environment.
+  const named = new Set<string>();
   let dir = cwd;
   let i = 0;
   for (; i < args.length; i++) {
     const a = args[i];
     if (a === "-C" || a === "--git-dir" || a === "--work-tree") {
-      dir = path.resolve(dir, args[++i] ?? "");
+      const to = path.resolve(dir, args[++i] ?? "");
+      if (a === "-C") dir = to;
+      named.add(to);
       continue;
     }
     const eq = /^--(git-dir|work-tree)=(.*)$/.exec(a);
     if (eq) {
-      dir = path.resolve(dir, eq[2]);
+      named.add(path.resolve(dir, eq[2]));
       continue;
     }
     if (a === "-c" || a === "--namespace" || a === "--exec-path") {
@@ -349,17 +371,28 @@ async function gitRefusal(
     if (a.startsWith("-")) continue;
     break;
   }
+  named.add(dir);
+  for (const w of inv.cmd.words) {
+    const env = /^GIT_(?:DIR|WORK_TREE)=(.*)$/.exec(w);
+    if (env) named.add(path.resolve(cwd, env[1]));
+  }
   const sub = args[i];
   if (sub === "push")
     return `Refused: ${T.quick_pr} pushes a quick change's branch and opens its PR, and tasks push their own; nothing pushes from the orchestrator's shell.`;
   if (!GIT_WRITES.has(sub)) return null;
   if (sub === "stash" && READ_ONLY_STASH.has(args[i + 1])) return null;
-  if (has(dir))
-    return `Refused: git ${sub} in a folder only the shell knows (${show(dir)}); name the folder.`;
-  const why = await ctx.writeRefusal(dir);
-  return why
-    ? `Refused: git ${sub} in ${dir}. Orchestrators don't change project checkouts (autodeploy runs from them). To see current code: \`git -C ${dir} fetch\` then \`git -C ${dir} show origin/main:<path>\` or \`git -C ${dir} log origin/main\`.`
-    : null;
+  for (const d of named) {
+    if (has(d))
+      return `Refused: git ${sub} in a folder only the shell knows (${show(d)}); name the folder.`;
+    if (!(await ctx.writeRefusal(d))) continue;
+    const kind = (await ctx.checkoutKind?.(d)) ?? "other";
+    const updates = CHECKOUT_UPDATES.has(sub);
+    if (kind === "live" && updates)
+      return `Refused: git ${sub} in ${d}. This is the checkout AgentOS's live server runs from; autodeploy deploys it (restart gap and health check), and changing it here would swap the code under the running server. For a manual deploy use scripts/redeploy.`;
+    if (kind === "own" && updates) continue;
+    return `Refused: git ${sub} in ${d}. Orchestrators don't change project checkouts except to update them: in a project checkout of your own workspace you may \`git pull\` (any form), \`merge\`, \`reset\`, \`checkout\`, \`switch\` and \`rebase\`. Commits, \`stash\`, \`clean\`, \`restore\` and file edits go through ${T.start_task} or ${T.quick_change}; other workspaces' repositories, task worktrees and AgentOS's live checkout are never changed from here. To see current code: \`git -C ${d} fetch\` then \`git -C ${d} show origin/main:<path>\` or \`git -C ${d} log origin/main\`.`;
+  }
+  return null;
 }
 
 // Commands whose every non-option argument is a file they change, and
@@ -557,7 +590,7 @@ export async function shellRefusal(
         (inv.name === "gh" ? ghRefusal(inv.args) : null) ??
         (inv.name === "curl" ? curlRefusal(inv.args) : null) ??
         (inv.name === "aos" ? aosRefusal(inv.args) : null) ??
-        (inv.name === "git" ? await gitRefusal(inv.args, ctx, cwd) : null) ??
+        (inv.name === "git" ? await gitRefusal(inv, ctx, cwd) : null) ??
         (inv.name === "sqlite3"
           ? await sqliteRefusal(inv, ctx, cwd, command)
           : null) ??

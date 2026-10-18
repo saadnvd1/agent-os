@@ -2,7 +2,12 @@ import fs from "fs";
 import os from "os";
 import path from "path";
 import { describe, expect, it } from "vitest";
-import { isLiveServer, readLiveRecord, writeLiveRecord } from "./liveServer";
+import {
+  isLiveServer,
+  liveCheckout,
+  readLiveRecord,
+  writeLiveRecord,
+} from "./liveServer";
 
 describe("isLiveServer", () => {
   it("is the marker, or a bare production launch", () => {
@@ -36,5 +41,7 @@ describe("live record", () => {
       home
     );
     expect(readLiveRecord(home)).toBeNull();
+    // The checkout is still known mid-restart.
+    expect(liveCheckout(home)).toBe("/x");
   });
 });

@@ -24,6 +24,7 @@ import { orchestratorDir } from "./home";
 import { LIMITS_FILE } from "./usage";
 import { quickWorktrees } from "./quick-store";
 import { shellRefusal } from "./shell-guard";
+import { liveCheckout } from "../dev-instance/liveServer";
 
 // The tools that write a file, and the argument naming it.
 export const WRITE_TOOLS: Record<string, string> = {
@@ -398,8 +399,59 @@ async function commandRefusal(
         : [];
       return roots.some((r) => within(p, r));
     },
+    checkoutKind: (dir) => checkoutKind(session, dir),
     protectedPids,
   });
+}
+
+// Whether a folder is a project checkout of the session's own workspace
+// (where it may update and move the branch), a checkout AgentOS's live
+// server or autodeploy runs from (never), or neither. The live ones are the
+// server's folder, the one live-server.json recorded (known even while the
+// server restarts), and any main checkout holding scripts/autodeploy, since
+// that script deploys the folder it sits in (a task worktree has a .git
+// file, not a folder).
+export async function checkoutKind(
+  session: Session,
+  dir: string
+): Promise<"own" | "live" | "other"> {
+  const real = await physicalPath(dir);
+  const roots = async (paths: (string | undefined)[]) =>
+    Promise.all(
+      paths
+        .filter((p): p is string => !!p)
+        .flatMap((p) => [path.resolve(p), p])
+        .map((p) => physicalPath(p))
+    );
+  const live = await roots([process.cwd(), liveCheckout() ?? undefined]);
+  if (live.some((r) => within(real, r)) || deploysFrom(real)) return "live";
+  if (!session.workspace_id) return "other";
+  const own = db
+    .prepare(
+      `SELECT working_directory AS dir FROM projects
+        WHERE workspace_id = ? AND is_uncategorized = 0 AND host_id = 'local'
+       UNION SELECT r.path FROM project_repositories r
+         JOIN projects p ON p.id = r.project_id
+        WHERE p.workspace_id = ? AND p.host_id = 'local'`
+    )
+    .all(session.workspace_id, session.workspace_id) as { dir: string }[];
+  const mine = await roots(own.map((p) => expandHome(p.dir)).filter(Boolean));
+  return mine.some((r) => within(real, r)) ? "own" : "other";
+}
+
+function deploysFrom(real: string): boolean {
+  for (let at = real; ; at = path.dirname(at)) {
+    try {
+      if (
+        fs.statSync(path.join(at, "scripts", "autodeploy")).isFile() &&
+        fs.statSync(path.join(at, ".git")).isDirectory()
+      )
+        return true;
+    } catch {
+      // Not here; look higher.
+    }
+    if (path.dirname(at) === at) return false;
+  }
 }
 
 // AgentOS's server (whatever listens on its port), the tmux servers its

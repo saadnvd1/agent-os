@@ -34,6 +34,17 @@ export function writeLiveRecord(
   fs.renameSync(tmp, recordPath(home));
 }
 
+// The recorded checkout the live server runs from, even when its process is
+// gone (mid-restart).
+export function liveCheckout(home = agentOsHome()): string | null {
+  try {
+    const rec = JSON.parse(fs.readFileSync(recordPath(home), "utf8"));
+    return typeof rec?.cwd === "string" && rec.cwd ? rec.cwd : null;
+  } catch {
+    return null;
+  }
+}
+
 export function readLiveRecord(home = agentOsHome()): InstanceRecord | null {
   try {
     const rec = JSON.parse(fs.readFileSync(recordPath(home), "utf8"));

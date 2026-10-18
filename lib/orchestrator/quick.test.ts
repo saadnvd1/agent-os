@@ -320,7 +320,8 @@ describe("the write guard with a quick change open", () => {
     for (const cmd of [
       `git -C ${s.repo} commit -m x`,
       `git -C ${s.other} reset --hard`,
-      `cd ${s.repo} && git checkout main`,
+      `cd ${s.repo} && git clean -fd`,
+      `git -C ${s.other} checkout main`,
       `git -C ${wt}/main-link stash`,
       `git -C ${wt}/../${path.basename(s.other)} clean -fd`,
       `echo x > ${s.repo}/README.md`,

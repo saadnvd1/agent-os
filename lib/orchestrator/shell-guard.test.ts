@@ -11,12 +11,14 @@ const inside = (p: string, root: string) =>
 const ctx: ShellContext = {
   cwd: "/work/orch",
   writeRefusal: async (p) =>
-    inside(p, "/work/repo") || inside(p, "/work/other")
+    inside(p, "/work/repo") || inside(p, "/work/other") || inside(p, "/live")
       ? `${p} is inside a project repository or task worktree; use start_task or quick_change.`
       : inside(p, "/state") && !inside(p, "/state/orch")
         ? `${p} is in AgentOS's own state.`
         : null,
   isAgentOsState: async (p) => inside(p, "/state") && !inside(p, "/state/orch"),
+  checkoutKind: async (p) =>
+    inside(p, "/live") ? "live" : inside(p, "/work/repo") ? "own" : "other",
   protectedPids: async () => new Set([4242]),
 };
 const check = (command: string) => shellRefusal(command, ctx);
@@ -133,12 +135,91 @@ describe("the orchestrator's shell", () => {
     );
   });
 
+  it("fast-forwards a project checkout of its own workspace", async () => {
+    await expectAllowed([
+      "git -C /work/repo pull --ff-only",
+      "git -C /work/repo pull --ff-only origin main",
+      "git -C /work/repo pull -q --ff-only origin main",
+      "cd /work/repo && git pull --ff-only",
+      "cd /work/repo/src && git pull --ff-only origin main",
+      "git -C /work/repo merge --ff-only origin/main",
+      "cd /work/repo && git fetch && git merge --ff-only @{u}",
+      "git -C /work/repo fetch",
+      "cd /work/repo && bundle install && bin/rails db:prepare db:seed",
+      "cd /work/repo && npm install",
+      "cd /work/repo && bun install",
+    ]);
+  });
+
+  it("updates and moves branches in its own workspace's checkout", async () => {
+    await expectAllowed([
+      "git -C /work/repo pull",
+      "cd /work/repo && git pull --rebase origin main",
+      "git -C /work/repo pull --ff-only --force",
+      "git -C /work/repo pull origin +main:main",
+      "git -C /work/repo -c rebase.autoStash=true pull",
+      "git -C /work/repo merge origin/main",
+      "cd /work/repo && git reset --hard origin/main",
+      "git -C /work/repo checkout main",
+      "git -C /work/repo switch -c x",
+      "git -C /work/repo rebase main",
+    ]);
+  });
+
+  it("still refuses commits, clean, restore and edits in its own checkout", async () => {
+    await expectRefused(
+      [
+        "git -C /work/repo commit -m x",
+        "git -C /work/repo clean -fdx",
+        "cd /work/repo/src && git restore README.md",
+        "git -C /work/repo stash",
+      ],
+      /don't change project checkouts except to update them/
+    );
+    await expectRefused(
+      ["git -C /work/repo pull --ff-only; echo x > /work/repo/a.txt"],
+      /would write/
+    );
+  });
+
+  it("refuses updating a task worktree or the live checkout, however it is named", async () => {
+    await expectRefused(
+      [
+        "git -C /work/other reset --hard",
+        "git -C /work/other checkout main",
+        "git -C /work/other pull --ff-only",
+        "git -C /live reset --hard",
+        "cd /live && git checkout main",
+        "git --git-dir=/live/.git --work-tree=/work/repo reset --hard",
+        "git --git-dir /work/other/.git --work-tree /work/repo reset --hard",
+        "git --work-tree=/work/repo --git-dir=/live/.git checkout main",
+        "git -C /work/repo -C /live reset --hard",
+        "GIT_DIR=/live/.git git -C /work/repo reset --hard",
+        "env GIT_WORK_TREE=/live git -C /work/repo checkout main",
+        "cd /work/repo && GIT_DIR=/work/other/.git git reset --hard",
+      ],
+      /Refused: git/
+    );
+  });
+
+  it("refuses pulling in AgentOS's live checkout, pointing at autodeploy", async () => {
+    await expectRefused(
+      [
+        "git -C /live pull --ff-only",
+        "cd /live && git pull --ff-only origin main",
+        "git -C /live merge --ff-only origin/main",
+        "git -C /live reset --hard",
+      ],
+      /autodeploy.*scripts\/redeploy/
+    );
+  });
+
   it("refuses writes in a project repository or another task's worktree", async () => {
     await expectRefused(
       [
         "git -C /work/repo commit -m x",
-        "cd /work/repo && git reset --hard",
-        "cd /work/repo/src && git checkout main",
+        "cd /work/repo && git clean -fd",
+        "cd /work/repo/src && git restore README.md",
         "git --git-dir=/work/repo/.git stash",
         "git --work-tree /work/other rebase main",
         "git -C /work/other merge main",
