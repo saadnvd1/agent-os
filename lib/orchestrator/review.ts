@@ -11,6 +11,7 @@
  * the orchestrator hears the verdict as an event.
  */
 
+import { uiEvidenceNote, withUiEvidenceNote } from "../tasks/ui-change";
 import { reviewGoal } from "../plans/features";
 import { pushReviewBlocked, pushReviewReady } from "../notify/push/events";
 import { db, type Session } from "../db";
@@ -89,7 +90,7 @@ export interface ReviewTarget {
   goal: string;
   repo: string;
   refs: Pick<Session, "base_branch" | "branch_name">;
-  pr: Pick<TaskPR, "number" | "url" | "scopeChange">;
+  pr: Pick<TaskPR, "number" | "url" | "scopeChange" | "uiEvidence">;
   task?: Session;
 }
 
@@ -192,7 +193,10 @@ async function reviewJob(
     const done = putCheck({
       ...row,
       kind: "review",
-      ...combineVerdicts(verdicts),
+      ...withUiEvidenceNote(
+        combineVerdicts(verdicts),
+        uiEvidenceNote(files, pr.uiEvidence)
+      ),
     });
     if (task?.lh_card_id)
       await checkScope({

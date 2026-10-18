@@ -1,4 +1,5 @@
 import { execFile } from "child_process";
+import { hasUiEvidence } from "./ui-change";
 import { promisify } from "util";
 import { git } from "../git-exec";
 import { attributionIn } from "./code-review";
@@ -118,6 +119,7 @@ export async function toTaskPR(repoDir: string, pr: ListedPR): Promise<TaskPR> {
     attribution:
       pr.body === undefined ? undefined : (attributionIn(pr.body) ?? null),
     scopeChange: parseScopeChange(pr.body),
+    ...(pr.body !== undefined && { uiEvidence: hasUiEvidence(pr.body) }),
     ...(pr.mergeable && { mergeable: pr.mergeable }),
     ...(pr.baseRefName && { base: pr.baseRefName }),
   };

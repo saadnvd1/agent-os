@@ -33,7 +33,7 @@ import {
   transcriptPath,
   writeTranscript,
 } from "../tasks/transcript";
-import { buildTaskBrief, declaredTest } from "../tasks/brief";
+import { buildTaskBrief, briefFacts } from "../tasks/brief";
 import { syncTaskCardInBackground } from "../lumifyhub/task-cards";
 import { allocatePorts } from "../ports";
 import { loadProjectConfig, portBases } from "../project-config";
@@ -440,7 +440,7 @@ async function relaunch(s: Session, cwd: string): Promise<void> {
       ? buildTaskBrief({
           branch: s.branch_name,
           baseBranch: s.base_branch ?? "main",
-          test: declaredTest(cwd),
+          ...briefFacts(cwd),
         })
       : undefined,
   });

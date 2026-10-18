@@ -200,3 +200,9 @@ export function projectEnv(
     env[name] = String(port);
   return env;
 }
+
+export const DEFAULT_VIEWPORTS = ["1440x900", "390x844"];
+
+// The sizes a UI change is checked at: the project's, else desktop and phone.
+export const viewportsOf = (browse: ProjectConfig["browse"]): string[] =>
+  browse?.viewports?.length ? browse.viewports : DEFAULT_VIEWPORTS;

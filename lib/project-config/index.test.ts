@@ -8,6 +8,7 @@ import {
   portBases,
   projectEnv,
   readyCommand,
+  viewportsOf,
   withPorts,
 } from "./index";
 import { jsonSchema } from "./schema";
@@ -285,5 +286,55 @@ describe("runningBrief", () => {
 
   it("stays short", () => {
     expect(brief.length).toBeLessThan(1200);
+  });
+});
+
+describe("browse config", () => {
+  const load = (browse: unknown) =>
+    loadProjectConfig(
+      project({
+        "agentos.json": { ports: { PORT: 3100 }, browse },
+      })
+    );
+
+  it("reads viewports, nav and verify", () => {
+    const { config, error } = load({
+      login: "/__dev/login",
+      viewports: ["1440x900", "390x844"],
+      nav: { Board: "/b" },
+      verify: true,
+    });
+    expect(error).toBeNull();
+    expect(config.browse?.viewports).toEqual(["1440x900", "390x844"]);
+    expect(config.browse?.nav).toEqual({ Board: "/b" });
+    expect(config.browse?.verify).toBe(true);
+  });
+
+  it("refuses a malformed viewport, too many pages and unknown keys", () => {
+    expect(load({ viewports: ["390"] }).error).toMatch(/WIDTHxHEIGHT/);
+    const nav = Object.fromEntries(
+      Array.from({ length: 16 }, (_, i) => [`p${i}`, "/x"])
+    );
+    expect(load({ nav }).error).toMatch(/at most 15/);
+    expect(load({ speed: 1 }).error).toMatch(/speed/);
+  });
+
+  it("defaults to a desktop and a phone width", () => {
+    expect(viewportsOf(undefined)).toEqual(["1440x900", "390x844"]);
+    expect(viewportsOf({ viewports: ["800x600"] })).toEqual(["800x600"]);
+  });
+
+  it("renders nav as URLs on the session's port", () => {
+    const brief = runningBrief(
+      {
+        browse: {
+          port: "PORT",
+          nav: { Board: "/p/board", Docs: "http://x.test/d" },
+        },
+      },
+      { PORT: 3118 }
+    );
+    expect(brief).toContain("Board `http://localhost:3118/p/board`");
+    expect(brief).toContain("Docs `http://x.test/d`");
   });
 });

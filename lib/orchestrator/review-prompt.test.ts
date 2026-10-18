@@ -85,3 +85,11 @@ describe("REVIEW_SYSTEM", () => {
       expect(REVIEW_SYSTEM).toContain(how);
   });
 });
+
+describe("missing browser evidence", () => {
+  it("is never blocking", () => {
+    expect(REVIEW_SYSTEM).toMatch(
+      /neither is a missing screenshot or browser or simulator check/
+    );
+  });
+});
