@@ -180,7 +180,7 @@ export async function setupWorktree(options: {
 
   // 1. The project's config. A broken one is reported and nothing of it is
   // used: running an older file's setup instead would hide the mistake.
-  const { config, source, error } = loadProjectConfig(sourcePath);
+  const { config, source, error, warning } = loadProjectConfig(sourcePath);
   if (error) {
     result.success = false;
     result.steps.push({
@@ -188,6 +188,13 @@ export async function setupWorktree(options: {
       command: `read ${source}`,
       success: false,
       error,
+    });
+  } else if (warning) {
+    result.steps.push({
+      name: "Read agentos.json and .dispatch.json",
+      command: "read agentos.json + .dispatch.json",
+      success: true,
+      output: warning,
     });
   }
 

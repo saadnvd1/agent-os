@@ -8,7 +8,12 @@ import os from "os";
 import { db } from "../db";
 import { getProject } from "../projects";
 import { sessionPorts } from "../ports";
-import { loadProjectConfig, projectEnv, type LoadedConfig } from "./index";
+import {
+  loadProjectConfig,
+  NONE,
+  projectEnv,
+  type LoadedConfig,
+} from "./index";
 import { runningBrief } from "./brief";
 import { databaseEnv, sessionDatabase } from "./database";
 
@@ -29,9 +34,7 @@ export function sessionConfig(
   sessionId: string
 ): LoadedConfig & { ports: Record<string, number> | null } {
   const projectPath = projectPathOf(sessionId);
-  const loaded = projectPath
-    ? loadProjectConfig(projectPath)
-    : { config: {}, source: null, error: null };
+  const loaded = projectPath ? loadProjectConfig(projectPath) : NONE;
   return { ...loaded, ports: sessionPorts(sessionId) };
 }
 
@@ -52,9 +55,9 @@ export function sessionProjectEnv(sessionId: string): Record<string, string> {
 
 export function sessionRunningBrief(sessionId: string): string {
   try {
-    const { config, source, ports } = sessionConfig(sessionId);
+    const { config, source, warning, ports } = sessionConfig(sessionId);
     return source
-      ? runningBrief(config, ports ?? {}, sessionDatabase(sessionId))
+      ? runningBrief(config, ports ?? {}, sessionDatabase(sessionId), warning)
       : "";
   } catch (error) {
     console.error(`[project-config] brief for ${sessionId}:`, error);

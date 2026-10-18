@@ -1,17 +1,28 @@
 /**
- * The one reader of a project's config: `agentos.json`, else `.dispatch.json`,
- * else the legacy `.agent-os/worktrees.json` / `.agent-os.json`. The first
- * file that exists is the config; a broken one is an error, never a reason
- * to read the next. Design: docs/decisions/2026-10-10-agentos-json.md.
+ * The one reader of a project's config: `agentos.json` and `.dispatch.json`
+ * together, else the legacy `.agent-os/worktrees.json` / `.agent-os.json`
+ * (the first of those that exists). A broken file is an error, never a
+ * reason to read the next or to ignore it.
+ *
+ * When both agentos.json and .dispatch.json exist they merge by top-level
+ * key: agentos.json wins any key it sets, and its value replaces
+ * .dispatch.json's whole (no deep merge, so a partial `browse` never mixes
+ * with the old one); keys only .dispatch.json has still apply, after its
+ * normalization (`workspace` becomes `cards.workspace`, dispatch-only keys
+ * are dropped). `inherited` names those keys and `warning` says to move them.
+ * Design: docs/decisions/2026-10-10-agentos-json.md.
  */
 
 import * as fs from "fs";
 import * as path from "path";
 import type { z } from "zod";
 import {
+  agentosFields,
   agentosJson,
+  dispatchFields,
   dispatchJson,
   legacyJson,
+  mergedJson,
   RESERVED_ENV,
   type ProjectConfig,
 } from "./schema";
@@ -34,9 +45,20 @@ export interface LoadedConfig {
   source: string | null;
   // Why the file was refused, naming it and every bad field.
   error: string | null;
+  // Top-level keys that came from .dispatch.json because agentos.json lacks
+  // them; empty unless both files exist.
+  inherited: string[];
+  // One line for the brief when both files exist; null otherwise.
+  warning: string | null;
 }
 
-const NONE: LoadedConfig = { config: {}, source: null, error: null };
+export const NONE: LoadedConfig = {
+  config: {},
+  source: null,
+  error: null,
+  inherited: [],
+  warning: null,
+};
 
 function describe(file: string, error: z.ZodError): string {
   const fields = error.issues.map((i) => {
@@ -61,7 +83,9 @@ function fromLegacy(raw: z.infer<typeof legacyJson>): ProjectConfig {
   return config;
 }
 
-function parse(file: string, text: string): LoadedConfig {
+// `checked: false` leaves the port-name check to the merge, which can see
+// the ports the other file declares.
+function parse(file: string, text: string, checked = true): LoadedConfig {
   let raw: unknown;
   try {
     raw = JSON.parse(text);
@@ -73,24 +97,85 @@ function parse(file: string, text: string): LoadedConfig {
     };
   }
   if (file === "agentos.json") {
-    const got = agentosJson.safeParse(raw);
+    const got = (checked ? agentosJson : agentosFields).safeParse(raw);
     return got.success
-      ? { config: got.data, source: file, error: null }
+      ? { ...NONE, config: got.data, source: file }
       : { ...NONE, source: file, error: describe(file, got.error) };
   }
   if (file === ".dispatch.json") {
-    const got = dispatchJson.safeParse(raw);
+    const got = (checked ? dispatchJson : dispatchFields).safeParse(raw);
     if (!got.success)
       return { ...NONE, source: file, error: describe(file, got.error) };
     const { workspace, ...config } = got.data;
     if (workspace && !config.cards?.workspace)
       config.cards = { ...config.cards, workspace };
-    return { config, source: file, error: null };
+    return { ...NONE, config, source: file };
   }
   const got = legacyJson.safeParse(raw);
   return got.success
-    ? { config: fromLegacy(got.data), source: file, error: null }
+    ? { ...NONE, config: fromLegacy(got.data), source: file }
     : { ...NONE, source: file, error: describe(file, got.error) };
+}
+
+export function bothFilesWarning(inherited: string[]): string {
+  const both = "This repo has both agentos.json and .dispatch.json;";
+  return inherited.length
+    ? `${both} keys ${inherited.join(", ")} come from .dispatch.json. Move them into agentos.json and delete .dispatch.json.`
+    : `${both} agentos.json sets every key, so .dispatch.json is unused. Delete it.`;
+}
+
+function merge(agentos: ProjectConfig, dispatch: ProjectConfig): LoadedConfig {
+  const inherited = Object.keys(dispatch).filter((k) => !(k in agentos));
+  const config = {
+    ...Object.fromEntries(
+      inherited.map((k) => [k, dispatch[k as keyof ProjectConfig]])
+    ),
+    ...agentos,
+  } as ProjectConfig;
+  const got = mergedJson.safeParse(config);
+  return {
+    config,
+    source: "agentos.json",
+    error: got.success
+      ? null
+      : describe("agentos.json with .dispatch.json", got.error),
+    inherited,
+    warning: bothFilesWarning(inherited),
+  };
+}
+
+function statOf(projectPath: string, file: string): fs.Stats | null {
+  try {
+    const stat = fs.statSync(path.join(projectPath, file));
+    return stat.isFile() ? stat : null;
+  } catch {
+    return null;
+  }
+}
+
+function readFile(projectPath: string, file: string): string | LoadedConfig {
+  try {
+    return fs.readFileSync(path.join(projectPath, file), "utf-8");
+  } catch (e) {
+    return {
+      ...NONE,
+      source: file,
+      error: `${file} could not be read: ${(e as Error).message}`,
+    };
+  }
+}
+
+// Both files, merged. A broken one is the error, whichever it is.
+function loadBoth(projectPath: string): LoadedConfig {
+  const parsed: LoadedConfig[] = [];
+  for (const file of ["agentos.json", ".dispatch.json"]) {
+    const text = readFile(projectPath, file);
+    if (typeof text !== "string") return text;
+    const got = parse(file, text, false);
+    if (got.error) return got;
+    parsed.push(got);
+  }
+  return merge(parsed[0].config, parsed[1].config);
 }
 
 // Keyed on the project; reused while the file's mtime and size hold, since
@@ -98,6 +183,16 @@ function parse(file: string, text: string): LoadedConfig {
 const cache = new Map<string, { stamp: string; loaded: LoadedConfig }>();
 
 export function loadProjectConfig(projectPath: string): LoadedConfig {
+  const a = statOf(projectPath, "agentos.json");
+  const d = statOf(projectPath, ".dispatch.json");
+  if (a && d) {
+    const stamp = `both:${a.mtimeMs}:${a.size}:${d.mtimeMs}:${d.size}`;
+    const hit = cache.get(projectPath);
+    if (hit?.stamp === stamp) return hit.loaded;
+    const loaded = loadBoth(projectPath);
+    cache.set(projectPath, { stamp, loaded });
+    return loaded;
+  }
   for (const file of CONFIG_FILES) {
     const full = path.join(projectPath, file);
     let stat: fs.Stats;
@@ -110,16 +205,8 @@ export function loadProjectConfig(projectPath: string): LoadedConfig {
     const stamp = `${file}:${stat.mtimeMs}:${stat.size}`;
     const hit = cache.get(projectPath);
     if (hit?.stamp === stamp) return hit.loaded;
-    let text: string;
-    try {
-      text = fs.readFileSync(full, "utf-8");
-    } catch (e) {
-      return {
-        ...NONE,
-        source: file,
-        error: `${file} could not be read: ${(e as Error).message}`,
-      };
-    }
+    const text = readFile(projectPath, file);
+    if (typeof text !== "string") return text;
     const loaded = parse(file, text);
     cache.set(projectPath, { stamp, loaded });
     return loaded;
