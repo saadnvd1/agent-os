@@ -18,6 +18,7 @@ interface Pending {
   sessionId: string;
   itemId: string;
   server: string;
+  origin: string | null;
   at: number;
 }
 
@@ -81,6 +82,7 @@ export async function startMcpSignIn(
       sessionId,
       itemId: input.itemId,
       server: input.server,
+      origin,
       at: Date.now(),
     });
   return result;
@@ -118,6 +120,23 @@ export async function finishMcpSignIn(
   });
   if (error) throw new Error(error);
   return { server: p.server };
+}
+
+// The provider's redirect reached our callback route. Rebuild the address
+// from the origin the sign-in started with, not from the request (behind the
+// custom server Next may derive it from Host), so it matches the
+// redirect_uri the provider was given exactly.
+export async function finishMcpSignInFromRedirect(
+  search: string
+): Promise<{ server: string }> {
+  sweep();
+  const state = new URLSearchParams(search).get("state");
+  const origin = state ? pending.get(state)?.origin : null;
+  if (!origin)
+    throw new Error(
+      "That sign-in expired or was already used. Press Sign in again."
+    );
+  return finishMcpSignIn(`${origin}${CALLBACK_PATH}${search}`);
 }
 
 // "Check again": reconnect and refresh the list.

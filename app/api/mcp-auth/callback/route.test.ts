@@ -2,7 +2,7 @@ import { NextRequest } from "next/server";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
 const finish = vi.hoisted(() => vi.fn());
-vi.mock("@/lib/chat/mcp-auth", () => ({ finishMcpSignIn: finish }));
+vi.mock("@/lib/chat/mcp-auth", () => ({ finishMcpSignInFromRedirect: finish }));
 
 const { GET } = await import("./route");
 const get = (query: string) =>
@@ -11,13 +11,12 @@ const get = (query: string) =>
 beforeEach(() => vi.clearAllMocks());
 
 describe("GET /api/mcp-auth/callback", () => {
-  it("hands the whole address over and says which server signed in, escaped", async () => {
+  it("hands the query string over and says which server signed in, escaped", async () => {
     finish.mockResolvedValue({ server: "<b>linear</b>" });
     const res = await get("code=c&state=s");
     const html = await res.text();
-    expect(finish).toHaveBeenCalledWith(
-      "http://localhost:3011/api/mcp-auth/callback?code=c&state=s"
-    );
+    // Only the query string goes on: the origin comes from the pending sign-in
+    expect(finish).toHaveBeenCalledWith("?code=c&state=s");
     expect(res.status).toBe(200);
     expect(html).toContain("&lt;b&gt;linear&lt;/b&gt;");
     expect(html).not.toContain("<b>linear");

@@ -14,6 +14,7 @@ const {
   PENDING_MS,
   cleanOrigin,
   finishMcpSignIn,
+  finishMcpSignInFromRedirect,
   reconnectMcpServer,
   resetMcpSignIns,
   startMcpSignIn,
@@ -141,6 +142,30 @@ describe("finishMcpSignIn", () => {
     await expect(finishMcpSignIn(back)).rejects.toThrow(
       "token exchange failed"
     );
+  });
+});
+
+describe("finishMcpSignInFromRedirect", () => {
+  it("rebuilds the address from the origin the sign-in started with", async () => {
+    await start();
+    mocks.mcpAuth.mockResolvedValue({});
+    await finishMcpSignInFromRedirect("?code=c&state=s1");
+    expect(mocks.mcpAuth).toHaveBeenLastCalledWith({
+      action: "submit",
+      server: "linear",
+      itemId: "mcp-1",
+      url: "https://mac.ts.net:3443/api/mcp-auth/callback?code=c&state=s1",
+    });
+  });
+
+  it("refuses an unknown state, or one that started without a redirect", async () => {
+    await expect(
+      finishMcpSignInFromRedirect("?code=c&state=nope")
+    ).rejects.toThrow(/expired/);
+    await start(null);
+    await expect(
+      finishMcpSignInFromRedirect("?code=c&state=s1")
+    ).rejects.toThrow(/expired/);
   });
 });
 

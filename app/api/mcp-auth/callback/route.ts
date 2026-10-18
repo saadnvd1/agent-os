@@ -1,5 +1,5 @@
 import { NextRequest } from "next/server";
-import { finishMcpSignIn } from "@/lib/chat/mcp-auth";
+import { finishMcpSignInFromRedirect } from "@/lib/chat/mcp-auth";
 
 const escape = (text: string) =>
   text.replace(
@@ -31,14 +31,16 @@ export async function GET(request: NextRequest) {
   try {
     if (failed && !params.get("code")) {
       const why = (params.get("error_description") || failed).slice(0, 200);
-      await finishMcpSignIn(request.url).catch(() => {});
+      await finishMcpSignInFromRedirect(request.nextUrl.search).catch(() => {});
       return page(
         false,
         "Sign-in wasn't completed",
         `${why}. Press Sign in again in AgentOS.`
       );
     }
-    const { server } = await finishMcpSignIn(request.url);
+    const { server } = await finishMcpSignInFromRedirect(
+      request.nextUrl.search
+    );
     return page(
       true,
       `Signed in to ${server}`,
