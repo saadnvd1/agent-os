@@ -11,12 +11,14 @@ const inside = (p: string, root: string) =>
 const ctx: ShellContext = {
   cwd: "/work/orch",
   writeRefusal: async (p) =>
-    inside(p, "/work/repo") || inside(p, "/work/other")
+    inside(p, "/work/repo") || inside(p, "/work/other") || inside(p, "/live")
       ? `${p} is inside a project repository or task worktree; use start_task or quick_change.`
       : inside(p, "/state") && !inside(p, "/state/orch")
         ? `${p} is in AgentOS's own state.`
         : null,
   isAgentOsState: async (p) => inside(p, "/state") && !inside(p, "/state/orch"),
+  checkoutKind: async (p) =>
+    inside(p, "/live") ? "live" : inside(p, "/work/repo") ? "own" : "other",
   protectedPids: async () => new Set([4242]),
 };
 const check = (command: string) => shellRefusal(command, ctx);
@@ -130,6 +132,59 @@ describe("the orchestrator's shell", () => {
         "if true; then git push; fi",
       ],
       /quick_pr/
+    );
+  });
+
+  it("fast-forwards a project checkout of its own workspace", async () => {
+    await expectAllowed([
+      "git -C /work/repo pull --ff-only",
+      "git -C /work/repo pull --ff-only origin main",
+      "git -C /work/repo pull -q --ff-only origin main",
+      "cd /work/repo && git pull --ff-only",
+      "cd /work/repo/src && git pull --ff-only origin main",
+      "git -C /work/repo merge --ff-only origin/main",
+      "cd /work/repo && git fetch && git merge --ff-only @{u}",
+      "git -C /work/repo fetch",
+      "cd /work/repo && bundle install && bin/rails db:prepare db:seed",
+      "cd /work/repo && npm install",
+      "cd /work/repo && bun install",
+    ]);
+  });
+
+  it("still refuses everything else that changes a checkout, naming the allowed form", async () => {
+    await expectRefused(
+      [
+        "git -C /work/repo pull",
+        "git -C /work/repo pull origin main",
+        "cd /work/repo && git pull --rebase",
+        "git -C /work/repo pull --ff-only --rebase",
+        "git -C /work/repo pull --ff-only --force",
+        "git -C /work/repo pull --ff-only origin +main:main",
+        "git -C /work/repo -c core.hooksPath=/tmp pull --ff-only",
+        "git -C /work/repo merge origin/main",
+        "git -C /work/repo merge --ff-only a b",
+        "git -C /work/repo reset --hard origin/main",
+        "git -C /work/repo checkout main",
+        "git -C /work/repo switch -c x",
+        "git -C /work/repo rebase main",
+        "git -C /work/other pull --ff-only",
+      ],
+      /Refused: git/
+    );
+    expect(await check("git -C /work/repo pull")).toMatch(/pull --ff-only/);
+    expect(await check("git -C /work/repo reset --hard")).not.toMatch(
+      /pull --ff-only/
+    );
+  });
+
+  it("refuses pulling in AgentOS's live checkout, pointing at autodeploy", async () => {
+    await expectRefused(
+      [
+        "git -C /live pull --ff-only",
+        "cd /live && git pull --ff-only origin main",
+        "git -C /live merge --ff-only origin/main",
+      ],
+      /autodeploy.*scripts\/redeploy/
     );
   });
 
