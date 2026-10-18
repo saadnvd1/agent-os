@@ -111,6 +111,7 @@ vi.spyOn(os, "homedir").mockReturnValue(tempDir("aos-done-home-"));
 
 const { db } = await import("@/lib/db");
 const { createProject } = await import("@/lib/projects");
+const { setProjectTier } = await import("@/lib/project-tier");
 const { createWorkspace, setProjectWorkspace } =
   await import("@/lib/workspaces");
 const { ensureOrchestrator } = await import("@/lib/orchestrator/home");
@@ -163,6 +164,7 @@ function setup() {
     workingDirectory: r.repo,
   });
   setProjectWorkspace(project.id, workspace.id);
+  setProjectTier(project.id, "production");
   ensureOrchestrator(workspace.id);
   const w = workspace.id;
 

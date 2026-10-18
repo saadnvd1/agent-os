@@ -1,14 +1,13 @@
-import fs from "fs";
-import os from "os";
 import path from "path";
 import Database from "better-sqlite3";
 import { describe, expect, it } from "vitest";
 import { createSchema } from "./schema";
 import { runMigrations } from "./migrations";
+import { tempDir } from "@/lib/test-temp";
 
 describe("migration 20261018T2130_project_tier", () => {
   it("makes LumifyHub and Workstak projects production, the rest fast, and keeps a later change", () => {
-    const dir = fs.mkdtempSync(path.join(os.tmpdir(), "project-tier-"));
+    const dir = tempDir("project-tier-");
     const db = new Database(path.join(dir, "old.db"));
     createSchema(db);
     runMigrations(db, "20261018T2100_orch_full_access");
@@ -66,6 +65,5 @@ describe("migration 20261018T2130_project_tier", () => {
       db.prepare(`SELECT COUNT(*) AS n FROM fast_lane_tasks`).get()
     ).toEqual({ n: 0 });
     db.close();
-    fs.rmSync(dir, { recursive: true, force: true });
   });
 });
