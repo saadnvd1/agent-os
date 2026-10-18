@@ -15,6 +15,7 @@ import type {
   Compacting,
   DriverEvent,
   FileSuggestion,
+  McpSignInStart,
   ChatOrigin,
   PeerMessage,
 } from "../events";
@@ -56,6 +57,18 @@ export type WorkerCommand =
   | { type: "undo"; reqId: string; checkpoint: string; dryRun: boolean }
   | { type: "stop_task"; taskId: string }
   | { type: "background_task"; reqId: string; toolUseId?: string }
+  // Sign in to an MCP server listed in the /mcp item `itemId`: start it
+  // (redirectUri: where the provider should return the browser), finish it
+  // with the address it returned to (url), or just reconnect.
+  | {
+      type: "mcp_auth";
+      reqId: string;
+      action: "start" | "submit" | "reconnect";
+      server: string;
+      itemId: string;
+      redirectUri?: string;
+      url?: string;
+    }
   // It runs an older build: it takes no new message into its agent (they
   // wait in the queue) and closes at its next turn boundary, so a current
   // worker resumes the conversation with today's tools.
@@ -101,6 +114,12 @@ export type WorkerEvent =
   | { type: "suggestion"; text: string | null }
   | { type: "undo_result"; reqId: string; result?: UndoResult; error?: string }
   | { type: "background_result"; reqId: string; ok?: boolean; error?: string }
+  | {
+      type: "mcp_auth_result";
+      reqId: string;
+      start?: McpSignInStart & { state?: string };
+      error?: string;
+    }
   | {
       type: "files_result";
       reqId: string;

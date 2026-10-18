@@ -38,6 +38,8 @@ export interface Live {
   canFresh?: boolean;
   // Whether it takes "background_task" (an older worker drops it).
   canBackground?: boolean;
+  // Whether it takes "mcp_auth" (sign in to an MCP server).
+  canMcpAuth?: boolean;
   // From an older build and idle: retired once its guess at the next
   // message is in, or this fires.
   retiring?: NodeJS.Timeout;

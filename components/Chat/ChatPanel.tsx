@@ -51,6 +51,7 @@ import { Background, type BackgroundValue } from "./background";
 import { FindBar } from "./FindBar";
 import { FIND_EVENT, isFindKey, useFind } from "./useFind";
 import { McpServers } from "./McpServers";
+import { ChatSessionId } from "./session";
 import { ArtifactCard } from "./Artifact";
 import { PlanCard } from "./PlanCard";
 import { ChatIdle } from "./idle";
@@ -677,9 +678,11 @@ export function ChatPanel({
                         </p>
                       )}
                   </div>
-                  <ChatIdle.Provider value={idle}>
-                    <TimelineRows blocks={blocks} actions={actions} />
-                  </ChatIdle.Provider>
+                  <ChatSessionId.Provider value={sessionId}>
+                    <ChatIdle.Provider value={idle}>
+                      <TimelineRows blocks={blocks} actions={actions} />
+                    </ChatIdle.Provider>
+                  </ChatSessionId.Provider>
                   {pending.map((p) => (
                     <div
                       key={p.id}

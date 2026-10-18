@@ -298,3 +298,8 @@
 - Cap the shared `~/.agent-os/simulators/{ccache,derived,modulecache}` caches by size (they are shared, not per task, so the reaper leaves them).
 - A per-project hook for test databases that don't carry `_aos_<hash>` (they can only clean up after themselves today).
 - Reap the user-level chrome-devtools wrapper's old named profiles (lives outside this repo).
+
+## MCP sign-in follow-ups
+
+- Sign in to an MCP server for a chat that runs on a linked machine (forward the start and the provider's return to that machine's AgentOS).
+- A "Sign out" next to a connected server (the CLI has `mcpClearAuth`).

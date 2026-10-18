@@ -146,10 +146,13 @@ export function originAllowed(
 
 const SAFE_METHODS = new Set(["GET", "HEAD", "OPTIONS"]);
 
-// LumifyHub's approve page sends the browser back here, so this one URL is
-// reached by a cross-site top-level navigation. It acts only on a `state`
-// this instance issued, which a foreign page can't know.
-const CROSS_SITE_NAVIGATIONS = ["/api/lumifyhub/callback"];
+// LumifyHub's approve page and an MCP server's sign-in send the browser back
+// here, so these URLs are reached by a cross-site top-level navigation. Each
+// acts only on a `state` this instance issued, which a foreign page can't know.
+const CROSS_SITE_NAVIGATIONS = [
+  "/api/lumifyhub/callback",
+  "/api/mcp-auth/callback",
+];
 
 function crossSiteNavigationAllowed(req: {
   method?: string;

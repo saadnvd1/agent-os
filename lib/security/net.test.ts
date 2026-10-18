@@ -118,6 +118,22 @@ describe("requests from web pages", () => {
     ).toBe(false);
   });
 
+  it("lets an MCP server's sign-in navigate back to its callback only", () => {
+    const back = {
+      host: "127.0.0.1:3011",
+      method: "GET",
+      fetchSite: "cross-site",
+      fetchMode: "navigate",
+      url: "/api/mcp-auth/callback?code=c&state=s",
+    };
+    expect(requestAllowed(back, policy)).toBe(true);
+    expect(requestAllowed({ ...back, fetchMode: "cors" }, policy)).toBe(false);
+    expect(requestAllowed({ ...back, method: "POST" }, policy)).toBe(false);
+    expect(
+      requestAllowed({ ...back, url: "/api/sessions/x/mcp-auth" }, policy)
+    ).toBe(false);
+  });
+
   it("guards the terminal WebSocket the same way", () => {
     expect(
       upgradeAllowed(

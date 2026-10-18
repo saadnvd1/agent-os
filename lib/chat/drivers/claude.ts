@@ -29,6 +29,7 @@ import { NO_ATTRIBUTION } from "../../agents/attribution";
 import { SUBAGENTS_ENV } from "../../models/subagent-env";
 import { parseSubagentEnv, subagentModelHook } from "../../models/subagents";
 import { callFromAssistant } from "../../usage/calls";
+import { canSignIn, claudeMcpAuth } from "./claude-mcp-auth";
 
 // Claude Code through the Agent SDK, signed in with the user's own Claude
 // Code login. Asks for approval through chat cards unless given full access,
@@ -71,6 +72,10 @@ function cleanError(text?: string): string | undefined {
   return line.length > 300 ? `${line.slice(0, 299)}…` : line;
 }
 
+export function cleanMcpError(text?: string): string | undefined {
+  return cleanError(text);
+}
+
 export function mcpView(s: McpServerStatus): McpServerView {
   return {
     name: s.name,
@@ -78,6 +83,7 @@ export function mcpView(s: McpServerStatus): McpServerView {
     scope: s.source ?? s.scope,
     version: s.serverInfo?.version,
     error: cleanError(s.error),
+    ...(canSignIn(s) && { signIn: true }),
     tools: (s.tools ?? []).map((t) => ({
       name: t.name,
       description: firstLine(t.description),
@@ -346,6 +352,7 @@ export const claudeDriver: ChatDriver = {
           },
         ]);
       },
+      mcpAuth: claudeMcpAuth(q, mcpView),
       async interrupt() {
         await q.interrupt();
       },

@@ -4,6 +4,9 @@ import { useState } from "react";
 import { ChevronRight } from "lucide-react";
 import type { ChatItem, McpServerView } from "@/lib/chat/events";
 import { cn } from "@/lib/utils";
+import { McpSignIn } from "./McpSignIn";
+import { useChatSessionId } from "./session";
+import { useMcpSignIn } from "@/data/chat/mcpAuth";
 
 type Status = McpServerView["status"];
 
@@ -25,38 +28,72 @@ function summary(servers: McpServerView[]): string {
   return parts.join(" · ");
 }
 
-function Server({ server }: { server: McpServerView }) {
+function Server({ server, itemId }: { server: McpServerView; itemId: string }) {
+  const sessionId = useChatSessionId();
   const [open, setOpen] = useState(false);
+  const [signingIn, setSigningIn] = useState(false);
+  const flow = useMcpSignIn(sessionId ?? "", itemId, server.name);
+  const needsAuth = server.status === "needs-auth";
+  const cantSignIn = needsAuth && !server.signIn;
   const status = STATUS[server.status];
   const tools = server.tools.length;
+  const expandable = !!tools || !!server.error || cantSignIn;
   return (
     <li>
-      <button
-        type="button"
-        onClick={() => setOpen(!open)}
-        disabled={!tools && !server.error}
-        aria-expanded={open}
-        className="hover:bg-foreground/[0.04] flex min-h-11 w-full items-center gap-2.5 rounded-lg px-2 text-left disabled:hover:bg-transparent md:min-h-9"
-      >
-        <span className={cn("h-2 w-2 shrink-0 rounded-full", status.dot)} />
-        <span className="min-w-0 flex-1 truncate font-mono text-xs">
-          {server.name}
-        </span>
-        <span className="text-muted-foreground shrink-0 text-xs">
-          {status.label}
-          {tools ? ` · ${tools} tool${tools === 1 ? "" : "s"}` : ""}
-        </span>
-        <ChevronRight
-          className={cn(
-            "text-muted-foreground h-3.5 w-3.5 shrink-0 transition-transform",
-            open && "rotate-90",
-            !tools && !server.error && "invisible"
-          )}
+      <div className="flex items-center gap-1">
+        <button
+          type="button"
+          onClick={() => setOpen(!open)}
+          disabled={!expandable}
+          aria-expanded={open}
+          className="hover:bg-foreground/[0.04] flex min-h-11 min-w-0 flex-1 items-center gap-2.5 rounded-lg px-2 text-left disabled:hover:bg-transparent md:min-h-9"
+        >
+          <span className={cn("h-2 w-2 shrink-0 rounded-full", status.dot)} />
+          <span className="min-w-0 flex-1 truncate font-mono text-xs">
+            {server.name}
+          </span>
+          <span className="text-muted-foreground shrink-0 text-xs">
+            {status.label}
+            {tools ? ` · ${tools} tool${tools === 1 ? "" : "s"}` : ""}
+          </span>
+          <ChevronRight
+            className={cn(
+              "text-muted-foreground h-3.5 w-3.5 shrink-0 transition-transform",
+              open && "rotate-90",
+              !expandable && "invisible"
+            )}
+          />
+        </button>
+        {server.signIn && sessionId && !signingIn && (
+          <button
+            type="button"
+            onClick={() => {
+              setSigningIn(true);
+              flow.start.mutate();
+            }}
+            aria-label={`Sign in to ${server.name}`}
+            className="bg-secondary text-secondary-foreground hairline h-11 shrink-0 rounded-lg px-3 text-xs font-medium md:h-8"
+          >
+            Sign in
+          </button>
+        )}
+      </div>
+      {signingIn && sessionId && needsAuth && (
+        <McpSignIn
+          flow={flow}
+          server={server.name}
+          onClose={() => setSigningIn(false)}
         />
-      </button>
+      )}
       {open && (
         <div className="text-muted-foreground space-y-1 pt-1 pr-2 pb-2 pl-6.5 text-xs">
           {server.scope && <p>From {server.scope} config</p>}
+          {cantSignIn && (
+            <p>
+              AgentOS can&apos;t sign in to this server. Sign in from a terminal
+              session with /mcp.
+            </p>
+          )}
           {server.error && (
             <p className="text-destructive whitespace-pre-wrap">
               {server.error}
@@ -98,7 +135,7 @@ export function McpServers({
       ) : (
         <ul>
           {item.servers.map((s) => (
-            <Server key={s.name} server={s} />
+            <Server key={s.name} server={s} itemId={item.id} />
           ))}
         </ul>
       )}

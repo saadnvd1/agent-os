@@ -104,7 +104,19 @@ export interface McpServerView {
   scope?: string;
   version?: string;
   error?: string;
+  // Needs sign-in and AgentOS can start it (the driver can, and the server
+  // speaks OAuth over HTTP). Decided by the server, never by its name.
+  signIn?: boolean;
   tools: { name: string; description?: string }[];
+}
+
+// What starting an MCP server's sign-in came back with: "callback" (open the
+// link; the provider returns to AgentOS), "paste" (the provider only returns
+// to the machine running the session: paste the address it ends on),
+// "external" (finish on claude.ai) or "done" (signed in without asking).
+export interface McpSignInStart {
+  mode: "callback" | "paste" | "external" | "done";
+  authUrl?: string;
 }
 
 // How full the conversation's context window is, as the agent last measured.
