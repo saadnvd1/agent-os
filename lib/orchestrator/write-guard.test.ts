@@ -3,7 +3,7 @@ import fs from "fs";
 import os from "os";
 import path from "path";
 import { beforeAll, describe, expect, it, vi } from "vitest";
-import { createWorkspace } from "@/lib/workspaces";
+import { createWorkspace as createWs, updateWorkspace } from "@/lib/workspaces";
 import { addProjectRepository, createProject } from "@/lib/projects";
 import {
   Approvals,
@@ -18,6 +18,12 @@ import {
   writeRefusal,
   type WriteBounds,
 } from "./write-guard";
+
+// These tests are the guards as they are with Orchestrator full access off.
+const createWorkspace = (name: string) => {
+  const w = createWs(name);
+  return updateWorkspace(w.id, { orchFullAccess: false })!;
+};
 
 // A home with a project repo, a task worktree, AgentOS's state with the
 // orchestrator's own folder, and somewhere ordinary to write.

@@ -1,5 +1,7 @@
 /**
- * Where an orchestrator may write. Anywhere on the machine except the
+ * Where an orchestrator may write (unless its workspace has Orchestrator full
+ * access on, the default: orchestratorToolRefusal then checks nothing but
+ * warns about stopping AgentOS; full-access.ts). Anywhere on the machine except the
  * workspace's project repositories and their task worktrees (code changes go
  * through tasks, so the merge gates keep meaning something), AgentOS's own
  * install and state (all of ~/.agent-os but its own folder), secret files,
@@ -18,13 +20,15 @@ import fs from "fs";
 import os from "os";
 import path from "path";
 import { db, type Session } from "../db";
+import type { ToolGuardResult } from "../chat/driver";
 import { git, GitError } from "../git-exec";
 import { isOrchestratorSecretPath as isSecretPath } from "../secret-paths";
 import { WORKTREES_DIR } from "../worktrees";
 import { orchestratorDir } from "./home";
 import { LIMITS_FILE } from "./usage";
 import { quickWorktrees } from "./quick-store";
-import { shellRefusal } from "./shell-guard";
+import { shellRefusal, shellWarning, type ShellContext } from "./shell-guard";
+import { orchestratorFullAccess } from "./full-access";
 import { liveCheckout } from "../dev-instance/liveServer";
 
 // The tools that write a file, and the argument naming it.
@@ -366,13 +370,30 @@ export async function orchestratorToolRefusal(
   session: Session,
   tool: string,
   input: Record<string, unknown>
-): Promise<string | null> {
-  if (tool === "Bash") return commandRefusal(session, input.command);
+): Promise<ToolGuardResult> {
+  const full = orchestratorFullAccess(session);
+  if (tool === "Bash")
+    return full
+      ? commandWarning(session, input.command)
+      : commandRefusal(session, input.command);
   const arg = WRITE_TOOLS[tool];
   if (!arg) return null;
   const filePath = input[arg];
+  if (full) return null;
   if (typeof filePath !== "string") return "No file path to check.";
   return writeRefusal(filePath, await orchestratorWriteBounds(session));
+}
+
+// With full access: only a warning for stopping AgentOS or its tmux.
+async function commandWarning(
+  session: Session,
+  command: unknown
+): Promise<ToolGuardResult> {
+  const warning = await shellWarning(
+    command,
+    shellContext(session, await orchestratorWriteBounds(session))
+  );
+  return warning ? { warning } : null;
 }
 
 // A shell command, against the deny list (shell-guard.ts), its writes held
@@ -381,9 +402,15 @@ async function commandRefusal(
   session: Session,
   command: unknown
 ): Promise<string | null> {
-  const bounds = await orchestratorWriteBounds(session);
+  return shellRefusal(
+    command,
+    shellContext(session, await orchestratorWriteBounds(session))
+  );
+}
+
+function shellContext(session: Session, bounds: WriteBounds): ShellContext {
   const dbFile = agentOsDbPath();
-  return shellRefusal(command, {
+  return {
     cwd: bounds.cwd,
     writeRefusal: (p) => writeRefusal(p, bounds, { shell: true }),
     isAgentOsState: async (p) => {
@@ -402,7 +429,7 @@ async function commandRefusal(
     },
     checkoutKind: (dir) => checkoutKind(session, dir),
     protectedPids,
-  });
+  };
 }
 
 // Whether a folder is a project checkout of the session's own workspace

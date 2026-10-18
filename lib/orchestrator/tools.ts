@@ -132,7 +132,7 @@ const DESCRIPTIONS: Record<ToolName, string> = {
   start_session:
     'Start an agent session in a project with a prompt, for work that isn\'t a PR task. It runs on the implementation model unless you give model (one "provider/model"; Opus only when the work needs deep reasoning), as a chat unless view is terminal (only for a job that needs a TUI). Refused while a brake holds.',
   quick_change:
-    "Make a small, low-risk edit yourself (a typo, a config value, a one-file fix): cuts a worktree and branch from the project's default branch and returns its path. You may write there (Write, Edit) and run git there as `git -C <path> ...` (status, diff, add, rm, mv, restore, reset, log, show); nowhere else in a project. Anything needing real work, tests or an investigation is a task (start_task).",
+    "Make a change yourself (without full access, a small low-risk one: a typo, a config value, a one-file fix): cuts a worktree and branch from the project's default branch and returns its path. Its dependencies install in the background (a note says when). You may write there (Write, Edit) and, with Orchestrator full access, run any git there; without it, only `git -C <path> ...` status, diff, add, rm, mv, restore, reset, log, show, and nowhere else in a project. Without full access, anything needing real work, tests or an investigation is a task (start_task).",
   quick_pr:
     "Commit everything in a quick change's worktree, push its branch (never the default branch) and open its PR, or push to the PR it already has. The PR goes through the same gates as a task's; with no task agent to run /do-code-review, its code-review gate is the independent review of its exact head, which starts now.",
   stack:
@@ -187,7 +187,7 @@ const DESCRIPTIONS: Record<ToolName, string> = {
   review:
     "Start an independent read-only review of a PR at its exact head commit, or read the stored verdict for that commit. Takes a task, or any open PR in a workspace repository by #N, owner/repo#N or URL, even one no task owns.",
   sign_off:
-    "Merge a PR, with its project's merge method, through the gates: CI green and settled, a passing review of that commit, nothing blocked, in scope, stack parent merged. Takes a task, or any open PR in a workspace repository by #N, owner/repo#N or URL (an external PR). Refuses with the failing gate, or a repository outside the workspace.",
+    "Merge a PR, with its project's merge method, through the gates: CI green and settled, a passing review of that commit, nothing blocked, in scope, stack parent merged. Takes a task, or any open PR in a workspace repository by #N, owner/repo#N or URL (an external PR). Refuses with the failing gate, or a repository outside the workspace. With direct true (and a reason) it merges now at the PR's head without the gates; only with Orchestrator full access, and not while paused or while the task waits on Saad.",
   arm: "Arm a task's PR to merge: AgentOS merges it, through the same gates as sign_off, the moment they all pass at its head, and tells you with one event. A gate failure comes as one event and it stays armed for the fix; one that goes to Saad disarms it. Survives restarts. Use it instead of calling sign_off until it passes.",
   disarm:
     "Disarm a task armed to merge: it merges only through sign_off again.",

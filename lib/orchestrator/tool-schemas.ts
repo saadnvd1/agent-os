@@ -427,7 +427,21 @@ export const TOOL_SHAPES = {
       .optional()
       .describe("Run it again even if this commit has a verdict"),
   },
-  sign_off: { task },
+  sign_off: {
+    task,
+    direct: z
+      .boolean()
+      .optional()
+      .describe(
+        "Merge now at the PR's head without the gates; needs Orchestrator full access and a reason"
+      ),
+    reason: z
+      .string()
+      .trim()
+      .max(300)
+      .optional()
+      .describe("Why the gates are skipped (required with direct)"),
+  },
   arm: { task },
   disarm: { task },
   ask_saad: {

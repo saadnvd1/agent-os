@@ -8,10 +8,11 @@ import { db, type Workspace } from "./db";
 
 type WorkspaceRow = Omit<
   Workspace,
-  "collapsed" | "wake_tasks_on_pr" | "orch_mcp_servers"
+  "collapsed" | "wake_tasks_on_pr" | "orch_mcp_servers" | "orch_full_access"
 > & {
   collapsed: number;
   wake_tasks_on_pr: number;
+  orch_full_access: number;
   orch_mcp_servers: string;
 };
 
@@ -38,6 +39,7 @@ const toWorkspace = (row: WorkspaceRow): Workspace => ({
   ...row,
   collapsed: !!row.collapsed,
   wake_tasks_on_pr: !!row.wake_tasks_on_pr,
+  orch_full_access: !!row.orch_full_access,
   orch_mcp_servers: parseServers(row.orch_mcp_servers),
 });
 
@@ -86,6 +88,7 @@ export function updateWorkspace(
     sortOrder?: number;
     maxRunningTasks?: number | null;
     wakeTasksOnPR?: boolean;
+    orchFullAccess?: boolean;
     mcpServers?: string[];
   }
 ): Workspace | null {
@@ -93,13 +96,14 @@ export function updateWorkspace(
   if (!existing) return null;
   const name = updates.name?.trim() || existing.name;
   db.prepare(
-    `UPDATE workspaces SET name = ?, collapsed = ?, sort_order = ?, max_running_tasks = ?, wake_tasks_on_pr = ?, orch_mcp_servers = ? WHERE id = ?`
+    `UPDATE workspaces SET name = ?, collapsed = ?, sort_order = ?, max_running_tasks = ?, wake_tasks_on_pr = ?, orch_full_access = ?, orch_mcp_servers = ? WHERE id = ?`
   ).run(
     name,
     (updates.collapsed ?? existing.collapsed) ? 1 : 0,
     updates.sortOrder ?? existing.sort_order,
     taskLimit(updates.maxRunningTasks, existing.max_running_tasks),
     (updates.wakeTasksOnPR ?? existing.wake_tasks_on_pr) ? 1 : 0,
+    (updates.orchFullAccess ?? existing.orch_full_access) ? 1 : 0,
     JSON.stringify(serverNames(updates.mcpServers, existing.orch_mcp_servers)),
     id
   );

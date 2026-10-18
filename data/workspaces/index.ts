@@ -66,6 +66,8 @@ export function useUpdateWorkspace() {
       maxRunningTasks?: number | null;
       // Message tasks about failing checks and reviews on their PRs.
       wakeTasksOnPR?: boolean;
+      // Its orchestrator runs without guards.
+      orchFullAccess?: boolean;
       // MCP servers its orchestrator may use, by name.
       mcpServers?: string[];
     }) =>
@@ -80,6 +82,7 @@ export function useUpdateWorkspace() {
       id,
       maxRunningTasks,
       wakeTasksOnPR,
+      orchFullAccess,
       mcpServers,
       ...updates
     }) => {
@@ -95,6 +98,9 @@ export function useUpdateWorkspace() {
                 }),
                 ...(wakeTasksOnPR !== undefined && {
                   wake_tasks_on_pr: wakeTasksOnPR,
+                }),
+                ...(orchFullAccess !== undefined && {
+                  orch_full_access: orchFullAccess,
                 }),
                 ...(mcpServers !== undefined && {
                   orch_mcp_servers: mcpServers,

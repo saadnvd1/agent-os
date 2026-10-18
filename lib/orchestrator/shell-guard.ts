@@ -617,3 +617,25 @@ export async function shellRefusal(
   }
   return null;
 }
+
+// The one thing full access still flags: a command that looks like it stops
+// or restarts AgentOS or its tmux, which ends every session it runs, this one
+// included. A warning, never a refusal; null for anything else.
+export async function shellWarning(
+  command: unknown,
+  ctx: ShellContext
+): Promise<string | null> {
+  if (typeof command !== "string") return null;
+  const parsed = parseShell(command);
+  if (typeof parsed === "string") return null;
+  for (const cmd of parsed) {
+    const invs = invocations(cmd);
+    if (typeof invs === "string") continue;
+    for (const inv of invs) {
+      const why = await stopRefusal(inv, ctx).catch(() => null);
+      if (why)
+        return `Warning: ${why.replace(/^Refused: /, "")} It will run anyway.`;
+    }
+  }
+  return null;
+}

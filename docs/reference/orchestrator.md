@@ -36,7 +36,8 @@ it may do on its own, and the lines that always come back to you as asks.
   approve, answer an ask or pass a gate. The route
   they call answers only the orchestrator's worker, by a per-orchestrator
   secret.
-- **Shell:** it runs anything without asking, so an orchestrator can read and
+- **Orchestrator full access** (Settings → Workspaces, on by default, per workspace): the orchestrator's shell and file writes are not checked, quick changes have no cap, and `sign_off` takes `direct` and a reason to merge at the PR's head without the gates. Only stopping AgentOS or its tmux gets a warning. Turn it off and everything below applies. Task agents, ordinary sessions and devices are never affected.
+- **Shell** (with full access off): it runs anything without asking, so an orchestrator can read and
   investigate on its own: `gh pr list`, `gh run view --log-failed`, `gh api`
   GETs, `curl`, `sqlite3 -readonly`, git in any repository, a skill's scripts,
   pipes and chains. Its chat worker refuses a deny list before a command runs,

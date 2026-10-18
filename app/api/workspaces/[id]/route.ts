@@ -12,11 +12,17 @@ export async function PATCH(request: NextRequest, { params }: RouteParams) {
     sortOrder,
     maxRunningTasks,
     wakeTasksOnPR,
+    orchFullAccess,
     mcpServers,
   } = await request.json();
   if (wakeTasksOnPR !== undefined && typeof wakeTasksOnPR !== "boolean")
     return NextResponse.json(
       { error: "wakeTasksOnPR is true or false" },
+      { status: 400 }
+    );
+  if (orchFullAccess !== undefined && typeof orchFullAccess !== "boolean")
+    return NextResponse.json(
+      { error: "orchFullAccess is true or false" },
       { status: 400 }
     );
   let workspace;
@@ -27,6 +33,7 @@ export async function PATCH(request: NextRequest, { params }: RouteParams) {
       sortOrder,
       maxRunningTasks,
       wakeTasksOnPR,
+      orchFullAccess,
       mcpServers,
     });
   } catch (error) {
@@ -36,7 +43,8 @@ export async function PATCH(request: NextRequest, { params }: RouteParams) {
   if (!workspace) {
     return NextResponse.json({ error: "Workspace not found" }, { status: 404 });
   }
-  if (mcpServers !== undefined) await applyMcpServers(id);
+  if (mcpServers !== undefined || orchFullAccess !== undefined)
+    await applyMcpServers(id);
   return NextResponse.json({ workspace });
 }
 

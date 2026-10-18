@@ -272,8 +272,10 @@ export async function runTool(
       const a = p(tool, raw);
       return reviewTarget(w, a.target, { fresh: a.fresh });
     }
-    case "sign_off":
-      return signOffTarget(w, p(tool, raw).task);
+    case "sign_off": {
+      const a = p(tool, raw);
+      return signOffTarget(w, a.task, { direct: a.direct, reason: a.reason });
+    }
     case "arm":
       return arm(w, p(tool, raw).task);
     case "disarm":
