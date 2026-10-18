@@ -144,6 +144,7 @@ function armed(): ArmedFact[] {
 }
 
 export function gatherFacts(now: number, c: HealthConfig): HealthFacts {
+  const recent = bootsSince(now - c.restartsWindowMinutes * MIN);
   return {
     now,
     machines: machines(now),
@@ -151,9 +152,8 @@ export function gatherFacts(now: number, c: HealthConfig): HealthFacts {
     bg: backgroundJobs(now, c),
     armed: armed(),
     ci: pendingCi(now),
-    boots: bootsSince(now - c.restartsWindowMinutes * MIN).map(
-      (b) => b.started_at
-    ),
+    boots: recent.filter((b) => !b.deploy).map((b) => b.started_at),
+    deploys: recent.filter((b) => b.deploy).map((b) => b.started_at),
     errors: errorRate(now),
   };
 }

@@ -2,7 +2,7 @@
  * How long CI takes, learned from what the orchestrator already sees. Each
  * diff it reads every open PR's verdict; the first time a head is pending is
  * when its run started (to within a diff), and the first time it isn't is
- * when it settled. No extra gh call.
+ * when it settled. No extra gh call. A row lives only while its PR is open.
  */
 
 import { db } from "../db";
@@ -19,6 +19,7 @@ export function observeCi(
   now: number
 ): void {
   db.transaction(() => {
+    const open = new Set<string>();
     for (const f of facts) {
       const pr = f.task?.pr;
       const project = f.project;
@@ -31,6 +32,7 @@ export function observeCi(
         ).run(project, pr.number);
         continue;
       }
+      open.add(`${project}#${pr.number}`);
       if (pr.checks === "pending") {
         // A newer head replaces the run still pending on an older one.
         db.prepare(
@@ -50,13 +52,32 @@ export function observeCi(
         ).run(now, project, pr.number, head);
       }
     }
+    // A PR that left the facts (done, archived) can't be seen merging.
+    const rows = db
+      .prepare(
+        `SELECT project_id, pr_number FROM ci_runs
+         WHERE workspace_id = ? AND settled_at IS NULL`
+      )
+      .all(workspaceId) as { project_id: string; pr_number: number }[];
+    for (const r of rows)
+      if (!open.has(`${r.project_id}#${r.pr_number}`))
+        db.prepare(
+          `DELETE FROM ci_runs WHERE project_id = ? AND pr_number = ?
+           AND settled_at IS NULL`
+        ).run(r.project_id, r.pr_number);
   })();
 }
 
 export function pendingCi(now: number): CiFact[] {
   const rows = db
     .prepare(
-      `SELECT * FROM ci_runs WHERE settled_at IS NULL AND pending_since >= ?`
+      `SELECT r.* FROM ci_runs r
+       WHERE r.settled_at IS NULL AND r.pending_since >= ?
+         AND NOT EXISTS (
+           SELECT 1 FROM session_rows s JOIN projects p ON p.id = s.project_id
+           WHERE p.name = r.project_id AND s.pr_number = r.pr_number
+             AND (s.pr_status IN ('merged', 'closed')
+               OR s.task_status = 'merged'))`
     )
     .all(now - LOST_AFTER_MS) as {
     project_id: string;

@@ -6,7 +6,7 @@
  */
 
 import { runClaude } from "../orchestrator/claude-cli";
-import { leaveHeartbeat } from "./boots";
+import { lastDeployRestart, leaveHeartbeat, markDeployBoot } from "./boots";
 import { healthConfig, type HealthConfig } from "./config";
 import { runDetectors } from "./detectors";
 import { gatherFacts, liveBackgroundJobs } from "./facts";
@@ -134,6 +134,11 @@ export function healthTick(
   if (now - last < EVERY_MS) return [];
   last = now;
   const c = deps.config();
+  try {
+    markDeployBoot(lastDeployRestart());
+  } catch (error) {
+    console.error("[health] deploy restarts:", error);
+  }
   const facts = deps.facts(now, c);
   const found = recordTrips(runDetectors(facts, c), TICK_CHECKS, now);
   for (const row of found.closed) deliverClosed(row, now, deps.route);

@@ -137,6 +137,10 @@ const UNFINISHED = [
 const outcome = (c: RollupEntry) =>
   (c.conclusion || c.state || c.status || "").toUpperCase();
 
+// A skipped or neutral run is settled and says nothing about a rerun, so it
+// never makes a check look unsettled.
+const counts = (c: RollupEntry) => !["SKIPPED", "NEUTRAL"].includes(outcome(c));
+
 // Job names repeat across workflows, and a status context can share a check
 // run's name, so a check is its kind, workflow and name together.
 const checkKey = (c: RollupEntry) => {
@@ -198,7 +202,7 @@ const groupByCheck = <T extends RollupEntry>(rollup: T[]) => {
 // rollup can't tell one attempt from the next.
 function shownAttempts(rollup: RollupEntry[]): Map<string, number | null> {
   const shown = new Map<string, number | null>();
-  for (const c of rollup) {
+  for (const c of rollup.filter(counts)) {
     const run = actionsRunOf(c);
     if (!run) continue;
     const key = `${run.repo}#${run.id}`;
@@ -226,7 +230,7 @@ export function rerunsToLookUp(
     string,
     { repo: string; id: string; attempt: string | null }
   >();
-  for (const group of groupByCheck(rollup).values()) {
+  for (const group of groupByCheck(rollup.filter(counts)).values()) {
     if (group.length < 2) continue;
     for (const c of group) {
       const run = actionsRunOf(c);
@@ -259,7 +263,7 @@ export function settleReruns<T extends RollupEntry>(
   const shown = shownAttempts(rollup);
   const drop = new Set<RollupEntry>();
   const unsettled: RollupEntry[] = [];
-  for (const group of groupByCheck(rollup).values()) {
+  for (const group of groupByCheck(rollup.filter(counts)).values()) {
     if (group.length < 2) continue;
     const located = group.map((c) => ({ c, run: actionsRunOf(c) }));
     // Not all GitHub Actions: nothing says which run is stale, so all count.
