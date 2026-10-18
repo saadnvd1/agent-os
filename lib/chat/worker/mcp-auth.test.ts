@@ -2,7 +2,12 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import type { McpAuth } from "../driver";
 import type { ChatItem, McpServerView } from "../events";
 import type { WorkerEvent } from "./protocol";
-import { handleMcpAuth, WATCH_EVERY_MS, WATCH_FOR_MS } from "./mcp-auth";
+import {
+  handleMcpAuth,
+  stopMcpWatches,
+  WATCH_EVERY_MS,
+  WATCH_FOR_MS,
+} from "./mcp-auth";
 
 const view = (status: McpServerView["status"]): McpServerView => ({
   name: "linear",
@@ -138,6 +143,14 @@ describe("handleMcpAuth", () => {
     const calls = auth.servers.mock.calls.length;
     await vi.advanceTimersByTimeAsync(WATCH_EVERY_MS * 5);
     expect(auth.servers.mock.calls.length).toBe(calls);
+  });
+
+  it("stops watching when the conversation closes", async () => {
+    auth.start.mockResolvedValue({ mode: "paste", authUrl: "https://a/b" });
+    await run({});
+    stopMcpWatches(auth);
+    await vi.advanceTimersByTimeAsync(WATCH_EVERY_MS * 3);
+    expect(auth.servers).not.toHaveBeenCalled();
   });
 
   it("reports an agent that can't sign in", async () => {

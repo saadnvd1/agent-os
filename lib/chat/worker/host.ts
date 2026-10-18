@@ -30,7 +30,7 @@ import {
   runningTools,
   settle,
 } from "../store";
-import { handleMcpAuth } from "./mcp-auth";
+import { handleMcpAuth, stopMcpWatches } from "./mcp-auth";
 import { claimNext, enqueue, listQueue, moveToFront } from "../queued";
 import { isHeld } from "../hold";
 import {
@@ -1059,6 +1059,7 @@ export class ChatHost {
     this.setCompacting(false);
     flushItems();
     this.onClose();
+    stopMcpWatches(this.conversation.mcpAuth);
     this.conversation.close();
   }
 }

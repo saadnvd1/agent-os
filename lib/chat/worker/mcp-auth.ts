@@ -31,6 +31,13 @@ function stopWatch(owner: object, server: string): void {
   watches.get(owner)?.delete(server);
 }
 
+// The conversation is closing: no watch outlives it.
+export function stopMcpWatches(auth: object | undefined): void {
+  if (!auth) return;
+  for (const timer of watches.get(auth)?.values() ?? []) clearInterval(timer);
+  watches.delete(auth);
+}
+
 // Rewrites the /mcp item with the servers as they are now.
 async function refresh(auth: McpAuth, host: Host, itemId: string) {
   const item = host.item(itemId);

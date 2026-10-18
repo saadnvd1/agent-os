@@ -2,11 +2,13 @@
  * Signing in to an MCP server from the browser. The agent starts the
  * sign-in and gives a link; the provider then sends the browser back to
  * AgentOS (/api/mcp-auth/callback), which hands that address to the agent.
- * What ties the return to the attempt is the OAuth `state`, kept here in
- * memory, used once, and dropped after PENDING_MS. The agent holds the
+ * What ties the return to the attempt is the OAuth `state`, kept in SQLite
+ * (the start and callback routes are separate bundles, so memory isn't
+ * shared), used once, and dropped after PENDING_MS. The agent holds the
  * tokens; nothing here stores or logs the address it was given.
  */
 
+import { db } from "../db";
 import { getItem } from "./store";
 import { mcpAuthWorker } from "./runner";
 import type { McpSignInStart } from "./events";
@@ -22,15 +24,53 @@ interface Pending {
   at: number;
 }
 
-const pending = new Map<string, Pending>();
+interface PendingRow {
+  session_id: string;
+  item_id: string;
+  server: string;
+  origin: string | null;
+  at: number;
+}
 
 export function resetMcpSignIns(): void {
-  pending.clear();
+  db.prepare(`DELETE FROM mcp_sign_ins`).run();
 }
 
 function sweep(now = Date.now()): void {
-  for (const [state, p] of pending)
-    if (now - p.at > PENDING_MS) pending.delete(state);
+  db.prepare(`DELETE FROM mcp_sign_ins WHERE at < ?`).run(now - PENDING_MS);
+}
+
+function savePending(state: string, p: Pending): void {
+  db.prepare(
+    `DELETE FROM mcp_sign_ins WHERE session_id = ? AND server = ?`
+  ).run(p.sessionId, p.server);
+  db.prepare(
+    `INSERT OR REPLACE INTO mcp_sign_ins (state, session_id, item_id, server, origin, at)
+     VALUES (?, ?, ?, ?, ?, ?)`
+  ).run(state, p.sessionId, p.itemId, p.server, p.origin, p.at);
+}
+
+function peekPending(state: string): Pending | undefined {
+  const r = db
+    .prepare(`SELECT * FROM mcp_sign_ins WHERE state = ?`)
+    .get(state) as PendingRow | undefined;
+  return (
+    r && {
+      sessionId: r.session_id,
+      itemId: r.item_id,
+      server: r.server,
+      origin: r.origin,
+      at: r.at,
+    }
+  );
+}
+
+// Single use: only the caller whose delete changed a row may go on.
+function takePending(state: string): boolean {
+  return (
+    db.prepare(`DELETE FROM mcp_sign_ins WHERE state = ?`).run(state).changes >
+    0
+  );
 }
 
 // `http(s)://host[:port]`, nothing else: the browser's own address for
@@ -74,11 +114,8 @@ export async function startMcpSignIn(
   if (error || !start) throw new Error(error ?? "Sign-in didn't start");
   sweep();
   const { state, ...result } = start;
-  for (const [s, p] of pending)
-    if (p.sessionId === sessionId && p.server === input.server)
-      pending.delete(s);
   if (state)
-    pending.set(state, {
+    savePending(state, {
       sessionId,
       itemId: input.itemId,
       server: input.server,
@@ -101,7 +138,7 @@ export async function finishMcpSignIn(
   } catch {
     throw new Error("That isn't a web address");
   }
-  const p = state ? pending.get(state) : undefined;
+  const p = state ? peekPending(state) : undefined;
   if (!state || !p)
     throw new Error(
       "That sign-in expired or was already used. Press Sign in again."
@@ -111,7 +148,10 @@ export async function finishMcpSignIn(
     (expect.sessionId !== p.sessionId || expect.server !== p.server)
   )
     throw new Error("That address belongs to a different sign-in");
-  pending.delete(state);
+  if (!takePending(state))
+    throw new Error(
+      "That sign-in expired or was already used. Press Sign in again."
+    );
   const { error } = await mcpAuthWorker(p.sessionId).mcpAuth({
     action: "submit",
     server: p.server,
@@ -131,7 +171,7 @@ export async function finishMcpSignInFromRedirect(
 ): Promise<{ server: string }> {
   sweep();
   const state = new URLSearchParams(search).get("state");
-  const origin = state ? pending.get(state)?.origin : null;
+  const origin = state ? peekPending(state)?.origin : null;
   if (!origin)
     throw new Error(
       "That sign-in expired or was already used. Press Sign in again."

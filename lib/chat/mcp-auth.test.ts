@@ -169,6 +169,21 @@ describe("finishMcpSignInFromRedirect", () => {
   });
 });
 
+describe("pending sign-ins across bundles", () => {
+  it("a freshly imported module finishes what another one started", async () => {
+    await start();
+    vi.resetModules();
+    const other = await import("./mcp-auth");
+    mocks.mcpAuth.mockResolvedValue({});
+    await expect(
+      other.finishMcpSignInFromRedirect("?code=c&state=s1")
+    ).resolves.toEqual({ server: "linear" });
+    await expect(
+      other.finishMcpSignInFromRedirect("?code=c&state=s1")
+    ).rejects.toThrow(/expired/);
+  });
+});
+
 describe("reconnectMcpServer", () => {
   it("asks the agent to reconnect that server", async () => {
     mocks.mcpAuth.mockResolvedValue({});
