@@ -1,3 +1,4 @@
+import { sessionBaseEnv } from "../../agents/server-env";
 /**
  * The server's side of a chat worker: starts one in tmux when none is
  * running, connects to its socket, and passes commands and events along.
@@ -224,7 +225,7 @@ async function spawnWorker(sessionId: string): Promise<void> {
   if (await tmuxHas(name)) return;
   fs.mkdirSync(workerDir(), { recursive: true, mode: 0o700 });
   const env: Record<string, string | undefined> = {
-    ...process.env,
+    ...sessionBaseEnv(),
     DB_PATH: path.resolve(
       process.env.DB_PATH || path.join(process.cwd(), "agent-os.db")
     ),
