@@ -87,6 +87,7 @@ import {
 } from "./worker/client";
 import { buildId, isStaleWorker } from "../build";
 import type { WorkerEvent } from "./worker/protocol";
+import type { WorkerClient } from "./worker/client";
 import { DEMO_REFUSAL, demoMode } from "../security/demo";
 import { chatHold, chatRefusal } from "./hold";
 import { getHost } from "../hosts";
@@ -363,6 +364,7 @@ async function ensureLive(sessionId: string, spawn = true): Promise<Live> {
       canQueue: !!hello.caps?.includes("queue"),
       canFresh: !!hello.caps?.includes("fresh"),
       canBackground: !!hello.caps?.includes("background"),
+      canMcpAuth: !!hello.caps?.includes("mcp_auth"),
     };
     // From an older build and busy, or running background work: it goes at
     // its next turn boundary, by itself if it can. Messages meanwhile wait
@@ -930,6 +932,22 @@ export async function backgroundChatTask(
     ok: !!r.ok,
     ...(r.error && { error: r.error }),
   });
+}
+
+// The session's running worker, when it can sign in to MCP servers; why not
+// otherwise (a chat on another machine, an idle one, one from an older build).
+export function mcpAuthWorker(sessionId: string): WorkerClient {
+  checkChattable(getSession(sessionId));
+  const live = registry.live.get(sessionId);
+  if (!live || live.retiring)
+    throw new Error(
+      "This chat's agent isn't running. Send /mcp again to wake it, then sign in."
+    );
+  if (!live.canMcpAuth)
+    throw new Error(
+      "This chat's agent is from an older AgentOS build. Send it a message or reopen the chat, then try again."
+    );
+  return live.worker;
 }
 
 export function chatTaskOutput(

@@ -11,8 +11,25 @@ import type {
   ChatModel,
   DriverEvent,
   FileSuggestion,
+  McpServerView,
+  McpSignInStart,
   UndoPreview,
 } from "./events";
+
+// An agent's way of signing in to an MCP server that needs it, without
+// restarting the conversation. Tokens stay with the agent; the host only
+// sees the link to open and, later, the address the provider returned to.
+export interface McpAuth {
+  // `state` ties the provider's return to this attempt; it stays server-side.
+  start(
+    server: string,
+    redirectUri?: string
+  ): Promise<McpSignInStart & { state?: string }>;
+  // Hands over the address the provider returned the browser to.
+  submit(server: string, callbackUrl: string): Promise<void>;
+  reconnect(server: string): Promise<void>;
+  servers(): Promise<McpServerView[]>;
+}
 
 export interface ChatStartOptions {
   cwd: string;
@@ -88,6 +105,8 @@ export interface ChatConversation {
   backgroundTask?(toolUseId?: string): Promise<boolean>;
   // Puts files back as they were before a message (dryRun: only say what).
   undo(checkpoint: string, dryRun: boolean): Promise<UndoResult>;
+  // Signing in to an MCP server that needs it (Claude's).
+  mcpAuth?: McpAuth;
   close(): void;
   events: AsyncIterable<DriverEvent>;
 }

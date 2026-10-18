@@ -61,6 +61,15 @@ servers with their status and tools, without spending a turn. Commands that
 only make sense in a terminal, such as `/vim`, are left out, and say so if
 typed anyway.
 
+A server that "needs sign-in" has a **Sign in** button when it speaks OAuth
+over HTTP. Press it, then open the sign-in page it shows; the provider sends
+your browser back to AgentOS and the server reconnects in the same session,
+with its tools, from a phone or iPad as well as the Mac. A server that only
+accepts a sign-in returning to the machine running the session shows a field
+to paste the address of the page you land on; claude.ai connectors finish on
+claude.ai, then press **Check again**. The tokens stay with Claude Code. A chat
+that runs on another linked machine, or whose agent isn't running, says so.
+
 Type `@` for files and folders, matched the way Claude Code matches them
 (ripgrep over the folder until the agent is running), and pick one to insert
 `@path`. After each turn but the first, the agent's guess at your next message

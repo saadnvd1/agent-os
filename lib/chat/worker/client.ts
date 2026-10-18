@@ -12,7 +12,8 @@ import path from "path";
 import { promisify } from "util";
 import { endTmuxSession } from "../../tmux/end";
 import type { UndoResult } from "../driver";
-import type { FileSuggestion } from "../events";
+import type { FileSuggestion, McpSignInStart } from "../events";
+import type { McpAuthCommand } from "./mcp-auth";
 import {
   envPath,
   lineReader,
@@ -45,6 +46,11 @@ export class WorkerClient {
   private backgrounds = new Map<
     string,
     (r: { ok?: boolean; error?: string }) => void
+  >();
+
+  private mcpAuths = new Map<
+    string,
+    (r: { start?: McpSignInStart & { state?: string }; error?: string }) => void
   >();
 
   private constructor(
@@ -115,6 +121,11 @@ export class WorkerClient {
       this.backgrounds.delete(e.reqId);
       return;
     }
+    if (e.type === "mcp_auth_result") {
+      this.mcpAuths.get(e.reqId)?.({ start: e.start, error: e.error });
+      this.mcpAuths.delete(e.reqId);
+      return;
+    }
     if (e.type === "files_result") {
       this.files.get(e.reqId)?.(e.files ?? null);
       this.files.delete(e.reqId);
@@ -152,6 +163,29 @@ export class WorkerClient {
         resolve(r);
       });
       this.command({ type: "background_task", reqId, toolUseId });
+    });
+  }
+
+  // Signs in to an MCP server (start, finish or reconnect): what it came back
+  // with, or why not (an error, or no answer in time).
+  mcpAuth(
+    cmd: Omit<McpAuthCommand, "type" | "reqId">,
+    timeoutMs = 60_000
+  ): Promise<{
+    start?: McpSignInStart & { state?: string };
+    error?: string;
+  }> {
+    const reqId = randomUUID();
+    return new Promise((resolve) => {
+      const timer = setTimeout(() => {
+        this.mcpAuths.delete(reqId);
+        resolve({ error: "The agent didn't answer in time" });
+      }, timeoutMs);
+      this.mcpAuths.set(reqId, (r) => {
+        clearTimeout(timer);
+        resolve(r);
+      });
+      this.command({ type: "mcp_auth", reqId, ...cmd });
     });
   }
 
