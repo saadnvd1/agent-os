@@ -3,7 +3,7 @@ import { sessionBaseEnv, SERVER_ONLY_ENV } from "./server-env";
 import { agentEnv } from "./launch";
 
 describe("sessionBaseEnv", () => {
-  const parent: Record<string, string> = {
+  const parent = {
     NODE_ENV: "production",
     PORT: "3011",
     AGENTOS_SERVER: "live",
@@ -12,7 +12,7 @@ describe("sessionBaseEnv", () => {
     AGENTOS_PORT: "3011",
     AGENTOS_SESSION_ID: "s1",
     HOME: "/h",
-  };
+  } as unknown as NodeJS.ProcessEnv;
 
   it("drops every server-only variable and keeps the rest", () => {
     const env = sessionBaseEnv(parent);
