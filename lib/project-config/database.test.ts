@@ -3,6 +3,7 @@ import * as fs from "fs";
 import * as os from "os";
 import * as path from "path";
 import { db } from "../db";
+import { sessionTmpDir } from "../sessions/leftovers";
 import { createProject } from "../projects";
 import { seedSession } from "../orchestrator/testing";
 import type { PgRun } from "./database";
@@ -25,13 +26,19 @@ class FakePg {
     this.envs.push(env);
     if (!this.up)
       return { code: 2, out: "connection to server on socket failed" };
+    if (cmd === "psql" && args.includes("-c")) {
+      const q = args[args.indexOf("-c") + 1];
+      const asked = /datname = '(.+)'/.exec(q)?.[1];
+      if (asked !== undefined)
+        return { code: 0, out: this.holdConnection.has(asked) ? "1" : "0" };
+    }
     if (cmd === "psql" && args.includes("-c"))
       return {
         code: 0,
         out: [...this.dbs].map(([n, c]) => `${n}\t${c}`).join("\n"),
       };
     if (cmd === "createdb") {
-      const [, , name, comment] = args;
+      const [, , , name, comment] = args;
       if (this.dbs.has(name)) return { code: 1, out: "already exists" };
       this.dbs.set(name, comment ?? "");
       return { code: 0, out: "" };
@@ -104,6 +111,25 @@ beforeEach(() => {
   pg = new FakePg();
 });
 
+describe("a task's temp folder", () => {
+  it("is private, also when an earlier run left it open", () => {
+    const id = session();
+    db.prepare(`UPDATE sessions SET worktree_path = ? WHERE id = ?`).run(
+      "/tmp/some-worktree",
+      id
+    );
+    const dir = sessionTmpDir(id);
+    fs.mkdirSync(dir, { recursive: true, mode: 0o777 });
+    fs.chmodSync(dir, 0o777);
+    try {
+      expect(sessionProjectEnv(id).TMPDIR).toBe(dir);
+      expect(fs.statSync(dir).mode & 0o777).toBe(0o700);
+    } finally {
+      fs.rmSync(dir, { recursive: true, force: true });
+    }
+  });
+});
+
 describe("ensureSessionDatabase", () => {
   it("copies from through template0 and pg_dump, never createdb -T <from>", async () => {
     const id = session();
@@ -118,7 +144,7 @@ describe("ensureSessionDatabase", () => {
       "psql",
     ]);
     expect(pg.calls[1]).toEqual(
-      expect.arrayContaining(["-T", "template0", name])
+      expect.arrayContaining(["-T", "template0", "--", name])
     );
     expect(pg.calls[1][pg.calls[1].indexOf("-T") + 1]).toBe("template0");
     expect(pg.calls[3]).toEqual(
@@ -514,6 +540,19 @@ describe("dropSessionDatabase", () => {
     );
   });
 
+  it("leaves a derived database someone is connected to", async () => {
+    const id = session();
+    await ensureSessionDatabase(id, decl, pg.run);
+    const derived = `app_dev_test_aos_${databaseName("x", id).slice(-12)}`;
+    pg.dbs.set(derived, "");
+    pg.holdConnection.add(derived);
+    await dropSessionDatabase(id, pg.run);
+    expect(pg.dbs.has(derived)).toBe(true);
+    expect(
+      pg.calls.filter((c) => c[0] === "dropdb" && c.includes(derived))
+    ).toEqual([]);
+  });
+
   it("ends a straggler's connection with --force", async () => {
     const id = session();
     await ensureSessionDatabase(id, decl, pg.run);
@@ -530,8 +569,8 @@ describe("dropSessionDatabase", () => {
     pg.calls = [];
     await dropSessionDatabase(id, pg.run);
     expect(pg.calls.filter((c) => c[0] === "dropdb")).toEqual([
-      ["dropdb", "--if-exists", "--force", name],
-      ["dropdb", "--if-exists", name],
+      ["dropdb", "--if-exists", "--force", "--", name],
+      ["dropdb", "--if-exists", "--", name],
     ]);
     expect(pg.dbs.has(name)).toBe(false);
     expect(sessionDatabase(id)).toBeNull();

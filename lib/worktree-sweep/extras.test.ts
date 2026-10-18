@@ -17,6 +17,13 @@ describe("measuring a whole root", () => {
     expect(size).toHaveBeenCalledTimes(3);
   });
 
+  it("doesn't keep a 0, which is what a failed du reports", async () => {
+    const size = vi.fn(async () => 0);
+    await cachedRootSize("/r", size, false, 0);
+    await cachedRootSize("/r", size, false, 1);
+    expect(size).toHaveBeenCalledTimes(2);
+  });
+
   it("keeps each root's own number", async () => {
     const size = async (dir: string) => dir.length;
     expect(await cachedRootSize("/a", size, false, 0)).toBe(2);

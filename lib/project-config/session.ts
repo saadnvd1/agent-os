@@ -46,7 +46,9 @@ function taskTmpEnv(sessionId: string): Record<string, string> {
     .get(sessionId) as { worktree_path: string | null } | undefined;
   if (!row?.worktree_path) return {};
   const dir = sessionTmpDir(sessionId);
-  fs.mkdirSync(dir, { recursive: true });
+  fs.mkdirSync(dir, { recursive: true, mode: 0o700 });
+  // A folder left by an earlier run keeps its old mode otherwise.
+  fs.chmodSync(dir, 0o700);
   return { TMPDIR: dir };
 }
 

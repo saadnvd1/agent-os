@@ -215,7 +215,7 @@ export async function dropTaskDatabase(
   if (!taskHashOf(c.path) || froms.has(c.path)) return false;
   const { code } = await run(
     "dropdb",
-    ["--if-exists", c.path],
+    ["--if-exists", "--", c.path],
     pgEnv(c.server ?? {})
   );
   return code === 0;

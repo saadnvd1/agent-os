@@ -178,7 +178,7 @@ describe("dropping", () => {
       run
     );
     expect(ok).toBe(true);
-    expect(dropped).toEqual([["--if-exists", `app_aos_${dead}`]]);
+    expect(dropped).toEqual([["--if-exists", "--", `app_aos_${dead}`]]);
   });
 
   it("refuses a name without the token or a declared source", async () => {

@@ -5,10 +5,11 @@ import { NextRequest } from "next/server";
 const { GET, PUT } = await import("./route");
 const { createProject } = await import("@/lib/projects");
 
-const put = (body: unknown) =>
+const put = (body: unknown, trust: string | null = "loopback") =>
   PUT(
     new NextRequest("http://localhost/api/worktree-sweep", {
       method: "PUT",
+      headers: trust ? { "x-agentos-trust": trust } : {},
       body: JSON.stringify(body),
     })
   );
@@ -36,6 +37,15 @@ describe("/api/worktree-sweep", () => {
     expect((await (await GET()).json()).armed).toBe(true);
     expect((await (await put({ armed: false })).json()).armed).toBe(false);
     expect((await put({ armed: "yes" })).status).toBe(400);
+  });
+
+  it("turns the full clean-up on only from this machine or the tailnet, off from anywhere", async () => {
+    expect((await put({ armed: true }, null)).status).toBe(403);
+    expect((await put({ armed: true }, "device")).status).toBe(403);
+    expect((await (await GET()).json()).armed).toBe(false);
+    expect((await put({ armed: true }, "tailnet")).status).toBe(200);
+    expect((await put({ armed: false }, null)).status).toBe(200);
+    expect((await (await GET()).json()).armed).toBe(false);
   });
 
   it("refuses a number that isn't a whole 0-365", async () => {

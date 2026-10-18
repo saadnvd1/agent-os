@@ -6,6 +6,7 @@ import {
   setProjectSweepDays,
   sweepDays,
 } from "@/lib/worktree-sweep/settings";
+import { requireLocalTrust } from "@/lib/security/route-guard";
 import { sweepState } from "@/lib/worktree-sweep/state";
 
 const body = z.union([
@@ -32,6 +33,13 @@ export async function PUT(request: NextRequest) {
       { status: 400 }
     );
   if ("armed" in got.data) {
+    // Turning the removal on is a person's call, made on this machine or
+    // over Tailscale: a stolen device token must not be able to. Turning it
+    // off stays on the ordinary gate.
+    if (got.data.armed) {
+      const refused = requireLocalTrust(request);
+      if (refused) return refused;
+    }
     setReaperArmed(got.data.armed);
     return NextResponse.json(sweepState());
   }

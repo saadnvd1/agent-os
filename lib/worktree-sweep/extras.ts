@@ -62,7 +62,8 @@ export async function cachedRootSize(
   const hit = rootSizes.get(dir);
   if (hit && !fresh && now - hit.at < ROOT_SIZE_TTL_MS) return hit.bytes;
   const bytes = await size(dir);
-  rootSizes.set(dir, { at: now, bytes });
+  // 0 is what a failed or timed-out du reports: try again next time.
+  if (bytes > 0) rootSizes.set(dir, { at: now, bytes });
   return bytes;
 }
 

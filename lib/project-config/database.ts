@@ -174,7 +174,7 @@ async function copy(
   // recognised and remade rather than left or reused half-filled.
   const created = await run(
     "createdb",
-    ["-T", "template0", target, PENDING(sessionId)],
+    ["-T", "template0", "--", target, PENDING(sessionId)],
     env
   );
   if (created.code !== 0)
@@ -184,7 +184,7 @@ async function copy(
   try {
     let step = await run(
       "pg_dump",
-      ["--no-owner", "--no-privileges", "-f", dump, from],
+      ["--no-owner", "--no-privileges", "-f", dump, "--", from],
       env
     );
     if (step.code === 0) {
@@ -200,7 +200,7 @@ async function copy(
       );
     }
     if (step.code !== 0) {
-      await run("dropdb", ["--if-exists", target], env);
+      await run("dropdb", ["--if-exists", "--", target], env);
       return `could not copy ${from} into ${target} (${oneLine(step.out, 300)}); ${target} was dropped again`;
     }
     return null;
@@ -252,7 +252,7 @@ async function makeDatabase(
     // An interrupted copy of ours: made again from the start.
     if (!record({ ...state, name: target, pending: true }))
       return { ...state, error: ENDED };
-    const dropped = await run("dropdb", ["--if-exists", target], env);
+    const dropped = await run("dropdb", ["--if-exists", "--", target], env);
     if (dropped.code !== 0)
       return {
         ...state,
@@ -420,9 +420,13 @@ async function dropDatabase(
   // The session is over: a dev server left running in its worktree and
   // still connected is a straggler, ended by --force (Postgres 13+; a plain
   // drop for an older server).
-  let dropped = await run("dropdb", ["--if-exists", "--force", name], env);
+  let dropped = await run(
+    "dropdb",
+    ["--if-exists", "--force", "--", name],
+    env
+  );
   if (dropped.code !== 0)
-    dropped = await run("dropdb", ["--if-exists", name], env);
+    dropped = await run("dropdb", ["--if-exists", "--", name], env);
   if (dropped.code === 0) {
     await dropDerived(sessionId, state, listed, run, env);
     forget();
@@ -442,7 +446,25 @@ async function dropDerived(
   for (const other of listed.keys()) {
     if (other === state.from || other === state.name) continue;
     if (taskHashOf(other) !== hash) continue;
-    const done = await run("dropdb", ["--if-exists", "--force", other], env);
+    // A plain drop, and not while anyone is connected: it is another
+    // task's or a person's session if the token matches by accident.
+    const busy = await run(
+      "psql",
+      [
+        "-X",
+        "-d",
+        "postgres",
+        "-tAq",
+        "-c",
+        `select count(*) from pg_stat_activity where datname = ${quoteLiteral(other)}`,
+      ],
+      env
+    );
+    if (busy.code !== 0 || Number(busy.out.trim()) > 0) {
+      console.warn(`[database] ${other} left: connected or unreadable`);
+      continue;
+    }
+    const done = await run("dropdb", ["--if-exists", "--", other], env);
     if (done.code !== 0)
       console.warn(`[database] ${other} left: ${oneLine(done.out)}`);
   }

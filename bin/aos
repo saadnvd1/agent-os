@@ -803,6 +803,10 @@ async function main() {
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify(body),
         });
+      if (flags.has("--arm") && process.env.AGENTOS_SESSION_ID)
+        fail(
+          "a person turns the full clean-up on: Health, Clean-up, Turn on (or aos sweep --arm in their own terminal)"
+        );
       if (flags.has("--arm") || flags.has("--disarm")) {
         const state = await put({ armed: flags.has("--arm") });
         console.log(`full clean-up is ${state.armed ? "on" : "off"}`);

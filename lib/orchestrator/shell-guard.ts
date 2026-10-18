@@ -229,6 +229,8 @@ function aosRefusal(args: string[]): string | null {
     resurrect: T.resurrect,
     stop: T.stop,
   };
+  if (sub === "sweep" && args.includes("--arm"))
+    return "Refused: `aos sweep --arm` turns on removing files and databases, which a person decides: Health, Clean-up, Turn on. `--dry-run` and `--disarm` are fine.";
   if (sub && tool[sub])
     return `Refused: \`aos ${sub}\` isn't for you; use ${tool[sub]}, which is scoped to this workspace and held by Pause.`;
   return null;
