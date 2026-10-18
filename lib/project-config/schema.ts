@@ -67,6 +67,27 @@ const browse = z.strictObject({
   login: z.string().min(1).optional(),
   map: projectPath.optional(),
   port: envName.optional(),
+  // Screen sizes a UI change is checked at, "WIDTHxHEIGHT".
+  viewports: z
+    .array(
+      z
+        .string()
+        .regex(/^\d{3,4}x\d{3,4}$/, "must be WIDTHxHEIGHT, like 390x844")
+    )
+    .min(1)
+    .max(4)
+    .optional(),
+  // A short page name to path map, for the pages worth knowing by heart.
+  nav: z
+    .record(z.string().min(1).max(40), z.string().min(1).max(200))
+    .refine(
+      (n) => Object.keys(n).length <= 15,
+      "at most 15 pages; use map for more"
+    )
+    .optional(),
+  // Force the browser-check section of a task's brief on or off; otherwise
+  // the project's files decide (lib/tasks/ui-brief.ts).
+  verify: z.boolean().optional(),
 });
 
 // An iOS simulator tasks may drive on a Mac (lib/simulator). `start` runs in

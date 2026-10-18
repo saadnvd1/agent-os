@@ -67,3 +67,33 @@ describe("the checks line", () => {
     expect(brief).not.toMatch(/CI runs the full suite/);
   });
 });
+
+describe("the UI check section", () => {
+  const base = { branch: "feature/x", baseBranch: "main" };
+
+  it("is absent unless the project has a UI", () => {
+    expect(buildTaskBrief(base)).not.toContain("Checking UI changes");
+    expect(buildTaskBrief({ ...base, ui: null })).not.toContain(
+      "chrome-devtools"
+    );
+  });
+
+  it("is added for a web project, after the standing rules", () => {
+    const brief = buildTaskBrief({ ...base, ui: "web" });
+    expect(brief).toContain("## Checking UI changes");
+    expect(brief).toContain("**Browser check**");
+    expect(brief.indexOf("Checking UI changes")).toBeGreaterThan(
+      brief.indexOf("BLOCKED:")
+    );
+  });
+
+  it("uses the project's viewports", () => {
+    const brief = buildTaskBrief({
+      ...base,
+      ui: "web",
+      browse: { viewports: ["1024x768"] },
+    });
+    expect(brief).toContain("1024x768");
+    expect(brief).not.toContain("390x844");
+  });
+});

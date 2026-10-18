@@ -10,6 +10,7 @@
  * does carry is held to the same rules as a task's.
  */
 
+import { hasUiEvidence } from "../tasks/ui-change";
 import { MERGED_AS, mergePolicy } from "../tasks/merge-policy";
 import { mergePR } from "../tasks/merge-pr";
 import { attributionIn, codeReviewGate } from "../tasks/code-review";
@@ -171,7 +172,11 @@ export async function reviewExternal(
       goal: `${ext.title}\n\n${ext.body}`.slice(0, GOAL_CAP),
       repo: ext.repo,
       refs: refsOf(ext),
-      pr: { number: ext.number, url: ext.url },
+      pr: {
+        number: ext.number,
+        url: ext.url,
+        uiEvidence: hasUiEvidence(ext.body),
+      },
     },
     ext.pr.head,
     opts

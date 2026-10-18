@@ -23,7 +23,7 @@ import { resolveModelForAgent } from "../model-catalog";
 import { providerFor } from "../models/resolve";
 import { preparePlanDir, PLAN_FILE } from "../models/plan-step";
 import { carryTaskState } from "./move-carry";
-import { buildTaskBrief, declaredTest } from "./brief";
+import { buildTaskBrief, briefFacts } from "./brief";
 import { expandHome } from "./session";
 import { ensureProject } from "./project-ref";
 import { checkoutBranchWorktree } from "./branch-worktree";
@@ -141,7 +141,7 @@ async function arrive(
   const brief = buildTaskBrief({
     branch: bundle.branch,
     baseBranch,
-    test: declaredTest(worktreePath),
+    ...briefFacts(worktreePath),
   });
   // Checked and written with no await between, so two can't both pass.
   db.transaction(() => {

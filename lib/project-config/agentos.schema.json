@@ -142,6 +142,31 @@
         "port": {
           "type": "string",
           "pattern": "^[A-Za-z_][A-Za-z0-9_]*$"
+        },
+        "viewports": {
+          "minItems": 1,
+          "maxItems": 4,
+          "type": "array",
+          "items": {
+            "type": "string",
+            "pattern": "^\\d{3,4}x\\d{3,4}$"
+          }
+        },
+        "nav": {
+          "type": "object",
+          "propertyNames": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 40
+          },
+          "additionalProperties": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 200
+          }
+        },
+        "verify": {
+          "type": "boolean"
         }
       },
       "additionalProperties": false

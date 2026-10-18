@@ -27,6 +27,9 @@ export interface TaskPR {
   attribution?: AttributionKind | null;
   // The body's "Scope change" note (tasks/scope-change.ts), when it has one.
   scopeChange?: string | null;
+  // Whether the body shows a browser or simulator check (tasks/ui-change.ts);
+  // undefined when the body wasn't read.
+  uiEvidence?: boolean;
   // GitHub's word on merging it into its base: CONFLICTING once the base
   // moved under it (UNKNOWN while GitHub works it out).
   mergeable?: "MERGEABLE" | "CONFLICTING" | "UNKNOWN";

@@ -1,4 +1,5 @@
-import { loadProjectConfig } from "../project-config";
+import { loadProjectConfig, type ProjectConfig } from "../project-config";
+import { uiKindOf, uiVerifyBrief, type UiKind } from "./ui-brief";
 
 // A task stacked on another task's unmerged branch.
 export interface StackedOn {
@@ -21,9 +22,18 @@ function stackedLines(baseBranch: string, stack: StackedOn): string {
 - Never merge or rebase onto the default branch yourself. When the parent merges, AgentOS rebases your branch and retargets your PR, then tells you; re-run your checks when it does. AgentOS reviews your PR itself; a review of your head still counts for the head its restack left, and a push after that gets a new one.${also}`;
 }
 
-// The project's declared test command, read from the checkout the task runs in.
-export function declaredTest(cwd: string): string | undefined {
-  return loadProjectConfig(cwd).config.test || undefined;
+// What a brief needs from the checkout's config, from one read.
+export function briefFacts(cwd: string): {
+  test?: string;
+  ui: UiKind | null;
+  browse: ProjectConfig["browse"];
+} {
+  const { config } = loadProjectConfig(cwd);
+  return {
+    test: config.test || undefined,
+    ui: uiKindOf(cwd, config),
+    browse: config.browse,
+  };
 }
 
 function checksLine(test?: string): string {
@@ -40,8 +50,11 @@ export function buildTaskBrief(opts: {
   stack?: StackedOn;
   // The project's `test` from agentos.json, when it declares one.
   test?: string;
+  // Whether the project has a UI to check, and how it is browsed.
+  ui?: UiKind | null;
+  browse?: ProjectConfig["browse"];
 }): string {
-  return `You are running as an AgentOS background task, alone, in an isolated git worktree.
+  const base = `You are running as an AgentOS background task, alone, in an isolated git worktree.
 
 - Branch: ${opts.branch} (based on ${opts.baseBranch}). Stay in this directory and on this branch.
 - Do the task fully. ${checksLine(opts.test)}
@@ -51,4 +64,6 @@ export function buildTaskBrief(opts: {
 - Write scratch files (PR bodies, review notes, logs, test output) outside the worktree, in your scratchpad or \$TMPDIR. Anything uncommitted left in the worktree keeps it from being removed when the task is done.
 - Do not add any AI or assistant attribution to commits or the pull request.
 - If you are blocked or need a decision only a human can make, print one line starting with "BLOCKED:" that says what you need, then stop and wait.`;
+  const ui = uiVerifyBrief(opts.ui ?? null, opts.browse);
+  return ui ? `${base}\n\n${ui}` : base;
 }
