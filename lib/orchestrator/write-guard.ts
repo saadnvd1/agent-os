@@ -405,9 +405,13 @@ async function commandRefusal(
 }
 
 // Whether a folder is a project checkout of the session's own workspace
-// (where it may fast-forward), the one AgentOS's live server and autodeploy
-// run from (never), or neither.
-async function checkoutKind(
+// (where it may update and move the branch), a checkout AgentOS's live
+// server or autodeploy runs from (never), or neither. The live ones are the
+// server's folder, the one live-server.json recorded (known even while the
+// server restarts), and any main checkout holding scripts/autodeploy, since
+// that script deploys the folder it sits in (a task worktree has a .git
+// file, not a folder).
+export async function checkoutKind(
   session: Session,
   dir: string
 ): Promise<"own" | "live" | "other"> {
@@ -420,7 +424,7 @@ async function checkoutKind(
         .map((p) => physicalPath(p))
     );
   const live = await roots([process.cwd(), liveCheckout() ?? undefined]);
-  if (live.some((r) => within(real, r) || within(r, real))) return "live";
+  if (live.some((r) => within(real, r)) || deploysFrom(real)) return "live";
   if (!session.workspace_id) return "other";
   const own = db
     .prepare(
@@ -433,6 +437,21 @@ async function checkoutKind(
     .all(session.workspace_id, session.workspace_id) as { dir: string }[];
   const mine = await roots(own.map((p) => expandHome(p.dir)).filter(Boolean));
   return mine.some((r) => within(real, r)) ? "own" : "other";
+}
+
+function deploysFrom(real: string): boolean {
+  for (let at = real; ; at = path.dirname(at)) {
+    try {
+      if (
+        fs.statSync(path.join(at, "scripts", "autodeploy")).isFile() &&
+        fs.statSync(path.join(at, ".git")).isDirectory()
+      )
+        return true;
+    } catch {
+      // Not here; look higher.
+    }
+    if (path.dirname(at) === at) return false;
+  }
 }
 
 // AgentOS's server (whatever listens on its port), the tmux servers its

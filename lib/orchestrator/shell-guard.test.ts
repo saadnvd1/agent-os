@@ -166,16 +166,39 @@ describe("the orchestrator's shell", () => {
     ]);
   });
 
-  it("still refuses commits, edits and another task's worktree", async () => {
+  it("still refuses commits, clean, restore and edits in its own checkout", async () => {
     await expectRefused(
       [
         "git -C /work/repo commit -m x",
         "git -C /work/repo clean -fdx",
-        "git -C /work/repo pull --ff-only; echo x > /work/repo/a.txt",
-        "git -C /work/other pull --ff-only",
-        "git -C /work/other reset --hard",
+        "cd /work/repo/src && git restore README.md",
+        "git -C /work/repo stash",
       ],
-      /Refused/
+      /don't change project checkouts except to update them/
+    );
+    await expectRefused(
+      ["git -C /work/repo pull --ff-only; echo x > /work/repo/a.txt"],
+      /would write/
+    );
+  });
+
+  it("refuses updating a task worktree or the live checkout, however it is named", async () => {
+    await expectRefused(
+      [
+        "git -C /work/other reset --hard",
+        "git -C /work/other checkout main",
+        "git -C /work/other pull --ff-only",
+        "git -C /live reset --hard",
+        "cd /live && git checkout main",
+        "git --git-dir=/live/.git --work-tree=/work/repo reset --hard",
+        "git --git-dir /work/other/.git --work-tree /work/repo reset --hard",
+        "git --work-tree=/work/repo --git-dir=/live/.git checkout main",
+        "git -C /work/repo -C /live reset --hard",
+        "GIT_DIR=/live/.git git -C /work/repo reset --hard",
+        "env GIT_WORK_TREE=/live git -C /work/repo checkout main",
+        "cd /work/repo && GIT_DIR=/work/other/.git git reset --hard",
+      ],
+      /Refused: git/
     );
   });
 
