@@ -69,6 +69,18 @@ export async function cachedRootSize(
 
 export const forgetRootSizes = () => rootSizes.clear();
 
+// Removes a folder directly inside one of the roots, and nothing else.
+export async function dropFolderIn(
+  roots: string[],
+  folder: string
+): Promise<boolean> {
+  const target = path.resolve(folder);
+  if (!roots.some((r) => r && path.dirname(target) === path.resolve(r)))
+    return false;
+  await fs.promises.rm(target, { recursive: true, force: true });
+  return !fs.existsSync(target);
+}
+
 export async function defaultExtras(
   opts: { fresh?: boolean } = {}
 ): Promise<Extras> {
@@ -108,14 +120,10 @@ export async function defaultExtras(
       count: dirCount(SPARE_ROOT),
       bytes: await cachedRootSize(SPARE_ROOT, size, !!opts.fresh),
     },
-    drop: async (c) => {
-      if (c.kind === "database") return dropTaskDatabase(c, froms);
-      const target = path.resolve(c.path);
-      if (!roots.some((r) => r && path.dirname(target) === path.resolve(r)))
-        return false;
-      await fs.promises.rm(target, { recursive: true, force: true });
-      return !fs.existsSync(target);
-    },
+    drop: async (c) =>
+      c.kind === "database"
+        ? dropTaskDatabase(c, froms)
+        : dropFolderIn(roots, c.path),
   };
 }
 

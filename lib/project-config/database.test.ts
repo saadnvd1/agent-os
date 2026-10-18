@@ -617,3 +617,12 @@ describe("dropSessionDatabase", () => {
     expect(sessionDatabase(id)?.name).toBe(databaseName("app_dev", id));
   });
 });
+
+describe("the real Postgres tools", () => {
+  it("are never run under the test runner", async () => {
+    const { pgRun } = await import("./database");
+    await expect(pgRun("psql", ["-l"], process.env)).rejects.toThrow(
+      /Refusing/
+    );
+  });
+});

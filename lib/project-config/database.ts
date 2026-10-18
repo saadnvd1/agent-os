@@ -43,6 +43,12 @@ export type PgRun = (
 
 export const pgRun: PgRun = (cmd, args, env) =>
   new Promise((resolve) => {
+    // A test that reached the real server could list or drop the owner's
+    // databases: every test injects its own run.
+    if (process.env.VITEST)
+      throw new Error(
+        "Refusing to run the real Postgres tools under the test runner"
+      );
     execFile(
       cmd,
       args,
