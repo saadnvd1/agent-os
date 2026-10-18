@@ -1,5 +1,12 @@
 import { SSH_OPTIONS, loginShellCommand, shellQuote } from "./ssh";
 import { isValidTmuxName } from "./tmux-name";
+import { SERVER_ONLY_ENV } from "../agents/server-env";
+
+// For a shared tmux server that already holds them: attach is the one path
+// that cannot prefix the pane command.
+const UNSET_GLOBAL_ENV = SERVER_ONLY_ENV.map(
+  (k) => `set-environment -gu ${k} \\;`
+).join(" ");
 
 export interface AttachSpec {
   sessionName: string;
@@ -28,7 +35,7 @@ export function buildTmuxAttachCommand(spec: AttachSpec): string {
   }
   // Commands chained after an attaching command only run once the client
   // detaches, so options go first; start-server keeps a fresh server alive.
-  const prefix = "tmux start-server \\; set -g mouse on \\;";
+  const prefix = `tmux start-server \\; set -g mouse on \\; ${UNSET_GLOBAL_ENV}`;
   if (spec.attachOnly) {
     // Quoted: zsh expands a bare "=word" to a command path.
     return `${prefix} attach-session -t ${shellQuote(`=${spec.sessionName}`)}`;

@@ -1,3 +1,4 @@
+import { sessionBaseEnv } from "../../agents/server-env";
 import type { ChatConversation, ChatDriver } from "../driver";
 import type { ChatImage, DriverEvent } from "../events";
 import { InputQueue } from "../queue";
@@ -46,7 +47,7 @@ export const openCodeDriver: ChatDriver = {
   atRest: false,
 
   async discover({ cwd, env }) {
-    const server = new OpenCodeServer(cwd, { ...process.env, ...env });
+    const server = new OpenCodeServer(cwd, { ...sessionBaseEnv(), ...env });
     try {
       const [providers, commands] = await Promise.all([
         server.call<{ all: P[]; connected: string[] }>("GET", "/provider"),
@@ -79,7 +80,7 @@ export const openCodeDriver: ChatDriver = {
     const out = new InputQueue<DriverEvent>();
     const emit = (e: DriverEvent) => out.push(e);
     const server = new OpenCodeServer(options.cwd, {
-      ...process.env,
+      ...sessionBaseEnv(),
       ...options.env,
     });
     let sessionId: string | null = null;

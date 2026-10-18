@@ -1,3 +1,4 @@
+import { sessionBaseEnv } from "./agents/server-env";
 import { routedRun } from "./models/launch";
 import { execFile } from "child_process";
 import { git as runGit } from "./git-exec";
@@ -163,7 +164,7 @@ async function claudePrint(cwd: string, prompt: string): Promise<string> {
       ["--print", "--model", routed.model],
       {
         cwd,
-        env: { ...process.env, ...routed.env },
+        env: { ...sessionBaseEnv(), ...routed.env },
         encoding: "utf-8",
         timeout: 30_000,
         killSignal: "SIGKILL",

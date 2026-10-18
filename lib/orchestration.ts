@@ -15,6 +15,7 @@ import { resolveModelForAgent } from "./model-catalog";
 import { type AgentType, getProvider } from "./providers";
 import { statusDetector } from "./status-detector";
 import { wrapWithBanner } from "./banner";
+import { UNSET_SERVER_ENV } from "./agents/server-env";
 import { runInBackground } from "./async-operations";
 import { tmux } from "./tmux/exec";
 import { endTmuxSession } from "./tmux/end";
@@ -168,7 +169,8 @@ export async function spawnWorker(
 
   // Create tmux session with the agent and banner
   const agentCmd = `${provider.command} ${flagsStr}`;
-  const newSessionCmd = wrapWithBanner(agentCmd, provider.preamble);
+  const newSessionCmd =
+    UNSET_SERVER_ENV + wrapWithBanner(agentCmd, provider.preamble);
   try {
     await tmux(["set", "-g", "mouse", "on"]).catch(() => {});
     // The last argument is the agent's command line, which tmux runs.

@@ -8,6 +8,7 @@ import { randomUUID } from "crypto";
 import { readFile } from "fs/promises";
 import { homedir } from "os";
 import { pasteText, tmux } from "@/lib/tmux/exec";
+import { sessionBaseEnv, UNSET_SERVER_ENV } from "@/lib/agents/server-env";
 
 // Get Claude session ID from tmux environment
 async function getClaudeSessionId(tmuxSession: string): Promise<string | null> {
@@ -135,7 +136,7 @@ async function generateSummary(conversation: string): Promise<string> {
   const routed = await routedRun("helper");
   return new Promise((resolve, reject) => {
     const claude = spawn("claude", ["-p", prompt, "--model", routed.model], {
-      env: { ...process.env, ...routed.env },
+      env: { ...sessionBaseEnv(), ...routed.env },
       stdio: ["pipe", "pipe", "pipe"],
     });
 
@@ -309,7 +310,7 @@ export async function POST(
 
       // Start new tmux session with Claude directly
       const isRoot = process.getuid?.() === 0;
-      const envPrefix = isRoot ? "IS_SANDBOX=1 " : "";
+      const envPrefix = UNSET_SERVER_ENV + (isRoot ? "IS_SANDBOX=1 " : "");
       const claudeCmd = effectiveAutoApprove(session.auto_approve)
         ? `${envPrefix}claude --dangerously-skip-permissions`
         : "claude";

@@ -1,3 +1,4 @@
+import { sessionBaseEnv } from "../../agents/server-env";
 import type { ChatConversation, ChatDriver, ChatStartOptions } from "../driver";
 import type { ChatImage, DriverEvent } from "../events";
 import { InputQueue } from "../queue";
@@ -45,7 +46,7 @@ export const piDriver: ChatDriver = {
   async discover({ cwd, env }) {
     const rpc = new PiRpc(
       ["--no-session", "--offline"],
-      { cwd, env: { ...process.env, ...env } },
+      { cwd, env: { ...sessionBaseEnv(), ...env } },
       { event: () => {}, ui: () => {}, exit: () => {} }
     );
     try {
@@ -82,7 +83,7 @@ export const piDriver: ChatDriver = {
       {
         cwd: options.cwd,
         env: {
-          ...process.env,
+          ...sessionBaseEnv(),
           ...options.env,
           AGENTOS_PI_ACCESS_FILE: access.file,
           PI_OFFLINE: "1",

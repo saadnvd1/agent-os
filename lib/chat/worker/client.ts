@@ -1,3 +1,4 @@
+import { UNSET_SERVER_ENV, sessionBaseEnv } from "../../agents/server-env";
 /**
  * The server's side of a chat worker: starts one in tmux when none is
  * running, connects to its socket, and passes commands and events along.
@@ -224,7 +225,7 @@ async function spawnWorker(sessionId: string): Promise<void> {
   if (await tmuxHas(name)) return;
   fs.mkdirSync(workerDir(), { recursive: true, mode: 0o700 });
   const env: Record<string, string | undefined> = {
-    ...process.env,
+    ...sessionBaseEnv(),
     DB_PATH: path.resolve(
       process.env.DB_PATH || path.join(process.cwd(), "agent-os.db")
     ),
@@ -233,18 +234,22 @@ async function spawnWorker(sessionId: string): Promise<void> {
   delete env.TMUX_PANE;
   fs.writeFileSync(envPath(sessionId), JSON.stringify(env), { mode: 0o600 });
   const entry = path.join(process.cwd(), "lib/chat/worker/main.ts");
-  await execFileAsync("tmux", [
-    "new-session",
-    "-d",
-    "-s",
-    name,
-    "-c",
-    process.cwd(),
-    // The worker finds its env file by DB_PATH, so it can't come from there.
-    "-e",
-    `DB_PATH=${env.DB_PATH}`,
-    `exec ${shellQuote(process.execPath)} --import tsx ${shellQuote(entry)} ${shellQuote(sessionId)} > ${shellQuote(path.join(workerDir(), `${sessionId}.log`))} 2>&1`,
-  ]);
+  await execFileAsync(
+    "tmux",
+    [
+      "new-session",
+      "-d",
+      "-s",
+      name,
+      "-c",
+      process.cwd(),
+      // The worker finds its env file by DB_PATH, so it can't come from there.
+      "-e",
+      `DB_PATH=${env.DB_PATH}`,
+      `${UNSET_SERVER_ENV}exec ${shellQuote(process.execPath)} --import tsx ${shellQuote(entry)} ${shellQuote(sessionId)} > ${shellQuote(path.join(workerDir(), `${sessionId}.log`))} 2>&1`,
+    ],
+    { env: sessionBaseEnv() }
+  );
 }
 
 const shellQuote = (s: string) => `'${s.replace(/'/g, `'\\''`)}'`;
