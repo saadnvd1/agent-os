@@ -8,6 +8,7 @@ import type { Session } from "@/lib/db";
 import type { TaskPR, TaskState } from "@/lib/tasks/state";
 import { recordPlaced } from "@/lib/worktree-placed";
 import { commitFile, git, makeRepo, WORKTREE_MARK } from "./testing";
+import { tempDir } from "@/lib/test-temp";
 
 // Real repositories; gh, tmux, chat workers and LumifyHub are faked.
 const prs = new Map<string, TaskPR>();
@@ -106,9 +107,7 @@ vi.mock("@/lib/project-config/database", async (importOriginal) => ({
 }));
 
 // Orchestrators' scratch folders go in a temporary home.
-vi.spyOn(os, "homedir").mockReturnValue(
-  fs.mkdtempSync(path.join(os.tmpdir(), "aos-done-home-"))
-);
+vi.spyOn(os, "homedir").mockReturnValue(tempDir("aos-done-home-"));
 
 const { db } = await import("@/lib/db");
 const { createProject } = await import("@/lib/projects");

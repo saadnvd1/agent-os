@@ -1,15 +1,9 @@
 import { spawnSync } from "node:child_process";
 import net from "node:net";
-import {
-  chmodSync,
-  existsSync,
-  mkdtempSync,
-  readFileSync,
-  writeFileSync,
-} from "node:fs";
-import { tmpdir } from "node:os";
+import { chmodSync, existsSync, readFileSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import { beforeEach, describe, expect, it } from "vitest";
+import { tempDir } from "@/lib/test-temp";
 
 const SCRIPT = join(process.cwd(), "scripts", "claude-status-hook.sh");
 const NOTE =
@@ -23,7 +17,7 @@ function fakeCurl(script: string) {
 }
 
 beforeEach(() => {
-  dir = mkdtempSync(join(tmpdir(), "load-hook-"));
+  dir = tempDir("load-hook-");
 });
 
 function run(

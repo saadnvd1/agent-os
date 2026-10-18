@@ -1,9 +1,9 @@
 import { execFileSync } from "child_process";
 import fs from "fs";
-import os from "os";
 import path from "path";
 import { randomUUID } from "crypto";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
+import { tempDir } from "@/lib/test-temp";
 
 // Real tmux, on a private socket in a temp dir: never the user's server.
 const hasTmux = (() => {
@@ -15,7 +15,7 @@ const hasTmux = (() => {
   }
 })();
 
-const dir = fs.mkdtempSync(path.join(os.tmpdir(), "aos-tmux-"));
+const dir = tempDir("aos-tmux-");
 const saved = { ...process.env };
 delete process.env.TMUX;
 delete process.env.TMUX_PANE;

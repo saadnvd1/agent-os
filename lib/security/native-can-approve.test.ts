@@ -1,5 +1,3 @@
-import fs from "fs";
-import os from "os";
 import path from "path";
 import type { IncomingMessage, ServerResponse } from "http";
 import Database from "better-sqlite3";
@@ -20,11 +18,10 @@ import {
   revokeDevice,
   setDeviceCanApprove,
 } from "./devices";
+import { tempDir } from "@/lib/test-temp";
 
 vi.mock("@/lib/notify", () => ({ notifyPhone: () => {} }));
-process.env.AGENTOS_AUDITS_DIR = fs.mkdtempSync(
-  path.join(os.tmpdir(), "native-approve-audits-")
-);
+process.env.AGENTOS_AUDITS_DIR = tempDir("native-approve-audits-");
 
 const APP_UA = "AgentOS/18 CFNetwork/3826.600.41.2.1 Darwin/24.6.0";
 const SAFARI_UA =
@@ -78,7 +75,7 @@ describe("Can approve at pairing", () => {
 
 describe("migration 83 (native_devices_can_approve)", () => {
   function oldDb() {
-    const dir = fs.mkdtempSync(path.join(os.tmpdir(), "native-approve-"));
+    const dir = tempDir("native-approve-");
     const db = new Database(path.join(dir, "old.db"));
     createSchema(db);
     runMigrations(db, 82);

@@ -18,8 +18,8 @@ import {
 import Database from "better-sqlite3";
 import { randomUUID } from "crypto";
 import fs from "fs/promises";
-import os from "os";
 import path from "path";
+import { tempDir } from "@/lib/test-temp";
 
 const calls = vi.hoisted(() => ({
   signOff: [] as { id: string; head?: string; base?: string }[],
@@ -224,7 +224,7 @@ beforeAll(async () => {
   saveHostLink(hostId, "http://box.test", "tok-mac");
   link = requireHostLink(hostId);
   other = { ...link, token: "tok-other" };
-  planDir = await fs.mkdtemp(path.join(os.tmpdir(), "contract-plan-"));
+  planDir = tempDir("contract-plan-");
   await fs.mkdir(path.dirname(path.join(planDir, PLAN_FILE)), {
     recursive: true,
   });

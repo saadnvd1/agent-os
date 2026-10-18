@@ -8,6 +8,7 @@ import {
   multiRootFileSuggestions,
   type MentionRoot,
 } from "./files";
+import { tempDir } from "@/lib/test-temp";
 
 const hasRg = (() => {
   try {
@@ -20,7 +21,7 @@ const hasRg = (() => {
 
 // A git repository holding these files.
 function repo(files: Record<string, string>): string {
-  const dir = fs.realpathSync(fs.mkdtempSync(path.join(os.tmpdir(), "multi-")));
+  const dir = fs.realpathSync(tempDir("multi-"));
   execFileSync("git", ["init", "-q"], { cwd: dir });
   for (const [name, text] of Object.entries(files)) {
     fs.mkdirSync(path.dirname(path.join(dir, name)), { recursive: true });

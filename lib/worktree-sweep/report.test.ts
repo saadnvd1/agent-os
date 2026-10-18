@@ -1,9 +1,8 @@
-import fs from "fs";
-import os from "os";
 import path from "path";
 import { describe, expect, it } from "vitest";
 import { renderDiskReport, writeDiskReport } from "./report";
 import type { SweepSummary } from "./types";
+import { tempDir } from "@/lib/test-temp";
 
 const summary = (): SweepSummary => ({
   removed: [
@@ -34,7 +33,7 @@ describe("disk report", () => {
   });
 
   it("a second report the same day gets a suffix, never overwrites", () => {
-    const dir = fs.mkdtempSync(path.join(os.tmpdir(), "aos-report-"));
+    const dir = tempDir("aos-report-");
     const at = new Date(2026, 9, 18, 12);
     const one = writeDiskReport(summary(), at, dir);
     const two = writeDiskReport(summary(), at, dir);

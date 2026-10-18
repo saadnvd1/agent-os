@@ -1,4 +1,4 @@
-import { mkdirSync, mkdtempSync, utimesSync, writeFileSync } from "node:fs";
+import { mkdirSync, utimesSync, writeFileSync } from "node:fs";
 import { existsSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { basename, dirname, join } from "node:path";
@@ -11,6 +11,7 @@ import {
   testTmpPrefixes,
   worktreeLeaks,
 } from "./vitest.tmp";
+import { tempDir } from "@/lib/test-temp";
 
 const old = (path: string) => {
   const t = new Date(Date.now() - 3 * 24 * 60 * 60 * 1000);
@@ -26,7 +27,7 @@ const entry = (dir: string, name: string, aged = false) => {
 
 describe("sweepStale", () => {
   it("removes old leftovers of the suite and nothing else", () => {
-    const dir = mkdtempSync(join(tmpdir(), "sweep-"));
+    const dir = tempDir("sweep-");
     const oldRun = entry(dir, `${RUN_PREFIX}abc`, true);
     const oldLink = entry(dir, "agentos-link-abc", true);
     const freshLink = entry(dir, "agentos-link-def");
@@ -43,7 +44,7 @@ describe("sweepStale", () => {
 
 describe("sweepStale limit", () => {
   it("stops after the limit and takes the rest next time", () => {
-    const dir = mkdtempSync(join(tmpdir(), "sweep-"));
+    const dir = tempDir("sweep-");
     for (const n of ["a", "b", "c"]) entry(dir, `aos-config-${n}`, true);
     expect(sweepStale(dir, { limit: 2 }).removed).toBe(2);
     expect(sweepStale(dir, { limit: 2 }).removed).toBe(1);
@@ -52,7 +53,7 @@ describe("sweepStale limit", () => {
 
 describe("leaks", () => {
   it("reports only new entries that match a prefix", () => {
-    const dir = mkdtempSync(join(tmpdir(), "leaks-"));
+    const dir = tempDir("leaks-");
     entry(dir, "aos-done-repo-1");
     const before = snapshot(dir, ["aos-done-repo-"]);
     entry(dir, "aos-done-repo-2");
@@ -88,7 +89,7 @@ describe("worktreeLeaks", () => {
   };
 
   it("flags a new worktree whose repository is in this run's temp root", () => {
-    const dir = mkdtempSync(join(tmpdir(), "aos-wl-"));
+    const dir = tempDir("aos-wl-");
     const root = "/var/folders/xx/T/aos-t-run";
     worktree(dir, "old-one", `${root}/f-1/repo/.git/worktrees/old-one`);
     worktree(dir, "repo-quick-a", `${root}/f-1/repo/.git/worktrees/a`);

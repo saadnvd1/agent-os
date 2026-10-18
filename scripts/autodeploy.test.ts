@@ -3,6 +3,7 @@ import * as fs from "fs";
 import * as os from "os";
 import * as path from "path";
 import { describe, expect, it } from "vitest";
+import { tempDir } from "@/lib/test-temp";
 
 // Runs the real scripts/autodeploy in a scratch clone with a stub redeploy
 // (a pull) and wait-quiet, against a scratch origin and HOME.
@@ -11,7 +12,7 @@ const sh = (cwd: string, ...args: string[]) =>
   execFileSync("git", args, { cwd, encoding: "utf-8" }).trim();
 
 function setup() {
-  const root = fs.mkdtempSync(path.join(os.tmpdir(), "aos-autodeploy-"));
+  const root = tempDir("aos-autodeploy-");
   const origin = path.join(root, "origin.git");
   const work = path.join(root, "work");
   const clone = path.join(root, "live");

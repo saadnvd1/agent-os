@@ -6,9 +6,10 @@ import path from "path";
 import type { AddressInfo } from "net";
 import { randomUUID } from "crypto";
 import { afterAll, beforeEach, describe, expect, it } from "vitest";
+import { tempDir } from "@/lib/test-temp";
 
 // A fake Connect that verifies each signed request against the machine's key.
-const dir = fs.mkdtempSync(path.join(os.tmpdir(), "agentos-share-route-"));
+const dir = tempDir("agentos-share-route-");
 const keys = crypto.generateKeyPairSync("ed25519");
 const publicPem = keys.publicKey
   .export({ type: "spki", format: "pem" })
@@ -90,9 +91,7 @@ await new Promise<void>((r) => server.listen(0, "127.0.0.1", r));
 process.env.AGENTOS_CONNECT_DIR = dir;
 process.env.CONNECT_API_URL = `http://127.0.0.1:${(server.address() as AddressInfo).port}`;
 process.env.AGENTOS_CONNECT_OPERATOR = "1";
-process.env.AGENTOS_ARTIFACTS_DIR = fs.mkdtempSync(
-  path.join(os.tmpdir(), "agentos-share-art-")
-);
+process.env.AGENTOS_ARTIFACTS_DIR = tempDir("agentos-share-art-");
 
 const link = () => {
   fs.writeFileSync(

@@ -1,5 +1,6 @@
 import { randomUUID } from "crypto";
 import fs from "fs";
+import os from "os";
 import path from "path";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { commitFile, git, makeRepo, WORKTREE_MARK } from "@/lib/done/testing";
@@ -399,6 +400,42 @@ describe("sweeping what tasks leave beside their worktrees", () => {
       "the machine is busy; left for the next run",
       "the machine is busy; left for the next run",
     ]);
+  });
+
+  it("removes old test temp folders once it is on, and nothing else in the temp folder", async () => {
+    const { defaultExtras } = await import("./extras");
+    const old = new Date(Date.now() - 3 * 24 * 3600_000);
+    const mk = (name: string, when = old) => {
+      const dir = path.join(os.tmpdir(), name);
+      fs.mkdirSync(dir);
+      fs.utimesSync(dir, when, when);
+      return dir;
+    };
+    const stale = mk("aos-orch-repo-stale");
+    const fresh = mk("aos-orch-repo-fresh", new Date());
+    const other = mk("somebody-elses-old");
+    const t = setup();
+    const run = (armed: boolean, dryRun = false) => {
+      setReaperArmed(armed);
+      return sweep({ dryRun }, { ...t.deps(), extras: defaultExtras });
+    };
+    try {
+      const off = await run(false);
+      expect(off.summary.pending?.map((p) => p.path)).toContain(stale);
+      expect(fs.existsSync(stale)).toBe(true);
+      await run(true, true);
+      expect(fs.existsSync(stale)).toBe(true);
+      const on = await run(true);
+      expect(on.summary.removed.map((r) => [r.path, r.kind])).toContainEqual([
+        stale,
+        "test-temp",
+      ]);
+      expect(fs.existsSync(stale)).toBe(false);
+      expect(fs.existsSync(fresh)).toBe(true);
+      expect(fs.existsSync(other)).toBe(true);
+    } finally {
+      setReaperArmed(false);
+    }
   });
 
   it("a person's own plain session is never a candidate for its worktree", async () => {

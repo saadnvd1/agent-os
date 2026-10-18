@@ -1,8 +1,7 @@
-import fs from "fs";
 import os from "os";
-import path from "path";
 import { beforeAll, beforeEach, describe, expect, it, vi } from "vitest";
 import type { PRState } from "./ask-settle";
+import { tempDir } from "@/lib/test-temp";
 
 vi.mock("@/lib/status-detector", () => ({
   checkWaitingPatterns: () => false,
@@ -41,7 +40,7 @@ const getSession = (id: string) =>
   db.prepare(`SELECT * FROM session_rows WHERE id = ?`).get(id) as Session;
 
 beforeAll(() => {
-  const home = fs.mkdtempSync(path.join(os.tmpdir(), "aos-orch-settle-"));
+  const home = tempDir("aos-orch-settle-");
   vi.spyOn(os, "homedir").mockReturnValue(home);
 });
 beforeEach(() => forgetPRStates());

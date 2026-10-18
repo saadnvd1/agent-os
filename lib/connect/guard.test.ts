@@ -1,8 +1,8 @@
 import { describe, it, expect } from "vitest";
 import fs from "fs";
-import os from "os";
 import path from "path";
 import { shouldStartConnect, takeConnectLock } from "./guard";
+import { tempDir } from "@/lib/test-temp";
 
 const prod = { NODE_ENV: "production" } as NodeJS.ProcessEnv;
 
@@ -39,7 +39,7 @@ describe("shouldStartConnect", () => {
 
 describe("takeConnectLock", () => {
   it("lets one live process hold the tunnel, and takes over a stale lock", () => {
-    const dir = fs.mkdtempSync(path.join(os.tmpdir(), "connect-lock-"));
+    const dir = tempDir("connect-lock-");
     const first = takeConnectLock(dir, 111, () => true);
     expect("release" in first).toBe(true);
     expect(takeConnectLock(dir, 222, () => true)).toEqual({ heldBy: 111 });
@@ -47,7 +47,7 @@ describe("takeConnectLock", () => {
     expect("release" in takeConnectLock(dir, 222, () => false)).toBe(true);
   });
   it("releases only its own lock", () => {
-    const dir = fs.mkdtempSync(path.join(os.tmpdir(), "connect-lock-"));
+    const dir = tempDir("connect-lock-");
     const a = takeConnectLock(dir, 111, () => true) as { release: () => void };
     a.release();
     expect(fs.existsSync(path.join(dir, "connect.lock"))).toBe(false);
@@ -58,7 +58,7 @@ describe("takeConnectLock races", () => {
   const lockIn = (dir: string) => path.join(dir, "connect.lock");
 
   it("gives the lock back when a live process took it between the look and the rename", () => {
-    const dir = fs.mkdtempSync(path.join(os.tmpdir(), "connect-lock-"));
+    const dir = tempDir("connect-lock-");
     fs.writeFileSync(lockIn(dir), "999"); // stale
     const alive = (pid: number) => {
       // While we decide 999 is dead, process 222 takes the lock over.
@@ -70,7 +70,7 @@ describe("takeConnectLock races", () => {
   });
 
   it("never throws, even on a lock it can't read", () => {
-    const dir = fs.mkdtempSync(path.join(os.tmpdir(), "connect-lock-"));
+    const dir = tempDir("connect-lock-");
     fs.mkdirSync(lockIn(dir)); // not a file at all
     let result: ReturnType<typeof takeConnectLock> | undefined;
     expect(

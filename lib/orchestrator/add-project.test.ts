@@ -1,6 +1,5 @@
 import fs from "fs";
 import path from "path";
-import { tmpdir } from "os";
 import { execFileSync } from "child_process";
 import { describe, expect, it } from "vitest";
 import { getProject } from "@/lib/projects";
@@ -8,9 +7,10 @@ import { addFolder } from "@/lib/project-add";
 import { createWorkspace } from "@/lib/workspaces";
 import { runTool } from "./serve";
 import { listNotes } from "./notes";
+import { tempDir } from "@/lib/test-temp";
 
 const repo = (branch = "trunk") => {
-  const dir = fs.mkdtempSync(path.join(tmpdir(), "aos-orch-add-"));
+  const dir = tempDir("aos-orch-add-");
   execFileSync("git", ["init", "-q", "-b", branch], { cwd: dir });
   return dir;
 };
@@ -62,7 +62,7 @@ describe("add_project", () => {
 
   it("refuses a folder that isn't a repository, holds secrets, or is relative", async () => {
     const ws = createWorkspace("Strict");
-    const plain = fs.mkdtempSync(path.join(tmpdir(), "aos-orch-plain-"));
+    const plain = tempDir("aos-orch-plain-");
     await expect(
       runTool(ws.id, "add_project", { path: plain })
     ).rejects.toThrow(/isn't a git repository/);
@@ -70,16 +70,10 @@ describe("add_project", () => {
       runTool(ws.id, "add_project", { path: "~/.ssh" })
     ).rejects.toThrow(/secrets/);
     // A repository behind a symlink is judged by where it points.
-    const vault = path.join(
-      fs.mkdtempSync(path.join(tmpdir(), "aos-")),
-      "tokenvault"
-    );
+    const vault = path.join(tempDir("aos-"), "tokenvault");
     fs.mkdirSync(vault);
     execFileSync("git", ["init", "-q"], { cwd: vault });
-    const link = path.join(
-      fs.mkdtempSync(path.join(tmpdir(), "aos-")),
-      "notes"
-    );
+    const link = path.join(tempDir("aos-"), "notes");
     fs.symlinkSync(vault, link);
     await expect(runTool(ws.id, "add_project", { path: link })).rejects.toThrow(
       /secrets/

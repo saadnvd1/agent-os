@@ -1,6 +1,5 @@
 import { execFileSync } from "child_process";
 import fs from "fs";
-import os from "os";
 import path from "path";
 import { describe, expect, it, vi } from "vitest";
 import { db } from "../db";
@@ -10,9 +9,9 @@ import { setLogFolder, destination, writeLogFileTo } from "./folder";
 import { commitLogs, getHq, setHq } from "./hq";
 import { reexportLogs } from "./reexport";
 import { insertLog, getLog } from "./store";
+import { tempDir } from "@/lib/test-temp";
 
-const tmp = () =>
-  fs.realpathSync(fs.mkdtempSync(path.join(os.tmpdir(), "hq-")));
+const tmp = () => fs.realpathSync(tempDir("hq-"));
 const sh = (cwd: string, ...args: string[]) =>
   execFileSync("git", args, { cwd, encoding: "utf8" });
 

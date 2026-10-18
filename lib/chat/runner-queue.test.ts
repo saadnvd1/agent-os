@@ -1,12 +1,12 @@
 import { execFileSync } from "child_process";
 import { randomUUID } from "crypto";
 import fs from "fs";
-import os from "os";
 import path from "path";
 import { describe, expect, it, vi } from "vitest";
 import type { FileSuggestion } from "./events";
 import type { WorkerHandlers } from "./worker/client";
 import type { WorkerCommand } from "./worker/protocol";
+import { tempDir } from "@/lib/test-temp";
 
 // Workers are faked: which ones are "running", and each one a connect
 // starts, with the handlers the server gave it.
@@ -60,7 +60,7 @@ const { createProject } = await import("../projects");
 
 // A git folder with a tracked file, an untracked one and an ignored one.
 function repo(): string {
-  const dir = fs.mkdtempSync(path.join(os.tmpdir(), "aos-files-"));
+  const dir = tempDir("aos-files-");
   execFileSync("git", ["init", "-q"], { cwd: dir });
   fs.mkdirSync(path.join(dir, "lib"));
   fs.writeFileSync(path.join(dir, "lib", "queue.ts"), "");

@@ -3,13 +3,13 @@
 // Tests mock ../worktrees (WORKTREES_DIR), ../env-setup and ../agents/launch.
 
 import fs from "fs";
-import os from "os";
 import path from "path";
 import { randomUUID } from "crypto";
 import { db, insertSessionRow, type Session } from "../db";
 import { createProject } from "../projects";
 import { writeTranscript } from "./transcript";
 import { gitSync } from "../git-exec";
+import { tempDir } from "@/lib/test-temp";
 
 export const CLAUDE_ID = "11111111-2222-3333-4444-555555555555";
 
@@ -30,7 +30,7 @@ export interface MoveFixture {
 /** HOME, Claude's folder and git identity all point into a temp dir. */
 export function setupMoveRepo(): MoveFixture {
   const saved = { HOME: process.env.HOME };
-  const tmp = fs.mkdtempSync(path.join(os.tmpdir(), "aos-move-"));
+  const tmp = tempDir("aos-move-");
   process.env.HOME = tmp;
   process.env.CLAUDE_CONFIG_DIR = path.join(tmp, ".claude");
   for (const who of ["AUTHOR", "COMMITTER"]) {

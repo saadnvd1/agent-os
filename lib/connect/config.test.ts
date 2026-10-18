@@ -1,6 +1,5 @@
 import { describe, it, expect } from "vitest";
 import fs from "fs";
-import os from "os";
 import path from "path";
 import {
   connectTunnelPort,
@@ -10,9 +9,10 @@ import {
   setConnectEnabled,
   loadConnect,
 } from "./config";
+import { tempDir } from "@/lib/test-temp";
 
 const dirWith = (files: Record<string, string>) => {
-  const dir = fs.mkdtempSync(path.join(os.tmpdir(), "connect-cfg-"));
+  const dir = tempDir("connect-cfg-");
   for (const [f, v] of Object.entries(files))
     fs.writeFileSync(path.join(dir, f), v);
   return dir;

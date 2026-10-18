@@ -1,7 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { execFileSync, spawnSync } from "child_process";
 import fs from "fs";
-import os from "os";
 import path from "path";
 import {
   ATTRIBUTION_ERE,
@@ -9,6 +8,7 @@ import {
   installWorktreeHooks,
 } from "./worktree-hooks";
 import { ATTRIBUTION } from "./tasks/code-review";
+import { tempDir } from "@/lib/test-temp";
 
 let root: string;
 let repo: string;
@@ -35,7 +35,7 @@ Co-authored-by: Ada <ada@example.com>
 `;
 
 beforeEach(() => {
-  root = fs.realpathSync(fs.mkdtempSync(path.join(os.tmpdir(), "wt-hooks-")));
+  root = fs.realpathSync(tempDir("wt-hooks-"));
   repo = path.join(root, "repo");
   tree = path.join(root, "tree");
   fs.mkdirSync(repo);

@@ -1,17 +1,17 @@
 import { describe, it, expect, beforeAll } from "vitest";
 import { execFileSync } from "node:child_process";
 import fs from "node:fs";
-import os from "node:os";
 import path from "node:path";
 import type { Project } from "../db";
 import { isWithin, resolveRepoFile } from "./publish";
+import { tempDir } from "@/lib/test-temp";
 
 let repo: string;
 let outside: string;
 let project: Project;
 
 beforeAll(() => {
-  const base = fs.realpathSync(fs.mkdtempSync(path.join(os.tmpdir(), "pub-")));
+  const base = fs.realpathSync(tempDir("pub-"));
   repo = path.join(base, "repo");
   fs.mkdirSync(repo);
   execFileSync("git", ["init", "-q"], { cwd: repo });

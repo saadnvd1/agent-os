@@ -3,15 +3,14 @@ import {
   chmodSync,
   existsSync,
   mkdirSync,
-  mkdtempSync,
   readFileSync,
   rmSync,
   symlinkSync,
   writeFileSync,
 } from "node:fs";
-import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
+import { tempDir } from "@/lib/test-temp";
 
 // The installer's WSL paths, run on any OS: `uname`, `ps`, the browser
 // openers and the package managers are fakes, and the kernel release is a
@@ -60,7 +59,7 @@ function run(
 }
 
 beforeEach(() => {
-  dir = mkdtempSync(join(tmpdir(), "aos-wsl-"));
+  dir = tempDir("aos-wsl-");
   mkdirSync(join(dir, "bin"));
   for (const tool of TOOLS) {
     const real = ["/usr/bin", "/bin"]

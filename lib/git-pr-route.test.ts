@@ -1,11 +1,11 @@
 import { execFileSync } from "child_process";
 import fs from "fs";
-import os from "os";
 import path from "path";
 import { NextRequest } from "next/server";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { GET, POST } from "@/app/api/git/pr/route";
 import { noteGhFailure, resetGhLimit } from "./tasks/gh-limit";
+import { tempDir } from "@/lib/test-temp";
 
 const PR = {
   number: 7,
@@ -19,7 +19,7 @@ const PR = {
 // `loggedOut` fails `auth status`, `rateLimited` fails `pr list` as GitHub
 // does when the limit is spent.
 function setup(opts: { loggedOut?: boolean; rateLimited?: boolean } = {}) {
-  const dir = fs.mkdtempSync(path.join(os.tmpdir(), "aos-pr-route-"));
+  const dir = tempDir("aos-pr-route-");
   const repo = path.join(dir, "repo");
   const bin = path.join(dir, "bin");
   fs.mkdirSync(repo);

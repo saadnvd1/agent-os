@@ -1,6 +1,5 @@
 import { beforeEach, describe, expect, it } from "vitest";
 import * as fs from "fs";
-import * as os from "os";
 import * as path from "path";
 import { db, updateSessionRow } from "./db";
 import { createProject } from "./projects";
@@ -8,13 +7,14 @@ import { seedSession } from "./orchestrator/testing";
 import { allocatePorts, releasePorts, sessionPorts } from "./ports";
 import { agentEnv } from "./agents/launch";
 import { sessionRunningBrief } from "./project-config/session";
+import { tempDir } from "@/lib/test-temp";
 
 const free = async () => false;
 // No tmux session is alive: tests never ask the real tmux server.
 const gone = async () => false;
 const bases = { RAILS_PORT: 3000, VITE_PORT: 3100 };
 
-const projectDir = fs.mkdtempSync(path.join(os.tmpdir(), "aos-ports-"));
+const projectDir = tempDir("aos-ports-");
 const projectId = createProject({
   name: "ports-app",
   workingDirectory: projectDir,

@@ -1,7 +1,6 @@
 import { beforeEach, describe, expect, it } from "vitest";
 import { db } from "@/lib/db";
 import fs from "fs";
-import os from "os";
 import path from "path";
 import {
   bootsSince,
@@ -12,6 +11,7 @@ import {
   recordBoot,
 } from "./boots";
 import { MIN } from "./types";
+import { tempDir } from "@/lib/test-temp";
 
 const NOW = Date.parse("2026-10-14T18:00:00Z");
 beforeEach(() => {
@@ -56,7 +56,7 @@ describe("boots", () => {
     markDeployBoot(null);
   });
   it("reads autodeploy's restarted file in seconds", () => {
-    const dir = fs.mkdtempSync(path.join(os.tmpdir(), "boots-"));
+    const dir = tempDir("boots-");
     const file = path.join(dir, "restarted");
     expect(lastDeployRestart(file)).toBeNull();
     fs.writeFileSync(file, "1760000000\n");

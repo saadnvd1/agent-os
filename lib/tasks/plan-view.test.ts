@@ -1,5 +1,4 @@
 import fs from "fs";
-import os from "os";
 import path from "path";
 import { describe, expect, it } from "vitest";
 import { db, updateSessionRow, type Session } from "../db";
@@ -7,6 +6,7 @@ import { saveItem } from "../chat/store";
 import { seedSession, seedWorkspace } from "../orchestrator/testing";
 import { PLAN_TEXT_MAX } from "./loop-types";
 import { planTitle, taskPlan } from "./plan-view";
+import { tempDir } from "@/lib/test-temp";
 
 const make = (set: Record<string, string | number | null> = {}) => {
   const { app } = seedWorkspace();
@@ -22,7 +22,7 @@ const make = (set: Record<string, string | number | null> = {}) => {
     .get(id) as Session;
 };
 const worktree = (plan?: string) => {
-  const dir = fs.mkdtempSync(path.join(os.tmpdir(), "aos-plan-"));
+  const dir = tempDir("aos-plan-");
   if (plan !== undefined) {
     fs.mkdirSync(path.join(dir, ".agentos"));
     fs.writeFileSync(path.join(dir, ".agentos/plan.md"), plan);

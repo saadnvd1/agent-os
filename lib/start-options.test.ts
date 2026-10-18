@@ -1,7 +1,4 @@
 import { execFileSync } from "child_process";
-import fs from "fs";
-import os from "os";
-import path from "path";
 import { NextRequest } from "next/server";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { db } from "./db";
@@ -9,6 +6,7 @@ import { setModelSettings } from "./models/config";
 import { PROVIDER_PRESETS } from "./models/providers";
 import { createProject } from "./projects";
 import { TRUST_HEADER } from "./security/auth";
+import { tempDir } from "@/lib/test-temp";
 
 vi.mock("./agents/probe", () => ({
   probeAgents: vi.fn(async () => ({
@@ -20,7 +18,7 @@ vi.mock("./agents/probe", () => ({
 const { startOptions, UnknownProjectError } = await import("./start-options");
 const route = await import("@/app/api/start-options/route");
 
-const repo = fs.mkdtempSync(path.join(os.tmpdir(), "aos-start-opts-"));
+const repo = tempDir("aos-start-opts-");
 execFileSync("git", ["init", "-q", "-b", "trunk"], { cwd: repo });
 execFileSync(
   "git",
@@ -122,7 +120,7 @@ describe("start options", () => {
   });
 
   it("says a folder that isn't a repository isn't one", async () => {
-    const dir = fs.mkdtempSync(path.join(os.tmpdir(), "aos-start-plain-"));
+    const dir = tempDir("aos-start-plain-");
     const project = createProject({ name: "plain", workingDirectory: dir });
     const out = await startOptions(project.id);
     expect(out.git).toMatchObject({

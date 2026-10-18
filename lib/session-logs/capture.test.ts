@@ -1,5 +1,4 @@
 import fs from "fs";
-import os from "os";
 import path from "path";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
@@ -46,14 +45,15 @@ import {
   resetSessionLogState,
   setLogFolder,
 } from "./index";
+import { tempDir } from "@/lib/test-temp";
 
-const dir = fs.mkdtempSync(path.join(os.tmpdir(), "session-logs-"));
+const dir = tempDir("session-logs-");
 const MERGED = "2026-10-12 10:15:00";
 
 function mergedTask(over: { status?: string; plan?: string | null } = {}) {
   const w = seedWorkspace();
   const id = w.task;
-  const worktree = fs.mkdtempSync(path.join(os.tmpdir(), "wt-"));
+  const worktree = tempDir("wt-");
   if (over.plan) {
     fs.mkdirSync(path.join(worktree, ".agentos"));
     fs.writeFileSync(path.join(worktree, ".agentos", "plan.md"), over.plan);

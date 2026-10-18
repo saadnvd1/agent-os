@@ -1,12 +1,12 @@
 import { describe, expect, it } from "vitest";
 import * as fs from "fs";
-import * as os from "os";
 import * as path from "path";
 import { uiKindOf, uiVerifyBrief } from "./ui-brief";
 import { briefFacts } from "./brief";
+import { tempDir } from "@/lib/test-temp";
 
 const project = (files: Record<string, string>) => {
-  const dir = fs.mkdtempSync(path.join(os.tmpdir(), "aos-ui-"));
+  const dir = tempDir("aos-ui-");
   for (const [name, body] of Object.entries(files)) {
     fs.mkdirSync(path.dirname(path.join(dir, name)), { recursive: true });
     fs.writeFileSync(path.join(dir, name), body);

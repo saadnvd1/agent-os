@@ -15,8 +15,9 @@ import {
   repoNameOf,
   startClone,
 } from "./index";
+import { tempDir } from "@/lib/test-temp";
 
-const temp = () => fs.mkdtempSync(path.join(tmpdir(), "aos-add-"));
+const temp = () => tempDir("aos-add-");
 
 async function until(check: () => boolean, ms = 15_000) {
   const end = Date.now() + ms;

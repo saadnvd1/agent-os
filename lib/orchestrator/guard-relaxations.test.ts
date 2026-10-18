@@ -6,6 +6,7 @@ import { isOrchestratorSecretPath, isSecretPath } from "@/lib/secret-paths";
 import { BUS_BRIEF } from "@/lib/agents/brief";
 import { shellRefusal, addsExecute, type ShellContext } from "./shell-guard";
 import { mangleCwd, writeRefusal, type WriteBounds } from "./write-guard";
+import { tempDir } from "@/lib/test-temp";
 
 let home: string;
 let bounds: WriteBounds;
@@ -13,7 +14,7 @@ const at = (...p: string[]) => path.join(home, ...p);
 const refused = (p: string) => writeRefusal(p, bounds);
 
 beforeAll(() => {
-  home = fs.realpathSync(fs.mkdtempSync(path.join(os.tmpdir(), "aos-gr-")));
+  home = fs.realpathSync(tempDir("aos-gr-"));
   const cwd = at(".agent-os/orchestrators/w1");
   const mem = at(".claude/projects", mangleCwd(cwd), "memory");
   const otherMem = at(".claude/projects", mangleCwd("/x/other"), "memory");

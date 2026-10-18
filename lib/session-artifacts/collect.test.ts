@@ -1,7 +1,6 @@
 import { execFileSync } from "child_process";
 import { randomUUID } from "crypto";
 import fs from "fs";
-import os from "os";
 import path from "path";
 import { describe, expect, it } from "vitest";
 import { getDb, insertSessionRow } from "@/lib/db";
@@ -12,6 +11,7 @@ import * as oneRoute from "@/app/api/sessions/[id]/artifacts/[artifactId]/route"
 import { collectArtifacts, keepSessionFiles, getSession } from "./collect";
 import { sessionKeptDir } from "./keep";
 import type { SessionArtifact } from "./types";
+import { tempDir } from "@/lib/test-temp";
 
 const PNG = Buffer.from(
   "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNkYPhfDwAChwGA60e6kgAAAABJRU5ErkJggg==",
@@ -22,9 +22,7 @@ const git = (cwd: string, ...args: string[]) =>
   execFileSync("git", args, { cwd, stdio: "pipe" });
 
 function repo(): string {
-  const dir = fs.realpathSync(
-    fs.mkdtempSync(path.join(os.tmpdir(), "aos-art-"))
-  );
+  const dir = fs.realpathSync(tempDir("aos-art-"));
   git(dir, "init", "-q");
   git(dir, "config", "user.email", "t@example.com");
   git(dir, "config", "user.name", "t");
@@ -171,7 +169,7 @@ describe("session artifacts", () => {
   it("refuses a link to a secret and another session's artifact", async () => {
     const dir = repo();
     const s = session(dir, false);
-    const secretDir = fs.mkdtempSync(path.join(os.tmpdir(), "aos-sec-"));
+    const secretDir = tempDir("aos-sec-");
     fs.writeFileSync(path.join(secretDir, ".env"), "TOKEN=1\n");
     fs.symlinkSync(path.join(secretDir, ".env"), path.join(dir, "notes.md"));
     s.write("notes.md");

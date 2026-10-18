@@ -1,8 +1,7 @@
-import fs from "fs";
 import os from "os";
-import path from "path";
 import { beforeAll, beforeEach, describe, expect, it, vi } from "vitest";
 import { NextRequest } from "next/server";
+import { tempDir } from "@/lib/test-temp";
 
 vi.mock("@/lib/status-detector", () => ({
   checkWaitingPatterns: () => false,
@@ -51,7 +50,7 @@ const { switchNoApprovals } = await import("./enable");
 const hookRoute = await import("@/app/api/approvals/hook/route");
 
 beforeAll(() => {
-  const home = fs.mkdtempSync(path.join(os.tmpdir(), "aos-no-approvals-"));
+  const home = tempDir("aos-no-approvals-");
   vi.spyOn(os, "homedir").mockReturnValue(home);
 });
 beforeEach(() => {

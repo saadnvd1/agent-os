@@ -10,6 +10,7 @@ import fs from "fs";
 import path from "path";
 import { execFile } from "child_process";
 import { SESSION_TMP_PREFIX, tmpName } from "../sessions/leftovers";
+import { isTestTempName } from "./testTemp";
 import type { Candidate, SweepSkipped } from "./types";
 
 const DAY_MS = 24 * 3600_000;
@@ -92,6 +93,11 @@ export async function findCacheLeftovers(deps: CacheDeps): Promise<{
   const livePrefixes = [...deps.liveIds].map(tmpName);
   for (const dir of subdirs(deps.tmpRoot)) {
     const name = path.basename(dir);
+    if (isTestTempName(name)) {
+      if (deps.now - mtime(dir) >= DAY_MS)
+        await add(dir, "test-temp", "left behind by a test run");
+      continue;
+    }
     const isSession = name.startsWith(SESSION_TMP_PREFIX);
     if (!isSession && !name.startsWith("agentos-preview-")) continue;
     if (deps.now - mtime(dir) < DAY_MS) continue;

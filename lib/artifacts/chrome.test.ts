@@ -1,12 +1,12 @@
 import fs from "fs";
-import os from "os";
 import path from "path";
 import { describe, expect, it, vi } from "vitest";
 import { launchChrome } from "./chrome";
+import { tempDir } from "@/lib/test-temp";
 
 describe("launchChrome", () => {
   it("gives up on, and kills, a browser that never answers", async () => {
-    const dir = fs.mkdtempSync(path.join(os.tmpdir(), "agentos-chrome-"));
+    const dir = tempDir("agentos-chrome-");
     const pidFile = path.join(dir, "pid");
     const stub = path.join(dir, "chrome");
     fs.writeFileSync(

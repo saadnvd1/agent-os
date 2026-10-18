@@ -1,7 +1,6 @@
 import { spawn } from "child_process";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import * as fs from "fs";
-import * as os from "os";
 import * as path from "path";
 import { db } from "../db";
 import { createProject } from "../projects";
@@ -17,8 +16,9 @@ import {
 } from "./index";
 import { bootedCount, getLease, putLease } from "./lease";
 import { setSimctlRunner } from "./simctl";
+import { tempDir } from "@/lib/test-temp";
 
-const dir = fs.mkdtempSync(path.join(os.tmpdir(), "aos-sim-"));
+const dir = tempDir("aos-sim-");
 const projectId = createProject({ name: "sim-app", workingDirectory: dir }).id;
 const config = path.join(dir, "agentos.json");
 const calls: string[][] = [];

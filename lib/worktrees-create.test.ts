@@ -1,8 +1,8 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { execFileSync } from "child_process";
 import fs from "fs";
-import os from "os";
 import path from "path";
+import { tempDir } from "@/lib/test-temp";
 
 // A failed `git worktree add` can still have made its branch and part of
 // the worktree. createWorktree must leave neither behind, and say what
@@ -27,7 +27,7 @@ async function load() {
 }
 
 beforeEach(() => {
-  root = fs.realpathSync(fs.mkdtempSync(path.join(os.tmpdir(), "wt-add-")));
+  root = fs.realpathSync(tempDir("wt-add-"));
   repo = path.join(root, "repo");
   home = path.join(root, "home");
   fs.mkdirSync(repo);

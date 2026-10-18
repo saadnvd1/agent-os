@@ -5,6 +5,7 @@ import { execFileSync } from "child_process";
 import { beforeAll, beforeEach, vi } from "vitest";
 import type { TaskPR } from "@/lib/tasks/state";
 import type { SessionFacts } from "./facts";
+import { tempDir } from "@/lib/test-temp";
 
 // Shared fixtures for the armed*.test.ts files: a real repository with a
 // local bare remote, gh faked around it. Import this before anything it mocks.
@@ -67,7 +68,7 @@ export const { rebaseConflicting } = await import("./rebase");
 export const { recordConditions } = await import("./events");
 
 beforeAll(() => {
-  const home = fs.mkdtempSync(path.join(os.tmpdir(), "aos-orch-armed-"));
+  const home = tempDir("aos-orch-armed-");
   vi.spyOn(os, "homedir").mockReturnValue(home);
 });
 beforeEach(() => {
@@ -101,7 +102,7 @@ export const lines = (n: number, change: Record<number, string> = {}) =>
 // is a second clone for moving main.
 export function setup() {
   setMergeApprovals(false);
-  const root = fs.mkdtempSync(path.join(os.tmpdir(), "aos-armed-repo-"));
+  const root = tempDir("aos-armed-repo-");
   const remote = path.join(root, "remote.git");
   const repo = path.join(root, "repo");
   const other = path.join(root, "other");

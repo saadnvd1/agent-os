@@ -1,5 +1,4 @@
 import fs from "fs";
-import os from "os";
 import path from "path";
 import { randomUUID } from "crypto";
 import { afterAll, afterEach, describe, expect, it, vi } from "vitest";
@@ -7,9 +6,9 @@ import { getDb } from "@/lib/db";
 import type { ChatServerMessage } from "./events";
 import { registry } from "./registry";
 import { fakeFsWatch, sleep, until } from "./test-touch";
+import { tempDir } from "@/lib/test-temp";
 
-const tmp = (prefix: string) =>
-  fs.realpathSync(fs.mkdtempSync(path.join(os.tmpdir(), prefix)));
+const tmp = (prefix: string) => fs.realpathSync(tempDir(prefix));
 // The user's skills, not the real ~/.claude's.
 process.env.CLAUDE_CONFIG_DIR = tmp("skr-home-");
 

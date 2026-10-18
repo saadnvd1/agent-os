@@ -1,9 +1,9 @@
 import { spawnSync } from "node:child_process";
-import { chmodSync, mkdtempSync, readFileSync, writeFileSync } from "node:fs";
-import { tmpdir } from "node:os";
+import { chmodSync, readFileSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import { beforeEach, describe, expect, it } from "vitest";
 import { OscScanner } from "./parse";
+import { tempDir } from "@/lib/test-temp";
 
 const SCRIPT = join(process.cwd(), "scripts", "claude-status-hook.sh");
 let dir: string;
@@ -11,7 +11,7 @@ let tty: string;
 
 // A fake tmux on PATH that names a plain file as the pane's tty.
 beforeEach(() => {
-  dir = mkdtempSync(join(tmpdir(), "osc7501-hook-"));
+  dir = tempDir("osc7501-hook-");
   tty = join(dir, "tty");
   writeFileSync(tty, "");
   writeFileSync(join(dir, "tmux"), `#!/bin/sh\necho ${JSON.stringify(tty)}\n`);

@@ -2,6 +2,7 @@ import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { afterAll, inject } from "vitest";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
+import { removeTempDirs } from "./lib/test-temp";
 import { FILE_PREFIX } from "./vitest.tmp";
 
 // One temp folder per test file, inside the run's root (vitest.global-setup.ts).
@@ -21,6 +22,7 @@ const sub = (name: string) => {
 // A file's async work can still be writing here as it ends (ENOTEMPTY); the
 // run root's removal in teardown is the backstop.
 afterAll(() => {
+  removeTempDirs();
   try {
     rmSync(fileDir, {
       recursive: true,

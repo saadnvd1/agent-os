@@ -1,6 +1,4 @@
-import fs from "fs";
 import os from "os";
-import path from "path";
 import { beforeAll, describe, expect, it, vi } from "vitest";
 import { db } from "../db";
 import { seedWorkspace } from "./testing";
@@ -8,9 +6,10 @@ import { ensureOrchestrator } from "./home";
 import { runTool } from "./serve";
 import { orchestratorExtras } from "./worker";
 import { addRule, listRules, MAX_RULES, removeRule, updateRule } from "./rules";
+import { tempDir } from "@/lib/test-temp";
 
 beforeAll(() => {
-  const home = fs.mkdtempSync(path.join(os.tmpdir(), "aos-orch-rules-"));
+  const home = tempDir("aos-orch-rules-");
   vi.spyOn(os, "homedir").mockReturnValue(home);
 });
 

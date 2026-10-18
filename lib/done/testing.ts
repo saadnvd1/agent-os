@@ -2,9 +2,9 @@
 // worktrees cut from it the way AgentOS cuts them.
 
 import fs from "fs";
-import os from "os";
 import path from "path";
 import { gitSync } from "../git-exec";
+import { tempDir } from "@/lib/test-temp";
 
 // Old enough that CI counts as settled on every commit.
 const env = { ...process.env, GIT_COMMITTER_DATE: "2026-01-01T00:00:00Z" };
@@ -24,7 +24,7 @@ export function commitFile(cwd: string, file: string, text: string): string {
 export const WORKTREE_MARK = "aos-done-wt";
 
 export function makeRepo() {
-  const root = fs.mkdtempSync(path.join(os.tmpdir(), "aos-done-repo-"));
+  const root = tempDir("aos-done-repo-");
   const remote = path.join(root, "remote.git");
   const repo = path.join(root, "repo");
   git(root, "init", "-q", "--bare", "-b", "main", remote);

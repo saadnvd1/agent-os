@@ -1,10 +1,9 @@
-import fs from "fs";
 import { updateSessionRow } from "@/lib/db";
 import os from "os";
-import path from "path";
 import { beforeAll, describe, expect, it, vi } from "vitest";
 import type { ChatSender } from "./deliver";
 import type { ChatOrigin } from "@/lib/chat/events";
+import { tempDir } from "@/lib/test-temp";
 
 vi.mock("@/lib/status-detector", () => ({
   checkWaitingPatterns: () => false,
@@ -39,7 +38,7 @@ const { answerAsk, getAsk, openAskCount, openAsks } = await import("./asks");
 const { resolveStaleAsks } = await import("./ask-settle");
 
 beforeAll(() => {
-  const home = fs.mkdtempSync(path.join(os.tmpdir(), "aos-orch-asks-"));
+  const home = tempDir("aos-orch-asks-");
   vi.spyOn(os, "homedir").mockReturnValue(home);
 });
 

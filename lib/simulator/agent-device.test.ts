@@ -11,6 +11,7 @@ import {
   stateDir,
   toolEnv,
 } from "./agent-device";
+import { tempDir } from "@/lib/test-temp";
 
 const target = {
   udid: "UDID-1",
@@ -85,9 +86,7 @@ describe("buildArgs", () => {
   });
 
   it("keeps a screenshot inside the shots dir or the worktree, as a png", () => {
-    const wt = fs.realpathSync(
-      fs.mkdtempSync(path.join(os.tmpdir(), "aos-wt-"))
-    );
+    const wt = fs.realpathSync(tempDir("aos-wt-"));
     const t = { ...target, cwd: wt };
     const shot = (...a: string[]) =>
       screenshotPath(buildArgs(["screenshot", ...a], t));

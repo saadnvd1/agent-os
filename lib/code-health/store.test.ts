@@ -1,5 +1,4 @@
 import fs from "fs";
-import os from "os";
 import path from "path";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import { listAudits } from "../session-audit/store";
@@ -11,10 +10,11 @@ import {
   writePrepass,
 } from "./store";
 import type { Prepass } from "./summary";
+import { tempDir } from "@/lib/test-temp";
 
 let dir: string;
 beforeEach(() => {
-  dir = fs.mkdtempSync(path.join(os.tmpdir(), "code-health-"));
+  dir = tempDir("code-health-");
   process.env.AGENTOS_AUDITS_DIR = dir;
 });
 afterEach(() => {

@@ -1,12 +1,12 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import * as fs from "fs";
-import * as os from "os";
 import * as path from "path";
 import { db } from "../db";
 import { sessionTmpDir } from "../sessions/leftovers";
 import { createProject } from "../projects";
 import { seedSession } from "../orchestrator/testing";
 import type { PgRun } from "./database";
+import { tempDir } from "@/lib/test-temp";
 
 // A Postgres in memory, behind the same commands the module runs.
 class FakePg {
@@ -92,7 +92,7 @@ const {
 const { setupWorktree } = await import("../env-setup");
 const { sessionProjectEnv, sessionRunningBrief } = await import("./session");
 
-const projectDir = fs.mkdtempSync(path.join(os.tmpdir(), "aos-db-"));
+const projectDir = tempDir("aos-db-");
 fs.writeFileSync(
   path.join(projectDir, "agentos.json"),
   JSON.stringify({
@@ -465,7 +465,7 @@ describe("the session's env and brief", () => {
 describe("setupWorktree with a database", () => {
   it("makes the copy before setup runs, with its name in setup's env", async () => {
     const id = session();
-    const worktree = fs.mkdtempSync(path.join(os.tmpdir(), "aos-db-wt-"));
+    const worktree = tempDir("aos-db-wt-");
     const result = await setupWorktree({
       worktreePath: worktree,
       sourcePath: projectDir,
@@ -485,7 +485,7 @@ describe("setupWorktree with a database", () => {
   it("still succeeds without a copy; the step and the env say there's none", async () => {
     pg.up = false;
     const id = session();
-    const worktree = fs.mkdtempSync(path.join(os.tmpdir(), "aos-db-wt-"));
+    const worktree = tempDir("aos-db-wt-");
     const result = await setupWorktree({
       worktreePath: worktree,
       sourcePath: projectDir,

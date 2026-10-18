@@ -4,6 +4,7 @@ import path from "path";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import type { UpdateRun } from "./banner";
 import type { CheckResult } from "./check";
+import { tempDir } from "@/lib/test-temp";
 
 // startUpdate asks for a fresh check; here it's whatever the test says.
 let check: CheckResult;
@@ -62,7 +63,7 @@ const state = (): UpdateRun =>
   JSON.parse(fs.readFileSync(path.join(dir, "state.json"), "utf8"));
 
 beforeEach(() => {
-  dir = fs.mkdtempSync(path.join(os.tmpdir(), "aos-run-"));
+  dir = tempDir("aos-run-");
   now = 1_000_000;
   spawned = [];
   settings = new Map();

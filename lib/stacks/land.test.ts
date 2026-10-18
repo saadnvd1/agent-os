@@ -1,12 +1,10 @@
-import { mkdtempSync } from "fs";
-import { tmpdir } from "os";
-import { join } from "path";
 import { describe, expect, it, vi } from "vitest";
 import { db, stackQueries as q, type Session } from "../db";
 import type { TaskPR } from "../tasks/state";
 import type { ReviewState } from "../tasks/code-review";
 import { landStack, type LandDeps } from "./land";
 import { seedStack } from "./testing";
+import { tempDir } from "@/lib/test-temp";
 
 const pr = (n: number, checks: TaskPR["checks"] = "pass"): TaskPR => ({
   number: n,
@@ -20,7 +18,7 @@ const pr = (n: number, checks: TaskPR["checks"] = "pass"): TaskPR => ({
 function setup(
   checks: (key: string, after: boolean) => TaskPR["checks"] = () => "pass"
 ) {
-  const s = seedStack(mkdtempSync(join(tmpdir(), "land-")), [
+  const s = seedStack(tempDir("land-"), [
     { key: "P", status: "pr", branch: "feature/p", pr: 1 },
     {
       key: "C",

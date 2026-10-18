@@ -1,5 +1,4 @@
 import fs from "fs";
-import os from "os";
 import path from "path";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { NextRequest } from "next/server";
@@ -30,13 +29,14 @@ import {
   turnAwayOff,
   turnAwayOn,
 } from "./run";
+import { tempDir } from "@/lib/test-temp";
 
 const phone = vi.hoisted(() => [] as string[]);
 vi.mock("../notify", () => ({
   notifyPhone: (_source: string, text: string) => phone.push(text),
 }));
 
-const audits = fs.mkdtempSync(path.join(os.tmpdir(), "away-audits-"));
+const audits = tempDir("away-audits-");
 process.env.AGENTOS_AUDITS_DIR = audits;
 
 beforeEach(() => {

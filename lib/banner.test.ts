@@ -1,13 +1,13 @@
 import { execFileSync } from "node:child_process";
-import { mkdtempSync, writeFileSync } from "node:fs";
-import { tmpdir } from "node:os";
+import { writeFileSync } from "node:fs";
 import { join } from "node:path";
 import { describe, expect, it } from "vitest";
 import { generateInitScript } from "./banner";
 import { getProvider } from "./providers";
+import { tempDir } from "@/lib/test-temp";
 
 const syntaxOk = (script: string) => {
-  const file = join(mkdtempSync(join(tmpdir(), "banner-")), "init.sh");
+  const file = join(tempDir("banner-"), "init.sh");
   writeFileSync(file, script);
   execFileSync("bash", ["-n", file]);
 };

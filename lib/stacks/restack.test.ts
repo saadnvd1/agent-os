@@ -1,13 +1,12 @@
-import { mkdtempSync } from "fs";
-import { tmpdir } from "os";
 import { join } from "path";
 import { describe, expect, it, vi } from "vitest";
 import { db, stackQueries as q } from "../db";
 import { restackAfterMerge, stackNotice, type RestackDeps } from "./restack";
 import { seedStack } from "./testing";
 import type { Runner } from "./git";
+import { tempDir } from "@/lib/test-temp";
 
-const dir = () => mkdtempSync(join(tmpdir(), "stack-restack-"));
+const dir = () => tempDir("stack-restack-");
 
 // A fake git/gh: remote refs live in a map, a push moves one.
 function fakeGit(opts: { conflict?: string } = {}) {
@@ -70,8 +69,8 @@ function depsFor(
 
 // The fake keys each worktree by its folder name.
 function seed() {
-  const cWt = mkdtempSync(join(tmpdir(), "c"));
-  const gWt = mkdtempSync(join(tmpdir(), "g"));
+  const cWt = tempDir("c");
+  const gWt = tempDir("g");
   const s = seedStack(dir(), [
     { key: "P", status: "merged", branch: "feature/p", pr: 11 },
     {

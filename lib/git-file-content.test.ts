@@ -1,15 +1,15 @@
 import { execFileSync } from "child_process";
 import fs from "fs";
-import os from "os";
 import path from "path";
 import { NextRequest } from "next/server";
 import { describe, expect, it } from "vitest";
 import { GET } from "@/app/api/git/file-content/route";
+import { tempDir } from "@/lib/test-temp";
 
 // The file name is a git revision argument, never shell text.
 describe("GET /api/git/file-content", () => {
   it("never runs a file name as a command", async () => {
-    const dir = fs.mkdtempSync(path.join(os.tmpdir(), "file-content-"));
+    const dir = tempDir("file-content-");
     const git = (...args: string[]) =>
       execFileSync("git", args, { cwd: dir, stdio: "ignore" });
     git("init", "-q");

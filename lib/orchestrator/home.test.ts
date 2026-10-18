@@ -16,9 +16,10 @@ import { ORCHESTRATOR_PERMISSIONS, TOOL_NAMES } from "./tool-names";
 import { setChatAccess } from "@/lib/chat/settings";
 import { deletionRefusal } from "./home";
 import { setMergeApprovals } from "./merge-approvals";
+import { tempDir } from "@/lib/test-temp";
 
 beforeAll(() => {
-  const home = fs.mkdtempSync(path.join(os.tmpdir(), "aos-orch-home-"));
+  const home = tempDir("aos-orch-home-");
   vi.spyOn(os, "homedir").mockReturnValue(home);
 });
 

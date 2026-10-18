@@ -1,6 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import * as fs from "fs";
-import * as os from "os";
 import * as path from "path";
 import {
   cloneDeps,
@@ -9,10 +8,11 @@ import {
   nodeModulesMatchLock,
 } from "./clone";
 import { sparePath } from "./spare";
+import { tempDir } from "@/lib/test-temp";
 
 let tmp: string, source: string, worktree: string, spares: string;
 beforeEach(() => {
-  tmp = fs.mkdtempSync(path.join(os.tmpdir(), "aos-clone-"));
+  tmp = tempDir("aos-clone-");
   source = path.join(tmp, "source");
   worktree = path.join(tmp, "worktree");
   spares = path.join(tmp, "spare");

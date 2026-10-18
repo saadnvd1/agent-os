@@ -1,5 +1,4 @@
 import fs from "fs";
-import os from "os";
 import path from "path";
 import { describe, expect, it } from "vitest";
 import type { DriverEvent } from "../events";
@@ -9,6 +8,7 @@ import {
   proposedPlan,
   sdkMode,
 } from "./claude-approvals";
+import { tempDir } from "@/lib/test-temp";
 
 describe("sdkMode", () => {
   it("is plan while plan mode is on, whatever the access", () => {
@@ -66,7 +66,7 @@ describe("proposePlan", () => {
 
 describe("proposedPlan", () => {
   it("reads the plan file when the call doesn't carry the plan", () => {
-    const dir = fs.mkdtempSync(path.join(os.tmpdir(), "plans-"));
+    const dir = tempDir("plans-");
     const file = path.join(dir, ".claude", "plans", "quiet-otter.md");
     fs.mkdirSync(path.dirname(file), { recursive: true });
     fs.writeFileSync(file, "# From the file");
@@ -80,7 +80,7 @@ describe("proposedPlan", () => {
   });
 
   it("reads only a regular plan file, and no more than a plan needs", () => {
-    const dir = fs.mkdtempSync(path.join(os.tmpdir(), "plans-"));
+    const dir = tempDir("plans-");
     const plans = path.join(dir, ".claude", "plans");
     fs.mkdirSync(plans, { recursive: true });
     const secret = path.join(dir, "secret.key");
@@ -97,7 +97,7 @@ describe("proposedPlan", () => {
   });
 
   it("never reads a file the call names that isn't a plan file", () => {
-    const dir = fs.mkdtempSync(path.join(os.tmpdir(), "plans-"));
+    const dir = tempDir("plans-");
     const secret = path.join(dir, "secret.key");
     fs.writeFileSync(secret, "hunter2");
     expect(proposedPlan({ planFilePath: secret })).toBeNull();

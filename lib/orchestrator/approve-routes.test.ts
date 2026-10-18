@@ -5,6 +5,7 @@ import { beforeAll, beforeEach, describe, expect, it, vi } from "vitest";
 import { NextRequest } from "next/server";
 import { DEVICE_HEADER, TRUST_HEADER } from "@/lib/security/auth";
 import type { softAuthenticator as SoftAuth } from "@/lib/security/soft-authenticator";
+import { tempDir } from "@/lib/test-temp";
 
 vi.mock("@/lib/status-detector", () => ({
   checkWaitingPatterns: () => false,
@@ -53,7 +54,7 @@ const { noApprovalsOn, setNoApprovals } =
   await import("@/lib/approvals/no-approvals");
 
 beforeAll(() => {
-  const home = fs.mkdtempSync(path.join(os.tmpdir(), "aos-orch-approve-"));
+  const home = tempDir("aos-orch-approve-");
   vi.spyOn(os, "homedir").mockReturnValue(home);
 });
 beforeEach(() => {

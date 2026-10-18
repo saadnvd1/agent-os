@@ -2,15 +2,14 @@ import { spawnSync } from "node:child_process";
 import {
   existsSync,
   mkdirSync,
-  mkdtempSync,
   readFileSync,
   rmSync,
   utimesSync,
   writeFileSync,
 } from "node:fs";
-import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
+import { tempDir } from "@/lib/test-temp";
 
 const LIB = join(import.meta.dirname, "build-swap.sh");
 
@@ -41,7 +40,7 @@ const BUILD = `
 `;
 
 beforeEach(() => {
-  dir = mkdtempSync(join(tmpdir(), "build-swap-"));
+  dir = tempDir("build-swap-");
   mkdirSync(join(dir, ".next/cache/turbopack"), { recursive: true });
   writeFileSync(join(dir, ".next/BUILD_ID"), "old\n");
   writeFileSync(join(dir, ".next/cache/turbopack/db"), "cache\n");

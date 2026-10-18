@@ -5,10 +5,11 @@ import path from "path";
 import { afterAll, beforeAll, describe, expect, it, vi } from "vitest";
 import { adoptServerEnv } from "./env";
 import { envPath } from "./protocol";
+import { tempDir } from "@/lib/test-temp";
 
 let home = "";
 beforeAll(() => {
-  home = fs.mkdtempSync(path.join(os.tmpdir(), "aos-worker-env-"));
+  home = tempDir("aos-worker-env-");
   vi.spyOn(os, "homedir").mockReturnValue(home);
 });
 afterAll(() => vi.restoreAllMocks());
@@ -52,7 +53,7 @@ describe("adoptServerEnv", () => {
   it.runIf(hasTmux)(
     "leaves a shell the worker starts no tmux server to reach",
     () => {
-      const dir = fs.mkdtempSync(path.join(os.tmpdir(), "aos-worker-tmux-"));
+      const dir = tempDir("aos-worker-tmux-");
       const sock = path.join(dir, "sock");
       const out = path.join(dir, "out");
       const script = path.join(dir, "worker.mts");

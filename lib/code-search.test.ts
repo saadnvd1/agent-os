@@ -1,9 +1,9 @@
 import { execFileSync } from "child_process";
 import fs from "fs";
-import os from "os";
 import path from "path";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { MAX_RESULTS_CAP, searchCode } from "./code-search";
+import { tempDir } from "@/lib/test-temp";
 
 const hasRg = (() => {
   try {
@@ -17,7 +17,7 @@ const hasRg = (() => {
 // CI installs ripgrep, so there a missing rg fails rather than skips.
 describe.skipIf(!hasRg && !process.env.CI)("searchCode", () => {
   it("reads a query starting with - as a pattern, never an option", async () => {
-    const dir = fs.mkdtempSync(path.join(os.tmpdir(), "code-search-"));
+    const dir = tempDir("code-search-");
     fs.writeFileSync(path.join(dir, "a.sh"), 'touch "$0.ran"\n--pre=sh\n');
     const matches = await searchCode(dir, "--pre=sh");
     expect(fs.existsSync(path.join(dir, "a.sh.ran"))).toBe(false);
@@ -29,7 +29,7 @@ describe.skipIf(!hasRg && !process.env.CI)("searchCode", () => {
 // A stand-in rg on PATH: prints `count` matches, marks that it has (the
 // file "printed"), then hangs for 30 s.
 function stubRg(count: number) {
-  const dir = fs.mkdtempSync(path.join(os.tmpdir(), "code-search-stub-"));
+  const dir = tempDir("code-search-stub-");
   const line = (i: number) =>
     JSON.stringify({
       type: "match",
@@ -101,7 +101,7 @@ describe("searchCode off the event loop", () => {
   });
 
   it("says when rg isn't installed", async () => {
-    const dir = fs.mkdtempSync(path.join(os.tmpdir(), "code-search-none-"));
+    const dir = tempDir("code-search-none-");
     vi.stubEnv("PATH", "/nonexistent");
     await expect(searchCode(dir, "x")).rejects.toThrow(
       /ripgrep \(rg\) not found/

@@ -1,6 +1,5 @@
 import fs from "fs";
 import path from "path";
-import { tmpdir } from "os";
 import { execFileSync } from "child_process";
 import { describe, expect, it } from "vitest";
 import {
@@ -9,13 +8,14 @@ import {
   getDefaultBranch,
   remoteBranchExists,
 } from "./git";
+import { tempDir } from "@/lib/test-temp";
 
 const git = (cwd: string, ...args: string[]) =>
   execFileSync("git", args, { cwd, encoding: "utf8", stdio: "pipe" }).trim();
 
 describe("getDefaultBranch", () => {
   it("ignores a remote default branch that isn't a plain branch name", async () => {
-    const dir = fs.mkdtempSync(path.join(tmpdir(), "aos-git-"));
+    const dir = tempDir("aos-git-");
     git(dir, "init", "-q", "-b", "main");
     git(
       dir,
@@ -40,7 +40,7 @@ describe("getDefaultBranch", () => {
   });
 
   const repo = (branch: string) => {
-    const dir = fs.mkdtempSync(path.join(tmpdir(), "aos-git-"));
+    const dir = tempDir("aos-git-");
     git(dir, "init", "-q", "-b", branch);
     git(
       dir,
@@ -87,7 +87,7 @@ describe("getDefaultBranch", () => {
 
 describe("git reads run without a shell", () => {
   const repo = () => {
-    const dir = fs.mkdtempSync(path.join(tmpdir(), "aos-git-"));
+    const dir = tempDir("aos-git-");
     git(dir, "init", "-q", "-b", "main");
     git(
       dir,
@@ -121,7 +121,7 @@ describe("git reads run without a shell", () => {
   });
 
   it("checks a branch on the remote", async () => {
-    const origin = fs.mkdtempSync(path.join(tmpdir(), "aos-origin-"));
+    const origin = tempDir("aos-origin-");
     git(origin, "init", "-q", "--bare");
     const dir = repo();
     git(dir, "remote", "add", "origin", origin);

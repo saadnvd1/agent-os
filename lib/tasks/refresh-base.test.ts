@@ -1,15 +1,9 @@
-import {
-  existsSync,
-  mkdirSync,
-  mkdtempSync,
-  readFileSync,
-  writeFileSync,
-} from "fs";
-import { tmpdir } from "os";
+import { existsSync, mkdirSync, readFileSync, writeFileSync } from "fs";
 import { join } from "path";
 import { beforeEach, describe, expect, it } from "vitest";
 import { git as gitIn } from "../git-exec";
 import { refreshBase } from "./refresh-base";
+import { tempDir } from "@/lib/test-temp";
 
 const git = async (cwd: string, ...args: string[]) =>
   (await gitIn(cwd, args)).trim();
@@ -44,7 +38,7 @@ async function setup() {
 }
 
 beforeEach(async () => {
-  root = mkdtempSync(join(tmpdir(), "refresh-base-"));
+  root = tempDir("refresh-base-");
   const origin = join(root, "origin.git");
   repo = join(root, "repo");
   await git(root, "init", "-q", "--bare", "-b", "main", origin);

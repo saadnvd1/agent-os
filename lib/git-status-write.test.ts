@@ -1,7 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import { execFileSync } from "child_process";
 import fs from "fs";
-import os from "os";
 import path from "path";
 import {
   commit,
@@ -10,6 +9,7 @@ import {
   isValidBranchName,
   push,
 } from "./git-status";
+import { tempDir } from "@/lib/test-temp";
 
 // The commit, branch and push the git panel's POST routes run: whatever a
 // request puts in a message or a branch name is data, never shell or options.
@@ -26,7 +26,7 @@ const pwned = () =>
   fs.existsSync(path.join(repo, "x"));
 
 beforeEach(() => {
-  root = fs.mkdtempSync(path.join(os.tmpdir(), "git-status-write-"));
+  root = tempDir("git-status-write-");
   repo = path.join(root, "repo");
   origin = path.join(root, "origin.git");
   fs.mkdirSync(repo);
@@ -71,7 +71,7 @@ describe("commit", () => {
   });
 
   it("fails, without crashing, when git exits before reading a long message", async () => {
-    const outside = fs.mkdtempSync(path.join(os.tmpdir(), "not-a-repo-"));
+    const outside = tempDir("not-a-repo-");
     try {
       await expect(commit(outside, "m".repeat(4 << 20))).rejects.toThrow(
         /git commit failed: .*not a git repository/i

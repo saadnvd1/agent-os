@@ -1,5 +1,4 @@
 import fs from "fs";
-import os from "os";
 import path from "path";
 import { execFileSync } from "child_process";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
@@ -21,13 +20,13 @@ import {
   worktreeList,
   worktreeRemove,
 } from "./git-exec";
+import { tempDir } from "@/lib/test-temp";
 
 // Test setup runs git directly; the code under test goes through the helper.
 const sh = (cwd: string, ...args: string[]) =>
   execFileSync("git", args, { cwd, encoding: "utf8", stdio: "pipe" }).trim();
 
-const tmp = (prefix: string) =>
-  fs.realpathSync(fs.mkdtempSync(path.join(os.tmpdir(), prefix)));
+const tmp = (prefix: string) => fs.realpathSync(tempDir(prefix));
 
 let repo: string;
 const made: string[] = [];

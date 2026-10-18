@@ -6,6 +6,7 @@ import { afterEach, describe, expect, it } from "vitest";
 import { ensureMcpConfig } from "../mcp-config";
 import { agentEnv } from "./launch";
 import { claimAgentosEnv } from "./self-env";
+import { tempDir } from "@/lib/test-temp";
 
 const KEYS = [
   "AGENTOS_URL",
@@ -45,7 +46,7 @@ describe("claimAgentosEnv", () => {
       AGENTOS_SESSION_ID: "s1",
     });
 
-    const dir = fs.mkdtempSync(path.join(os.tmpdir(), "self-env-"));
+    const dir = tempDir("self-env-");
     ensureMcpConfig(dir, "s1");
     const mcp = JSON.parse(
       fs.readFileSync(path.join(dir, ".mcp.json"), "utf8")

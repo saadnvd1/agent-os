@@ -1,5 +1,4 @@
 import fs from "fs";
-import os from "os";
 import path from "path";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import {
@@ -8,9 +7,9 @@ import {
   type SkillWatcher,
 } from "./skill-watch";
 import { fakeFsWatch } from "./test-touch";
+import { tempDir } from "@/lib/test-temp";
 
-const tmp = () =>
-  fs.realpathSync(fs.mkdtempSync(path.join(os.tmpdir(), "skw-")));
+const tmp = () => fs.realpathSync(tempDir("skw-"));
 let watcher: SkillWatcher | undefined;
 let fake: ReturnType<typeof fakeFsWatch> | undefined;
 afterEach(() => {

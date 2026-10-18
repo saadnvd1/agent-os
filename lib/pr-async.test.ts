@@ -1,14 +1,14 @@
 import fs from "fs";
-import os from "os";
 import path from "path";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { checkGhCli, getPRForBranch } from "./pr";
 import { GhBackoffError, noteGhFailure, resetGhLimit } from "./tasks/gh-limit";
+import { tempDir } from "@/lib/test-temp";
 
 // A stand-in gh on PATH that counts its runs, takes `delayMs` to answer and
 // exits with `code`.
 function stubGh(delayMs: number, code = 0) {
-  const dir = fs.mkdtempSync(path.join(os.tmpdir(), "aos-pr-async-"));
+  const dir = tempDir("aos-pr-async-");
   const count = path.join(dir, "count");
   fs.writeFileSync(
     path.join(dir, "gh"),

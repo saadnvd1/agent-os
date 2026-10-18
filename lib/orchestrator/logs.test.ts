@@ -1,6 +1,3 @@
-import fs from "fs";
-import os from "os";
-import path from "path";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
 vi.mock("../tasks/gh", async (orig) => ({
@@ -16,6 +13,7 @@ import {
 } from "../session-logs";
 import { runTool } from "./serve";
 import { seedWorkspace } from "./testing";
+import { tempDir } from "@/lib/test-temp";
 
 function logged(name: string, merged: string, pr: number) {
   const w = seedWorkspace();
@@ -27,7 +25,7 @@ function logged(name: string, merged: string, pr: number) {
     pr_number: pr,
     merged_at: merged,
   });
-  setLogFolder(w.api.id, fs.mkdtempSync(path.join(os.tmpdir(), "orch-logs-")));
+  setLogFolder(w.api.id, tempDir("orch-logs-"));
   return w;
 }
 

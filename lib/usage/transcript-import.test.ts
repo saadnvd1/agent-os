@@ -1,10 +1,10 @@
 import { randomUUID } from "crypto";
 import fs from "fs";
-import os from "os";
 import path from "path";
 import { beforeEach, describe, expect, it } from "vitest";
 import { db, insertSessionRow } from "../db";
 import { importTranscripts } from "./transcript-import";
+import { tempDir } from "@/lib/test-temp";
 
 const line = (id: string, over: Record<string, unknown> = {}, usage = {}) =>
   JSON.stringify({
@@ -31,7 +31,7 @@ describe("importTranscripts", () => {
     db.exec(
       `DELETE FROM usage_calls; DELETE FROM usage_import_offsets; DELETE FROM sessions;`
     );
-    root = fs.mkdtempSync(path.join(os.tmpdir(), "aos-transcripts-"));
+    root = tempDir("aos-transcripts-");
     claudeId = randomUUID();
     const id = randomUUID();
     insertSessionRow(db, {

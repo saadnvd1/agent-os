@@ -57,10 +57,9 @@ import {
 } from "./features";
 import { editWaiting, realDeps, releaseAnyway, releasePieces } from "./release";
 import type { ReleaseDeps } from "./release";
+import { tempDir } from "@/lib/test-temp";
 
-process.env.AGENTOS_PLANS_DIR = fs.mkdtempSync(
-  path.join(os.tmpdir(), "plans-")
-);
+process.env.AGENTOS_PLANS_DIR = tempDir("plans-");
 
 const turn = {
   costUsd: 0.5,
@@ -84,7 +83,7 @@ function task(
     view: "chat",
     task: true,
   });
-  const worktree = fs.mkdtempSync(path.join(os.tmpdir(), "pieces-"));
+  const worktree = tempDir("pieces-");
   updateSessionRow(db, id, {
     worktree_path: worktree,
     model: "claude-opus-5-5",
@@ -838,8 +837,7 @@ describe("work the parent already merged", () => {
 });
 
 describe("repo names in a plan", () => {
-  const dirOf = (name: string) =>
-    path.join(fs.mkdtempSync(path.join(os.tmpdir(), "repos-")), name);
+  const dirOf = (name: string) => path.join(tempDir("repos-"), name);
   const project = (name: string, dir: string, ws: string) => {
     fs.mkdirSync(dir, { recursive: true });
     const p = createProject({ name, workingDirectory: dir });

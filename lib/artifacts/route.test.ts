@@ -1,5 +1,4 @@
 import fs from "fs";
-import os from "os";
 import path from "path";
 import { randomUUID } from "crypto";
 import { beforeAll, describe, expect, it } from "vitest";
@@ -8,11 +7,10 @@ import { GET } from "@/app/api/artifacts/[id]/route";
 import { GET as getImage } from "@/app/api/files/image/route";
 import { artifactHeight } from "@/components/Chat/ArtifactFrame";
 import { createArtifact } from "./store";
+import { tempDir } from "@/lib/test-temp";
 
 beforeAll(() => {
-  process.env.AGENTOS_ARTIFACTS_DIR = fs.mkdtempSync(
-    path.join(os.tmpdir(), "agentos-artifacts-")
-  );
+  process.env.AGENTOS_ARTIFACTS_DIR = tempDir("agentos-artifacts-");
 });
 
 const get = (id: string) =>
@@ -65,9 +63,7 @@ describe("GET /api/files/image", () => {
     );
 
   it("serves an SVG sandboxed, so its scripts never run as the app", async () => {
-    const dir = fs.realpathSync(
-      fs.mkdtempSync(path.join(os.tmpdir(), "agentos-img-"))
-    );
+    const dir = fs.realpathSync(tempDir("agentos-img-"));
     const svg = path.join(dir, "a.svg");
     fs.writeFileSync(svg, "<svg><script>alert(1)</script></svg>");
     const res = await image(svg);
@@ -80,9 +76,7 @@ describe("GET /api/files/image", () => {
   });
 
   it("answers 404 for anything that isn't an image file", async () => {
-    const dir = fs.realpathSync(
-      fs.mkdtempSync(path.join(os.tmpdir(), "agentos-img-"))
-    );
+    const dir = fs.realpathSync(tempDir("agentos-img-"));
     fs.writeFileSync(path.join(dir, "notes.txt"), "secret");
     fs.symlinkSync(path.join(dir, "notes.txt"), path.join(dir, "x.png"));
     expect((await image(path.join(dir, "notes.txt"))).status).toBe(404);

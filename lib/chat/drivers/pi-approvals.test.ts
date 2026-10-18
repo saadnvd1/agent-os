@@ -1,9 +1,9 @@
 import fs from "fs";
-import os from "os";
 import path from "path";
 import { pathToFileURL } from "url";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { EXTENSION } from "./pi-approvals";
+import { tempDir } from "@/lib/test-temp";
 
 type Handler = (
   event: { toolName: string; input: unknown; toolCallId: string },
@@ -15,7 +15,7 @@ let handler: Handler;
 
 // The extension exactly as Pi loads it, with Pi's side stubbed.
 beforeAll(async () => {
-  dir = fs.mkdtempSync(path.join(os.tmpdir(), "pi-ext-"));
+  dir = tempDir("pi-ext-");
   const file = path.join(dir, "ext.mjs");
   fs.writeFileSync(file, EXTENSION);
   const ext = (await import(pathToFileURL(file).href)) as {

@@ -1,14 +1,14 @@
 import fs from "fs";
-import os from "os";
 import path from "path";
 import { describe, expect, it } from "vitest";
 import { findCacheLeftovers, type CacheDeps } from "./caches";
 import { SESSION_TMP_PREFIX } from "@/lib/sessions/leftovers";
+import { tempDir } from "@/lib/test-temp";
 
 const DAY = 24 * 3600_000;
 
 function setup() {
-  const base = fs.mkdtempSync(path.join(os.tmpdir(), "aos-caches-"));
+  const base = tempDir("aos-caches-");
   const dir = (...p: string[]) => {
     const d = path.join(base, ...p);
     fs.mkdirSync(d, { recursive: true });
@@ -77,6 +77,25 @@ describe("cache leftovers", () => {
     t.plist["Here-2"] = live;
     t.plist["Mine-3"] = path.join(t.base, "Projects", "my-own-app");
     expect(await names(t.deps())).toEqual(["Gone-1"]);
+  });
+
+  it("takes test temp folders a day old, not fresh ones or other names", async () => {
+    const t = setup();
+    t.age(t.dir("tmp", "agent-os-test-old"), 3);
+    t.age(t.dir("tmp", "aos-orch-repo-old"), 3);
+    t.age(t.dir("tmp", "aos-t-oldrun"), 3);
+    t.age(t.dir("tmp", "aos-orch-repo-new"), 0);
+    t.age(t.dir("tmp", "aos-snap-old"), 3);
+    t.age(t.dir("tmp", "agent-os-screenshots"), 3);
+    t.age(t.dir("tmp", "other-old"), 30);
+    const { candidates } = await findCacheLeftovers(t.deps());
+    expect(
+      candidates.map((c) => [path.basename(c.path), c.kind]).sort()
+    ).toEqual([
+      ["agent-os-test-old", "test-temp"],
+      ["aos-orch-repo-old", "test-temp"],
+      ["aos-t-oldrun", "test-temp"],
+    ]);
   });
 
   it("finds nothing where the folders don't exist", async () => {

@@ -1,13 +1,13 @@
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import * as fs from "fs";
-import * as os from "os";
 import * as path from "path";
 import { fastCopyMode, unlinkMutable } from "./fastcopy";
 import { copyArgs } from "./spare";
+import { tempDir } from "@/lib/test-temp";
 
 let tmp: string;
 beforeEach(() => {
-  tmp = fs.mkdtempSync(path.join(os.tmpdir(), "aos-fast-"));
+  tmp = tempDir("aos-fast-");
 });
 afterEach(() => fs.rmSync(tmp, { recursive: true, force: true }));
 

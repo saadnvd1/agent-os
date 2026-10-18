@@ -1,5 +1,4 @@
 import fs from "fs";
-import os from "os";
 import path from "path";
 import { afterEach, describe, expect, it } from "vitest";
 import type { MachineView } from "./schedule";
@@ -15,6 +14,7 @@ import {
   unplaceable,
   type PeerOption,
 } from "./placement";
+import { tempDir } from "@/lib/test-temp";
 
 const NOW = Date.parse("2026-10-14T15:00:00Z");
 
@@ -140,7 +140,7 @@ describe("place", () => {
 describe("what a task needs", () => {
   const dirs: string[] = [];
   const project = (files: Record<string, string | null>) => {
-    const dir = fs.mkdtempSync(path.join(os.tmpdir(), "needs-"));
+    const dir = tempDir("needs-");
     dirs.push(dir);
     for (const [name, body] of Object.entries(files)) {
       const p = path.join(dir, name);

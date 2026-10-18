@@ -9,8 +9,8 @@
 import { execFileSync } from "child_process";
 import crypto from "crypto";
 import fs from "fs";
-import os from "os";
 import path from "path";
+import { tempDir } from "@/lib/test-temp";
 
 export interface TestPki {
   ca: string;
@@ -18,7 +18,7 @@ export interface TestPki {
 }
 
 export function makeTestPki(): TestPki {
-  const dir = fs.mkdtempSync(path.join(os.tmpdir(), "connect-pki-"));
+  const dir = tempDir("connect-pki-");
   const f = (n: string) => path.join(dir, n);
   const ssl = (...args: string[]) =>
     execFileSync("openssl", args, { stdio: "pipe" });

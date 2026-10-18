@@ -1,10 +1,10 @@
-import fs from "fs";
 import os from "os";
 import path from "path";
 import { beforeAll, beforeEach, describe, expect, it, vi } from "vitest";
 import type { Session } from "@/lib/db";
 import { seedSession, seedWorkspace } from "./testing";
 import type { UsageState } from "./usage";
+import { tempDir } from "@/lib/test-temp";
 
 // Sessions named "busy-*" are working; the rest are idle.
 const busy = new Set<string>();
@@ -54,7 +54,7 @@ const { readUsage } =
 
 beforeAll(() => {
   process.env.AGENTOS_ORCH_BRAKES = "1";
-  const home = fs.mkdtempSync(path.join(os.tmpdir(), "aos-orch-brakes-"));
+  const home = tempDir("aos-orch-brakes-");
   vi.spyOn(os, "homedir").mockReturnValue(home);
 });
 beforeEach(() => {
@@ -257,7 +257,7 @@ describe("the usage window brake", () => {
   });
 
   it("fails closed when nothing was ever sampled", async () => {
-    const dir = fs.mkdtempSync(path.join(os.tmpdir(), "aos-limits-"));
+    const dir = tempDir("aos-limits-");
     const ws = workspace();
     usage = readUsage(path.join(dir, "missing.json"), now, () => null);
     await expect(ws.start("x")).rejects.toThrow(
@@ -309,7 +309,7 @@ describe("a stack the orchestrator starts", () => {
   it("holds a braked card in the stack watcher, which starts nothing", async () => {
     const { setStartGate, tickStack } = await import("@/lib/stacks/tick");
     const { seedStack } = await import("@/lib/stacks/testing");
-    const s = seedStack(fs.mkdtempSync(path.join(os.tmpdir(), "aos-stack-")), [
+    const s = seedStack(tempDir("aos-stack-"), [
       { key: "A", status: "planned" },
     ]);
     const { stackQueries: q } = await import("@/lib/db");
@@ -422,7 +422,7 @@ describe("a brake on Saad's asks list", () => {
     const { landGate } = await import("./signoff");
     const { stackQueries: q } = await import("@/lib/db");
     const ws = workspace();
-    const s = seedStack(fs.mkdtempSync(path.join(os.tmpdir(), "aos-stack-")), [
+    const s = seedStack(tempDir("aos-stack-"), [
       { key: "A", status: "planned" },
     ]);
     db.prepare(

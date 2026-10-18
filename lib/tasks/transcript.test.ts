@@ -9,6 +9,7 @@ import {
   rewritePaths,
   writeTranscript,
 } from "./transcript";
+import { tempDir } from "@/lib/test-temp";
 
 const A = "11111111-2222-3333-4444-555555555555";
 const B = "99999999-2222-3333-4444-555555555555";
@@ -59,7 +60,7 @@ describe("rewritePaths", () => {
 describe("conversation files", () => {
   let dir: string;
   beforeEach(() => {
-    dir = fs.mkdtempSync(path.join(os.tmpdir(), "claude-cfg-"));
+    dir = tempDir("claude-cfg-");
     process.env.CLAUDE_CONFIG_DIR = dir;
   });
   afterEach(() => {

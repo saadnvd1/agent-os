@@ -1,6 +1,3 @@
-import fs from "fs";
-import os from "os";
-import path from "path";
 import { describe, expect, it } from "vitest";
 import {
   isLiveServer,
@@ -8,6 +5,7 @@ import {
   readLiveRecord,
   writeLiveRecord,
 } from "./liveServer";
+import { tempDir } from "@/lib/test-temp";
 
 describe("isLiveServer", () => {
   it("is the marker, or a bare production launch", () => {
@@ -29,7 +27,7 @@ describe("isLiveServer", () => {
 });
 
 describe("live record", () => {
-  const home = fs.mkdtempSync(path.join(os.tmpdir(), "live-"));
+  const home = tempDir("live-");
   it("reads a live pid and ignores a dead one", () => {
     writeLiveRecord(
       { pid: process.pid, port: 3011, cwd: "/x", startedAt: 1 },

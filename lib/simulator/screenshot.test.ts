@@ -1,6 +1,5 @@
 import { afterEach, describe, expect, it } from "vitest";
 import fs from "fs";
-import os from "os";
 import path from "path";
 import {
   RegionError,
@@ -12,10 +11,11 @@ import {
   setSips,
   takeRegion,
 } from "./screenshot";
+import { tempDir } from "@/lib/test-temp";
 
 afterEach(() => setSips(null));
 
-const tmp = () => fs.mkdtempSync(path.join(os.tmpdir(), "aos-shot-"));
+const tmp = () => tempDir("aos-shot-");
 
 describe("reducedCopy", () => {
   it("asks sips for 800px on the longest side, into shots/read", async () => {

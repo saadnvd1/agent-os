@@ -1,10 +1,10 @@
 import { afterAll, afterEach, describe, expect, it } from "vitest";
 import fs from "fs";
 import http from "http";
-import os from "os";
 import path from "path";
 import type { AddressInfo } from "net";
 import { cleanLinkCode, linkWithCode } from "./link";
+import { tempDir } from "@/lib/test-temp";
 
 const HOST = "m-0123456789abcdef.runagentos.com";
 const servers: http.Server[] = [];
@@ -45,7 +45,7 @@ afterEach(() => {
     fs.rmSync(d, { recursive: true, force: true });
 });
 const tmp = () => {
-  const dir = fs.mkdtempSync(path.join(os.tmpdir(), "agentos-link-"));
+  const dir = tempDir("agentos-link-");
   dirs.push(dir);
   return dir;
 };

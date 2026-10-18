@@ -1,9 +1,9 @@
 import { describe, expect, it } from "vitest";
 import { execFileSync, spawnSync } from "child_process";
 import fs from "fs";
-import os from "os";
 import path from "path";
 import { scanDiff } from "./staged-secrets";
+import { tempDir } from "@/lib/test-temp";
 
 // Fakes are built here, never written whole: a literal would be the very
 // thing this scan (and the merge gate) refuses.
@@ -62,7 +62,7 @@ describe("scanDiff", () => {
   });
 
   it("fails the commit on a staged secret, and passes once it's gone", () => {
-    const repo = fs.mkdtempSync(path.join(os.tmpdir(), "staged-secrets-"));
+    const repo = tempDir("staged-secrets-");
     const git = (...args: string[]) =>
       execFileSync("git", args, { cwd: repo, stdio: "pipe" });
     const scan = () =>

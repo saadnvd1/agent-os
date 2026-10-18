@@ -1,7 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import { execFileSync } from "child_process";
 import fs from "fs";
-import os from "os";
 import path from "path";
 import {
   describeChanges,
@@ -11,6 +10,7 @@ import {
   unsavedChanges,
 } from "./worktree-placed";
 import { setupWorktree } from "./env-setup";
+import { tempDir } from "@/lib/test-temp";
 
 let root: string;
 let repo: string;
@@ -23,7 +23,7 @@ const write = (rel: string, body: string) => {
 };
 
 beforeEach(() => {
-  root = fs.realpathSync(fs.mkdtempSync(path.join(os.tmpdir(), "placed-")));
+  root = fs.realpathSync(tempDir("placed-"));
   repo = path.join(root, "repo");
   wt = path.join(root, "wt");
   fs.mkdirSync(repo);

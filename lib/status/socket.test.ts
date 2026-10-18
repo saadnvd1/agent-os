@@ -1,6 +1,5 @@
 import { EventEmitter } from "events";
 import fs from "fs";
-import os from "os";
 import path from "path";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { randomUUID } from "crypto";
@@ -11,6 +10,7 @@ import {
   sessionFolder,
   streamParams,
 } from "./socket";
+import { tempDir } from "@/lib/test-temp";
 
 const p = (q: string) => new URLSearchParams(q);
 
@@ -45,7 +45,7 @@ describe("status socket messages", () => {
   });
 
   it("in a demo, watches git only in the demo's home", () => {
-    const home = fs.mkdtempSync(path.join(os.tmpdir(), "demo-home-"));
+    const home = tempDir("demo-home-");
     fs.mkdirSync(path.join(home, "code"));
     vi.stubEnv("AGENTOS_DEMO", "1");
     vi.stubEnv("HOME", home);

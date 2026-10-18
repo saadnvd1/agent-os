@@ -1,6 +1,3 @@
-import { mkdtempSync } from "fs";
-import { tmpdir } from "os";
-import { join } from "path";
 import { randomUUID } from "crypto";
 import { describe, expect, it, vi } from "vitest";
 
@@ -27,6 +24,7 @@ import { registry, type Live } from "./registry";
 import { stopChatAtTurnEnd } from "./stop";
 import * as runner from "./runner";
 import { waitForExit } from "./worker/client";
+import { tempDir } from "@/lib/test-temp";
 
 function chatSession(status = "running"): string {
   const id = randomUUID();
@@ -76,7 +74,7 @@ describe("a held chat", () => {
   });
 
   it("keeps its queue while its stack is landing", () => {
-    const s = seedStack(mkdtempSync(join(tmpdir(), "hold-")), [
+    const s = seedStack(tempDir("hold-"), [
       { key: "P", status: "pr", branch: "feature/hold-p", pr: 1 },
     ]);
     const id = s.item("P").session_id!;
