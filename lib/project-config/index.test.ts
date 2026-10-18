@@ -338,3 +338,13 @@ describe("browse config", () => {
     expect(brief).toContain("Docs `http://x.test/d`");
   });
 });
+
+describe("this repo's agentos.json", () => {
+  it("parses, and its browse block turns into URLs", () => {
+    const loaded = loadProjectConfig(path.resolve(__dirname, "../.."));
+    expect(loaded.error).toBeNull();
+    expect(loaded.config.browse?.verify).toBe(true);
+    const brief = runningBrief(loaded.config, { PORT: 3121 });
+    expect(brief).toContain("http://localhost:3121/welcome");
+  });
+});
