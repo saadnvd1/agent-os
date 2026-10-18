@@ -328,46 +328,17 @@ const GIT_WRITES = new Set([
 
 const READ_ONLY_STASH = new Set(["list", "show"]);
 
-// Options a fast-forward may carry: none rewrites history or the branch.
-const FF_FLAGS = new Set([
-  "--ff-only",
-  "-q",
-  "--quiet",
-  "-v",
-  "--verbose",
-  "--no-edit",
-  "--no-rebase",
-  "--stat",
-  "--no-stat",
-  "--tags",
-  "-t",
-  "--no-tags",
-  "--prune",
-  "-p",
-  "--progress",
-  "--no-progress",
-  "-4",
-  "-6",
+// What an orchestrator may do to a project checkout of its own workspace:
+// bring it up to date and move its branch (Saad, 2026-10-18). Commits, stash,
+// clean and file edits still go through tasks and quick changes.
+const CHECKOUT_UPDATES = new Set([
+  "pull",
+  "merge",
+  "reset",
+  "checkout",
+  "switch",
+  "rebase",
 ]);
-
-// `git pull --ff-only [remote [branch]]` and `git merge --ff-only <ref>`:
-// they only move the checked-out branch forward, and git refuses when local
-// work would be overwritten or the branch has diverged.
-function isFastForward(sub: string, rest: string[]): boolean {
-  if (!rest.includes("--ff-only")) return false;
-  const pos: string[] = [];
-  for (const a of rest) {
-    if (a.startsWith("-")) {
-      if (!FF_FLAGS.has(a)) return false;
-    } else pos.push(a);
-  }
-  if (pos.some((a) => has(a) || a.startsWith("+") || a.includes(":")))
-    return false;
-  return sub === "pull" ? pos.length <= 2 : sub === "merge" && pos.length === 1;
-}
-
-const FF_HINT =
-  "Fast-forwarding a project checkout is allowed: `git pull --ff-only [origin main]` or `git merge --ff-only <upstream>` (git refuses if the branch has diverged or local work would be overwritten).";
 
 async function gitRefusal(
   args: string[],
@@ -376,10 +347,8 @@ async function gitRefusal(
 ): Promise<string | null> {
   let dir = cwd;
   let i = 0;
-  let configured = false;
   for (; i < args.length; i++) {
     const a = args[i];
-    if (a === "-c" || a.startsWith("--exec-path")) configured = true;
     if (a === "-C" || a === "--git-dir" || a === "--work-tree") {
       dir = path.resolve(dir, args[++i] ?? "");
       continue;
@@ -406,18 +375,10 @@ async function gitRefusal(
   const why = await ctx.writeRefusal(dir);
   if (!why) return null;
   const kind = (await ctx.checkoutKind?.(dir)) ?? "other";
-  const pullish = sub === "pull" || sub === "merge";
-  if (kind === "live" && pullish)
-    return `Refused: git ${sub} in ${dir}. This is the checkout AgentOS's live server runs from; autodeploy deploys it (restart gap and health check), and a pull here would swap the code under the running server. For a manual deploy use scripts/redeploy.`;
-  if (
-    kind === "own" &&
-    pullish &&
-    !configured &&
-    isFastForward(sub, args.slice(i + 1))
-  )
-    return null;
-  const hint = pullish ? ` ${FF_HINT}` : "";
-  return `Refused: git ${sub} in ${dir}. Orchestrators don't change project checkouts (autodeploy runs from them).${hint} To see current code: \`git -C ${dir} fetch\` then \`git -C ${dir} show origin/main:<path>\` or \`git -C ${dir} log origin/main\`.`;
+  if (kind === "live" && CHECKOUT_UPDATES.has(sub))
+    return `Refused: git ${sub} in ${dir}. This is the checkout AgentOS's live server runs from; autodeploy deploys it (restart gap and health check), and changing it here would swap the code under the running server. For a manual deploy use scripts/redeploy.`;
+  if (kind === "own" && CHECKOUT_UPDATES.has(sub)) return null;
+  return `Refused: git ${sub} in ${dir}. Orchestrators don't change project checkouts (autodeploy runs from them).To see current code: \`git -C ${dir} fetch\` then \`git -C ${dir} show origin/main:<path>\` or \`git -C ${dir} log origin/main\`.`;
 }
 
 // Commands whose every non-option argument is a file they change, and

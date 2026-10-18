@@ -151,29 +151,31 @@ describe("the orchestrator's shell", () => {
     ]);
   });
 
-  it("still refuses everything else that changes a checkout, naming the allowed form", async () => {
+  it("updates and moves branches in its own workspace's checkout", async () => {
+    await expectAllowed([
+      "git -C /work/repo pull",
+      "cd /work/repo && git pull --rebase origin main",
+      "git -C /work/repo pull --ff-only --force",
+      "git -C /work/repo pull origin +main:main",
+      "git -C /work/repo -c rebase.autoStash=true pull",
+      "git -C /work/repo merge origin/main",
+      "cd /work/repo && git reset --hard origin/main",
+      "git -C /work/repo checkout main",
+      "git -C /work/repo switch -c x",
+      "git -C /work/repo rebase main",
+    ]);
+  });
+
+  it("still refuses commits, edits and another task's worktree", async () => {
     await expectRefused(
       [
-        "git -C /work/repo pull",
-        "git -C /work/repo pull origin main",
-        "cd /work/repo && git pull --rebase",
-        "git -C /work/repo pull --ff-only --rebase",
-        "git -C /work/repo pull --ff-only --force",
-        "git -C /work/repo pull --ff-only origin +main:main",
-        "git -C /work/repo -c core.hooksPath=/tmp pull --ff-only",
-        "git -C /work/repo merge origin/main",
-        "git -C /work/repo merge --ff-only a b",
-        "git -C /work/repo reset --hard origin/main",
-        "git -C /work/repo checkout main",
-        "git -C /work/repo switch -c x",
-        "git -C /work/repo rebase main",
+        "git -C /work/repo commit -m x",
+        "git -C /work/repo clean -fdx",
+        "git -C /work/repo pull --ff-only; echo x > /work/repo/a.txt",
         "git -C /work/other pull --ff-only",
+        "git -C /work/other reset --hard",
       ],
-      /Refused: git/
-    );
-    expect(await check("git -C /work/repo pull")).toMatch(/pull --ff-only/);
-    expect(await check("git -C /work/repo reset --hard")).not.toMatch(
-      /pull --ff-only/
+      /Refused/
     );
   });
 
@@ -183,6 +185,7 @@ describe("the orchestrator's shell", () => {
         "git -C /live pull --ff-only",
         "cd /live && git pull --ff-only origin main",
         "git -C /live merge --ff-only origin/main",
+        "git -C /live reset --hard",
       ],
       /autodeploy.*scripts\/redeploy/
     );
@@ -192,8 +195,8 @@ describe("the orchestrator's shell", () => {
     await expectRefused(
       [
         "git -C /work/repo commit -m x",
-        "cd /work/repo && git reset --hard",
-        "cd /work/repo/src && git checkout main",
+        "cd /work/repo && git clean -fd",
+        "cd /work/repo/src && git restore README.md",
         "git --git-dir=/work/repo/.git stash",
         "git --work-tree /work/other rebase main",
         "git -C /work/other merge main",

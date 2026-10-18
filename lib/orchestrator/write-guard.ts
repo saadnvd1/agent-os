@@ -24,7 +24,7 @@ import { orchestratorDir } from "./home";
 import { LIMITS_FILE } from "./usage";
 import { quickWorktrees } from "./quick-store";
 import { shellRefusal } from "./shell-guard";
-import { readLiveRecord } from "../dev-instance/liveServer";
+import { liveCheckout } from "../dev-instance/liveServer";
 
 // The tools that write a file, and the argument naming it.
 export const WRITE_TOOLS: Record<string, string> = {
@@ -419,7 +419,7 @@ async function checkoutKind(
         .flatMap((p) => [path.resolve(p), p])
         .map((p) => physicalPath(p))
     );
-  const live = await roots([process.cwd(), readLiveRecord()?.cwd]);
+  const live = await roots([process.cwd(), liveCheckout() ?? undefined]);
   if (live.some((r) => within(real, r) || within(r, real))) return "live";
   if (!session.workspace_id) return "other";
   const own = db
