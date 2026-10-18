@@ -295,6 +295,7 @@
 
 ## Disk clean-up follow-ups
 
+- Turning the full clean-up on is refused to device tokens, but any process on the same machine can still PUT it over loopback; tie it to a person or the orchestrator.
 - Cap the shared `~/.agent-os/simulators/{ccache,derived,modulecache}` caches by size (they are shared, not per task, so the reaper leaves them).
 - A per-project hook for test databases that don't carry `_aos_<hash>` (they can only clean up after themselves today).
 - Reap the user-level chrome-devtools wrapper's old named profiles (lives outside this repo).

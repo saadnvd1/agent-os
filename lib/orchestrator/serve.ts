@@ -31,6 +31,7 @@ import { addRule, removeRule } from "./rules";
 import { askSaad } from "./ask-tool";
 import { askQuestion, resolveQuestion } from "./questions";
 import { listOrchestratorPeers, messageOrchestrator } from "./cross";
+import { sweepArm, sweepDryRun } from "./sweep-arm";
 import { PAUSED_REFUSAL } from "./pause";
 import { readSession } from "./read";
 import { reviewTarget, signOffTarget } from "./external-gates";
@@ -215,6 +216,12 @@ export async function runTool(
     case "move": {
       const a = p(tool, raw);
       return moveTaskTo(w, a.task, a.machine);
+    }
+    case "sweep_dry_run":
+      return sweepDryRun(p(tool, raw).machine);
+    case "sweep_arm": {
+      const a = p(tool, raw);
+      return sweepArm(w, a.machine, a.on, a.reason);
     }
     case "stop":
       return stop(w, p(tool, raw).session);

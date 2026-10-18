@@ -145,6 +145,10 @@ const DESCRIPTIONS: Record<ToolName, string> = {
     "A task whose plan split into pieces: each piece, its repo, what it waits on and its state. With merge or drop (position numbers) it edits the pieces still waiting: a merged piece's slice goes to the piece before it, a dropped one is left out and anything waiting on it is held. It can't add pieces or change reasons.",
   drop: "Reject a task: close its PR and remove its worktree. A task still waiting in the queue is removed by its id. Logged with the reason.",
   move: 'Carry a running task to a linked machine, or back with "here": for heavy test or build work. It keeps its branch, conversation and plan; the gates, events, read, send, stop, done and drop work the same wherever it runs, and the machine it lands on can\'t merge it. Takes a few minutes and runs in the background; an event says when it lands. Refused while paused, for a task waiting on Saad (an escalation or open ask), and for card and stacked tasks.',
+  sweep_dry_run:
+    "Start a dry run of the disk clean-up on this machine or a linked one: it lists what the full clean-up would remove and removes nothing. Takes a few minutes; sweep_arm reads it.",
+  sweep_arm:
+    "Turn the full disk clean-up (test leftovers, stale task databases, spares, temp folders, build caches) on or off for this machine or a linked one. Only for when Saad has said to turn it on: put what he said in reason. Turning it on is refused unless that machine's latest dry run finished in the last hour (run sweep_dry_run first, and read its totals). Off is always allowed. Logged in the decision log with the dry run's totals.",
   set_priority:
     "Change the priority of a queued task (it re-ranks the line at once) or a running one (it only matters if it is paused and waits to resume). urgent starts first even on a busy machine; background starts last.",
   start_now:

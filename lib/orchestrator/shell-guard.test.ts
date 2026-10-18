@@ -119,7 +119,7 @@ describe("the orchestrator's shell", () => {
   it("refuses aos sweep --arm, allows a dry run and disarming", async () => {
     await expectRefused(
       ["aos sweep --arm", "env aos sweep --arm"],
-      /Health, Clean-up, Turn on/
+      /Health, Clean-up, Turn on.*sweep_arm/
     );
     await expectAllowed(["aos sweep --dry-run", "aos sweep --disarm"]);
   });

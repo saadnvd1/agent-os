@@ -22,6 +22,7 @@ it may do on its own, and the lines that always come back to you as asks.
   stack position), `read` (the end of a terminal or chat) and `cards` (the
   linked boards' cards), plus acting tools: `send`, `start_task`,
   `start_session`, `stack`, `stack_status`, `land`, `drop`, `resurrect` (bring back a dropped, done or archived session with its conversation), `stop`, `done`, `move`,
+  `sweep_dry_run` and `sweep_arm` (the full disk clean-up: a dry run of this or a linked machine, then on or off for it when Saad has said to; turning it on is refused without a dry run from the last hour, and each change goes in the decision log with that run's totals),
   `add_project` (a git repository on the machine becomes a project of the
   workspace, or the project already at that path moves in from no workspace;
   folders that hold secrets and projects of another workspace are refused),
@@ -42,8 +43,8 @@ it may do on its own, and the lines that always come back to you as asks.
   naming the tool to use instead: merging, closing or retargeting a PR
   (`gh pr merge`, `gh pr close`, `gh pr edit --base`, and `gh api` or `curl`
   calls that merge a pull request or PATCH or PUT one; use `sign_off`, `arm`,
-  `land` or `drop`), `aos move`, `aos done` and `aos stop` (use `move`, `done` and
-  `stop`, which are scoped to the workspace and held by Pause), `git push` (`quick_pr` pushes), writing in a project
+  `land` or `drop`), `aos move`, `aos done`, `aos stop` and `aos sweep --arm` (use `move`, `done`,
+  `stop` and `sweep_arm`, which are scoped to the workspace and held by Pause), `git push` (`quick_pr` pushes), writing in a project
   repository or task worktree other than its own open quick changes (git
   commit, reset, checkout, rebase, merge, stash, clean or rm there, and `rm`,
   `mv`, `cp`, `tee` or a redirect into one), writing AgentOS's state (`sqlite3`
