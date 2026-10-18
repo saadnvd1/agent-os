@@ -228,13 +228,19 @@ function portRefs(
 
 // agentos.json: an unknown key is an error, because it is nearly always a
 // typo that would otherwise be silently ignored.
-export const agentosJson = z.strictObject(shape).superRefine(portRefs);
+export const agentosFields = z.strictObject(shape);
+export const agentosJson = agentosFields.superRefine(portRefs);
 
 // .dispatch.json: the same fields, but dispatch has keys of its own. Its
 // top-level `workspace` is `cards.workspace` here.
-export const dispatchJson = z
-  .object({ ...shape, workspace: z.string().optional() })
-  .superRefine(portRefs);
+export const dispatchFields = z.object({
+  ...shape,
+  workspace: z.string().optional(),
+});
+export const dispatchJson = dispatchFields.superRefine(portRefs);
+
+// The cross-key port check on its own, for a config merged from two files.
+export const mergedJson = z.looseObject(shape).superRefine(portRefs);
 
 export const legacyJson = z.object({
   setup: z.array(z.string()).optional(),

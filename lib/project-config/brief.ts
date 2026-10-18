@@ -18,9 +18,11 @@ import { simulatorBrief } from "../simulator/brief";
 export function runningBrief(
   config: ProjectConfig,
   ports: Record<string, number>,
-  database: SessionDatabase | null = null
+  database: SessionDatabase | null = null,
+  warning: string | null = null
 ): string {
   const lines: string[] = [];
+  if (warning) lines.push(`- ${warning}`);
   const names = Object.entries(ports);
   if (names.length)
     lines.push(

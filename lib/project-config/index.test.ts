@@ -50,6 +50,8 @@ describe("loadProjectConfig precedence", () => {
       config: {},
       source: null,
       error: null,
+      inherited: [],
+      warning: null,
     });
   });
 
@@ -346,5 +348,118 @@ describe("this repo's agentos.json", () => {
     expect(loaded.config.browse?.verify).toBe(true);
     const brief = runningBrief(loaded.config, { PORT: 3121 });
     expect(brief).toContain("http://localhost:3121/welcome");
+  });
+});
+
+describe("agentos.json over .dispatch.json", () => {
+  const rails = {
+    "agentos.json": { browse: { login: "/dev/login", port: "PORT" } },
+    ".dispatch.json": {
+      ports: { PORT: 3000 },
+      dev: "bin/dev",
+      copy: [".env"],
+      database: { from: "postgres://x/y" },
+      workspace: "W",
+      dispatchOnly: 1,
+    },
+  };
+
+  it("merges disjoint keys and names the inherited ones", () => {
+    const loaded = loadProjectConfig(
+      project({
+        "agentos.json": { dev: "a" },
+        ".dispatch.json": { test: "t", ports: { PORT: 3000 } },
+      })
+    );
+    expect(loaded.error).toBeNull();
+    expect(loaded.source).toBe("agentos.json");
+    expect(loaded.config).toEqual({
+      dev: "a",
+      test: "t",
+      ports: { PORT: 3000 },
+    });
+    expect([...loaded.inherited].sort()).toEqual(["ports", "test"]);
+  });
+
+  it("takes an overlapping key whole from agentos.json", () => {
+    const loaded = loadProjectConfig(
+      project({
+        "agentos.json": { browse: { login: "/a" } },
+        ".dispatch.json": { browse: { login: "/b", map: "docs/map.md" } },
+      })
+    );
+    expect(loaded.config.browse).toEqual({ login: "/a" });
+    expect(loaded.inherited).toEqual([]);
+  });
+
+  it("leaves a single file as it was", () => {
+    const one = loadProjectConfig(project({ "agentos.json": { dev: "a" } }));
+    expect(one.inherited).toEqual([]);
+    expect(one.warning).toBeNull();
+    const old = loadProjectConfig(
+      project({ ".dispatch.json": { workspace: "W", dev: "d" } })
+    );
+    expect(old.config).toEqual({ dev: "d", cards: { workspace: "W" } });
+    expect(old.warning).toBeNull();
+  });
+
+  it("keeps the whole setup of a repo with a browse-only agentos.json", () => {
+    const loaded = loadProjectConfig(project(rails));
+    expect(loaded.error).toBeNull();
+    expect(loaded.config.dev).toBe("bin/dev");
+    expect(loaded.config.copy).toEqual([".env"]);
+    expect(loaded.config.database).toEqual({ from: "postgres://x/y" });
+    expect(loaded.config.cards).toEqual({ workspace: "W" });
+    expect(loaded.config.browse).toEqual({ login: "/dev/login", port: "PORT" });
+    expect(portBases(loaded.config)).toEqual({ PORT: 3000 });
+    expect(loaded.config).not.toHaveProperty("dispatchOnly");
+    expect(loaded.inherited).not.toContain("browse");
+  });
+
+  it("checks port names across both files", () => {
+    const loaded = loadProjectConfig(
+      project({
+        "agentos.json": { browse: { login: "/l", port: "API" } },
+        ".dispatch.json": { ports: { WEB: 3000 } },
+      })
+    );
+    expect(loaded.error).toContain("browse.port: names API");
+    expect(loaded.config).toEqual({});
+  });
+
+  it("reports a broken file on either side", () => {
+    expect(
+      loadProjectConfig(
+        project({ "agentos.json": { dev: "a" }, ".dispatch.json": "{ nope" })
+      ).error
+    ).toMatch(/^\.dispatch\.json is not valid JSON/);
+    expect(
+      loadProjectConfig(
+        project({
+          "agentos.json": { cloen: [] },
+          ".dispatch.json": { dev: "d" },
+        })
+      ).error
+    ).toMatch(/^agentos\.json is invalid/);
+  });
+
+  it("names the inherited keys in the warning and the brief", () => {
+    const loaded = loadProjectConfig(project(rails));
+    for (const key of ["ports", "dev", "copy", "database"])
+      expect(loaded.warning).toContain(key);
+    expect(loaded.warning).toContain("delete .dispatch.json");
+    expect(runningBrief({}, {}, null, loaded.warning)).toContain(
+      `## Running this project\n\n- ${loaded.warning}`
+    );
+  });
+
+  it("notices an edit to either file", () => {
+    const dir = project(rails);
+    expect(loadProjectConfig(dir).config.dev).toBe("bin/dev");
+    fs.writeFileSync(
+      path.join(dir, ".dispatch.json"),
+      JSON.stringify({ ports: { PORT: 3000 }, dev: "something/else/longer" })
+    );
+    expect(loadProjectConfig(dir).config.dev).toBe("something/else/longer");
   });
 });
