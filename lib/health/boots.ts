@@ -7,8 +7,7 @@
  */
 
 import fs from "fs";
-import os from "os";
-import path from "path";
+import { agentosHome } from "../agentos-home";
 import { db } from "../db";
 import { gitSync } from "../git-exec";
 import { getSetting, putSetting } from "../settings-store";
@@ -80,12 +79,7 @@ export const recentBoots = (n = 6) =>
     .prepare(`SELECT * FROM health_boots ORDER BY started_at DESC LIMIT ?`)
     .all(n) as BootRow[];
 
-export const DEPLOY_RESTART_FILE = path.join(
-  os.homedir(),
-  ".agent-os",
-  "autodeploy",
-  "restarted"
-);
+export const DEPLOY_RESTART_FILE = agentosHome("autodeploy", "restarted");
 
 // When autodeploy last restarted the server (it writes epoch seconds once the
 // server is back up), or null.
