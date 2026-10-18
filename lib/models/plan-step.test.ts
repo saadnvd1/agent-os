@@ -77,6 +77,19 @@ describe("plan then implement", () => {
     expect(taskRouting(null, "chat", undefined).plan).toBe(false);
   });
 
+  it("skips the plan in a fast project unless the caller asks for it", () => {
+    expect(
+      taskRouting(null, "chat", undefined, undefined, undefined, "fast").plan
+    ).toBe(false);
+    expect(
+      taskRouting(null, "chat", undefined, true, undefined, "fast").plan
+    ).toBe(true);
+    expect(
+      taskRouting(null, "chat", undefined, undefined, undefined, "production")
+        .plan
+    ).toBe(true);
+  });
+
   it("asks for the plan in a file the worktree's git ignores", () => {
     const { worktree } = planningTask();
     preparePlanDir(worktree);

@@ -165,7 +165,12 @@ export function checkGate(
   return { gate, state: "pass" };
 }
 
-export function evaluateGates(i: GateInput): GateOutcome[] {
+// `fast`: the fast lane keeps Saad's hold, the rules on the diff, the stack
+// and the PR body's attribution; no CI, review or card scope check.
+export function evaluateGates(
+  i: GateInput,
+  opts: { fast?: boolean } = {}
+): GateOutcome[] {
   const blocked: GateOutcome = i.prBlocked
     ? { gate: "blocked", state: "fail", reason: i.prBlocked }
     : i.prDraft
@@ -185,7 +190,7 @@ export function evaluateGates(i: GateInput): GateOutcome[] {
           : { gate: "blocked", state: "pass" };
   const scope: GateOutcome = i.ruleBreaks.length
     ? { gate: "scope", state: "fail", reason: i.ruleBreaks.join("; ") }
-    : i.fromCard
+    : i.fromCard && !opts.fast
       ? checkGate("scope", i.scope, i.sha)
       : { gate: "scope", state: "pass" };
   const stack: GateOutcome = i.stackRefusal
@@ -197,6 +202,7 @@ export function evaluateGates(i: GateInput): GateOutcome[] {
   const codeReview: GateOutcome = i.codeReview.refusal
     ? { gate: "code-review", state: "fail", reason: i.codeReview.refusal }
     : { gate: "code-review", state: "pass" };
+  if (opts.fast) return [codeReview, blocked, scope, stack];
   return [
     ciGate(i),
     checkGate("review", i.review, i.sha),

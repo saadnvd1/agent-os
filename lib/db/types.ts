@@ -175,6 +175,9 @@ export interface Group {
   created_at: string;
 }
 
+// production: every merge gate applies. fast: a task's PR merges when it opens.
+export type ProjectTier = "production" | "fast";
+
 export interface Project {
   id: string;
   name: string;
@@ -190,6 +193,7 @@ export interface Project {
   lh_board_id: string | null;
   lh_board_name: string | null;
   lh_board_page_id: string | null;
+  tier: ProjectTier;
   // What its tasks need from a machine (JSON array), and where that came from.
   machine_needs?: string | null;
   machine_needs_source?: string | null;

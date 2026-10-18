@@ -136,6 +136,9 @@ function setup() {
     workingDirectory: repo,
   });
   setProjectWorkspace(project.id, workspace.id);
+  db.prepare(`UPDATE projects SET tier = 'production' WHERE id = ?`).run(
+    project.id
+  );
   const orchestrator = ensureOrchestrator(workspace.id);
   const other = path.join(WORKTREES_DIR, `${path.basename(root)}-other`);
   git(repo, "worktree", "add", "-q", "-b", "feature/other", other);

@@ -231,6 +231,9 @@ export function setup(
     workingDirectory: repo,
   });
   setProjectWorkspace(project.id, workspace.id);
+  db.prepare(`UPDATE projects SET tier = 'production' WHERE id = ?`).run(
+    project.id
+  );
   ensureOrchestrator(workspace.id);
   const task = seedSession({
     projectId: project.id,

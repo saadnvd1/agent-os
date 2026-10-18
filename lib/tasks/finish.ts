@@ -40,6 +40,7 @@ import { sessionEnded } from "../experiments/hooks";
 import { snapshotWorktree } from "../resurrect/snapshot";
 import { keepSessionFiles } from "../session-artifacts/collect";
 import { setPr, setTask } from "../db/session-parts";
+import { isFast } from "../project-tier/getProjectTier";
 
 export const sessionMergePolicy = (session: Session): MergePolicy =>
   mergePolicy(session.project_id ? getProject(session.project_id) : null);
@@ -167,7 +168,7 @@ export async function signOffTask(
     throw new Error(`${opts.base} isn't a base ${session.name} may merge into`);
   const judgedBase = opts.base ?? session.base_branch;
   const pr = await prFor(session, true);
-  const verdict = canSignOff(pr);
+  const verdict = canSignOff(pr, { ci: !isFast(session) });
   if (!verdict.ok) throw new Error(verdict.reason);
   if (pr!.base && pr!.base !== judgedBase)
     throw new Error(

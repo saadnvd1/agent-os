@@ -41,6 +41,8 @@ import {
   reviewSignature,
 } from "./loop-guard";
 import { addNote } from "./notes";
+import { isFast } from "../project-tier/getProjectTier";
+import { recordFastMerge } from "./fast-lane-state";
 import { latestApproval, refundApproval, spendApproval } from "./ask-approvals";
 import { workSubject } from "./asks";
 import { carryApproval } from "./approval-carry";
@@ -71,7 +73,7 @@ export function restackedOf(task: Session) {
 
 // `approval`: Saad approved this merge on his asks list, for this commit.
 export type Verdict =
-  | { ok: true; sha: string; pr: number; approval?: number }
+  | { ok: true; sha: string; pr: number; approval?: number; fast?: true }
   | { ok: false; wait: boolean; text: string };
 
 // Whether the task may merge now, and at which commit. Landing merges a
@@ -107,13 +109,15 @@ export async function judge(
   // A PR quick_pr opened (by the row AgentOS wrote, never the body): its
   // code review is the independent review of this head, and until that
   // passes it waits, before any gate is judged or counted.
-  const quick = isQuick(task)
-    ? quickCodeReview(
-        sha,
-        getCheck(task.id, sha, "review"),
-        restackedOf(task)?.to === sha
-      )
-    : null;
+  const fast = isFast(task);
+  const quick =
+    isQuick(task) && !fast
+      ? quickCodeReview(
+          sha,
+          getCheck(task.id, sha, "review"),
+          restackedOf(task)?.to === sha
+        )
+      : null;
   // Saad's approval of this head stands in for that review (gateVerdict).
   if (
     quick?.wait &&
@@ -157,7 +161,7 @@ export async function judge(
         return quick ? { refusal: gate.refusal, wait: null } : gate;
       })(),
     }),
-    opts
+    { ...opts, fast }
   );
 }
 
@@ -178,8 +182,9 @@ export async function gateVerdict(
   workspaceId: string,
   work: GateWork,
   inputs: () => Promise<Omit<GateInput, "sha" | "ruleBreaks">>,
-  opts: { count?: boolean } = {}
+  opts: { count?: boolean; fast?: boolean } = {}
 ): Promise<Verdict> {
+  const fast = !!opts.fast;
   const no = (text: string, wait = false): Verdict => ({
     ok: false,
     wait,
@@ -216,7 +221,9 @@ export async function gateVerdict(
         : null;
     const refusal = i.codeReview.refusal ?? stack;
     if (refusal) return no(`${approved} ${refusal}`);
-    const ci = ciGate({ sha, ...i, repoCI: await repoCIFor(repo, work, i) });
+    const ci = fast
+      ? { state: "pass" as const }
+      : ciGate({ sha, ...i, repoCI: await repoCIFor(repo, work, i) });
     if (ci.state === "fail") return no(`${approved} ${ci.reason}`);
     if (ci.state === "wait") return no(`${approved} ${ci.reason}`, true);
     // "escalate" is a repository with no CI: Saad is who that goes to.
@@ -245,7 +252,7 @@ export async function gateVerdict(
   }
   // Here too, not only in the review: one reviewed in parts while approvals
   // were off goes to Saad once they're on.
-  if (mergeApprovalsOn()) {
+  if (mergeApprovalsOn() && !fast) {
     const size = (await fullDiff(repo, base, sha)).length;
     if (size > DIFF_CAP) {
       const why = `PR #${pr.number}'s diff at ${short(sha)} is ${size} characters, too big to review whole`;
@@ -255,8 +262,11 @@ export async function gateVerdict(
 
   const ruled = ruleBreaks(files, await addedLines(repo, base, sha));
   const live = await inputs();
-  const repoCI = await repoCIFor(repo, base, live);
-  const outcomes = evaluateGates({ sha, ruleBreaks: ruled, ...live, repoCI });
+  const repoCI = fast ? undefined : await repoCIFor(repo, base, live);
+  const outcomes = evaluateGates(
+    { sha, ruleBreaks: ruled, ...live, repoCI },
+    { fast }
+  );
   const head = `${work.name} (PR #${pr.number} at ${short(sha)}) can't merge:`;
   const toSaad = outcomes.find((o) => o.state === "escalate");
   if (toSaad)
@@ -266,9 +276,12 @@ export async function gateVerdict(
   const failed = outcomes.filter((o) => o.state === "fail");
   const waiting = outcomes.filter((o) => o.state === "wait");
   if (!failed.length && !waiting.length)
-    return { ok: true, sha, pr: pr.number };
+    return fast
+      ? { ok: true, sha, pr: pr.number, fast: true }
+      : { ok: true, sha, pr: pr.number };
   const lines: string[] = [];
-  if (opts.count === false)
+  // The fast lane has no loop guard: a failure is told, never counted.
+  if (opts.count === false || fast)
     lines.push(...failed.map((o) => `- ${o.gate} failed: ${o.reason}`));
   else {
     for (const o of outcomes)
@@ -346,11 +359,15 @@ export async function mergeJudged(
   await refundIfRefused(task.id, verdict.approval, async () => {
     method = await signOffTask(task.id, { head: verdict.sha, wait: opts.wait });
   });
+  if (verdict.fast)
+    recordFastMerge(task.id, workspaceId, verdict.pr, verdict.sha);
   addNote(
     workspaceId,
-    verdict.approval
-      ? `Merged ${task.name} (PR #${verdict.pr}, ${short(verdict.sha)}) on Saad's approval of that commit.`
-      : `Merged ${task.name} (PR #${verdict.pr}, ${short(verdict.sha)}): CI green, review passed, in scope.`
+    verdict.fast
+      ? `Merged ${task.name} (PR #${verdict.pr}, ${short(verdict.sha)}) on the fast lane: no CI wait or review.`
+      : verdict.approval
+        ? `Merged ${task.name} (PR #${verdict.pr}, ${short(verdict.sha)}) on Saad's approval of that commit.`
+        : `Merged ${task.name} (PR #${verdict.pr}, ${short(verdict.sha)}): CI green, review passed, in scope.`
   );
   return `Merged ${task.name}: PR #${verdict.pr} ${method ? MERGED_AS[method] : "merged"} at ${short(verdict.sha)}.`;
 }

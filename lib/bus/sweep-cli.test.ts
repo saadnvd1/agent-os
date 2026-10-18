@@ -42,11 +42,10 @@ async function aos(args: string[], session: string | null) {
 }
 
 describe("aos sweep --arm", () => {
-  it("is refused inside a session, before any request", async () => {
+  it("inside a session, leaves the decision to the server", async () => {
     const r = await aos(["sweep", "--arm"], "some-task");
-    expect(r.code).not.toBe(0);
-    expect(r.err).toMatch(/can't turn the full clean-up on/);
-    expect(r.seen).toEqual([]);
+    expect(r.code).toBe(0);
+    expect(r.seen).toEqual(["PUT /api/worktree-sweep"]);
   });
 
   it("works in a person's own terminal", async () => {

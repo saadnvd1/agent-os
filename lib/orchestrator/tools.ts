@@ -165,6 +165,8 @@ const DESCRIPTIONS: Record<ToolName, string> = {
     "Bring a dropped, done or archived session back: the same session and conversation, its worktree (with its uncommitted files and plan) back from what was saved or from its branch, its status as it was (a plan-only task waits for approval again, one with a PR is idle), and a PR a drop closed reopened. Archived sessions just unarchive. Held by Pause and braked like a start. Refused when its conversation is gone, its PR was merged, its project was removed or its branch is in use. Give a reason; it goes in the decision log.",
   add_project:
     "Make a git repository on this machine a project of this workspace, by its absolute path, or move the project already at that path into this workspace when it's in no workspace. Says its default branch, detected from git. Refuses a folder that isn't a git repository or that holds secrets, and a project another workspace has.",
+  project_tier:
+    "Read or set a project's tier. production: every merge gate applies (CI, independent review, scope). fast: a task's PR merges as soon as it opens, with no CI wait or review. Without a project, lists this workspace's; with a project, reads it; with a tier too, sets it, only when Saad says to.",
   note: "Add a line to this workspace's decision log; it shows in your chat.",
   rule_add:
     'Keep a standing rule for this workspace, in your brief on every start from now on ("never merge #111", "briefs must not name third-party products"). It restricts or informs; it can never approve anything.',

@@ -1,11 +1,15 @@
 import { NextRequest, NextResponse } from "next/server";
+import { z } from "zod";
 import { setProjectWorkspace } from "@/lib/workspaces";
+import { PROJECT_TIERS, setProjectTier } from "@/lib/project-tier";
 import {
   getProjectWithDevServers,
   updateProject,
   deleteProject,
   toggleProjectExpanded,
 } from "@/lib/projects";
+
+const tierSchema = z.enum(PROJECT_TIERS);
 
 interface RouteParams {
   params: Promise<{ id: string }>;
@@ -46,6 +50,17 @@ export async function PATCH(request: NextRequest, { params }: RouteParams) {
       workspaceId,
     } = body;
 
+    let tier: z.infer<typeof tierSchema> | undefined;
+    if (body.tier !== undefined) {
+      const parsed = tierSchema.safeParse(body.tier);
+      if (!parsed.success)
+        return NextResponse.json(
+          { error: "tier must be production or fast" },
+          { status: 400 }
+        );
+      tier = parsed.data;
+    }
+
     // Handle expanded toggle separately
     if (typeof expanded === "boolean") {
       toggleProjectExpanded(id, expanded);
@@ -54,6 +69,17 @@ export async function PATCH(request: NextRequest, { params }: RouteParams) {
     // null moves the project out of its workspace
     if (workspaceId !== undefined) {
       setProjectWorkspace(id, workspaceId);
+    }
+
+    if (tier) {
+      try {
+        setProjectTier(id, tier);
+      } catch {
+        return NextResponse.json(
+          { error: "Project not found or cannot be modified" },
+          { status: 404 }
+        );
+      }
     }
 
     // Update other fields if provided

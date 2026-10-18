@@ -15,7 +15,7 @@ import { effectiveModels } from "../models/config";
 import { ANTHROPIC } from "../models/roles";
 import { processTable, runsSomething } from "../process-table";
 import { randomUUID } from "crypto";
-import { db, queries, type Session } from "../db";
+import { db, queries, type ProjectTier, type Session } from "../db";
 import { getProject } from "../projects";
 import {
   createWorktree,
@@ -267,7 +267,8 @@ async function startTask(
         view,
         opts.model,
         opts.plan,
-        opts.planOnly
+        opts.planOnly,
+        project.tier
       ).plan;
     const session = await startRemoteTask(hostId, project, {
       id,
@@ -310,7 +311,8 @@ async function startTask(
           view,
           opts.model,
           opts.plan,
-          opts.planOnly
+          opts.planOnly,
+          project.tier
         )
       : otherAgentRouting(opts.model);
   const projectPath = expandHome(project.working_directory);
@@ -590,7 +592,9 @@ export function taskRouting(
   view: StartView,
   model: unknown,
   plan?: boolean,
-  planOnly?: boolean
+  planOnly?: boolean,
+  // A fast project skips the plan step unless the caller asks for it.
+  tier: ProjectTier = "production"
 ) {
   const override = parseOverride(model);
   const models = effectiveModels();
@@ -601,7 +605,8 @@ export function taskRouting(
   const planStep =
     view === "chat" &&
     (!!planOnly ||
-      ((plan ?? models.planStep) && planning.ref !== implement.ref));
+      ((plan ?? (tier === "fast" ? false : models.planStep)) &&
+        planning.ref !== implement.ref));
   return {
     override,
     plan: planStep,

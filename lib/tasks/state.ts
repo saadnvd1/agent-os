@@ -97,13 +97,19 @@ export function needsHuman(state: TaskState): boolean {
   ].includes(state);
 }
 
-export function canSignOff(pr: TaskPR | null): {
+// `ci: false` (a fast project): checks that are failing or running don't
+// refuse the merge.
+export function canSignOff(
+  pr: TaskPR | null,
+  opts: { ci?: boolean } = {}
+): {
   ok: boolean;
   reason?: string;
 } {
   if (!pr) return { ok: false, reason: "No pull request yet" };
   if (pr.state !== "OPEN")
     return { ok: false, reason: `PR is ${pr.state.toLowerCase()}` };
+  if (opts.ci === false) return { ok: true };
   if (pr.checks === "fail")
     return { ok: false, reason: "CI checks are failing" };
   if (pr.checks === "pending")
