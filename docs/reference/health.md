@@ -4,16 +4,17 @@ Problems are caught by the system, not found by accident. Two parts:
 
 **Detectors** (`lib/health/detectors.ts`) are plain checks on the orchestrator watcher's tick. They cost no tokens. A trip is stored once per check and subject in `health_anomalies`; a persisting anomaly doesn't re-trip, and one that clears for 5 minutes closes.
 
-| Check         | Trips when                                                                  |
-| ------------- | --------------------------------------------------------------------------- |
-| load-red      | the machine's load gate has been red 10+ minutes                            |
-| queue-held    | a queued task has been held 60+ minutes                                     |
-| bg-quiet      | a live background job has printed nothing for 20+ minutes                   |
-| restarts      | more than 2 server boots in an hour                                         |
-| ci-slow       | CI is pending past its usual time (twice the median, or p90 plus 5 minutes) |
-| armed-stuck   | a PR has been armed 2+ hours without merging                                |
-| server-errors | the server error rate is well above its baseline                            |
-| piece-dup     | a plan piece is about to start though matching work has merged              |
+| Check         | Trips when                                                                                         |
+| ------------- | -------------------------------------------------------------------------------------------------- |
+| load-red      | the machine's load gate has been red 10+ minutes                                                   |
+| queue-held    | a queued task has been held 60+ minutes                                                            |
+| bg-quiet      | a live background job has printed nothing for 20+ minutes                                          |
+| bg-spin       | a background job's shell has held 80%+ of a core for 4+ minutes with no new output: stopped by PID |
+| restarts      | more than 2 server boots in an hour                                                                |
+| ci-slow       | CI is pending past its usual time (twice the median, or p90 plus 5 minutes)                        |
+| armed-stuck   | a PR has been armed 2+ hours without merging                                                       |
+| server-errors | the server error rate is well above its baseline                                                   |
+| piece-dup     | a plan piece is about to start though matching work has merged                                     |
 
 All thresholds are in Settings → Health → Thresholds (`health.*` settings).
 
@@ -21,6 +22,6 @@ All thresholds are in Settings → Health → Thresholds (`health.*` settings).
 
 **Where you hear.** One line in the orchestrator chat (machine-wide anomalies go to every orchestrator). A phone push only when the verdict says only you can clear it, once per anomaly and at most 5 a day. The sidebar dot shows while anything is open.
 
-**Report only.** Nothing is paused, stopped or restarted automatically.
+**Report only, except one.** Nothing is paused, stopped or restarted automatically, apart from `bg-spin`: a background job whose shell spins (a wait loop that can never exit) is stopped, because it can only burn a core. `lib/health/spin.ts` decides from the CPU of shells in the job's process tree, so a silent heavy build (its CPU is in node or cc, not the shell) or a job that keeps printing is never touched; a sleeping loop stays on `bg-quiet`. `lib/health/spin-tick.ts` stops exactly that job: SIGTERM, then SIGKILL for what is still the same process, to each PID of its own tree, never by pattern or group, and only when the job is a shell directly under the agent with no AgentOS, tmux or agent in it. Every kill is logged (`[health] bg-spin`), kept as a closed anomaly, sent to the task as its next prompt (with the brief's wait advice) and to its orchestrator as one event. Its thresholds are constants in `spin.ts`, not settings.
 
 Notes (Settings → Health → Notes) tell the watchers what normal looks like; they are kept in the database. Rows are never deleted. Dismissing an anomaly mutes that check and subject for 24 hours.

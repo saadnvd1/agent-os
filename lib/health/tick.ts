@@ -11,6 +11,7 @@ import { healthConfig, type HealthConfig } from "./config";
 import { runDetectors } from "./detectors";
 import { gatherFacts, liveBackgroundJobs } from "./facts";
 import { envTick, realEnv, type EnvDeps } from "./env/envTick";
+import { spinTick } from "./spin-tick";
 import { addNote } from "./notes";
 import { closeResolvedPieces } from "./pieces";
 import { deliver, deliverClosed, type RouteDeps, realRoute } from "./route";
@@ -43,9 +44,10 @@ export const MAX_WAKES = 2;
 // A wake that never came back (a restart cut it off) is given up on.
 export const WAKE_GIVE_UP_MS = 3 * MIN;
 
-// The checks the tick evaluates: piece-dup is raised where a piece starts.
+// The checks the tick evaluates: piece-dup is raised where a piece starts,
+// bg-spin by the process step (spin-tick.ts).
 export const TICK_CHECKS: readonly CheckId[] = CHECKS.filter(
-  (c) => c !== "piece-dup"
+  (c) => c !== "piece-dup" && c !== "bg-spin"
 );
 
 export interface TickDeps {
@@ -54,6 +56,8 @@ export interface TickDeps {
   watch: WatchDeps;
   route: RouteDeps;
   env: EnvDeps;
+  // Stops background jobs that spin (spin-tick.ts).
+  spin: (now: number) => Promise<void>;
   wake: typeof wake;
 }
 
@@ -63,6 +67,7 @@ export const realTick: TickDeps = {
   watch: { run: runClaude, usagePct: currentUsagePct },
   route: realRoute,
   env: realEnv,
+  spin: spinTick,
   wake,
 };
 
@@ -145,6 +150,9 @@ export function healthTick(
   closeResolvedPieces(now);
   leaveHeartbeat(now, liveBackgroundJobs());
   giveUpStale(now, deps);
+  void deps
+    .spin(now)
+    .catch((error) => console.error("[health] spin check:", error));
   void envTick(now, c, deps.env).catch((error) =>
     console.error("[health] environment failures:", error)
   );
