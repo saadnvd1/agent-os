@@ -73,7 +73,11 @@ describe("clientConfig", () => {
       logSeconds: 60,
       logMaxLines: 200,
     });
-    expect(cfg.attachments).toEqual({ max: 8 });
+    expect(cfg.attachments).toMatchObject({ max: 8 });
+    expect(cfg.attachments.maxBytes).toBeGreaterThan(0);
+    expect(cfg.attachments.types.map((t) => t.ext)).toEqual(
+      expect.arrayContaining(["pdf", "xlsx", "docx", "csv", "md"])
+    );
     expect(cfg.voice).toEqual({
       maxPhrases: 100,
       holdMinMs: 250,

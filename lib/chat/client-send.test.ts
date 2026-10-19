@@ -55,4 +55,10 @@ describe("clientSend", () => {
     ])
       expect(clientSend({ text: "hi", clientId })).not.toHaveProperty("id");
   });
+
+  it("keeps only files that are in the attachments folder", () => {
+    expect(
+      clientSend({ text: "x", files: [{ path: "/etc/passwd" }] }).files
+    ).toBeUndefined();
+  });
 });

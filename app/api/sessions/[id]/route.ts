@@ -1,3 +1,4 @@
+import { removeSessionAttachments } from "@/lib/attachments/store";
 import { NextRequest, NextResponse } from "next/server";
 import { deletionRefusal } from "@/lib/orchestrator/home";
 import { getDb, queries, type Session } from "@/lib/db";
@@ -281,6 +282,7 @@ export async function DELETE(request: NextRequest, { params }: RouteParams) {
     );
     deleteItems(id);
     clearQueue(id);
+    void removeSessionAttachments(id).catch(() => {});
     queries.deleteSession(db).run(id);
 
     // Clean up worktree in background (non-blocking)

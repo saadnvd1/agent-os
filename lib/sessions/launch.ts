@@ -10,7 +10,7 @@ import os from "os";
 import { randomUUID } from "crypto";
 import { db, queries, type Session } from "../db";
 import type { AgentType } from "../providers";
-import type { ChatAccess, ChatImage } from "../chat/events";
+import type { ChatAccess, ChatFile, ChatImage } from "../chat/events";
 import { resolveModelForAgent } from "../model-catalog";
 import { parseOverride, resolveRole, setSessionModel } from "../models/resolve";
 import { ANTHROPIC } from "../models/roles";
@@ -69,6 +69,7 @@ export interface LaunchInput {
   // The first message.
   prompt?: string | null;
   images?: ChatImage[];
+  files?: ChatFile[];
   name?: string | null;
   view?: "chat" | "terminal";
   parentSessionId?: string | null;
@@ -103,9 +104,14 @@ function firstMessage(projectPrompt: string | null | undefined, text: string) {
 }
 
 // Waits in the queue, so neither a restart nor a slow setup loses it.
-function queueFirst(sessionId: string, text: string, images?: ChatImage[]) {
+function queueFirst(
+  sessionId: string,
+  text: string,
+  images?: ChatImage[],
+  files?: ChatFile[]
+) {
   const id = `user-${Date.now()}-${randomUUID().slice(0, 5)}`;
-  enqueue(sessionId, { id, text, images });
+  enqueue(sessionId, { id, text, images, files });
   return id;
 }
 
@@ -201,8 +207,8 @@ async function launch(input: LaunchInput, id: string): Promise<Launched> {
   // A linked machine's AgentOS starts it there; it is mirrored here.
   const link = remote ? hostLink(runOn) : null;
   if (link) {
-    if (input.images?.length)
-      throw new Error(`Images can't be sent to ${link.hostName} yet`);
+    if (input.images?.length || input.files?.length)
+      throw new Error(`Images and files can't be sent to ${link.hostName} yet`);
     return startOnPeer(link, {
       id,
       project: scratch ? null : (project ?? null),
@@ -305,7 +311,7 @@ async function launch(input: LaunchInput, id: string): Promise<Launched> {
       : "";
   const chatFirst =
     view === "chat" && message
-      ? queueFirst(id, message, input.images)
+      ? queueFirst(id, message, input.images, input.files)
       : undefined;
 
   if (useWorktree) {

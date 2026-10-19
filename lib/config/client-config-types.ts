@@ -28,8 +28,21 @@ export interface ClientConfig {
   runTriggers: Record<string, string>;
   features: ClientFeatures;
   intake: IntakeLimits;
-  attachments: { max: number };
+  attachments: AttachmentConfig;
   voice: VoiceLimits;
+}
+
+// What a chat accepts, served from lib/attachments/policy.ts. Sizes in bytes.
+export interface AttachmentConfig {
+  max: number;
+  maxBytes: number;
+  maxImageBytes: number;
+  pdfInlineBytes: number;
+  types: {
+    ext: string;
+    mediaType: string;
+    kind: "image" | "pdf" | "sheet" | "doc" | "text";
+  }[];
 }
 
 // Server kill switches for the phone's new sends.
@@ -65,8 +78,6 @@ export const INTAKE_LIMITS: IntakeLimits = {
   logSeconds: 60,
   logMaxLines: 200,
 };
-
-export const ATTACHMENT_LIMITS = { max: 8 };
 
 export const VOICE_LIMITS: VoiceLimits = {
   maxPhrases: 100,

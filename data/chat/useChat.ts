@@ -9,6 +9,7 @@ import type {
   ChatAccess,
   ChatCommand,
   ChatContext,
+  ChatFile,
   ChatImage,
   ChatItem,
   ChatModel,
@@ -34,12 +35,13 @@ import { usePending } from "./usePending";
 
 // A pending send as the socket's `send`, under its own id.
 const sendFrame = (
-  p: Pick<PendingSend, "id" | "text" | "images" | "compact">
+  p: Pick<PendingSend, "id" | "text" | "images" | "files" | "compact">
 ) =>
   JSON.stringify({
     type: "send",
     text: p.text,
     images: p.images,
+    files: p.files,
     clientId: p.id,
     ...(p.compact && { compact: true }),
   });
@@ -400,8 +402,13 @@ export function useChat(
   const send = useCallback(
     // `compact`: the reader let a stale chat compact first (lib/chat/stale).
     // It shows as a pending bubble at once, until it's in the chat.
-    (text: string, images?: ChatImage[], compact?: boolean) => {
-      const p = { id: clientId(), text, images, compact };
+    (
+      text: string,
+      images?: ChatImage[],
+      compact?: boolean,
+      files?: ChatFile[]
+    ) => {
+      const p = { id: clientId(), text, images, files, compact };
       pend({ type: "add", send: p, now: Date.now() });
       const ws = wsRef.current;
       if (ws?.readyState !== WebSocket.OPEN) {

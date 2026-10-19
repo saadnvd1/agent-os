@@ -694,6 +694,7 @@ export function ChatPanel({
                           kind: "user",
                           text: p.text,
                           images: p.images,
+                          files: p.files,
                           createdAt: p.at,
                         }}
                         pending={{
@@ -820,6 +821,7 @@ export function ChatPanel({
         <LearningCardsHost sessionId={sessionId} />
         <Composer
           draftKey={sessionId}
+          attachScope={sessionId}
           suggestion={shownSuggestion}
           onDismissSuggestion={dismissSuggestion}
           history={history}
@@ -828,7 +830,7 @@ export function ChatPanel({
           running={running}
           disabled={!connected}
           placeholder={connected ? `Message ${sessionName}` : "Reconnecting…"}
-          onSend={(text, images) => {
+          onSend={(text, images, files) => {
             if (freshStart && isFreshCommand(text)) {
               startFresh.mutate(sessionId);
               return;
@@ -840,7 +842,12 @@ export function ChatPanel({
               asIs,
             });
             setAsIs(false);
-            send(text, images.length ? images : undefined, compact);
+            send(
+              text,
+              images.length ? images : undefined,
+              compact,
+              files.length ? files : undefined
+            );
             if (replyTo) {
               resolveQuestion.mutate(replyTo.id);
               setReplyTo(null);

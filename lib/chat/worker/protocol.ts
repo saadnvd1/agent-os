@@ -9,6 +9,7 @@ import path from "path";
 import type {
   ApprovalDecision,
   ChatAccess,
+  ChatFile,
   ChatImage,
   ChatItem,
   ChatState,
@@ -32,6 +33,7 @@ export type WorkerCommand =
       id: string;
       text: string;
       images?: ChatImage[];
+      files?: ChatFile[];
       from?: string;
       peer?: PeerMessage;
       origin?: ChatOrigin;

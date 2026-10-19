@@ -19,7 +19,8 @@ import { useTerminalConnection, useTerminalSearch } from "./hooks";
 import type { TerminalScrollState } from "./hooks";
 import { useViewport } from "@/hooks/useViewport";
 import { useFileDrop } from "@/hooks/useFileDrop";
-import { uploadFileToTemp } from "@/lib/file-upload";
+import { toast } from "sonner";
+import { uploadFile } from "@/lib/file-upload";
 import { FilePicker } from "@/components/FilePicker";
 import type { AttachSpec } from "@/lib/hosts/attach";
 
@@ -121,11 +122,11 @@ export const Terminal = forwardRef<TerminalHandle, TerminalProps>(
       async (file: File) => {
         setIsUploading(true);
         try {
-          const path = await uploadFileToTemp(file);
-          if (path) {
-            sendInput(path);
+          const done = await uploadFile(file);
+          if (done.ok) {
+            sendInput(done.file.path);
             focus();
-          }
+          } else toast.error(done.error);
         } catch (err) {
           console.error("Failed to upload file:", err);
         } finally {

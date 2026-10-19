@@ -3,7 +3,7 @@
 import { useRef, useState } from "react";
 import {
   ArrowUp,
-  ImagePlus,
+  Paperclip,
   ListChecks,
   MonitorUp,
   Square,
@@ -23,7 +23,8 @@ import { ModelPicker } from "../ModelPicker";
 export function Toolbar({
   plain,
   onTogglePlain,
-  onAddImages,
+  onAddFiles,
+  accept,
   plan,
   onTogglePlan,
   accessory,
@@ -42,7 +43,9 @@ export function Toolbar({
 }: {
   plain: boolean;
   onTogglePlain: () => void;
-  onAddImages: (files: Iterable<File>) => void;
+  onAddFiles: (files: Iterable<File>) => void;
+  // The types the server takes, for the picker.
+  accept: string;
   // Plan mode, when the session can use it.
   plan?: boolean | null;
   onTogglePlan?: () => void;
@@ -68,7 +71,7 @@ export function Toolbar({
   const capture = async () => {
     try {
       const file = await captureScreenFrame();
-      if (file) onAddImages([file]);
+      if (file) onAddFiles([file]);
     } catch (error) {
       toast.error(
         `Couldn't capture the screen: ${error instanceof Error ? error.message : String(error)}`
@@ -81,20 +84,20 @@ export function Toolbar({
         type="button"
         variant="ghost"
         size="icon"
-        aria-label="Attach image"
+        aria-label="Attach files"
         className="h-10 w-10 shrink-0"
         onClick={() => fileRef.current?.click()}
       >
-        <ImagePlus className="h-4 w-4" />
+        <Paperclip className="h-4 w-4" />
       </Button>
       <input
         ref={fileRef}
         type="file"
-        accept="image/*"
+        accept={accept}
         multiple
         hidden
         onChange={(e) => {
-          if (e.target.files) onAddImages(e.target.files);
+          if (e.target.files) onAddFiles(e.target.files);
           e.target.value = "";
         }}
       />

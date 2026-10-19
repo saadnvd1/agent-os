@@ -1,3 +1,4 @@
+import { documentBlocks } from "../../attachments/message";
 import { sessionBaseEnv } from "../../agents/server-env";
 import { randomUUID } from "crypto";
 import {
@@ -320,6 +321,7 @@ export const claudeDriver: ChatDriver = {
               data: img.data,
             },
           })),
+          ...documentBlocks(sendOptions?.files),
           { type: "text" as const, text },
         ];
         const checkpoint = randomUUID();

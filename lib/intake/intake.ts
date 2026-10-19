@@ -8,6 +8,7 @@ import { getWorkspace } from "../workspaces";
 import { INTAKE_LIMITS, MAX_INLINE_IMAGE_BYTES } from "./limits";
 import { buildIntakeMessage, type IntakeMeta } from "./message";
 import { sniff } from "./sniff";
+import { safeName } from "../attachments/store";
 
 export class IntakeError extends Error {
   constructor(
@@ -39,23 +40,7 @@ const day = (t: number) => new Date(t).toISOString().slice(0, 10);
 const workspaceRoot = (workspaceId: string) =>
   path.join(dataRoot(), "intake", segment(workspaceId));
 
-/** A phone's filename as one safe path segment. */
-export function safeName(name: string, taken: Set<string>, n: number): string {
-  let base = path.basename(name.replace(/\\/g, "/"));
-  base = base
-    .replace(/[^a-zA-Z0-9.-]/g, "_")
-    .replace(/^\.+/, "")
-    .slice(0, 80);
-  if (!base) base = `file-${n}`;
-  let out = base;
-  for (let i = 2; taken.has(out); i++) {
-    const dot = base.lastIndexOf(".");
-    out =
-      dot > 0 ? `${base.slice(0, dot)}-${i}${base.slice(dot)}` : `${base}-${i}`;
-  }
-  taken.add(out);
-  return out;
-}
+export { safeName };
 
 function checkMeta(meta: IntakeMeta) {
   if (!meta || typeof meta !== "object") throw new IntakeError(400, "Bad meta");

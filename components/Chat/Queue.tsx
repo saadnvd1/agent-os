@@ -90,6 +90,12 @@ export function Queue({
                     · {m.imageCount} image{m.imageCount > 1 ? "s" : ""}
                   </span>
                 ) : null}
+                {m.fileCount ? (
+                  <span className="text-muted-foreground text-xs">
+                    {" "}
+                    · {m.fileCount} file{m.fileCount > 1 ? "s" : ""}
+                  </span>
+                ) : null}
               </button>
             )}
             <div className="flex shrink-0 items-center">

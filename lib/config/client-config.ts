@@ -1,3 +1,4 @@
+import { ATTACHMENT_LIMITS } from "../attachments/policy";
 import { ACCESS_LEVELS, DEFAULT_NEW_CHAT_ACCESS } from "../chat/access-levels";
 import { CHAT_ACCESS } from "../chat/events";
 import {
@@ -7,7 +8,6 @@ import {
 import { TASK_STATE_LABELS } from "../tasks/state-labels";
 import { cachedCheck } from "../updates/check";
 import {
-  ATTACHMENT_LIMITS,
   CLIENT_CONFIG_VERSION,
   INTAKE_LIMITS,
   VOICE_LIMITS,

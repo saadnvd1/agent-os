@@ -168,7 +168,7 @@ function paste(
   return handlePaste(editor.view, event, {
     plain: false,
     asText: false,
-    onImages: () => {},
+    onFiles: () => {},
     onLongPaste: () => {},
     ...h,
   });

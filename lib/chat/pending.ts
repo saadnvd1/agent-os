@@ -1,4 +1,4 @@
-import type { ChatImage, ChatState } from "./events";
+import type { ChatFile, ChatImage, ChatState } from "./events";
 
 // A message the composer sent that isn't in the chat or its queue yet. It
 // shows as a bubble at once, and stays (as failed, with Retry) if it never
@@ -7,6 +7,7 @@ export interface PendingSend {
   id: string;
   text: string;
   images?: ChatImage[];
+  files?: ChatFile[];
   compact?: boolean;
   // "sending": not taken in yet. "accepted": the server has it and is
   // starting the agent.

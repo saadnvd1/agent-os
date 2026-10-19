@@ -13,7 +13,7 @@ import { docToMarkdown } from "@/lib/chat/markdown/serialize";
 import { plainExtensions, richExtensions } from "./extensions";
 import { loadMarkdown } from "./load";
 import { handleKeyDown, type KeyHandlers } from "./keys";
-import { handlePaste, isImage, type PasteHandlers } from "./paste";
+import { handlePaste, type PasteHandlers } from "./paste";
 import { usePlainMode } from "./usePlainMode";
 
 export type ComposerHandlers = Omit<
@@ -120,9 +120,9 @@ export function useComposerEditor({
             asText,
           });
         },
-        // Dropped images are the composer's to take, not the document's.
+        // Dropped files are the composer's to take, not the document's.
         handleDrop: (view, event) =>
-          [...(event.dataTransfer?.files ?? [])].some(isImage),
+          (event.dataTransfer?.files.length ?? 0) > 0,
       },
       // Only edits change the text: not loading a draft, not setEditable.
       onUpdate: ({ editor: ed, transaction }) => {

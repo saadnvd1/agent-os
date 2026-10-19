@@ -8,7 +8,8 @@ export interface PasteHandlers {
   plain: boolean;
   // Cmd/Ctrl+Shift+V was pressed just before this paste.
   asText: boolean;
-  onImages: (files: File[]) => void;
+  // Files pasted: images, documents, anything the composer may attach.
+  onFiles: (files: File[]) => void;
   onLongPaste: (text: string, language?: string) => void;
 }
 
@@ -58,9 +59,9 @@ export function handlePaste(
 ): boolean {
   const data = event.clipboardData;
   if (!data) return false;
-  const images = [...data.files].filter(isImage);
-  if (images.length) {
-    h.onImages(images);
+  const files = [...data.files];
+  if (files.length) {
+    h.onFiles(files);
     return true;
   }
   const text = data.getData("text/plain").replace(/\r\n?/g, "\n");

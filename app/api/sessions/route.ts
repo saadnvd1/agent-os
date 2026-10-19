@@ -50,8 +50,12 @@ export async function POST(request: NextRequest) {
   }
   const str = (v: unknown) => (typeof v === "string" ? v : null);
   const firstMessage = (b: Record<string, unknown>) => {
-    const { text, images } = clientSend({ text: b.prompt, images: b.images });
-    return { prompt: text, images };
+    const { text, images, files } = clientSend({
+      text: b.prompt,
+      images: b.images,
+      files: b.files,
+    });
+    return { prompt: text, images, files };
   };
   try {
     const { session, initialPrompt, repeat } = await launchSession({

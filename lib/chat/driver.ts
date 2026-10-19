@@ -6,6 +6,7 @@ import type {
   ApprovalDecision,
   ChatAccess,
   ChatCommand,
+  ChatFile,
   ChatImage,
   ChatItem,
   ChatModel,
@@ -88,7 +89,9 @@ export interface ChatConversation {
   send(
     text: string,
     images?: ChatImage[],
-    options?: { now?: boolean }
+    // `files`: saved attachments; their paths are already in `text`, and a
+    // driver may also hand some to the model directly.
+    options?: { now?: boolean; files?: ChatFile[] }
   ): string | undefined;
   // A command the driver answers itself, without starting a turn (/mcp):
   // the items to show, or null to send the text as a message.
