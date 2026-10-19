@@ -8,13 +8,13 @@ echo ""
 # Check Node.js
 if ! command -v node &> /dev/null; then
     echo "Error: Node.js is not installed"
-    echo "Install Node.js 20+ from https://nodejs.org"
+    echo "Install Node.js 22+ from https://nodejs.org"
     exit 1
 fi
 
 NODE_VERSION=$(node -v | cut -d'v' -f2 | cut -d'.' -f1)
-if [ "$NODE_VERSION" -lt 20 ]; then
-    echo "Error: Node.js 20+ required (found v$NODE_VERSION)"
+if [ "$NODE_VERSION" -lt 22 ]; then
+    echo "Error: Node.js 22+ required (found v$NODE_VERSION)"
     exit 1
 fi
 echo "Node.js: $(node -v)"
@@ -60,7 +60,7 @@ fi
 # Install dependencies
 echo ""
 echo "Installing dependencies..."
-npm install
+scripts/install-deps
 
 echo ""
 echo "Setup complete!"

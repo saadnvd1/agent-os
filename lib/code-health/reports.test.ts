@@ -55,6 +55,40 @@ describe("summarizeNpmAudit", () => {
   });
 });
 
+describe("summarizeNpmAudit on pnpm's advisories", () => {
+  it("makes one entry per module, worst severity first", () => {
+    const out = summarizeNpmAudit({
+      metadata: { vulnerabilities: { high: 1, low: 1 } },
+      advisories: {
+        "1": {
+          module_name: "braces",
+          title: "stack exhaustion",
+          severity: "high",
+          patched_versions: null,
+          findings: [{ paths: [".>eslint-config-next>braces"] }],
+        },
+        "2": {
+          module_name: "lodash",
+          title: "prototype pollution",
+          severity: "low",
+          patched_versions: ">=4.17.21",
+          findings: [{ paths: [".>lodash"] }],
+        },
+      },
+    });
+    expect(out.counts).toEqual({ high: 1, low: 1 });
+    expect(out.serious).toEqual([
+      {
+        name: "braces",
+        severity: "high",
+        direct: false,
+        via: ["stack exhaustion"],
+        fix: "none",
+      },
+    ]);
+  });
+});
+
 describe("summarizeOutdated", () => {
   it("puts packages a major version behind first", () => {
     const out = summarizeOutdated({

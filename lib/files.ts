@@ -17,6 +17,7 @@ const DEFAULT_EXCLUDES = [
   "node_modules",
   ".git",
   ".next",
+  ".deps",
   "dist",
   "build",
   "out",

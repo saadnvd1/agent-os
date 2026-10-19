@@ -22,6 +22,8 @@ export interface SetupStep {
   success: boolean;
   output?: string;
   error?: string;
+  // The step worked, but the agent should know something about it.
+  warning?: string;
 }
 
 // The stages a worktree's setup goes through, in order, for progress.

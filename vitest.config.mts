@@ -21,6 +21,7 @@ export default defineConfig({
       ".next/**",
       ".next-build/**",
       ".next-prev/**",
+      ".deps/**",
       "src-tauri/**",
       ".claude/**",
     ],

@@ -33,6 +33,7 @@
     "node_modules",
     ".next-build",
     ".next-prev",
+    ".deps",
     "public/sw.js",
     "app/sw.ts"
   ]

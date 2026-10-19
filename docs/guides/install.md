@@ -11,7 +11,7 @@ AgentOS runs on your own computer and opens in your browser. It starts your codi
 ## Requirements
 
 - **macOS or Linux.** On Windows, use WSL 2 (not WSL 1) and follow the Linux steps inside it. The [Windows section](#windows-wsl2) below has the notes.
-- **Node.js 20 or newer.**
+- **Node.js 22 or newer.**
 - **git.** Sessions work in git worktrees.
 - **tmux.** Terminal sessions run inside it.
 - **ripgrep and lsof** are optional. File search is slower without ripgrep, and finding what holds a port needs lsof.
@@ -29,7 +29,7 @@ curl -fsSL https://raw.githubusercontent.com/saadnvd1/agent-os/main/scripts/inst
 
 It needs git to start. It clones AgentOS to `~/.agent-os/repo` (or updates it if it's already there), then runs `agent-os install`, which:
 
-1. Checks for Node.js 20+, git, tmux and ripgrep, and offers to install any that are missing.
+1. Checks for Node.js 22+, git, tmux and ripgrep, and offers to install any that are missing.
 2. Offers to install an agent CLI if you don't have one.
 3. Installs dependencies and builds the app.
 4. Puts the `agent-os` command in `~/.local/bin`, and adds that folder to your shell profile if it isn't on your `PATH` yet.
@@ -56,7 +56,8 @@ Or run it from a source checkout:
 ```bash
 git clone https://github.com/saadnvd1/agent-os
 cd agent-os
-npm install
+corepack enable pnpm
+pnpm install
 npm run dev  # http://localhost:3011
 ```
 
@@ -254,7 +255,7 @@ It asks you to confirm, then stops AgentOS, turns off start-at-login, removes th
 These are the messages **Settings → Setup & health** shows.
 
 **"v18.x; AgentOS needs 20 or newer"**
-The Node.js on your `PATH` is too old. Install Node.js 20 or newer from nodejs.org, or switch to it with your version manager, then open a new terminal and run `agent-os install` again.
+The Node.js on your `PATH` is too old. Install Node.js 22 or newer from nodejs.org, or switch to it with your version manager, then open a new terminal and run `agent-os install` again.
 
 **"Not found. Sessions work in git worktrees." / "Not found. Terminal sessions run inside tmux."**
 git or tmux isn't installed. These two are required. Run the fix shown beside the message: `brew install git` or `brew install tmux` on macOS, and `sudo apt-get install -y git` or `sudo apt-get install -y tmux` on Debian and Ubuntu.

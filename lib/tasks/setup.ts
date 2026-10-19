@@ -20,8 +20,10 @@ const tail = (s: string, n: number) => (s.length > n ? `...${s.slice(-n)}` : s);
 export function setupOutcome(result: SetupResult | Error): TaskSetup {
   if (result instanceof Error)
     return { status: "failed", ms: null, error: redact(result.message) };
-  if (result.success)
-    return { status: "ok", ms: result.durationMs, error: null };
+  if (result.success) {
+    const warning = result.steps.find((s) => s.warning)?.warning;
+    return { status: "ok", ms: result.durationMs, error: warning ?? null };
+  }
   const failed = result.steps.filter((s) => !s.success);
   const last = failed[failed.length - 1];
   const error = last
@@ -31,6 +33,11 @@ export function setupOutcome(result: SetupResult | Error): TaskSetup {
 }
 
 export function setupNote(setup: TaskSetup): string {
+  if (setup.status === "ok" && setup.error)
+    return `
+
+---
+Note from AgentOS: ${setup.error}`;
   if (setup.status !== "failed") return "";
   return `
 

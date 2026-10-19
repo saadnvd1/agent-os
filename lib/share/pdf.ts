@@ -6,6 +6,7 @@
  */
 
 import fs from "fs";
+import path from "path";
 import type { Browser, LaunchOptions } from "playwright";
 
 const IDLE_MS = 60_000;
@@ -32,13 +33,43 @@ h1,h2,h3,h4{break-after:avoid}
 img{max-width:100%;break-inside:avoid}
 `;
 
+/**
+ * Playwright's headless shell, which `playwright install
+ * chromium-headless-shell` puts beside the full Chromium (same cache folder,
+ * the revision the locked package names). Null when it isn't installed.
+ */
+export function headlessShellPath(chromiumExecutable: string): string | null {
+  // <cache>/chromium-<rev>/<platform>/...: the shell's folder has the same <rev>.
+  const m = /^(.*)[\\/]chromium-(\d+)[\\/]/.exec(chromiumExecutable);
+  if (!m) return null;
+  const folder = path.join(m[1], `chromium_headless_shell-${m[2]}`);
+  let platform: string | undefined;
+  try {
+    platform = fs
+      .readdirSync(folder)
+      .find((d) => d.startsWith("chrome-headless-shell-"));
+  } catch {
+    return null;
+  }
+  if (!platform) return null;
+  const exe = path.join(
+    folder,
+    platform,
+    process.platform === "win32"
+      ? "chrome-headless-shell.exe"
+      : "chrome-headless-shell"
+  );
+  return fs.existsSync(exe) ? exe : null;
+}
+
 let found: LaunchOptions | null | undefined;
 
 /** How to launch a browser on this machine, or null when there is none. */
 export async function findBrowser(): Promise<LaunchOptions | null> {
   if (found !== undefined) return found;
   const { chromium } = await import("playwright");
-  const candidates = [chromium.executablePath(), ...CHROME_PATHS];
+  const full = chromium.executablePath();
+  const candidates = [headlessShellPath(full), full, ...CHROME_PATHS];
   const path = candidates.find((p) => p && fs.existsSync(p));
   found = path ? { executablePath: path, headless: true } : null;
   return found;

@@ -47,7 +47,7 @@ check_node() {
     if command -v node &> /dev/null; then
         local version
         version=$(node -v | sed 's/v//' | cut -d. -f1)
-        if [[ "$version" -ge 20 ]]; then
+        if [[ "$version" -ge 22 ]]; then
             local node_path=$(command -v node)
             log_success "Found Node.js v$(node -v | sed 's/v//') at $node_path"
             return 0
@@ -60,7 +60,7 @@ check_node() {
     if command -v node &> /dev/null; then
         local version
         version=$(node -v | sed 's/v//' | cut -d. -f1)
-        if [[ "$version" -ge 20 ]]; then
+        if [[ "$version" -ge 22 ]]; then
             local node_path=$(command -v node)
             local manager=""
 
@@ -202,10 +202,10 @@ install_node() {
     if command -v node &> /dev/null; then
         local version
         version=$(node -v | sed 's/v//' | cut -d. -f1)
-        if [[ "$version" -ge 20 ]]; then
+        if [[ "$version" -ge 22 ]]; then
             return 0
         fi
-        log_warn "Node.js $version found, but 20+ required"
+        log_warn "Node.js $version found, but 22+ required"
     fi
 
     log_info "Installing Node.js..."
@@ -224,9 +224,9 @@ install_node() {
                 export PATH="$HOME/.local/share/fnm:$PATH"
                 eval "$(fnm env --use-on-cd)"
 
-                # Install and use Node.js 20
-                fnm install 20
-                fnm use 20
+                # Install and use Node.js 22
+                fnm install 22
+                fnm use 22
 
                 # Add fnm to shell profile
                 local shell_profile=""
@@ -261,7 +261,7 @@ install_node() {
             sudo yum install -y nodejs
             ;;
         *)
-            log_error "Please install Node.js 20+ manually: https://nodejs.org"
+            log_error "Please install Node.js 22+ manually: https://nodejs.org"
             exit 1
             ;;
     esac
@@ -499,7 +499,7 @@ check_and_install_prerequisites() {
 
     # What this distro has no installer for here is still missing.
     local still=()
-    check_node > /dev/null || still+=("node 20+")
+    check_node > /dev/null || still+=("node 22+")
     check_git > /dev/null || still+=("git")
     check_tmux > /dev/null || still+=("tmux")
     if [[ ${#still[@]} -gt 0 ]]; then

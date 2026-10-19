@@ -1,7 +1,7 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import * as fs from "fs";
 import * as path from "path";
-import { detectPackageManager, setupEnv } from "./install";
+import { detectPackageManager, setupEnv, shellCommand } from "./install";
 import { setupWorktree, type SetupResult } from "../env-setup";
 import { bringDependencies } from ".";
 import { NO_FAST_COPY } from "./clone";
@@ -33,6 +33,26 @@ describe("detectPackageManager", () => {
     touch("bun.lock");
     expect(detectPackageManager(dir)?.installs[0]).toBe(
       "bun install --frozen-lockfile"
+    );
+  });
+
+  it("freezes AgentOS's own install with no plain fallback", () => {
+    touch("pnpm-lock.yaml");
+    fs.writeFileSync(
+      path.join(dir, "package.json"),
+      JSON.stringify({ name: "@saadnvd1/agent-os" })
+    );
+    const pm = detectPackageManager(dir);
+    expect(pm?.installs).toEqual([
+      "pnpm install --frozen-lockfile --prod=false",
+    ]);
+    expect(pm?.frozenOnly).toBe(true);
+  });
+
+  it("runs pnpm through corepack when it is not on PATH", () => {
+    expect(shellCommand("npm ci --include=dev")).toBe("npm ci --include=dev");
+    expect(shellCommand("pnpm install --frozen-lockfile")).toMatch(
+      /command -v pnpm.*corepack pnpm.*; pnpm install --frozen-lockfile$/
     );
   });
 
@@ -134,6 +154,35 @@ describe("bringDependencies", () => {
     );
     expect(ran).toEqual(["npm ci --include=dev", "npm install --include=dev"]);
     expect(result.success).toBe(true);
+    expect(result.steps[0].warning).toBeUndefined();
+    expect(result.steps[1].warning).toMatch(/lockfile is out of sync/);
+  });
+
+  it("never falls back to a plain install in AgentOS's own checkout", async () => {
+    fs.rmSync(path.join(dir, "package-lock.json"), { force: true });
+    touch("pnpm-lock.yaml");
+    fs.writeFileSync(
+      path.join(dir, "package.json"),
+      JSON.stringify({ name: "@saadnvd1/agent-os" })
+    );
+    const ran: string[] = [];
+    const result = fresh();
+    await bringDependencies(
+      result,
+      dir,
+      dir,
+      {},
+      {
+        clone: notCloned,
+        run: async (cmd) => (
+          ran.push(cmd),
+          { success: false, output: "", error: "lockfile out of date" }
+        ),
+      }
+    );
+    expect(ran).toHaveLength(1);
+    expect(ran[0]).toMatch(/pnpm install --frozen-lockfile/);
+    expect(result.success).toBe(false);
   });
 
   it("fails when every install fails", async () => {

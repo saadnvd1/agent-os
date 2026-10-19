@@ -16,7 +16,7 @@ const CODE = /\.(ts|tsx|mts|cts|js|mjs|cjs|jsx)$/;
 const TEST = /(\.test\.|\.spec\.|(^|\/)__tests__\/|(^|\/)vitest\.setup\.)/;
 // Generated, vendored or built: measured by other means or not ours.
 const NOT_OURS =
-  /(^|\/)(node_modules|\.next[^/]*|dist|out|coverage|public|src-tauri)\/|\.min\.js$|(^|\/)next-env\.d\.ts$/;
+  /(^|\/)(node_modules|\.deps|\.next[^/]*|dist|out|coverage|public|src-tauri)\/|\.min\.js$|(^|\/)next-env\.d\.ts$/;
 
 export const isCode = (p: string) => CODE.test(p) && !NOT_OURS.test(p);
 export const isTest = (p: string) => TEST.test(p);

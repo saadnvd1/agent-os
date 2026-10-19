@@ -22,7 +22,14 @@ export const STORE_ROOT = agentosHome("deps-store");
 
 // Files tools rewrite in place. A hardlink would carry the write back into
 // the store, so these are real copies in every worktree.
-export const MUTABLE_IN_MODULES = [".package-lock.json", ".cache", ".vite"];
+export const MUTABLE_IN_MODULES = [
+  ".package-lock.json",
+  ".modules.yaml",
+  ".pnpm/lock.yaml",
+  ".pnpm-workspace-state-v1.json",
+  ".cache",
+  ".vite",
+];
 
 const probed = new Map<string, boolean>();
 

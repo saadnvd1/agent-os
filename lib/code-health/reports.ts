@@ -24,13 +24,50 @@ interface NpmVuln {
     | { name?: string; version?: string; isSemVerMajor?: boolean };
 }
 
+interface PnpmAdvisory {
+  module_name?: string;
+  title?: string;
+  severity?: string;
+  patched_versions?: string | null;
+  findings?: { paths?: string[] }[];
+}
+
+// pnpm audit lists advisories, not packages: one npm-style entry per module.
+function fromAdvisories(
+  advisories: Record<string, PnpmAdvisory>
+): Record<string, NpmVuln> {
+  const out: Record<string, NpmVuln> = {};
+  for (const a of Object.values(advisories)) {
+    const name = a.module_name ?? "";
+    if (!name) continue;
+    const paths = (a.findings ?? []).flatMap((f) => f.paths ?? []);
+    const prev = out[name];
+    const rank = (v?: string) => (v === "critical" ? 2 : v === "high" ? 1 : 0);
+    out[name] = {
+      severity:
+        rank(a.severity) >= rank(prev?.severity) ? a.severity : prev?.severity,
+      isDirect:
+        Boolean(prev?.isDirect) || paths.some((p) => /^\.>[^>]+$/.test(p)),
+      via: [...(prev?.via ?? []), a.title ?? ""],
+      fixAvailable: a.patched_versions
+        ? { name, version: a.patched_versions }
+        : false,
+    };
+  }
+  return out;
+}
+
 export function summarizeNpmAudit(json: unknown): NpmAuditSummary {
   const data = (json ?? {}) as {
     metadata?: { vulnerabilities?: Record<string, number> };
     vulnerabilities?: Record<string, NpmVuln>;
+    advisories?: Record<string, PnpmAdvisory>;
   };
   const counts = { ...(data.metadata?.vulnerabilities ?? {}) };
-  const serious = Object.entries(data.vulnerabilities ?? {})
+  const vulnerabilities = data.advisories
+    ? fromAdvisories(data.advisories)
+    : (data.vulnerabilities ?? {});
+  const serious = Object.entries(vulnerabilities)
     .filter(([, v]) => v.severity === "high" || v.severity === "critical")
     .map(([name, v]) => {
       const fix = v.fixAvailable;

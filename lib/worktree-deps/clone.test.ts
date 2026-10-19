@@ -340,6 +340,18 @@ describe("nodeModulesMatchLock", () => {
     expect(await nodeModulesMatchLock(source)).toBe(false);
   });
 
+  it("compares a pnpm lockfile with the copy pnpm installed from", async () => {
+    const lock = path.join(source, "pnpm-lock.yaml");
+    const copy = path.join(source, "node_modules", ".pnpm", "lock.yaml");
+    fs.mkdirSync(path.dirname(copy), { recursive: true });
+    fs.writeFileSync(lock, "lockfileVersion: '9.0'\n");
+    expect(await nodeModulesMatchLock(source)).toBe(false);
+    fs.writeFileSync(copy, "lockfileVersion: '9.0'\n");
+    expect(await nodeModulesMatchLock(source)).toBe(true);
+    fs.writeFileSync(lock, "lockfileVersion: '9.0'\n# changed\n");
+    expect(await nodeModulesMatchLock(source)).toBe(false);
+  });
+
   it("makes the clone fall back to an install", async () => {
     lockWith({ "node_modules/a": { version: "1.0.0" } });
     fs.copyFileSync(

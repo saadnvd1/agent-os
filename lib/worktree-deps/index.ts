@@ -7,7 +7,12 @@ import { exec } from "child_process";
 import { promisify } from "util";
 import type { SetupResult } from "../env-setup";
 import { NO_FAST_COPY, cloneDeps } from "./clone";
-import { detectPackageManager, setupEnv } from "./install";
+import {
+  UNFROZEN_WARNING,
+  detectPackageManager,
+  setupEnv,
+  shellCommand,
+} from "./install";
 
 const execAsync = promisify(exec);
 
@@ -47,8 +52,8 @@ export async function runCommand(
 
 /**
  * Clone the main checkout's node_modules (or exactly agentos.json's `clone`
- * paths), or else install: the lockfile's frozen install first, then a
- * plain one.
+ * paths), or else install: the lockfile's frozen install first, then (for
+ * a project other than AgentOS) a plain one.
  */
 export async function bringDependencies(
   result: SetupResult,
@@ -82,8 +87,8 @@ export async function bringDependencies(
   }
 
   let error: string | undefined;
-  for (const command of pm.installs) {
-    const run = await deps.run(command, worktreePath, envVars);
+  for (const [i, command] of pm.installs.entries()) {
+    const run = await deps.run(shellCommand(command), worktreePath, envVars);
     result.steps.push({
       name: `Install dependencies (${pm.name})`,
       command,
@@ -92,6 +97,7 @@ export async function bringDependencies(
         .filter(Boolean)
         .join("\n"),
       error: run.error,
+      warning: run.success && i > 0 ? UNFROZEN_WARNING : undefined,
     });
     if (run.success) return;
     error = run.error;

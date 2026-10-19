@@ -15,7 +15,7 @@ for nvm_sh in "${NVM_DIR:-$HOME/.nvm}/nvm.sh" /opt/homebrew/opt/nvm/nvm.sh; do
   fi
 done
 bin="$(git rev-parse --show-toplevel)/node_modules/.bin"
-[ -x "$bin/prettier" ] || { echo "✗ no node_modules; run npm install" >&2; exit 1; }
+[ -x "$bin/prettier" ] || { echo "✗ no node_modules; run pnpm install" >&2; exit 1; }
 
 # Prettier skips what it can't parse and what .prettierignore lists.
 STAGED=$(git -c core.quotePath=false diff --cached --name-only --diff-filter=ACMR)
