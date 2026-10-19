@@ -15,7 +15,7 @@ runs:
     # (the release-age cooldown, the build allowlist) misses, so the frozen
     # install below, which enforces both, runs on every dependency change.
     - id: modules
-      uses: actions/cache@v4
+      uses: actions/cache@v6
       with:
         path: node_modules
         key: modules-${{ runner.os }}-${{ runner.arch }}-node22-${{ hashFiles('package.json', 'pnpm-lock.yaml', 'pnpm-workspace.yaml', '.npmrc') }}
