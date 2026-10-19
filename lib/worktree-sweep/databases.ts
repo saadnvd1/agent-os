@@ -22,7 +22,6 @@ import { loadProjectConfig } from "../project-config";
 import { expandHome } from "../project-config/session";
 import {
   LOCAL_HOSTS,
-  MARK,
   SOCKET_DIR,
   pgEnv,
   pgRun,

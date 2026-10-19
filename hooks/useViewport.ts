@@ -1,28 +1,22 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useSyncExternalStore } from "react";
+import { useMediaQuery } from "./useMediaQuery";
+
+const noop = () => () => {};
 
 /**
  * Mobile-first viewport detection hook
  * Breakpoint: 768px (md in Tailwind)
  */
 export function useViewport() {
-  const [isMobile, setIsMobile] = useState(false);
-  const [isHydrated, setIsHydrated] = useState(false);
-
-  useEffect(() => {
-    const checkViewport = () => {
-      setIsMobile(window.innerWidth < 768);
-    };
-
-    // Initial check
-    checkViewport();
-    setIsHydrated(true);
-
-    // Listen for resize
-    window.addEventListener("resize", checkViewport);
-    return () => window.removeEventListener("resize", checkViewport);
-  }, []);
+  const isMobile = useMediaQuery("(max-width: 767.98px)");
+  // False on the server and while hydrating, true after.
+  const isHydrated = useSyncExternalStore(
+    noop,
+    () => true,
+    () => false
+  );
 
   return {
     isMobile,

@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useCallback, useEffect, type RefObject } from "react";
+import { useState, useCallback, type RefObject } from "react";
 
 interface UseFileDropOptions {
   /** Disable drop handling (e.g., while uploading) */
@@ -29,11 +29,7 @@ export function useFileDrop(
   const [isDragging, setIsDragging] = useState(false);
 
   // Reset drag state when disabled
-  useEffect(() => {
-    if (options?.disabled) {
-      setIsDragging(false);
-    }
-  }, [options?.disabled]);
+  if (options?.disabled && isDragging) setIsDragging(false);
 
   const handleDragOver = useCallback(
     (e: React.DragEvent) => {

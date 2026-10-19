@@ -1,6 +1,12 @@
 "use client";
 
-import { useState, useRef, useCallback, useEffect } from "react";
+import {
+  useState,
+  useRef,
+  useCallback,
+  useEffect,
+  useSyncExternalStore,
+} from "react";
 
 // Web Speech API types
 interface SpeechRecognitionEvent extends Event {
@@ -46,19 +52,27 @@ declare global {
   }
 }
 
+const noopSubscribe = () => () => {};
+
+function getSpeechRecognitionAPI() {
+  return window.SpeechRecognition || window.webkitSpeechRecognition;
+}
+
 export function useSpeechRecognition(
   onTranscript: (text: string, isFinal: boolean) => void
 ) {
   const [isListening, setIsListening] = useState(false);
-  const [isSupported, setIsSupported] = useState(false);
+  const isSupported = useSyncExternalStore(
+    noopSubscribe,
+    () => !!getSpeechRecognitionAPI(),
+    () => false
+  );
   const recognitionRef = useRef<SpeechRecognition | null>(null);
   const lastTranscriptRef = useRef("");
 
   useEffect(() => {
     // Check for browser support
-    const SpeechRecognitionAPI =
-      window.SpeechRecognition || window.webkitSpeechRecognition;
-    setIsSupported(!!SpeechRecognitionAPI);
+    const SpeechRecognitionAPI = getSpeechRecognitionAPI();
 
     if (SpeechRecognitionAPI) {
       const recognition = new SpeechRecognitionAPI();

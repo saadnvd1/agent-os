@@ -37,13 +37,32 @@ export function QuickSwitcher({
   currentSessionId,
   activeSessionWorkingDir,
 }: QuickSwitcherProps) {
-  const [mode, setMode] = useState<"sessions" | "code">("sessions");
-  const [query, setQuery] = useState("");
+  const [chosenMode, setMode] = useState<"sessions" | "code">("sessions");
+  const [query, setQueryState] = useState("");
   const [selectedIndex, setSelectedIndex] = useState(0);
   const inputRef = useRef<HTMLInputElement>(null);
 
   // Check if ripgrep is available
   const { data: ripgrepAvailable } = useRipgrepAvailable();
+
+  // Code search needs ripgrep
+  const mode = ripgrepAvailable === false ? "sessions" : chosenMode;
+
+  const setQuery = (next: string) => {
+    setQueryState(next);
+    setSelectedIndex(0);
+  };
+
+  // Reset state when dialog opens
+  const [wasOpen, setWasOpen] = useState(open);
+  if (open !== wasOpen) {
+    setWasOpen(open);
+    if (open) {
+      setMode("sessions");
+      setQueryState("");
+      setSelectedIndex(0);
+    }
+  }
 
   // Filter sessions based on search query
   const filteredSessions = sessions.filter((session) => {
@@ -56,27 +75,11 @@ export function QuickSwitcher({
     );
   });
 
-  // Reset state when dialog opens
   useEffect(() => {
-    if (open) {
-      setMode("sessions");
-      setQuery("");
-      setSelectedIndex(0);
-      setTimeout(() => inputRef.current?.focus(), 50);
-    }
+    if (!open) return;
+    const t = setTimeout(() => inputRef.current?.focus(), 50);
+    return () => clearTimeout(t);
   }, [open]);
-
-  // Force sessions mode if ripgrep is not available
-  useEffect(() => {
-    if (ripgrepAvailable === false && mode === "code") {
-      setMode("sessions");
-    }
-  }, [ripgrepAvailable, mode]);
-
-  // Reset selected index when filtered results change
-  useEffect(() => {
-    setSelectedIndex(0);
-  }, [query]);
 
   // Handle keyboard navigation
   const handleKeyDown = useCallback(
