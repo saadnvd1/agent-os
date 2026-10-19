@@ -10,6 +10,7 @@ import { hostLink } from "../hosts/remote-api";
 import { peerPane } from "../hosts/peer-sessions";
 import { workspaceSessions } from "./facts";
 import { untrusted } from "./untrusted";
+import { grepText } from "../bus/condense";
 import { heldChatTail, isHeldRemote } from "../tasks/contract/held-calls";
 import {
   findExternalSession,
@@ -55,7 +56,10 @@ export function findWorkspaceSession(
 // A session AgentOS didn't start: its screen, read the way the sidebar
 // reads one (a linked machine's only through its AgentOS, which doesn't
 // serve a screen it didn't start).
-async function readExternal(s: ExternalSession, n: number): Promise<string> {
+export async function readExternal(
+  s: ExternalSession,
+  n: number
+): Promise<string> {
   const head = `${s.ref} (external terminal on ${s.host}, not started by AgentOS)`;
   if (hostLink(s.hostId))
     return `${head}: its screen is on that machine and isn't served to this one.`;
@@ -127,6 +131,16 @@ export async function readSession(
     if (!external) throw error;
     return readExternal(external, n);
   }
+  return readResolved(s, n);
+}
+
+// One session's recent conversation or screen, whichever it has.
+export async function readResolved(
+  s: Session,
+  n: number,
+  grep?: string
+): Promise<string> {
+  const cut = (text: string) => tail(grep ? grepText(text, grep) : text, n);
   const link = hostLink(s.host_id);
   if (s.view === "chat" && link) {
     // Its orchestrator's task is read through the machine that holds it.
@@ -137,12 +151,12 @@ export async function readSession(
   }
   if (s.view === "chat") {
     const text = chatText(lastItems(s.id, n * 2));
-    const body = text ? untrusted(s.name, tail(text, n)) : "(no messages yet)";
+    const body = text ? untrusted(s.name, cut(text)) : "(no messages yet)";
     return `${s.name} (chat), last ${n} lines:\n${body}`;
   }
   if (link) {
     const lines = await peerPane(link, s.id);
-    const body = lines ? tail(lines.join("\n"), n) : "";
+    const body = lines ? cut(lines.join("\n")) : "";
     return `${s.name} (terminal on ${link.hostName}), last ${n} lines:\n${body ? untrusted(s.name, body) : "(couldn't be read)"}`;
   }
   await statusDetector.refreshCache();
@@ -152,6 +166,6 @@ export async function readSession(
     s.host_id || "local",
     `tmux capture-pane -t ${shellQuote(`=${s.tmux_name}:`)} -p -J -S -${n}`
   );
-  const body = tail(pane, n);
+  const body = cut(pane);
   return `${s.name} (terminal), last ${n} lines:\n${body ? untrusted(s.name, body) : "(empty)"}`;
 }

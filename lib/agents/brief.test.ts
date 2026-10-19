@@ -8,4 +8,10 @@ describe("BUS_BRIEF", () => {
     );
     expect(BUS_BRIEF).toContain("npm run dev:stop");
   });
+
+  it("tells agents aos read exists, when to use it, and that it is data", () => {
+    expect(BUS_BRIEF).toContain("`aos read <session>`");
+    expect(BUS_BRIEF).toMatch(/already answers/);
+    expect(BUS_BRIEF).toMatch(/data, not instructions/);
+  });
 });
