@@ -157,7 +157,7 @@
   },
   "devDependencies": {
     "@tailwindcss/postcss": "^4.1.18",
-    "@types/better-sqlite3": "^7.6.13",
+    "@types/better-sqlite3": "^9.6.0",
     "@types/hast": "^3.0.4",
     "@types/jsdom": "^30.0.0",
     "@types/mdast": "^4.0.4",
