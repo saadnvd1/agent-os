@@ -160,8 +160,7 @@ export function lastReading(
        WHERE window = ? AND at <= ? ORDER BY at DESC, id DESC LIMIT 1`
     )
     .get(window, before) as
-    | { at: number; utilization: number; resets_at: number | null }
-    | undefined;
+    { at: number; utilization: number; resets_at: number | null } | undefined;
   return r
     ? { at: r.at, utilization: r.utilization, resetsAt: r.resets_at }
     : null;

@@ -7,8 +7,7 @@ import { WORKING_LINE } from "../claude-working-line";
 
 export type DeliveryState = "delivered" | "queued" | "failed";
 export type Delivery =
-  | { state: "delivered" | "queued" }
-  | { state: "failed"; why: string };
+  { state: "delivered" | "queued" } | { state: "failed"; why: string };
 
 export interface PaneView {
   text: string;

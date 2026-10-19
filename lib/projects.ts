@@ -357,8 +357,7 @@ export function updateProjectDevServer(
   updates: Partial<CreateDevServerOptions & { sortOrder?: number }>
 ): ProjectDevServer | undefined {
   const existing = queries.getProjectDevServer(db).get(id) as
-    | ProjectDevServer
-    | undefined;
+    ProjectDevServer | undefined;
   if (!existing) return undefined;
 
   queries

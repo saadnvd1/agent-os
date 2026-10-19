@@ -18,13 +18,7 @@ import { experimentOn } from ".";
 import { getExperiment, type ExperimentId } from "./registry";
 
 export type ExperimentEvent =
-  | "model"
-  | "script"
-  | "shown"
-  | "accepted"
-  | "dismissed"
-  | "applied"
-  | "error";
+  "model" | "script" | "shown" | "accepted" | "dismissed" | "applied" | "error";
 
 export interface MeterContext {
   trigger: string;

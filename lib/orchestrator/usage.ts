@@ -86,8 +86,7 @@ export interface LastSeen {
 }
 
 export type UsageState =
-  | { window: UsageWindow | null }
-  | { unknown: string; last?: LastSeen | null };
+  { window: UsageWindow | null } | { unknown: string; last?: LastSeen | null };
 
 export interface Series {
   window: number | null;

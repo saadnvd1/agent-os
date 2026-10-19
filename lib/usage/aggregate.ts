@@ -76,7 +76,7 @@ export function aggregateUsage(
   const since = rangeStart(range, now);
   const total = acc();
   const days = new Map<string, Acc>();
-  for (let t = since; t <= now; ) {
+  for (let t = since; t <= now;) {
     days.set(dayKey(t), acc());
     const next = new Date(t);
     next.setDate(next.getDate() + 1);

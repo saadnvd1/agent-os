@@ -19,8 +19,7 @@ export function recordHit(
        WHERE r.id = ?`
     )
     .get(sessionId) as
-    | { project_id: string | null; ws: string | null }
-    | undefined;
+    { project_id: string | null; ws: string | null } | undefined;
   db.prepare(
     `INSERT INTO env_failures
        (session_id, class, project_id, workspace_id, command, line,

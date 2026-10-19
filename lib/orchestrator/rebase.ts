@@ -74,8 +74,7 @@ const tried = new Map<string, string>();
 
 const sessionRow = (id: string) =>
   db.prepare(`SELECT * FROM session_rows WHERE id = ?`).get(id) as
-    | Session
-    | undefined;
+    Session | undefined;
 
 // Every open task PR in the workspace that conflicts with its base.
 export async function rebaseConflicting(

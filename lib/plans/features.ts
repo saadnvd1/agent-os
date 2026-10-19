@@ -21,11 +21,7 @@ import {
 } from "./pieces";
 
 export type PieceStatus =
-  | "waiting"
-  | "building"
-  | "merged"
-  | "blocked"
-  | "dropped";
+  "waiting" | "building" | "merged" | "blocked" | "dropped";
 
 export interface Feature {
   id: string;
@@ -70,8 +66,7 @@ function ref(id: string): ProjectRef | null {
   const p = db
     .prepare(`SELECT id, name, working_directory FROM projects WHERE id = ?`)
     .get(id) as
-    | { id: string; name: string; working_directory: string }
-    | undefined;
+    { id: string; name: string; working_directory: string } | undefined;
   if (!p) return null;
   const deploy = loadProjectConfig(expandHome(p.working_directory)).config
     .deploy;
@@ -134,8 +129,7 @@ export function planFor(s: Session, text: string): PiecesResult | null {
 
 export function getFeature(id: string): Feature | undefined {
   return db.prepare(`SELECT * FROM features WHERE id = ?`).get(id) as
-    | Feature
-    | undefined;
+    Feature | undefined;
 }
 
 export function piecesOf(featureId: string): FeaturePiece[] {
@@ -162,8 +156,7 @@ export function prOf(p: FeaturePiece): number | null {
   const s = db
     .prepare(`SELECT pr_number, project_id FROM session_rows WHERE id = ?`)
     .get(p.session_id) as
-    | { pr_number: number | null; project_id: string | null }
-    | undefined;
+    { pr_number: number | null; project_id: string | null } | undefined;
   return s && s.project_id === p.project_id ? s.pr_number : null;
 }
 

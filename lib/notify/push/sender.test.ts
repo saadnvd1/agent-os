@@ -10,12 +10,10 @@ import { outboxRows, pairPhone, resetPush } from "./testing";
 
 let now = 1_000_000_000_000;
 const fallback = vi.fn(async (_source: string, _text: string) => {});
-const relay = vi.fn(
-  async (_body: PushRequestBody): Promise<RelayAnswer> => ({
-    kind: "results",
-    results: [],
-  })
-);
+const relay = vi.fn(async (_body: PushRequestBody): Promise<RelayAnswer> => ({
+  kind: "results",
+  results: [],
+}));
 
 const sender = () =>
   new PushSender({ now: () => now, relay, fallback, log: () => {} });

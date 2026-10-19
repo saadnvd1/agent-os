@@ -100,12 +100,7 @@ export interface TaskDiffPatch {
 // -- Checks and the review verdict ----------------------------------------
 
 export type CheckState =
-  | "pass"
-  | "fail"
-  | "pending"
-  | "skipped"
-  | "cancelled"
-  | "neutral";
+  "pass" | "fail" | "pending" | "skipped" | "cancelled" | "neutral";
 
 export interface TaskCheck {
   name: string;

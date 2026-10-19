@@ -12,12 +12,7 @@ export interface OrchestratorRowCounts {
 }
 
 export type OrchestratorState =
-  | "Paused"
-  | "Failed"
-  | "Working"
-  | "Replied"
-  | "Waiting"
-  | "Idle";
+  "Paused" | "Failed" | "Working" | "Replied" | "Waiting" | "Idle";
 
 const plural = (n: number, one: string) => `${n} ${one}${n === 1 ? "" : "s"}`;
 

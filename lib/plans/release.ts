@@ -39,8 +39,7 @@ export interface ReleaseDeps {
 const sessionOf = (id: string | null) =>
   id
     ? (db.prepare(`SELECT * FROM session_rows WHERE id = ?`).get(id) as
-        | Session
-        | undefined)
+        Session | undefined)
     : undefined;
 
 const setPiece = (id: number, status: string, note: string | null = null) =>
@@ -60,8 +59,7 @@ function syncPieces(feature: Feature, pieces: FeaturePiece[]): void {
       const q = db
         .prepare(`SELECT status, error FROM task_queue WHERE id = ?`)
         .get(p.session_id) as
-        | { status: string; error: string | null }
-        | undefined;
+        { status: string; error: string | null } | undefined;
       if (q?.status === "removed")
         setPiece(p.id, "dropped", "removed from the queue");
       else if (q?.status === "failed")

@@ -43,8 +43,7 @@ export function activeAway(): AwayRow | null {
 export function getAway(id: number): AwayRow | null {
   return (
     (db.prepare(`SELECT * FROM away_periods WHERE id = ?`).get(id) as
-      | AwayRow
-      | undefined) ?? null
+      AwayRow | undefined) ?? null
   );
 }
 

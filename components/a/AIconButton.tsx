@@ -33,11 +33,7 @@ import { cn } from "@/lib/utils";
 
 export type AIconButtonSize = "sm" | "md" | "lg";
 export type AIconButtonHighlight =
-  | "blue"
-  | "green"
-  | "red"
-  | "orange"
-  | "purple";
+  "blue" | "green" | "red" | "orange" | "purple";
 
 export interface AIconButtonProps extends Omit<
   React.ButtonHTMLAttributes<HTMLButtonElement>,

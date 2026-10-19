@@ -45,10 +45,7 @@ export interface SpinSample {
 }
 
 export type SpinClass =
-  | "warming"
-  | "sleeping"
-  | "busy-with-output"
-  | "spinning";
+  "warming" | "sleeping" | "busy-with-output" | "spinning";
 
 export function classifySpin(samples: SpinSample[]): SpinClass {
   if (samples.length < 2) return "warming";

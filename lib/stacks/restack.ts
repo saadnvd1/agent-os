@@ -110,8 +110,7 @@ const defaults: RestackDeps = {
 const sessionOf = (id: string | null) =>
   id
     ? ((db.prepare(`SELECT * FROM session_rows WHERE id = ?`).get(id) as
-        | Session
-        | undefined) ?? null)
+        Session | undefined) ?? null)
     : null;
 
 const LIVE = new Set(["running", "pr"]);

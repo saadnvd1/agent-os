@@ -21,8 +21,7 @@ export function hostLink(hostId: string | null | undefined): HostLink | null {
          JOIN hosts h ON h.id = l.host_id WHERE l.host_id = ?`
     )
     .get(hostId) as
-    | { host_id: string; url: string; token: string; name: string }
-    | undefined;
+    { host_id: string; url: string; token: string; name: string } | undefined;
   return row
     ? {
         hostId: row.host_id,

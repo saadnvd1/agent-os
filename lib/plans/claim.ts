@@ -89,8 +89,7 @@ export function pieceRefusal(
 export function pieceStatus(id: number): string | undefined {
   return (
     db.prepare(`SELECT status FROM feature_pieces WHERE id = ?`).get(id) as
-      | { status: string }
-      | undefined
+      { status: string } | undefined
   )?.status;
 }
 

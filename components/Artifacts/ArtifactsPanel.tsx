@@ -141,7 +141,7 @@ export function ArtifactsPanel({
           </button>
         )}
       </div>
-      <div className="scrollbar-none mt-2.5 flex gap-1.5 overflow-x-auto">
+      <div className="mt-2.5 flex scrollbar-none gap-1.5 overflow-x-auto">
         {(Object.keys(FILTER_LABELS) as ArtifactFilter[])
           .filter((f) => f === "all" || tally[f])
           .map((f) => (

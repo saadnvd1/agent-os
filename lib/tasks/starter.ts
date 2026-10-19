@@ -102,8 +102,7 @@ export function orchestratorOf(startedBy: string | null | undefined) {
     const row = db
       .prepare(`SELECT role, started_by FROM sessions WHERE id = ?`)
       .get(id) as
-      | { role: string | null; started_by: string | null }
-      | undefined;
+      { role: string | null; started_by: string | null } | undefined;
     if (!row) return null;
     if (row.role === "orchestrator") return id;
     id = row.started_by;

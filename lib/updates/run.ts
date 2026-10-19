@@ -264,8 +264,7 @@ export async function preflight(
 // ── starting ─────────────────────────────────────────────────────────────
 
 export type StartResult =
-  | { ok: true; pending: boolean }
-  | ({ ok: false } & Refusal);
+  { ok: true; pending: boolean } | ({ ok: false } & Refusal);
 
 /** Takes the right to start, atomically, so two requests can't both run. */
 function claimStart(deps: Pick<RunDeps, "stateFile" | "now">): boolean {

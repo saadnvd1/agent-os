@@ -237,8 +237,7 @@ function HomeContent() {
 
   // Get terminal for a pane, with fallback to first available
   const getTerminalWithFallback = useCallback(():
-    | { terminal: TerminalHandle; paneId: string; tabId: string }
-    | undefined => {
+    { terminal: TerminalHandle; paneId: string; tabId: string } | undefined => {
     debugLog(
       `getTerminalWithFallback called, total refs: ${terminalRefs.current.size}, focusedPaneId: ${focusedPaneId}`
     );

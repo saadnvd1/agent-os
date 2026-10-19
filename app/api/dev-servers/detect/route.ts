@@ -16,8 +16,7 @@ export async function GET(request: NextRequest) {
     }
 
     const project = queries.getProject(db).get(projectId) as
-      | Project
-      | undefined;
+      Project | undefined;
     if (!project) {
       return NextResponse.json({ error: "Project not found" }, { status: 404 });
     }

@@ -54,8 +54,7 @@ export function activePasskeyCount(): number {
 export function getPasskey(id: string): PasskeyRow | null {
   return (
     (getDb().prepare(`SELECT * FROM passkeys WHERE id = ?`).get(id) as
-      | PasskeyRow
-      | undefined) ?? null
+      PasskeyRow | undefined) ?? null
   );
 }
 

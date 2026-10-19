@@ -45,8 +45,7 @@ const addDays = (day: string, n: number) =>
 
 function setting(key: string): string | null {
   const r = db.prepare(`SELECT value FROM settings WHERE key = ?`).get(key) as
-    | { value: string }
-    | undefined;
+    { value: string } | undefined;
   return r?.value ?? null;
 }
 

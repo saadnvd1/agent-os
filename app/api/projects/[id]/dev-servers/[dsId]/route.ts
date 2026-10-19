@@ -12,8 +12,7 @@ export async function PATCH(request: NextRequest, { params }: RouteParams) {
     const { dsId } = await params;
 
     const existing = queries.getProjectDevServer(db).get(dsId) as
-      | ProjectDevServer
-      | undefined;
+      ProjectDevServer | undefined;
     if (!existing) {
       return NextResponse.json(
         { error: "Dev server config not found" },
@@ -49,8 +48,7 @@ export async function DELETE(request: NextRequest, { params }: RouteParams) {
     const { dsId } = await params;
 
     const existing = queries.getProjectDevServer(db).get(dsId) as
-      | ProjectDevServer
-      | undefined;
+      ProjectDevServer | undefined;
     if (!existing) {
       return NextResponse.json(
         { error: "Dev server config not found" },

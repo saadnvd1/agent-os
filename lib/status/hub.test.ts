@@ -12,14 +12,12 @@ import {
 
 let version = 0;
 let terminals: "changed" | "busy" | null = null;
-const collector = vi.fn(
-  async (): Promise<StatusSnapshot> => ({
-    statuses: {
-      s: { sessionName: "s", status: version % 2 ? "running" : "idle" },
-    },
-    hostErrors: {},
-  })
-);
+const collector = vi.fn(async (): Promise<StatusSnapshot> => ({
+  statuses: {
+    s: { sessionName: "s", status: version % 2 ? "running" : "idle" },
+  },
+  hostErrors: {},
+}));
 const unsubscribers: (() => void)[] = [];
 const subscribe = () => {
   const seen: string[] = [];

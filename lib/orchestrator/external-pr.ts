@@ -59,8 +59,7 @@ export interface ExternalPR {
 type WorkspaceTask = Session & { project_name: string };
 
 export type GateTarget =
-  | { kind: "task"; task: WorkspaceTask }
-  | { kind: "external"; pr: ExternalPR };
+  { kind: "task"; task: WorkspaceTask } | { kind: "external"; pr: ExternalPR };
 
 const FIELDS =
   "number,url,state,headRefOid,headRefName,baseRefName,isDraft,labels,isCrossRepository,statusCheckRollup,body,title,mergeable";

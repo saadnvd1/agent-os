@@ -29,8 +29,7 @@ export interface RecordResult {
 
 const rowOf = (id: number) =>
   db.prepare(`SELECT * FROM health_anomalies WHERE id = ?`).get(id) as
-    | AnomalyRow
-    | undefined;
+    AnomalyRow | undefined;
 
 export function anomaly(id: number): AnomalyRow | null {
   return rowOf(id) ?? null;

@@ -95,8 +95,7 @@ describe("demo re-seed", () => {
     const name = (id: string) =>
       (
         db.prepare(`SELECT name FROM sessions WHERE id = ?`).get(id) as
-          | { name: string }
-          | undefined
+          { name: string } | undefined
       )?.name;
     expect(name(kept)).toBe("seeded");
     expect(name(added)).toBeUndefined();

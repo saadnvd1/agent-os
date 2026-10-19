@@ -19,13 +19,7 @@ import {
 import { Tooltip, TooltipContent, TooltipTrigger } from "./ui/tooltip";
 
 export type WorkerStatus =
-  | "pending"
-  | "running"
-  | "waiting"
-  | "idle"
-  | "completed"
-  | "failed"
-  | "dead";
+  "pending" | "running" | "waiting" | "idle" | "completed" | "failed" | "dead";
 
 export interface WorkerInfo {
   id: string;

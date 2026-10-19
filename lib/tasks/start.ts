@@ -60,8 +60,7 @@ export function launchHold(sessionId: string): string | null {
        LIMIT 1`
     )
     .get(sessionId, sessionId, sessionId) as
-    | { workspace_id: string }
-    | undefined;
+    { workspace_id: string } | undefined;
   if (!row) return null;
   if (isPaused(row.workspace_id)) return "the orchestrator is paused by Saad";
   const window = brakesEnabled() ? windowRefusal(readUsage()) : null;
@@ -135,8 +134,7 @@ export async function finishTaskStart(
   const now = db
     .prepare(`SELECT task_status, archived_at FROM session_rows WHERE id = ?`)
     .get(sessionId) as
-    | { task_status: string | null; archived_at: string | null }
-    | undefined;
+    { task_status: string | null; archived_at: string | null } | undefined;
   if (now?.task_status !== "running" || now.archived_at)
     return done({
       status: "failed",

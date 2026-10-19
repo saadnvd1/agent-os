@@ -313,8 +313,7 @@ export function moveQueued(id: string, by: -1 | 1): void {
          ORDER BY q.position ${by < 0 ? "DESC" : "ASC"} LIMIT 1`
       )
       .get({ position: r.position, ws: workspaceId, project: r.project_id }) as
-      | QueueRow
-      | undefined;
+      QueueRow | undefined;
     if (!other) return;
     patch(r.id, { position: other.position });
     patch(other.id, { position: r.position });

@@ -35,8 +35,7 @@ export function unarchiveSession(id: string): Session {
     )
     .run(id).changes;
   const row = db.prepare(`SELECT * FROM session_rows WHERE id = ?`).get(id) as
-    | Session
-    | undefined;
+    Session | undefined;
   if (!row) throw new Error("Session not found");
   if (!changed) throw new Error(`${row.name} isn't archived`);
   return row;

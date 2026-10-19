@@ -72,26 +72,22 @@ export function needsYouItems(input: {
 }): NeedsYouItem[] {
   const hidden = new Set(input.dismissed);
   const items: NeedsYouItem[] = [
-    ...input.asks.map(
-      (ask): NeedsYouItem => ({
-        key: `ask:${ask.id}`,
-        kind: "ask",
-        title: ask.title,
-        sub: ask.kind,
-        at: sqliteMs(ask.createdAt),
-        ask,
-      })
-    ),
-    ...input.questions.map(
-      (question): NeedsYouItem => ({
-        key: `question:${question.id}`,
-        kind: "question",
-        title: question.text,
-        sub: question.taskName ?? "Question",
-        at: sqliteMs(question.createdAt),
-        question,
-      })
-    ),
+    ...input.asks.map((ask): NeedsYouItem => ({
+      key: `ask:${ask.id}`,
+      kind: "ask",
+      title: ask.title,
+      sub: ask.kind,
+      at: sqliteMs(ask.createdAt),
+      ask,
+    })),
+    ...input.questions.map((question): NeedsYouItem => ({
+      key: `question:${question.id}`,
+      kind: "question",
+      title: question.text,
+      sub: question.taskName ?? "Question",
+      at: sqliteMs(question.createdAt),
+      question,
+    })),
   ];
   for (const card of input.cards ?? [])
     items.push({

@@ -150,8 +150,7 @@ function merged(
   );
   return rows.map((r) => {
     const done = action.get(away.id, `deploy:${r.id}`) as
-      | { kind: string; detail: string | null }
-      | undefined;
+      { kind: string; detail: string | null } | undefined;
     const deploy: DeployState =
       done?.kind === "deploy_ok"
         ? "deployed"

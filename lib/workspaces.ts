@@ -53,8 +53,7 @@ export function listWorkspaces(): Workspace[] {
 
 export function getWorkspace(id: string): Workspace | null {
   const row = db.prepare(`SELECT * FROM workspaces WHERE id = ?`).get(id) as
-    | WorkspaceRow
-    | undefined;
+    WorkspaceRow | undefined;
   return row ? toWorkspace(row) : null;
 }
 

@@ -346,8 +346,7 @@ describe("release with the real start and deploy check", () => {
   });
   const queueRow = (id: string) =>
     db.prepare(`SELECT status FROM task_queue WHERE id = ?`).get(id) as
-      | { status: string }
-      | undefined;
+      { status: string } | undefined;
 
   // Zero running tasks allowed in the workspace of the piece's project.
   const limitTasks = (featureId: string) =>

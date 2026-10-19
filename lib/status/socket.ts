@@ -78,7 +78,6 @@ export function sessionFolder(sessionId: string): string | null {
       `SELECT worktree_path, working_directory FROM sessions WHERE id = ?`
     )
     .get(sessionId) as
-    | { worktree_path: string | null; working_directory: string }
-    | undefined;
+    { worktree_path: string | null; working_directory: string } | undefined;
   return s ? s.worktree_path || s.working_directory : null;
 }

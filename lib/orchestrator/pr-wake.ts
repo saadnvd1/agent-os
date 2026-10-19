@@ -95,8 +95,7 @@ const failures = new Map<string, number>();
 
 const sessionRow = (id: string) =>
   db.prepare(`SELECT * FROM session_rows WHERE id = ?`).get(id) as
-    | Session
-    | undefined;
+    Session | undefined;
 
 // True when this call took the key; false when it was taken before.
 const claim = (task: string, key: string, kind: string) =>

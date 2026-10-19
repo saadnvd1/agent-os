@@ -79,8 +79,7 @@ export function describeReview(row: CheckRow): string {
 const baseBranchOf = (id: string) =>
   (
     db.prepare(`SELECT base_branch FROM sessions WHERE id = ?`).get(id) as
-      | { base_branch: string | null }
-      | undefined
+      { base_branch: string | null } | undefined
   )?.base_branch ?? null;
 
 export interface ReviewTarget {

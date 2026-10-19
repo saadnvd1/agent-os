@@ -241,8 +241,7 @@ async function settleOne(
       const q = db
         .prepare(`SELECT status, error FROM task_queue WHERE id = ?`)
         .get(run.session_id) as
-        | { status: string; error: string | null }
-        | undefined;
+        { status: string; error: string | null } | undefined;
       if (!q || q.status === "removed")
         finish(
           run,
@@ -425,8 +424,7 @@ async function afterSettle(run: Live): Promise<void> {
   const row = db
     .prepare(`SELECT status, summary_source FROM recipe_runs WHERE id = ?`)
     .get(run.id) as
-    | { status: RunStatus; summary_source: string | null }
-    | undefined;
+    { status: RunStatus; summary_source: string | null } | undefined;
   if (!row || !run.session_id || !finishesSession(row, run.recipe)) return;
   try {
     await doneSession(run.session_id, { by: "direct", noMerge: true });

@@ -14,13 +14,11 @@ export const IN_FLIGHT = ["running", "moving"];
 
 export const row = (id: string) =>
   db.prepare(`SELECT * FROM task_queue WHERE id = ?`).get(id) as
-    | QueueRow
-    | undefined;
+    QueueRow | undefined;
 
 export const sessionOf = (id: string) =>
   db.prepare(`SELECT * FROM session_rows WHERE id = ?`).get(id) as
-    | Session
-    | undefined;
+    Session | undefined;
 
 export function patch(id: string, fields: Partial<QueueRow>): void {
   const keys = Object.keys(fields);

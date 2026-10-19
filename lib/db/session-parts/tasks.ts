@@ -20,8 +20,7 @@ export function startTaskClock(
   const row = db
     .prepare(`SELECT created_at, task_since FROM session_rows WHERE id = ?`)
     .get(sessionId) as
-    | { created_at: string; task_since: string | null }
-    | undefined;
+    { created_at: string; task_since: string | null } | undefined;
   if (!row || row.task_since) return;
   setTask(db, sessionId, { task_since: at ?? row.created_at });
 }

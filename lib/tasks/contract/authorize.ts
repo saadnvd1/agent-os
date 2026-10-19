@@ -69,8 +69,7 @@ export async function taskRoute(
   const refused = refuse(request, id, rule);
   if (refused) return refused;
   const task = db.prepare(`SELECT * FROM session_rows WHERE id = ?`).get(id) as
-    | Session
-    | undefined;
+    Session | undefined;
   if (!task)
     return NextResponse.json({ error: "No such task" }, { status: 404 });
   try {

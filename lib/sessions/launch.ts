@@ -340,7 +340,6 @@ async function launch(input: LaunchInput, id: string): Promise<Launched> {
 
 function sessionName(id: string): string | null {
   const row = db.prepare(`SELECT name FROM sessions WHERE id = ?`).get(id) as
-    | { name: string }
-    | undefined;
+    { name: string } | undefined;
   return row?.name ?? null;
 }

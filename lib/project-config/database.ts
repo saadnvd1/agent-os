@@ -305,8 +305,7 @@ export async function ensureSessionDatabase(
   let last = sessionDatabase(sessionId);
   let written = (
     db.prepare(`SELECT database FROM sessions WHERE id = ?`).get(sessionId) as
-      | { database: string | null }
-      | undefined
+      { database: string | null } | undefined
   )?.database;
   const save = (state: SessionDatabase) => {
     const json = JSON.stringify(state);

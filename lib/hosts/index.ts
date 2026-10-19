@@ -39,8 +39,7 @@ export function getHost(hostId: string | null | undefined): Host | null {
   if (!isRemoteHost(hostId)) return LOCAL_HOST;
   return (
     (getDb().prepare(`SELECT * FROM hosts WHERE id = ?`).get(hostId) as
-      | Host
-      | undefined) ?? null
+      Host | undefined) ?? null
   );
 }
 
