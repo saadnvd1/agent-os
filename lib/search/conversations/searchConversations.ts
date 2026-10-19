@@ -98,14 +98,13 @@ export function searchConversations(
        )
        SELECT h.session_id, h.item_id, h.snippet, c.kind,
               json_extract(c.data, '$.createdAt') AS created_at,
-              s.name, s.status, t.task_status, s.archived_at, s.updated_at,
+              s.name, s.status, s.task_status, s.archived_at, s.updated_at,
               s.project_id, p.name AS project_name,
               COALESCE(s.workspace_id, p.workspace_id) AS workspace_id,
               w.name AS workspace_name
        FROM hits h
        JOIN chat_items c ON c.session_id = h.session_id AND c.item_id = h.item_id
-       JOIN sessions s ON s.id = h.session_id
-       LEFT JOIN session_tasks t ON t.session_id = s.id
+       JOIN session_rows s ON s.id = h.session_id
        LEFT JOIN projects p ON p.id = s.project_id
        LEFT JOIN workspaces w ON w.id = COALESCE(s.workspace_id, p.workspace_id)
        ORDER BY h.rank`
