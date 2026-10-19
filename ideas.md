@@ -6,7 +6,11 @@
 - [ ] MCP server integration - Toggle AI capabilities (web search, GitHub) per session
 - [ ] Session templates - Pre-configured sessions for common tasks
 - [ ] Session groups - Organize sessions into projects/folders
-- [ ] Session search - Fuzzy search across all conversations
+- [x] Session search - ⌘K Conversations (chat messages, full-text index)
+- [ ] Conversation search: terminal sessions (Claude's JSONL transcripts live outside the database; index them too)
+- [ ] Conversation search: tool calls and their output, ranked below messages
+- [ ] Conversation search: filter by project in the UI (the API takes `project`), date and `from:` filters
+- [ ] Conversation search in the mobile app
 - [ ] Export conversations - Export to Markdown/JSON
 - [ ] Keyboard shortcuts - Quick navigation and actions
 - [x] Mobile responsive - Better mobile layout

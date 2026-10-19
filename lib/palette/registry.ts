@@ -12,6 +12,10 @@ export interface PaletteCommand {
   keywords?: string[];
   // Shown beside it, e.g. ⌘K.
   hint?: string;
+  // A line under the title (what a conversation hit said).
+  detail?: string;
+  // Running it leaves the palette open (it changes the palette itself).
+  keepOpen?: boolean;
   icon?: unknown;
   run: () => void;
 }

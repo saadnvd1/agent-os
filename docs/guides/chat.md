@@ -228,6 +228,20 @@ pin the chat, and agents don't see them. The API is `GET/POST
 /api/sessions/:id/bookmarks`, `GET /api/bookmarks`, and `PATCH/DELETE
 /api/bookmarks/:id`.
 
+**Search every conversation.** ⌘K (Ctrl+K off a Mac) opens the palette; type
+two letters and the best matching conversations are listed under the
+commands, and Tab (or "Search all conversations") opens the full search. It
+looks at what you and the agent said (not tool calls or their output) in
+every chat, including done, dropped and archived ones, in the current
+workspace or all of them. A word matches by its start, so `compac` finds
+"compaction", and quotes match a phrase. The selected result shows its message
+with the ones around it; Enter, or a tap on a phone, opens the chat at that
+message, which flashes. An archived chat comes back first, as it does from a
+bookmark. Terminal sessions are not searched. Older chats are indexed in the
+background after an update, and the search says so while it runs. The API is
+`GET /api/search/conversations?q=&workspace=&project=` and
+`GET /api/search/conversations/context?session=&item=`.
+
 Drivers for other agent CLIs plug into `lib/chat/drivers`; undo, `@file`
 suggestions and visuals are Claude-only for now, and plan mode is Claude and
 OpenCode.

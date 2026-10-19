@@ -15,7 +15,7 @@ import { useBookmarks, type Bookmark } from "@/data/bookmarks";
 import { useWorkspacesQuery } from "@/data/workspaces";
 import { useUnarchiveSession } from "@/data/done";
 import { toast } from "sonner";
-import { hrefWithSession } from "@/lib/session-url";
+import { openChatAt } from "@/stores/chatJump";
 import { bookmarksUi, bookmarksUiActions } from "@/stores/bookmarksUi";
 import { BookmarkRow } from "./BookmarkRow";
 import { EmptyBookmarks } from "./EmptyBookmarks";
@@ -24,13 +24,7 @@ import { groupByDay } from "./helpers";
 // Opens the chat by its address, then takes it to the message.
 function openChat(b: Bookmark) {
   bookmarksUiActions.setOpen(false);
-  window.history.pushState(
-    null,
-    "",
-    hrefWithSession(location.href, b.sessionId)
-  );
-  window.dispatchEvent(new PopStateEvent("popstate"));
-  bookmarksUiActions.jump(b.sessionId, b.itemId);
+  openChatAt(b.sessionId, b.itemId);
 }
 
 // Every bookmark: one workspace's or all of them, searched on the server.

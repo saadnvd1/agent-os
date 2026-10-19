@@ -9,6 +9,7 @@ import { reattachChats } from "./lib/chat/runner";
 import { serveChatSocket } from "./lib/chat/socket";
 import { startStackWatcher } from "./lib/stacks";
 import { startPauseWatcher } from "./lib/tasks/pause";
+import { startConversationBackfill } from "./lib/search/conversations/backfill";
 import { setStartGate } from "./lib/stacks/tick";
 import { stackStartGate } from "./lib/orchestrator/brakes";
 import { buildId } from "./lib/build";
@@ -433,6 +434,8 @@ app.prepare().then(async () => {
   setInterval(sweepSims, 5 * 60_000);
   // Chat turns that kept running through a restart.
   void reattachChats().finally(() => startPauseWatcher());
+  // Older chats get into the search index in the background, a batch at a time.
+  if (process.env.AGENTOS_SEARCH_INDEX !== "off") startConversationBackfill();
   // Reviews this restart cut off run again and deliver their verdicts.
   if (process.env.AGENTOS_ORCHESTRATOR !== "off")
     resumeReviews().catch((error) =>

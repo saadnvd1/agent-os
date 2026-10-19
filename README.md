@@ -22,6 +22,7 @@ and check on all of it from your phone.
 - **Agents that talk to each other.** Sessions message each other with `aos`, and you see every conversation in Messages. [More](docs/guides/agent-network.md)
 - **Chat or terminal, same conversation.** Streaming replies, steps and diffs, plan mode, slash commands, `@file`, undo. [More](docs/guides/chat.md)
 - **Bookmarks.** Star any message, tool call or turn, then find it again from the chat or across every chat, with a search. [More](docs/guides/chat.md)
+- **Search every conversation.** ⌘K (Ctrl+K off a Mac), then Tab: what you and your agents said in any chat, found as you type from a full-text index (a word's start matches, quotes match a phrase), with the message and its neighbours shown beside the results and a jump to it in the chat. Done, dropped and archived chats are included. [More](docs/reference/conversation-search.md)
 - **Every artifact in one place.** A session's plan, PR, files, pages, images and job logs in one list, with a preview, kept after its worktree is removed. [More](docs/guides/sessions.md#artifacts)
 - **Share a chat or a page.** A read-only snapshot link with secrets, home paths and machine names masked, a preview before anything leaves your machine, and a Markdown copy to hand to an agent. [More](docs/guides/sharing.md)
 - **Project config.** `agentos.json` gives each session its own ports, environment, files and a private Postgres copy. [More](docs/reference/project-config.md)
@@ -33,7 +34,7 @@ and check on all of it from your phone.
 - **LumifyHub (optional).** Boards, cards and docs for a workspace, if you want them. [More](docs/lumifyhub.md)
 - **No approvals mode.** One switch in Settings that approves every ask, lets brakes and plan-only tasks through, and starts every agent with its permission prompts off; each approval it makes is logged. Off by default. [More](docs/reference/orchestrator.md#no-approvals-mode)
 - **Experiments.** Settings → Experiments lists features still being tried, each off until you turn it on, with what it has cost and how often its suggestions were taken. The first is Learning cards: when a session ends it can offer to save the work as a recipe or keep a lesson where it belongs. [More](docs/decisions/2026-10-13-experiments.md)
-- **Also:** a ⌘K palette, code search, a file picker, a git panel, dev servers, up to four panes, and dictation.
+- **Also:** a ⌘K palette (actions, sessions, conversations), code search, a file picker, a git panel, dev servers, up to four panes, and dictation.
 
 ## Documentation
 
