@@ -4,7 +4,7 @@ description: Node 22, pnpm (the version package.json pins) and the installed dep
 runs:
   using: composite
   steps:
-    - uses: actions/setup-node@v4
+    - uses: actions/setup-node@v7
       with:
         node-version: 22
     # corepack ships with Node 22 and reads packageManager from package.json.
