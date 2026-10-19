@@ -17,6 +17,16 @@ interface Deps {
   foldEvents: boolean;
 }
 
+// The message arrived at is marked for a moment (app/globals.css fades it).
+function flash(block: string) {
+  const el = document.querySelector(`[data-block="${CSS.escape(block)}"]`);
+  if (!el) return;
+  el.removeAttribute("data-flash");
+  void (el as HTMLElement).offsetWidth;
+  el.setAttribute("data-flash", "");
+  setTimeout(() => el.removeAttribute("data-flash"), 2000);
+}
+
 // Takes the reader to a message by a rule over the loaded items (the strip's
 // "the message where the question was asked"): older pages load until it is
 // found, then its folded rows open and it scrolls into view.
@@ -54,6 +64,7 @@ export function useGoToItem(d: Deps) {
           )
           ?.scrollIntoView({ block: "center" })
       )
+      .then(() => flash(where.block))
       .catch(() => {});
   }, [
     find,

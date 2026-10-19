@@ -309,3 +309,28 @@ body {
   background-color: hsl(var(--find-current));
   color: hsl(var(--find-current-foreground));
 }
+
+/* A message just jumped to (components/Chat/useGoToItem). */
+@keyframes jump-flash {
+  from {
+    background-color: hsl(var(--primary) / 0.22);
+  }
+  to {
+    background-color: transparent;
+  }
+}
+[data-block][data-flash] {
+  animation: jump-flash 1.8s ease-out;
+  border-radius: 0.75rem;
+}
+@media (prefers-reduced-motion: reduce) {
+  [data-block][data-flash] {
+    animation: none;
+    background-color: hsl(var(--primary) / 0.12);
+  }
+}
+
+/* Matches in the search preview (components/CommandPalette/conversations). */
+::highlight(conv-search) {
+  background-color: hsl(var(--find-match));
+}

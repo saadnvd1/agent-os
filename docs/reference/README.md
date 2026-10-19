@@ -7,6 +7,7 @@ How each part of AgentOS works, in detail. For how-tos, see the [guides](../guid
 - [Project config](project-config.md): `agentos.json`, and the iOS simulator for tasks.
 - [Workspaces](workspaces.md): Done, session logs and tmux cleanup.
 - [Machines](machines.md): sessions and tasks on other machines.
+- [Conversation search](conversation-search.md): the full-text index behind ⌘K, its backfill and API.
 - [Security](security.md): who is trusted, Connect and demo mode.
 - [Development](development.md): scripts, deploys, the pre-commit hook and audits.
 - [LumifyHub](../lumifyhub.md): the optional integration.
