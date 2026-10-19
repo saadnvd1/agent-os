@@ -125,4 +125,32 @@ describe("rowMenu", () => {
     expect(sec).toContain("open-recipe");
     expect(sec).not.toContain("save-recipe");
   });
+
+  const finishItems = (over: Parameters<typeof menu>[0]) =>
+    menu(over)
+      .sections.flat()
+      .filter((i) => i === "done" || i === "restore");
+
+  it.each([
+    ["done", "restore"],
+    ["dropped", "restore"],
+  ])("offers a %s task %s, never Done", (task_status, want) => {
+    expect(finishItems({ s: { task_status } })).toEqual([want]);
+  });
+
+  it("offers a merged task neither Done nor Restore", () => {
+    expect(finishItems({ s: { task_status: "merged" } })).toEqual([]);
+  });
+
+  it("offers a plain session on the Done shelf Reopen, not Done or Restore", () => {
+    const row = { ...base.row!, settled: "manual" as const };
+    const items = menu({ row }).sections.flat();
+    expect(items).toContain("reopen");
+    expect(items).not.toContain("done");
+    expect(items).not.toContain("restore");
+  });
+
+  it("offers a running task Done", () => {
+    expect(finishItems({ s: { task_status: "running" } })).toEqual(["done"]);
+  });
 });
