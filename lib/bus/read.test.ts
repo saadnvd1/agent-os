@@ -1,7 +1,7 @@
 import fs from "fs";
-import os from "os";
 import path from "path";
 import { describe, expect, it, vi } from "vitest";
+import { tempDir } from "@/lib/test-temp";
 
 vi.mock("@/lib/status-detector", () => ({
   statusDetector: {
@@ -101,7 +101,7 @@ describe("aos read", () => {
   });
 
   it("puts a task's brief and plan first", async () => {
-    const dir = fs.mkdtempSync(path.join(os.tmpdir(), "aos-read-"));
+    const dir = tempDir("agent-os-test-read-");
     try {
       fs.mkdirSync(path.join(dir, ".agentos"));
       fs.writeFileSync(path.join(dir, ".agentos/plan.md"), "plan");
@@ -194,7 +194,7 @@ describe("aos read", () => {
   it("changes nothing about the target", async () => {
     const row = () =>
       JSON.stringify(
-        db.prepare(`SELECT * FROM sessions WHERE id = ?`).get(peer)
+        db.prepare(`SELECT * FROM session_rows WHERE id = ?`).get(peer)
       );
     const msgs = () =>
       (
