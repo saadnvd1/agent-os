@@ -3,8 +3,6 @@
 .next-prev
 .deps
 node_modules
-src-tauri/target
-src-tauri/gen
 public
 dist
 *.db

@@ -22,7 +22,6 @@ export default defineConfig({
       ".next-build/**",
       ".next-prev/**",
       ".deps/**",
-      "src-tauri/**",
       ".claude/**",
     ],
     globalSetup: ["./vitest.global-setup.ts"],
