@@ -32,7 +32,6 @@ import { selectionActions } from "@/stores/sessionSelection";
 import { schedulesUiActions } from "@/stores/schedulesUi";
 import { recipesUiActions } from "@/stores/recipesUi";
 import { rowGroup } from "@/lib/recipes/chip";
-import { finishActions } from "@/lib/sidebar/row-actions";
 import {
   useArchiveAction,
   useDoneAction,

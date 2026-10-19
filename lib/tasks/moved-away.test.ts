@@ -29,7 +29,7 @@ vi.mock("../async-operations", () => ({
   runInBackground: (task: () => Promise<void>) => void task(),
 }));
 
-import { db, insertSessionRow, updateSessionRow } from "../db";
+import { db, updateSessionRow } from "../db";
 import { DEVICE_HEADER } from "../security/auth";
 import { cleanUpMovedAway } from "./moved-away";
 import { POST as moved } from "@/app/api/tasks/[id]/moved/route";

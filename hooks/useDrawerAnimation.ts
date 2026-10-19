@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef } from "react";
+import { useState, useEffect } from "react";
 
 /**
  * Hook for smooth drawer enter animations.
@@ -6,22 +6,19 @@ import { useState, useEffect, useRef } from "react";
  */
 export function useDrawerAnimation(open: boolean) {
   const [isAnimatingIn, setIsAnimatingIn] = useState(false);
-  const hasAnimated = useRef(false);
 
   useEffect(() => {
-    if (open && !hasAnimated.current) {
-      hasAnimated.current = true;
-      requestAnimationFrame(() => {
-        requestAnimationFrame(() => {
-          setIsAnimatingIn(true);
-        });
-      });
-    }
-    if (!open) {
-      hasAnimated.current = false;
+    if (!open) return;
+    let inner = 0;
+    const outer = requestAnimationFrame(() => {
+      inner = requestAnimationFrame(() => setIsAnimatingIn(true));
+    });
+    return () => {
+      cancelAnimationFrame(outer);
+      cancelAnimationFrame(inner);
       setIsAnimatingIn(false);
-    }
+    };
   }, [open]);
 
-  return isAnimatingIn;
+  return open && isAnimatingIn;
 }

@@ -7,8 +7,6 @@
 
 import type { EnvClass } from "./types";
 
-const OLD_PYTHON =
-  /python3?\.[0-9]\b|Python3?\.framework\/Versions\/3\.[0-9]\b|Python\/3\.[0-9]\b/i;
 const USE_ENV =
   "run it through the repo's own environment (`uv run …` when it has a pyproject.toml or uv.lock, else its .venv/bin/python), not a bare `python3`";
 

@@ -1,6 +1,6 @@
 import { NextRequest } from "next/server";
 import { describe, expect, it, vi } from "vitest";
-import { db, insertSessionRow, updateSessionRow } from "@/lib/db";
+import { db, updateSessionRow } from "@/lib/db";
 import { git, makeRepo } from "@/lib/done/testing";
 import { seedTask, taskRow } from "./testing";
 

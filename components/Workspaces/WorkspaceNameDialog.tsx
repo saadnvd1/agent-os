@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useState } from "react";
 import {
   Dialog,
   DialogContent,
@@ -28,9 +28,11 @@ export function WorkspaceNameDialog({
   onClose,
 }: WorkspaceNameDialogProps) {
   const [name, setName] = useState(initialName);
-  useEffect(() => {
+  const [synced, setSynced] = useState({ open, initialName });
+  if (synced.open !== open || synced.initialName !== initialName) {
+    setSynced({ open, initialName });
     if (open) setName(initialName);
-  }, [open, initialName]);
+  }
 
   return (
     <Dialog open={open} onOpenChange={(o) => !o && onClose()}>

@@ -1,5 +1,5 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
-import { db, insertSessionRow, updateSessionRow } from "@/lib/db";
+import { db, updateSessionRow } from "@/lib/db";
 import { seedSession, seedWorkspace } from "@/lib/orchestrator/testing";
 
 // The agent process is at the module edge: a chat's worker, a terminal's tmux.

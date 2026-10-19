@@ -1,6 +1,6 @@
 import fs from "fs";
 import { beforeEach, describe, expect, it, vi } from "vitest";
-import { db, insertSessionRow, updateSessionRow } from "@/lib/db";
+import { db, updateSessionRow } from "@/lib/db";
 import { git, makeRepo } from "@/lib/done/testing";
 import type { FindPROpts } from "./gh";
 import {
