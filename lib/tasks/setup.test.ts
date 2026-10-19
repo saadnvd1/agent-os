@@ -17,6 +17,23 @@ describe("task setup", () => {
     expect(setupNote(setup)).toBe("");
   });
 
+  it("passes a warning from a step that worked on to the agent", () => {
+    const setup = setupOutcome(
+      result({
+        steps: [
+          {
+            name: "i",
+            command: "npm install --include=dev",
+            success: true,
+            warning: "The lockfile is out of sync. Commit it.",
+          },
+        ],
+      })
+    );
+    expect(setup.status).toBe("ok");
+    expect(setupNote(setup)).toContain("The lockfile is out of sync");
+  });
+
   it("names the step that failed and tells the agent in its prompt", () => {
     const setup = setupOutcome(
       result({

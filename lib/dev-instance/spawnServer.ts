@@ -20,12 +20,16 @@ export function spawnServer(opts: {
 }): ChildProcess {
   const { repo, port, env, stdio, detached, native } = opts;
   assertNotLivePort(port, process.env, readLiveRecord());
-  const run = (script: string) =>
-    execFileSync(process.execPath, [path.join(repo, "scripts", script)], {
-      cwd: repo,
-      stdio: "ignore",
-    });
-  if (native) run("ensure-native.mjs");
+  const run = (script: string, ...args: string[]) =>
+    execFileSync(
+      process.execPath,
+      [path.join(repo, "scripts", script), ...args],
+      {
+        cwd: repo,
+        stdio: "ignore",
+      }
+    );
+  if (native) run("check-native.mjs", "--rebuild");
   run("gen-migrations-index.mjs");
   return spawn(process.execPath, ["--import", "tsx", "server.ts"], {
     cwd: repo,

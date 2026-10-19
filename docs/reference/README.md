@@ -10,4 +10,5 @@ How each part of AgentOS works, in detail. For how-tos, see the [guides](../guid
 - [Conversation search](conversation-search.md): the full-text index behind ⌘K, its backfill and API.
 - [Security](security.md): who is trusted, Connect and demo mode.
 - [Development](development.md): scripts, deploys, the pre-commit hook and audits.
+- [Dependencies](dependencies.md): pnpm, the 7-day cooldown, install-script allowlist and checked deploy installs.
 - [LumifyHub](../lumifyhub.md): the optional integration.

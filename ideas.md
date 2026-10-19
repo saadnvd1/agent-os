@@ -314,3 +314,8 @@
 - [ ] Sweep `attachments/draft/` files from drafts that never became a session
 
 - Health bg-spin: make its thresholds (core share, window) Settings → Health if the constants in `lib/health/spin.ts` need tuning.
+
+## Dependencies
+
+- Frozen-only worktree installs for every repo, not just AgentOS: today another project whose lockfile drifted falls back to a plain install (with a warning to the agent). Worth tightening once agents reliably commit lockfile fixes.
+- `npm i -g @saadnvd1/agent-os` users still resolve ranges fresh. Ship an `npm-shrinkwrap.json` made at publish, or point them at the git install.

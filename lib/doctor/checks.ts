@@ -11,7 +11,7 @@ import { getAllProviderDefinitions } from "../providers/registry";
 
 // The oldest Node major AgentOS runs on; scripts/lib/prerequisites.sh must agree
 // (lib/doctor/drift.test.ts fails when they don't).
-export const MIN_NODE_MAJOR = 20;
+export const MIN_NODE_MAJOR = 22;
 
 const TOOL_MS = 5_000;
 const CACHE_MS = 60 * 1000;

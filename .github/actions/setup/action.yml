@@ -1,5 +1,5 @@
 name: Set up
-description: Node 22 and the installed dependencies
+description: Node 22, pnpm (the version package.json pins) and the installed dependencies
 
 runs:
   using: composite
@@ -7,13 +7,18 @@ runs:
     - uses: actions/setup-node@v4
       with:
         node-version: 22
-    # node_modules itself, not just npm's download cache: a hit skips npm ci
-    # and its native-module builds.
+    # corepack ships with Node 22 and reads packageManager from package.json.
+    - run: corepack enable pnpm
+      shell: bash
+    # node_modules itself, not just pnpm's store: a hit skips the install and
+    # its native-module builds. Any change to the lockfile or the settings
+    # (the release-age cooldown, the build allowlist) misses, so the frozen
+    # install below, which enforces both, runs on every dependency change.
     - id: modules
       uses: actions/cache@v4
       with:
         path: node_modules
-        key: modules-${{ runner.os }}-${{ runner.arch }}-node22-${{ hashFiles('package-lock.json') }}
+        key: modules-${{ runner.os }}-${{ runner.arch }}-node22-${{ hashFiles('package.json', 'pnpm-lock.yaml', 'pnpm-workspace.yaml', '.npmrc') }}
     - if: steps.modules.outputs.cache-hit != 'true'
-      run: npm ci
+      run: pnpm install --frozen-lockfile
       shell: bash

@@ -8,7 +8,7 @@ npm run dev:stop     # stops only that server (never pkill by pattern: it can ma
 npm test             # vitest
 npm run lint         # eslint
 npm run check        # typecheck, lint, format and tests: what CI runs
-scripts/redeploy     # pull, install, build; restarts via $AGENTOS_RESTART only if all of it worked
+scripts/redeploy     # pull, install (pnpm, beside the live node_modules, checked first), build; restarts via $AGENTOS_RESTART only if all of it worked
 scripts/redeploy --rollback  # put the previous build back and restart
 ```
 
@@ -62,7 +62,7 @@ descriptors, child processes and spawns per minute; `scripts/perf/execs.mjs
 spawns with eslogger (macOS) or strace (Linux) and need passwordless sudo for
 that one number. Run them on a machine with room to spare.
 
-A pre-commit hook (`.husky/pre-commit`, installed by `npm install`) checks
+A pre-commit hook (`.husky/pre-commit`, installed by `pnpm install`) checks
 only what is staged, in well under two seconds: `prettier --check`, failing
 with the `npx prettier --write …` command that fixes it, and a scan of the
 added lines for token-shaped secrets with the merge gate's own rule
@@ -75,7 +75,7 @@ exists, a private list of regexes kept outside the repo in
 `~/.config/agent-os/banned-names` (`AGENTOS_BANNED_NAMES` overrides the
 path), checked against added lines and file names; `scripts/check` runs the
 same check over every tracked file. It runs in the worktrees AgentOS makes too, which have no `.husky/_`
-until `npm install` runs in them. Typecheck, lint and tests are left to CI.
+until `pnpm install` runs in them. Typecheck, lint and tests are left to CI.
 In an emergency, `git commit --no-verify` skips it. CI runs `scripts/check --build` on every pull request and push to main,
 which also holds the app's first-load JavaScript to a budget
 (`scripts/check-bundle.mjs`; `npx next experimental-analyze` shows what's in

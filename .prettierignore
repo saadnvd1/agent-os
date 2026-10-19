@@ -1,10 +1,11 @@
 .next
 .next-build
 .next-prev
+.deps
 node_modules
 src-tauri/target
 src-tauri/gen
 public
-package-lock.json
 dist
 *.db
+pnpm-lock.yaml

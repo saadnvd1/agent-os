@@ -87,3 +87,6 @@ agent-os-update.log
 # Built from lib/db/migrations/ by scripts/gen-migrations-index.mjs
 lib/db/migrations.generated.ts
 /attachments/
+
+# Dependencies installed beside the live ones by scripts/redeploy
+.deps/

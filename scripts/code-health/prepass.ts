@@ -142,11 +142,11 @@ async function prepass(args: string[]) {
   const steps: Record<Collector, () => string | void> = {
     deps: () => {
       const prod = JSON.parse(
-        run("npm", ["audit", "--omit=dev", "--json"], root) || "{}"
+        run("pnpm", ["audit", "--prod", "--json"], root) || "{}"
       );
-      const all = JSON.parse(run("npm", ["audit", "--json"], root) || "{}");
+      const all = JSON.parse(run("pnpm", ["audit", "--json"], root) || "{}");
       const outdated = JSON.parse(
-        run("npm", ["outdated", "--json"], root) || "{}"
+        run("pnpm", ["outdated", "--format", "json"], root) || "{}"
       );
       result.deps = {
         prod: summarizeNpmAudit(prod),

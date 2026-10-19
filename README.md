@@ -43,7 +43,7 @@ and check on all of it from your phone.
 
 ## Install
 
-You need Node.js 20+, tmux, and at least one agent CLI (the installer offers to set up what's missing).
+You need Node.js 22+, tmux, and at least one agent CLI (the installer offers to set up what's missing).
 
 ```bash
 npm install -g @saadnvd1/agent-os
@@ -74,7 +74,7 @@ npm run check        # typecheck, lint, format and tests: what CI runs
 npm run screenshots  # regenerate screenshots/ from a demo instance with fake data
 ```
 
-A pre-commit hook checks formatting, secrets and banned terms on what is staged. Route handlers may not call `*Sync` functions, and git runs only through `lib/git-exec.ts`. More in [docs/reference/development.md](docs/reference/development.md).
+Dependencies install with pnpm, frozen to the lockfile, with a 7-day cooldown on new versions and an allowlist for install scripts: see [docs/reference/dependencies.md](docs/reference/dependencies.md) (it also covers adding a package that needs an install script and the override for an urgent security fix). A pre-commit hook checks formatting, secrets and banned terms on what is staged. Route handlers may not call `*Sync` functions, and git runs only through `lib/git-exec.ts`. More in [docs/reference/development.md](docs/reference/development.md).
 
 ## License
 

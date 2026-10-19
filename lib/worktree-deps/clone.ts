@@ -236,6 +236,16 @@ export async function cloneDeps(opts: {
 // not, and cloning it would hand the worktree missing dependencies. Other
 // package managers have no hidden lockfile to check, so they pass.
 export async function nodeModulesMatchLock(dir: string): Promise<boolean> {
+  // pnpm copies the lockfile it installed from into node_modules/.pnpm.
+  const pnpmLock = await fs.promises
+    .readFile(path.join(dir, "pnpm-lock.yaml"), "utf-8")
+    .catch(() => null);
+  if (pnpmLock !== null) {
+    const installed = await fs.promises
+      .readFile(path.join(dir, "node_modules", ".pnpm", "lock.yaml"), "utf-8")
+      .catch(() => null);
+    return installed === pnpmLock;
+  }
   const read = (file: string) =>
     fs.promises
       .readFile(file, "utf-8")

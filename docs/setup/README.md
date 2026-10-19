@@ -13,7 +13,7 @@ curl -fsSL https://raw.githubusercontent.com/saadnvd1/agent-os/main/scripts/inst
 The installer will:
 
 1. Download the `agent-os` CLI to your PATH
-2. Check for prerequisites (Node.js 20+, git, tmux) and offer to install any missing ones
+2. Check for prerequisites (Node.js 22+, git, tmux) and offer to install any missing ones
 3. Detect installed AI CLIs or prompt you to install one (Claude Code recommended)
 4. Clone the repository to `~/.agent-os/repo`
 5. Install dependencies and build for production
@@ -27,8 +27,8 @@ If you prefer to install manually:
 git clone https://github.com/saadnvd1/agent-os ~/.agent-os/repo
 cd ~/.agent-os/repo
 
-# Install dependencies
-npm install
+# Install dependencies (pnpm, frozen to the lockfile)
+corepack enable pnpm && pnpm install --frozen-lockfile
 
 # Build for production
 npm run build
@@ -57,7 +57,7 @@ After installation, use the `agent-os` command to manage the server:
 
 The installer can automatically install these on macOS and Linux:
 
-- **Node.js 20+** - JavaScript runtime
+- **Node.js 22+** - JavaScript runtime
 - **npm** - Package manager (comes with Node.js)
 - **git** - Version control
 - **tmux** - Terminal multiplexer for session management
@@ -201,7 +201,7 @@ Common issues:
 
 - Port already in use: Change `AGENT_OS_PORT`
 - Missing dependencies: Run `agent-os install` again
-- Node.js version: Ensure Node.js 20+ is installed
+- Node.js version: Ensure Node.js 22+ is installed
 
 ### Can't connect from phone
 

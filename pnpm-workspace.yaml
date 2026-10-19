@@ -1,0 +1,26 @@
+# pnpm settings for AgentOS itself. See "How installs work" in README.md.
+
+# pnpm 11 ignores npm's "overrides" in package.json; these two pin a patched
+# floor for transitive dependencies.
+overrides:
+  dompurify: ^3.4.16
+  postcss-selector-parser: ^7.1.6
+
+# A version must be at least 7 days old (minutes) to be installed, and a
+# frozen install checks the lockfile against this too. An urgent security fix
+# gets one line below, with the reason and the date, removed once the version
+# is 7 days old:
+#   - some-package@1.2.3   # CVE-2026-0000, approved 2026-10-20
+minimumReleaseAge: 10080
+minimumReleaseAgeExclude: []
+
+# A dependency's install script runs only when listed here. A new package that
+# ships one fails the install until someone decides.
+strictDepBuilds: true
+allowBuilds:
+  node-pty: true # picks its prebuilt binary, or compiles one
+  better-sqlite3: true # prebuilds ship in the tarball; a later version may build
+  esbuild: true # checks the platform binary and installs the native one
+  "@swc/core": false # the native binary comes as an optional dependency
+  unrs-resolver: false # same: its script only downloads a fallback
+  fsevents: false # ships prebuilt

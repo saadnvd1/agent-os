@@ -1,0 +1,24 @@
+#!/usr/bin/env bash
+# Install this checkout's dependencies the one way AgentOS does: pnpm, frozen
+# to pnpm-lock.yaml, only the build scripts pnpm-workspace.yaml allows, then a
+# check that the native modules work and the PDF browser. For first installs
+# (setup, `agent-os install`); a running server's updates go through
+# scripts/redeploy, which installs beside the live tree.
+#   scripts/install-deps [--no-browser]
+set -euo pipefail
+cd "$(dirname "$0")/.."
+# shellcheck source=lib/pnpm.sh
+source scripts/lib/pnpm.sh
+
+if [ -s "$HOME/.nvm/nvm.sh" ]; then
+  # shellcheck disable=SC1091
+  source "$HOME/.nvm/nvm.sh" >/dev/null
+  nvm use >/dev/null
+fi
+use_pnpm
+
+# devDependencies are needed to build, even when the shell has NODE_ENV=production.
+unset NODE_ENV npm_config_production npm_config_omit
+pnpm install --frozen-lockfile
+node scripts/check-native.mjs
+[ "${1:-}" = "--no-browser" ] || install_pdf_browser

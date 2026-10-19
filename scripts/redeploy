@@ -8,6 +8,10 @@ set -euo pipefail
 cd "$(dirname "$0")/.."
 # shellcheck source=lib/build-swap.sh
 source scripts/lib/build-swap.sh
+# shellcheck source=lib/pnpm.sh
+source scripts/lib/pnpm.sh
+# shellcheck source=lib/deps-swap.sh
+source scripts/lib/deps-swap.sh
 
 if [ -s "$HOME/.nvm/nvm.sh" ]; then
   # shellcheck disable=SC1091
@@ -15,23 +19,36 @@ if [ -s "$HOME/.nvm/nvm.sh" ]; then
   nvm use >/dev/null
 fi
 
+# The pull can replace this script, so what follows runs from a fresh start.
+if [ "${1:-}" != "--rollback" ] && [ "${1:-}" != "--pulled" ]; then
+  echo "::phase pulling"
+  git pull --ff-only
+  exec bash "$0" --pulled
+fi
+
 acquire_build_lock
 
 if [ "${1:-}" = "--rollback" ]; then
   rollback_build
+  # The build and the dependencies it ran on go back together.
+  restore_deps
 else
-  echo "::phase pulling"
-  git pull --ff-only
   echo "::phase installing"
+  use_pnpm
   # The build needs dev dependencies even when the shell runs with
   # NODE_ENV=production (as sessions started by AgentOS do).
-  npm install --include=dev --no-audit --no-fund
-  # Another npm version (on another machine) rewrites the lockfile's flags; a
-  # deploy never changes it, and a dirty lockfile would block the next pull.
-  git checkout -- package-lock.json 2>/dev/null || true
-  node scripts/ensure-native.mjs
+  unset NODE_ENV npm_config_production npm_config_omit
+  # Installed beside the live node_modules and checked (SQLite opens, a pty
+  # spawns) before they replace it: a broken install fails the deploy here,
+  # and the running server keeps the build and dependencies it has.
+  swapped=0
+  install_beside && rc=0 || rc=$?
+  [ "$rc" = 0 ] && { swap_deps; swapped=1; }
+  [ "$rc" = 0 ] || [ "$rc" = 10 ] || exit 1
+  install_pdf_browser
   echo "::phase building"
-  build_beside
+  # A build that fails on the new dependencies puts the old ones back.
+  build_beside || { [ "$swapped" = 1 ] && restore_deps; exit 1; }
   swap_build
 fi
 
