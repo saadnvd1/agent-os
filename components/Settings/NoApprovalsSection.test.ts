@@ -4,7 +4,13 @@ import { createRoot, type Root } from "react-dom/client";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 // Radix dispatches its own events; they must be jsdom's, not Node's.
-for (const key of ["Event", "CustomEvent", "FocusEvent", "HTMLButtonElement"])
+for (const key of [
+  "Event",
+  "CustomEvent",
+  "FocusEvent",
+  "HTMLButtonElement",
+  "HTMLFormElement",
+])
   Object.defineProperty(globalThis, key, {
     value: (window as unknown as Record<string, unknown>)[key],
     configurable: true,

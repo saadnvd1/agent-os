@@ -32,13 +32,14 @@ export function useDirectoryBrowser(options: UseDirectoryBrowserOptions = {}) {
   const currentPath = data?.resolvedPath || requestedPath;
 
   // Filter and sort files from query data
+  const dataFiles = data?.files;
   const files = useMemo(() => {
-    if (!data?.files) return [];
+    if (!dataFiles) return [];
     const items = filterRef.current
-      ? data.files.filter(filterRef.current)
-      : data.files;
+      ? dataFiles.filter(filterRef.current)
+      : dataFiles;
     return sortFiles(items);
-  }, [data?.files]);
+  }, [dataFiles]);
 
   const filteredFiles = useMemo(
     () =>
