@@ -57,6 +57,10 @@ export function restoreDemo(db: Database.Database, file: string): void {
     db.transaction(() => {
       for (const { name } of tables) {
         if (KEEP_TABLES.has(name)) continue;
+        // The search index (an FTS table, its shadow tables, its keys) is
+        // kept up to date by triggers on chat_items; copying it would
+        // fight them, and shadow tables can't be written at all.
+        if (name.startsWith("chat_search")) continue;
         // Stored columns only: a generated one can't be written.
         const cols = (
           db.prepare(`SELECT * FROM pragma_table_xinfo(?)`).all(name) as {

@@ -112,4 +112,28 @@ describe("demo re-seed", () => {
     restoreDemo(db, seed);
     expect(getDevice(device.id)?.name).toBe("phone");
   });
+
+  it("keeps the conversation search index in step with the chat items it restores", async () => {
+    const { getDb } = await import("./db");
+    const db = getDb();
+    const seed = path.join(tmp(), "app.db.seed");
+    const add = (id: string, text: string) =>
+      db
+        .prepare(
+          `INSERT INTO chat_items (session_id, item_id, seq, data) VALUES ('s', ?, 1, ?)`
+        )
+        .run(id, JSON.stringify({ kind: "user", text }));
+    const hits = (q: string) =>
+      db
+        .prepare(
+          `SELECT count(*) AS n FROM chat_search WHERE chat_search MATCH ?`
+        )
+        .get(q) as { n: number };
+    add("a", "seededword");
+    snapshotDemo(db, seed);
+    add("b", "visitorword");
+    restoreDemo(db, seed);
+    expect(hits("seededword").n).toBe(1);
+    expect(hits("visitorword").n).toBe(0);
+  });
 });
