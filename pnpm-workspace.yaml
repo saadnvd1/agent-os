@@ -1,8 +1,11 @@
 # pnpm settings for AgentOS itself. See "How installs work" in README.md.
 
-# pnpm 11 ignores npm's "overrides" in package.json; these two pin a patched
+# pnpm 11 ignores npm's "overrides" in package.json; these pin a patched
 # floor for transitive dependencies.
 overrides:
+  # Alert 173. mermaid 11 pins ^0.16; the first mermaid with katex ^0.18 is
+  # 12.2.0 (2026-10-13), not yet 7 days old. Drop once mermaid 12 is adopted.
+  katex: ^0.18.2
   dompurify: ^3.4.16
   postcss-selector-parser: ^7.1.6
 
