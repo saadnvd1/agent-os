@@ -3,7 +3,13 @@ import { act, createElement } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
-for (const key of ["Event", "CustomEvent", "FocusEvent", "HTMLButtonElement"])
+for (const key of [
+  "Event",
+  "CustomEvent",
+  "FocusEvent",
+  "HTMLButtonElement",
+  "HTMLFormElement",
+])
   Object.defineProperty(globalThis, key, {
     value: (window as unknown as Record<string, unknown>)[key],
     configurable: true,
