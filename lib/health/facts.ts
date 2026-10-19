@@ -76,7 +76,12 @@ function queue(): QueueFact[] {
 
 // Background jobs still running in a chat whose agent is alive, that have
 // been going long enough to be worth a look at their output.
-function backgroundJobs(now: number, c: HealthConfig): BgFact[] {
+export interface BgTask extends BgFact {
+  outputFile?: string;
+  taskType?: string;
+}
+
+export function runningBgTasks(now: number, minAgeMs: number): BgTask[] {
   const live = new Set(runningWorkers());
   if (!live.size) return [];
   const sessions = db
@@ -86,12 +91,12 @@ function backgroundJobs(now: number, c: HealthConfig): BgFact[] {
        WHERE s.archived_at IS NULL AND s.view = 'chat'`
     )
     .all() as { id: string; name: string; workspace_id: string | null }[];
-  const out: BgFact[] = [];
+  const out: BgTask[] = [];
   for (const s of sessions) {
     if (!live.has(s.id)) continue;
     for (const t of itemsOfKind(s.id, "task")) {
       if (t.status !== "running" || t.ambient) continue;
-      if (now - t.createdAt < c.bgQuietMinutes * MIN) continue;
+      if (now - t.createdAt < minAgeMs) continue;
       const tail = taskOutputTail(t.taskId, t.outputFile);
       out.push({
         sessionId: s.id,
@@ -101,11 +106,16 @@ function backgroundJobs(now: number, c: HealthConfig): BgFact[] {
         description: t.description,
         startedAt: t.createdAt,
         outputAt: tail?.updatedAt ?? null,
+        outputFile: t.outputFile,
+        taskType: t.taskType,
       });
     }
   }
   return out;
 }
+
+const backgroundJobs = (now: number, c: HealthConfig): BgFact[] =>
+  runningBgTasks(now, c.bgQuietMinutes * MIN);
 
 // Every running background job, for the heartbeat a restart reads back.
 export function liveBackgroundJobs(): string[] {

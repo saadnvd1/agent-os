@@ -60,6 +60,7 @@ function setup(opts: { verdict?: Partial<Verdict>; fail?: boolean } = {}) {
     facts: () => current,
     watch: { run: vi.fn(), usagePct: () => null },
     route,
+    spin: async () => {},
     env: {
       notes: { send: envSend, blocked: () => false },
       alerts: { queue: vi.fn(() => true), workspaces: () => [] },

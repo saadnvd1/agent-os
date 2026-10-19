@@ -312,3 +312,5 @@
 - [ ] Open or download a sent file from its chip in the transcript
 - [ ] Attach files to sessions that run on a linked machine (the file has to be saved there)
 - [ ] Sweep `attachments/draft/` files from drafts that never became a session
+
+- Health bg-spin: make its thresholds (core share, window) Settings → Health if the constants in `lib/health/spin.ts` need tuning.
