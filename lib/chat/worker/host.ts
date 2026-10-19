@@ -596,7 +596,9 @@ export class ChatHost {
     if (/^\/compact\b/.test(m.text.trimStart())) this.setCompacting(true);
     const checkpoint = now
       ? this.conversation.send(text, m.images, { now, files: m.files })
-      : this.conversation.send(text, m.images, { files: m.files });
+      : m.files?.length
+        ? this.conversation.send(text, m.images, { files: m.files })
+        : this.conversation.send(text, m.images);
     const user: ChatItem = {
       id: m.id,
       kind: "user",
