@@ -46,6 +46,7 @@ import { planFromTranscript } from "./plan";
 import { dropSnapshot, restoreWorktree, type RestoredAs } from "./snapshot";
 import { restoreSwept, sweptNote } from "./swept";
 import { forgetSwept } from "../worktree-sweep/store";
+import { isRestorableTask } from "../tasks/restorable";
 import { setPr, setTask } from "../db/session-parts";
 
 export interface ResurrectOptions {
@@ -65,8 +66,6 @@ export interface ResurrectOutcome {
 
 const row = (id: string) =>
   queries.getSession(db).get(id) as Session | undefined;
-
-const ENDED_TASK = new Set(["dropped", "done"]);
 
 // Restores in flight here, so two clicks can't both build a worktree.
 const g = globalThis as unknown as { __agentosResurrecting?: Set<string> };
@@ -113,7 +112,7 @@ export async function resurrectSession(
     throw new Error(`${s.name} runs on ${peer.hostName}: restore it there.`);
   if (isMirror(s)) return onItsMachine(s);
 
-  const endedTask = !!s.task_status && ENDED_TASK.has(s.task_status);
+  const endedTask = isRestorableTask(s.task_status);
   if (s.task_status === "merged")
     throw new Error(
       `${s.name} was merged: its work is in the base branch. Start a new task to continue it.`

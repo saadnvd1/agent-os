@@ -94,7 +94,7 @@ function group(
 export function rowMenu(input: RowMenuInput): RowMenuPlan {
   const { session: s, row, remote } = input;
   const plain = !!row && !row.task && !s.task_status;
-  const finish = finishActions(s, plain);
+  const finish = finishActions(s, plain, row?.task);
   const sections: RowMenuEntry[][] = [];
 
   // A quick change has no agent: its PR and the ways to finish it.

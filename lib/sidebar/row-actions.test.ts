@@ -26,4 +26,26 @@ describe("finishActions", () => {
       finishActions({ role: "orchestrator", task_status: null }, true)
     ).toEqual([]);
   });
+
+  it.each(["dropped", "done"] as const)("restores a %s task", (task_status) => {
+    expect(finishActions({ role: null, task_status }, false)).toEqual([
+      "restore",
+      "archive",
+    ]);
+  });
+
+  it.each(["merged", "moved"] as const)(
+    "offers a %s task neither Done nor Restore",
+    (task_status) => {
+      expect(finishActions({ role: null, task_status }, false)).toEqual([
+        "archive",
+      ]);
+    }
+  );
+
+  it("treats a task whose PR merged before the status caught up as ended", () => {
+    expect(
+      finishActions({ role: null, task_status: "running" }, false, "merged")
+    ).toEqual(["archive"]);
+  });
 });
