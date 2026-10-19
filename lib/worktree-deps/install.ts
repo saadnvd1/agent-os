@@ -1,8 +1,8 @@
 /**
  * Installing a worktree's dependencies when they can't be cloned: the
- * lockfile's own frozen install first. A project other than AgentOS then
- * gets a plain install, with a warning; AgentOS's own never does, because a
- * plain install resolves ranges to versions newer than the lockfile.
+ * lockfile's own frozen install, and nothing else. A plain install would
+ * resolve ranges to versions newer than the lockfile, so a lockfile that
+ * disagrees with package.json fails setup and the agent is told.
  */
 
 import * as fs from "fs";
@@ -10,85 +10,51 @@ import * as path from "path";
 
 export interface PackageManager {
   name: "bun" | "pnpm" | "yarn" | "npm";
-  // Tried in order until one succeeds: frozen to the lockfile, then plain.
-  installs: string[];
-  // Set when the frozen install is the only one tried (AgentOS's own).
-  frozenOnly?: boolean;
+  install: string;
 }
-
-const AGENTOS_PACKAGE = "@saadnvd1/agent-os";
 
 // Each install includes devDependencies: the agent needs typecheck, tests
 // and the build, and AgentOS itself runs with NODE_ENV=production.
 const BY_LOCKFILE: Array<{ file: string; pm: PackageManager }> = [
   {
     file: "bun.lock",
-    pm: {
-      name: "bun",
-      installs: ["bun install --frozen-lockfile", "bun install"],
-    },
+    pm: { name: "bun", install: "bun install --frozen-lockfile" },
   },
   {
     file: "bun.lockb",
-    pm: {
-      name: "bun",
-      installs: ["bun install --frozen-lockfile", "bun install"],
-    },
+    pm: { name: "bun", install: "bun install --frozen-lockfile" },
   },
   {
     file: "pnpm-lock.yaml",
     pm: {
       name: "pnpm",
-      installs: [
-        "pnpm install --frozen-lockfile --prod=false",
-        "pnpm install --prod=false",
-      ],
+      install: "pnpm install --frozen-lockfile --prod=false",
     },
   },
   {
     file: "yarn.lock",
     pm: {
       name: "yarn",
-      installs: [
-        "yarn install --frozen-lockfile --production=false",
-        "yarn install --production=false",
-      ],
+      install: "yarn install --frozen-lockfile --production=false",
     },
   },
   {
     file: "package-lock.json",
-    pm: {
-      name: "npm",
-      installs: ["npm ci --include=dev", "npm install --include=dev"],
-    },
+    pm: { name: "npm", install: "npm ci --include=dev" },
   },
 ];
 
 export const LOCKFILES = BY_LOCKFILE.map((l) => l.file);
 
-function isAgentOs(projectPath: string): boolean {
-  try {
-    const pkg = JSON.parse(
-      fs.readFileSync(path.join(projectPath, "package.json"), "utf-8")
-    );
-    return pkg?.name === AGENTOS_PACKAGE;
-  } catch {
-    return false;
-  }
-}
-
 export function detectPackageManager(
   projectPath: string
 ): PackageManager | null {
   for (const { file, pm } of BY_LOCKFILE) {
-    if (!fs.existsSync(path.join(projectPath, file))) continue;
-    return isAgentOs(projectPath)
-      ? { ...pm, installs: pm.installs.slice(0, 1), frozenOnly: true }
-      : pm;
+    if (fs.existsSync(path.join(projectPath, file))) return pm;
   }
   if (fs.existsSync(path.join(projectPath, "package.json"))) {
     // No lockfile, so nothing to be frozen to.
-    return { name: "npm", installs: ["npm install --include=dev"] };
+    return { name: "npm", install: "npm install --include=dev" };
   }
   return null;
 }
@@ -99,9 +65,6 @@ export function shellCommand(command: string): string {
   if (!command.startsWith("pnpm ")) return command;
   return `if ! command -v pnpm >/dev/null 2>&1; then pnpm() { COREPACK_ENABLE_DOWNLOAD_PROMPT=0 corepack pnpm "$@"; }; fi; ${command}`;
 }
-
-export const UNFROZEN_WARNING =
-  "The lockfile is out of sync with package.json, so dependencies were installed without it. Commit the updated lockfile.";
 
 // What setup commands run under: the server's environment without the
 // settings that make an install skip devDependencies.

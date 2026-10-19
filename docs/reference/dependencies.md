@@ -11,17 +11,18 @@ corepack, which fetches that version (`corepack enable pnpm`; on Node 25+ run
 
 ## Where installs happen
 
-| Where                                                                    | What runs                                                                                                  |
-| ------------------------------------------------------------------------ | ---------------------------------------------------------------------------------------------------------- |
-| First install, `agent-os install`, `agent-os update`, `scripts/setup.sh` | `scripts/install-deps`: `pnpm install --frozen-lockfile`, then the native check, then the PDF browser      |
-| Autodeploy, the in-app Update, `scripts/redeploy`                        | the same install, **beside** the live `node_modules` (see below)                                           |
-| CI (`.github/actions/setup`)                                             | `pnpm install --frozen-lockfile`, cached by the hash of the lockfile and settings                          |
-| A new task or quick-change worktree                                      | the worktree's own lockfile decides: pnpm, npm, yarn or bun, frozen first (`lib/worktree-deps/install.ts`) |
+| Where                                                                    | What runs                                                                                                 |
+| ------------------------------------------------------------------------ | --------------------------------------------------------------------------------------------------------- |
+| First install, `agent-os install`, `agent-os update`, `scripts/setup.sh` | `scripts/install-deps`: `pnpm install --frozen-lockfile`, then the native check, then the PDF browser     |
+| Autodeploy, the in-app Update, `scripts/redeploy`                        | the same install, **beside** the live `node_modules` (see below)                                          |
+| CI (`.github/actions/setup`)                                             | `pnpm install --frozen-lockfile`, cached by the hash of the lockfile and settings                         |
+| A new task or quick-change worktree                                      | the worktree's own lockfile decides: pnpm, npm, yarn or bun, frozen only (`lib/worktree-deps/install.ts`) |
 
-A worktree of **AgentOS itself** is frozen only: if the lockfile and
-`package.json` disagree, setup fails and tells the agent. For any other
-project a failed frozen install falls back to a plain one, and the agent is
-told to commit the updated lockfile.
+A task worktree's install is frozen only, for every project: if the lockfile
+and `package.json` disagree, setup fails and tells the agent, rather than a
+plain install resolving ranges to versions the lockfile never pinned. Bun
+1.3.9 doesn't apply `minimumReleaseAge` to `bun install --frozen-lockfile`, so
+for a bun project the lockfile itself is the only guard.
 
 ## The 7-day cooldown
 

@@ -47,7 +47,8 @@ checkout's are fresh and not huge, so the first typecheck or build is warm. A
 main checkout whose `node_modules` doesn't match its lockfile (pulled, never
 reinstalled) is not cloned from at all.
 Otherwise the lockfile's frozen install runs (`npm ci`,
-`pnpm/yarn/bun --frozen-lockfile`), then a plain install, always with
+`pnpm/yarn/bun --frozen-lockfile`), and only that: a lockfile out of sync
+with `package.json` fails setup and the agent is told. It always installs with
 devDependencies even though the server runs with `NODE_ENV=production`. A
 project's `agentos.json` can name exactly what to copy and clone, and its
 `setup` commands (without a `clone`) replace the install; see
