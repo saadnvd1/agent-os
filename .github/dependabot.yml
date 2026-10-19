@@ -16,20 +16,6 @@ updates:
       npm-minor-patch:
         update-types: [minor, patch]
 
-  - package-ecosystem: cargo
-    directory: "/src-tauri"
-    schedule:
-      interval: weekly
-      day: monday
-      timezone: America/Chicago
-    cooldown:
-      default-days: 7
-    open-pull-requests-limit: 3
-    labels: [dependencies, rust]
-    groups:
-      cargo-minor-patch:
-        update-types: [minor, patch]
-
   - package-ecosystem: github-actions
     directories: ["/", "/.github/actions/setup"]
     schedule:

@@ -112,7 +112,6 @@ export default defineConfig([
     ".next-prev/**",
     ".deps/**",
     "node_modules/**",
-    "src-tauri/**",
     "public/**",
     "next-env.d.ts",
     "dist/**",
