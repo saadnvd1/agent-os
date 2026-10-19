@@ -304,3 +304,7 @@
 
 - Sign in to an MCP server for a chat that runs on a linked machine (forward the start and the provider's return to that machine's AgentOS).
 - A "Sign out" next to a connected server (the CLI has `mcpClearAuth`).
+
+- [ ] Open or download a sent file from its chip in the transcript
+- [ ] Attach files to sessions that run on a linked machine (the file has to be saved there)
+- [ ] Sweep `attachments/draft/` files from drafts that never became a session

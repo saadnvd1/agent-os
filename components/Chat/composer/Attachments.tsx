@@ -2,6 +2,8 @@
 
 import { FileText, X } from "lucide-react";
 import type { ChatImage } from "@/lib/chat/events";
+import { FileChip } from "../FileChip";
+import type { Upload } from "./useAttachFiles";
 import { byteLength, type TextAttachment } from "@/lib/chat/paste";
 
 const size = (text: string) => {
@@ -24,19 +26,23 @@ function Remove({ label, onClick }: { label: string; onClick: () => void }) {
   );
 }
 
-// Images and long pastes waiting to go with the message.
+// Images, files and long pastes waiting to go with the message.
 export function Attachments({
   images,
   files,
+  uploads,
   onRemoveImage,
   onRemoveFile,
+  onRemoveUpload,
 }: {
   images: ChatImage[];
   files: TextAttachment[];
+  uploads: Upload[];
   onRemoveImage: (index: number) => void;
   onRemoveFile: (index: number) => void;
+  onRemoveUpload: (key: string) => void;
 }) {
-  if (!images.length && !files.length) return null;
+  if (!images.length && !files.length && !uploads.length) return null;
   return (
     <div className="flex flex-wrap gap-2 px-1 pb-2">
       {images.map((img, i) => (
@@ -49,6 +55,14 @@ export function Attachments({
           />
           <Remove label="Remove image" onClick={() => onRemoveImage(i)} />
         </div>
+      ))}
+      {uploads.map((u) => (
+        <FileChip
+          key={u.key}
+          file={u.file}
+          uploading={u.uploading}
+          onRemove={() => onRemoveUpload(u.key)}
+        />
       ))}
       {files.map((file, i) => (
         <div

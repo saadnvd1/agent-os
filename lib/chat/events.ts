@@ -1,5 +1,8 @@
 import type { CallUsage } from "../usage/types";
 import type { SearchResult } from "./find";
+import type { ChatFile } from "../attachments/types";
+
+export type { ChatFile };
 
 /**
  * The provider-neutral shape of a chat conversation. Every driver (Claude
@@ -152,6 +155,8 @@ export type ChatItem =
       kind: "user";
       text: string;
       images?: ChatImage[];
+      // Saved in the session's attachments folder, by reference.
+      files?: ChatFile[];
       // Who sent it through the agent bus, when not typed here.
       from?: string;
       // Sent by another agent session: shown as its body, while the agent
@@ -282,6 +287,7 @@ export interface QueuedMessage {
   id: string;
   text: string;
   imageCount?: number;
+  fileCount?: number;
   createdAt: number;
 }
 
@@ -413,7 +419,13 @@ export type ChatServerMessage =
 // What a browser sends.
 export type ChatClientMessage =
   // `clientId` (`user-c-…`) becomes the message's id: a resend is a no-op.
-  | { type: "send"; text: string; images?: ChatImage[]; clientId?: string }
+  | {
+      type: "send";
+      text: string;
+      images?: ChatImage[];
+      files?: ChatFile[];
+      clientId?: string;
+    }
   | { type: "queue_edit"; id: string; text: string }
   | { type: "queue_move"; id: string; by: -1 | 1 }
   | { type: "queue_delete"; id: string }

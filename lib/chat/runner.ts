@@ -19,6 +19,7 @@ import type { CompactFirst } from "./stale";
 import type {
   ApprovalDecision,
   ChatContext,
+  ChatFile,
   ChatImage,
   ChatServerMessage,
   ChatState,
@@ -405,7 +406,12 @@ function refuseAway(sessionId: string): void {
 // started): the message waits in the queue instead of starting a turn.
 function queuedIfHeld(
   sessionId: string,
-  m: { id: string; text: string; images?: ChatImage[] } & SentBy
+  m: {
+    id: string;
+    text: string;
+    images?: ChatImage[];
+    files?: ChatFile[];
+  } & SentBy
 ): boolean {
   refuseAway(sessionId);
   if (!chatHold(sessionId)) return false;
@@ -429,6 +435,7 @@ export async function sendChat(
   input: {
     text: string;
     images?: ChatImage[];
+    files?: ChatFile[];
     // Typed in the composer: waits in the queue while a turn runs.
     queue?: boolean;
     // Compact a stale chat first (lib/chat/stale).
@@ -438,7 +445,7 @@ export async function sendChat(
   } & SentBy
 ): Promise<void> {
   const text = input.text.trim();
-  if (!text && !input.images?.length) return;
+  if (!text && !input.images?.length && !input.files?.length) return;
   if (input.id && taken(sessionId, input.id)) return;
   refuseAway(sessionId);
   const id = input.id ?? `user-${Date.now()}-${randomUUID().slice(0, 5)}`;
@@ -449,6 +456,7 @@ export async function sendChat(
       id,
       text,
       images: input.images,
+      files: input.files,
       ...sentBy(input),
     });
     emitQueue(sessionId);
@@ -463,6 +471,7 @@ export async function sendChat(
     id,
     text,
     images: input.images,
+    files: input.files,
     ...sentBy(input),
     queue: input.queue,
     compact: input.compact,

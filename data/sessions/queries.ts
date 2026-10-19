@@ -1,7 +1,7 @@
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import type { Session, Group } from "@/lib/db";
 import type { AgentType } from "@/lib/providers";
-import type { ChatAccess, ChatImage } from "@/lib/chat/events";
+import type { ChatAccess, ChatFile, ChatImage } from "@/lib/chat/events";
 import { sessionKeys } from "./keys";
 import { usePollWhenOffline, usePushConnected } from "../push/connection";
 
@@ -192,6 +192,7 @@ export interface LaunchSessionInput {
   baseBranch: string | null;
   prompt: string;
   images?: ChatImage[];
+  files?: ChatFile[];
 }
 
 interface LaunchSessionResponse {

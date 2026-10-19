@@ -5,7 +5,7 @@ import { useSnapshot } from "valtio";
 import { toast } from "sonner";
 import { Composer } from "@/components/Chat/Composer";
 import { Button } from "@/components/ui/button";
-import type { ChatImage } from "@/lib/chat/events";
+import type { ChatFile, ChatImage } from "@/lib/chat/events";
 import type { Project } from "@/lib/db";
 import { draftComposerKey, type Draft } from "@/lib/drafts";
 import { getModelOptions } from "@/lib/model-catalog";
@@ -57,11 +57,12 @@ export function DraftPanel({
       </div>
     );
 
-  const send = async (text: string, images: ChatImage[]) => {
+  const send = async (text: string, images: ChatImage[], files: ChatFile[]) => {
     try {
       if (draft.openPr) {
         if (!project) throw new Error("Pick a project for a task");
-        if (images.length) throw new Error("A task takes text only");
+        if (images.length || files.length)
+          throw new Error("A task takes text only");
         const { session, queued } = await createTask.mutateAsync({
           projectId: project.id,
           prompt: text,
@@ -96,6 +97,7 @@ export function DraftPanel({
         baseBranch: draft.baseBranch,
         prompt: text,
         images: images.length ? images : undefined,
+        files: files.length ? files : undefined,
       });
       // A resend whose first answer was lost: the terminal still needs its
       // first prompt, and this is the text that was sent.
@@ -134,6 +136,7 @@ export function DraftPanel({
         />
         <Composer
           draftKey={draftComposerKey(draft.id)}
+          attachScope="draft"
           running={false}
           disabled={pending}
           placeholder={
@@ -143,7 +146,7 @@ export function DraftPanel({
                 ? "Describe the task"
                 : `Message ${project?.name ?? "a new chat"}`
           }
-          onSend={(text, images) => void send(text, images)}
+          onSend={(text, images, files) => void send(text, images, files)}
           onStop={() => {}}
           models={getModelOptions(draft.agentType)}
           model={draft.model}

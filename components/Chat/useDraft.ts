@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useRef } from "react";
-import type { ChatImage } from "@/lib/chat/events";
+import type { ChatFile, ChatImage } from "@/lib/chat/events";
 import type { TextAttachment } from "@/lib/chat/paste";
 
 // `text` is the composer's markdown, so a reload restores its formatting.
@@ -9,6 +9,8 @@ interface Draft {
   text: string;
   images: ChatImage[];
   files?: TextAttachment[];
+  // Attached files, saved on the server: references only.
+  uploads?: ChatFile[];
 }
 
 const keyFor = (id: string) => `agentos:draft:${id}`;
@@ -39,7 +41,12 @@ export function useSaveDraft(id: string | undefined, draft: Draft): void {
     clearTimeout(timer.current);
     timer.current = setTimeout(() => {
       const key = keyFor(id);
-      if (!draft.text.trim() && !draft.images.length && !draft.files?.length) {
+      if (
+        !draft.text.trim() &&
+        !draft.images.length &&
+        !draft.files?.length &&
+        !draft.uploads?.length
+      ) {
         localStorage.removeItem(key);
         return;
       }

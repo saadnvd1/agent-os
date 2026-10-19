@@ -137,4 +137,17 @@ describe("chat queue", () => {
     expect(deleteQueued(id, "user-c")).toBe(true);
     expect(texts(id)).toEqual(["B"]);
   });
+
+  it("carries a message's files through the queue", () => {
+    const id = randomUUID();
+    const file = {
+      path: "/data/attachments/s/a.pdf",
+      name: "a.pdf",
+      size: 10,
+      mediaType: "application/pdf",
+    };
+    enqueue(id, { id: "user-f", text: "see", files: [file] });
+    expect(listQueue(id)[0].fileCount).toBe(1);
+    expect(claimNext(id)?.files).toEqual([file]);
+  });
 });

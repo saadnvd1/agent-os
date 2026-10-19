@@ -6,6 +6,7 @@ import { CornerDownRight, File, Folder } from "lucide-react";
 import type {
   ChatAccess,
   ChatCommand,
+  ChatFile,
   ChatImage,
   ChatModel,
   FileSuggestion,
@@ -28,7 +29,7 @@ import { useCoarsePointer } from "./useCoarsePointer";
 import { useMentions } from "./useMentions";
 import { Attachments } from "./Attachments";
 import { Toolbar } from "./Toolbar";
-import { useImageDrop } from "./useImageDrop";
+import { useAttachFiles } from "./useAttachFiles";
 import type { MenuKey } from "./keys";
 import { useComposerEditor, type ComposerHandlers } from "./useComposerEditor";
 import { useFocusOnShow } from "./autofocus";
@@ -44,7 +45,9 @@ export interface ComposerProps {
   running: boolean;
   disabled?: boolean;
   placeholder: string;
-  onSend: (text: string, images: ChatImage[]) => void;
+  onSend: (text: string, images: ChatImage[], files: ChatFile[]) => void;
+  // Where attached files are kept: the session's id, or "draft" before one exists.
+  attachScope: string;
   onStop: () => void;
   commands?: ChatCommand[];
   // Reloads the commands past the cache (a skill just added), from the menu.
@@ -99,6 +102,7 @@ export function ComposerBody({
   accessory,
   prefill,
   draftKey,
+  attachScope,
   suggestion = null,
   onDismissSuggestion,
   history = [],
@@ -132,7 +136,19 @@ export function ComposerBody({
     if (text && suggestion) onDismissSuggestion?.(suggestion);
   }, [text, suggestion, onDismissSuggestion]);
 
-  const draft = useMemo(() => ({ text, images, files }), [text, images, files]);
+  const attach = useAttachFiles({
+    scope: attachScope,
+    imageCount: images.length,
+    onImages: (read) => setImages((prev) => [...prev, ...read]),
+  });
+  const attached = useMemo(
+    () => attach.uploads.filter((u) => !u.uploading).map((u) => u.file),
+    [attach.uploads]
+  );
+  const draft = useMemo(
+    () => ({ text, images, files, uploads: attached }),
+    [text, images, files, attached]
+  );
   useSaveDraft(draftKey, draft);
 
   // Restored once the editor exists (the server render has no access to this
@@ -145,7 +161,8 @@ export function ComposerBody({
     setText(saved?.text ?? "");
     setImages(saved?.images ?? []);
     setFiles(saved?.files ?? []);
-  }, [draftKey, editor, setText]);
+    attach.restore(saved?.uploads ?? []);
+  }, [draftKey, editor, setText]); // eslint-disable-line react-hooks/exhaustive-deps
   useFocusOnShow(editor, focusKey, phone, disabled);
 
   const prefilled = useRef<number | null>(null);
@@ -228,16 +245,16 @@ export function ComposerBody({
     if (offered) setText(offered, true);
   };
 
-  const { dragging, dropProps, addFiles } = useImageDrop((read) =>
-    setImages((prev) => [...prev, ...read])
-  );
+  const { dragging, dropProps, addFiles } = attach;
 
-  const empty = !text.trim() && !images.length && !files.length;
+  const empty =
+    !text.trim() && !images.length && !files.length && !attach.uploads.length;
   const submit = () => {
-    if (empty || disabled) return;
-    onSend(composeMessage(text, files), images);
+    if (empty || disabled || attach.uploading) return;
+    onSend(composeMessage(text, files), images, attached);
     setImages([]);
     setFiles([]);
+    attach.clear();
     setText("");
     setHistoryIndex(-1);
   };
@@ -261,7 +278,8 @@ export function ComposerBody({
       suggestion: ghost !== null,
       onAcceptSuggestion: acceptSuggestion,
       onHistory: (dir, at) => {
-        if (images.length || files.length) return false;
+        if (images.length || files.length || attach.uploads.length)
+          return false;
         const step = historyStep(
           { history, index: historyIndex, text, ...at },
           dir
@@ -271,7 +289,7 @@ export function ComposerBody({
         setText(step.text, true);
         return true;
       },
-      onImages: (picked) => void addFiles(picked),
+      onFiles: (picked) => void addFiles(picked),
       onLongPaste: (pasted, language) => {
         const next = nextAttachment(files, lastPaste.current);
         lastPaste.current = next.number;
@@ -320,6 +338,8 @@ export function ComposerBody({
         <Attachments
           images={images}
           files={files}
+          uploads={attach.uploads}
+          onRemoveUpload={attach.remove}
           onRemoveImage={(i) => setImages(images.filter((_, j) => j !== i))}
           onRemoveFile={(i) => setFiles(files.filter((_, j) => j !== i))}
         />
@@ -329,7 +349,8 @@ export function ComposerBody({
         <Toolbar
           plain={plain}
           onTogglePlain={() => setPlain(!plain)}
-          onAddImages={(picked) => void addFiles(picked)}
+          onAddFiles={(picked) => void addFiles(picked)}
+          accept={attach.accept}
           plan={plan}
           onTogglePlan={onTogglePlan}
           accessory={accessory}
@@ -343,7 +364,7 @@ export function ComposerBody({
           onModelOpenChange={setModelOpen}
           stop={running && empty}
           onStop={onStop}
-          canSend={!disabled && !empty}
+          canSend={!disabled && !empty && !attach.uploading}
           onSend={submit}
         />
       </div>

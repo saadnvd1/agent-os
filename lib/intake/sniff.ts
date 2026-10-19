@@ -9,7 +9,7 @@ const BLOCKED_NAME =
 const starts = (b: Buffer, sig: number[], at = 0) =>
   sig.every((v, i) => b[at + i] === v);
 
-function isText(b: Buffer): boolean {
+export function isText(b: Buffer): boolean {
   const head = b.subarray(0, 8192);
   if (head.includes(0)) return false;
   try {

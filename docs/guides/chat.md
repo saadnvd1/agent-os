@@ -8,8 +8,8 @@ order: 4
 
 Sessions open as a chat by default: streaming replies, tool calls folded into
 expandable steps, inline diffs for edits, a plan checklist, highlighted code
-and mermaid diagrams, subagent cards, image attachments (pick, paste or drag
-them in) and a Stop button, all readable on a phone. Chat drives the same
+and mermaid diagrams, subagent cards, image and file attachments (pick,
+paste or drag them in) and a Stop button, all readable on a phone. Chat drives the same
 agent as the terminal, with your own logins: Claude Code through the Agent
 SDK, Codex through `codex app-server`, OpenCode through its own `opencode
 serve` (loopback only, behind a per-conversation password) and Pi through its
@@ -131,6 +131,21 @@ summary kept, and tells the agent not to re-read or rewrite whole files.
 Terminal agents don't get the note yet.
 On a desktop browser the screen button attaches a screenshot of a screen or
 window you pick; on a phone, attach a screenshot as a photo.
+
+**Files.** The paperclip, a paste or a drag-drop also take PDFs, spreadsheets
+(xlsx, xls, csv, tsv), Word and other documents (docx, doc, pptx, odt, rtf),
+and text, markdown, JSON and code files, up to 8 per message and 25 MB each.
+A file uploads as soon as you attach it, shows as a chip (icon, name, size)
+you can remove before sending, and a wrong type or a too-big file is refused
+there with a message. The server decides the types and sizes; the app reads
+them from `/api/client-config`. The file is kept in a per-session folder in
+AgentOS's data folder, outside your repo, so it's never committed, and it goes
+when the session is deleted. Every agent gets the file's absolute path in the
+message, to open with its own tools (a spreadsheet through a script, a docx
+through pandoc); Claude also gets a PDF up to 10 MB as a document it reads
+directly. A session running on a linked machine can't take files yet (images
+still work). In a terminal session, dropping a file pastes its path into the
+prompt, as before.
 
 **Usage** (the sidebar's ⋯ menu, or the palette) shows the account's 5-hour
 and weekly windows, and what chats cost today, over 7 or 30 days, by day,

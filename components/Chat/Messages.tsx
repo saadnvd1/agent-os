@@ -18,6 +18,7 @@ import { splitProse, splitUserText } from "@/lib/chat/user-text";
 import { inAppSessionId } from "@/lib/session-url";
 import { CodeBlock } from "./Code";
 import { CopyButton } from "./CopyButton";
+import { FileChip } from "./FileChip";
 import { ImageThumb } from "./ImageThumb";
 import { Markdown } from "./Markdown";
 import { openSessionLink } from "./session-link";
@@ -175,6 +176,13 @@ export function UserMessage({
               key={i}
               src={`data:${img.mediaType};base64,${img.data}`}
             />
+          ))}
+        </div>
+      ) : null}
+      {item.files?.length ? (
+        <div data-copy-skip className="flex flex-wrap justify-end gap-1.5">
+          {item.files.map((f) => (
+            <FileChip key={f.path} file={f} />
           ))}
         </div>
       ) : null}

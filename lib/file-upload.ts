@@ -1,34 +1,68 @@
-/**
- * Upload a file to temporary storage and return its path.
- * Converts the file to base64 and POSTs to /api/files/upload-temp.
- *
- * @param file - The file to upload
- * @returns The path to the uploaded file, or null if upload failed
- */
-export async function uploadFileToTemp(file: File): Promise<string | null> {
-  const buffer = await file.arrayBuffer();
-  const base64 = btoa(
-    new Uint8Array(buffer).reduce(
-      (data, byte) => data + String.fromCharCode(byte),
-      ""
-    )
-  );
+import type { AttachmentKind } from "./attachments/policy";
+import type { ChatFile } from "./attachments/types";
 
-  const res = await fetch("/api/files/upload-temp", {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({
-      filename: file.name || `file-${Date.now()}`,
-      base64,
-      mimeType: file.type || "application/octet-stream",
-    }),
+export type UploadResult =
+  | { ok: true; file: ChatFile; kind: AttachmentKind }
+  | { ok: false; error: string };
+
+function toBase64(file: File): Promise<string> {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onload = () => resolve(String(reader.result).split(",")[1] ?? "");
+    reader.onerror = () => reject(reader.error);
+    reader.readAsDataURL(file);
   });
+}
 
-  const data = await res.json();
-  if (data.path) {
-    return data.path;
+/**
+ * Upload a file through /api/files/upload-temp. With a `sessionId` (or
+ * "draft") the server checks it against its attachment limits and keeps it in
+ * that session's attachments folder; without one it goes to temp storage.
+ * The error is the server's own message, ready to show.
+ */
+export async function uploadFile(
+  file: File,
+  sessionId?: string
+): Promise<UploadResult> {
+  try {
+    const res = await fetch("/api/files/upload-temp", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        filename: file.name || `file-${Date.now()}`,
+        base64: await toBase64(file),
+        mimeType: file.type || "application/octet-stream",
+        sessionId,
+      }),
+    });
+    const data = await res.json().catch(() => ({}));
+    if (res.ok && data.path)
+      return {
+        ok: true,
+        kind: data.kind,
+        file: {
+          path: data.path,
+          name: data.name,
+          size: data.size,
+          mediaType: data.mediaType,
+        },
+      };
+    return {
+      ok: false,
+      error: data.error ?? `Couldn't upload ${file.name} (${res.status})`,
+    };
+  } catch {
+    return { ok: false, error: `Couldn't upload ${file.name}` };
   }
+}
 
-  console.error("Upload failed:", data.error);
+/** The saved path, or null when the upload failed (terminal and picker). */
+export async function uploadFileToTemp(
+  file: File,
+  sessionId?: string
+): Promise<string | null> {
+  const r = await uploadFile(file, sessionId);
+  if (r.ok) return r.file.path;
+  console.error("Upload failed:", r.error);
   return null;
 }

@@ -10,10 +10,12 @@ import { agentEnv } from "../../agents/launch";
 import { sessionRunningBrief } from "../../project-config/session";
 import { BUS_BRIEF } from "../../agents/brief";
 import { resolveModelForAgent } from "../../model-catalog";
+import { agentText } from "../../attachments/message";
 import { chatDriverFor } from "../drivers";
 import type { ChatConversation } from "../driver";
 import type {
   ChatContext,
+  ChatFile,
   ChatImage,
   ChatItem,
   ChatState,
@@ -560,6 +562,7 @@ export class ChatHost {
       id: string;
       text: string;
       images?: ChatImage[];
+      files?: ChatFile[];
     } & SentBy,
     now = false
   ): void {
@@ -577,7 +580,7 @@ export class ChatHost {
     if (now) this.nowPending++;
     this.stopping = null;
     const note = this.refreshedNote ?? (this.restartedNote && RESTARTED_NOTE);
-    const text = note ? `${note}\n\n${m.text}` : m.text;
+    const text = agentText(note ? `${note}\n\n${m.text}` : m.text, m.files);
     if (this.refreshedNote) {
       this.refreshedNote = null;
       db.prepare(`UPDATE sessions SET chat_refreshed = 0 WHERE id = ?`).run(
@@ -592,13 +595,14 @@ export class ChatHost {
     }
     if (/^\/compact\b/.test(m.text.trimStart())) this.setCompacting(true);
     const checkpoint = now
-      ? this.conversation.send(text, m.images, { now })
-      : this.conversation.send(text, m.images);
+      ? this.conversation.send(text, m.images, { now, files: m.files })
+      : this.conversation.send(text, m.images, { files: m.files });
     const user: ChatItem = {
       id: m.id,
       kind: "user",
       text: m.text,
       images: m.images,
+      files: m.files,
       from: m.from,
       peer: m.peer,
       origin: m.origin,

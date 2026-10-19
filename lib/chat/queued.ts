@@ -1,6 +1,6 @@
 import { db } from "../db";
 import { HELD_SQL } from "./hold";
-import type { ChatImage, QueuedMessage, SentBy } from "./events";
+import type { ChatFile, ChatImage, QueuedMessage, SentBy } from "./events";
 
 // Messages written while a turn runs, kept in SQLite so a reload or a
 // restart never loses them. The worker sends them in order when the turn
@@ -15,6 +15,7 @@ interface Row {
   id: string;
   text: string;
   images: string | null;
+  files: string | null;
   sent_by: string | null;
   created_at: number;
 }
@@ -25,19 +26,21 @@ export function listQueue(sessionId: string): QueuedMessage[] {
   return (
     db
       .prepare(
-        `SELECT id, text, image_count, created_at
+        `SELECT id, text, image_count, files, created_at
          FROM chat_queue WHERE session_id = ? ORDER BY position, created_at`
       )
       .all(sessionId) as {
       id: string;
       text: string;
       image_count: number;
+      files: string | null;
       created_at: number;
     }[]
   ).map((r) => ({
     id: r.id,
     text: r.text,
     imageCount: r.image_count || undefined,
+    fileCount: r.files ? (JSON.parse(r.files) as unknown[]).length : undefined,
     createdAt: r.created_at,
   }));
 }
@@ -45,7 +48,12 @@ export function listQueue(sessionId: string): QueuedMessage[] {
 // At the back. A retried send with the same id is only queued once.
 export function enqueue(
   sessionId: string,
-  m: { id: string; text: string; images?: ChatImage[] } & SentBy
+  m: {
+    id: string;
+    text: string;
+    images?: ChatImage[];
+    files?: ChatFile[];
+  } & SentBy
 ): void {
   const images = m.images?.length ? JSON.stringify(m.images) : null;
   const sentBy: SentBy = { from: m.from, peer: m.peer, origin: m.origin };
@@ -59,8 +67,8 @@ export function enqueue(
   if (n >= MAX_QUEUED)
     throw new Error(`The queue is full (${MAX_QUEUED} messages)`);
   db.prepare(
-    `INSERT OR IGNORE INTO chat_queue (id, session_id, position, text, images, image_count, sent_by, created_at)
-     VALUES (?, ?, (SELECT COALESCE(MAX(position), 0) + 1 FROM chat_queue WHERE session_id = ?), ?, ?, ?, ?, ?)`
+    `INSERT OR IGNORE INTO chat_queue (id, session_id, position, text, images, image_count, files, sent_by, created_at)
+     VALUES (?, ?, (SELECT COALESCE(MAX(position), 0) + 1 FROM chat_queue WHERE session_id = ?), ?, ?, ?, ?, ?, ?)`
   ).run(
     m.id,
     sessionId,
@@ -68,6 +76,7 @@ export function enqueue(
     m.text,
     images,
     m.images?.length ?? 0,
+    m.files?.length ? JSON.stringify(m.files) : null,
     m.from || m.peer || m.origin ? JSON.stringify(sentBy) : null,
     Date.now()
   );
@@ -80,13 +89,20 @@ export function claimNext(
   sessionId: string,
   // That message only, if it's still there.
   id?: string
-): ({ id: string; text: string; images?: ChatImage[] } & SentBy) | null {
+):
+  | ({
+      id: string;
+      text: string;
+      images?: ChatImage[];
+      files?: ChatFile[];
+    } & SentBy)
+  | null {
   const row = db
     .prepare(
       `DELETE FROM chat_queue WHERE session_id = @sid AND NOT ${HELD_SQL} AND id = (
          SELECT id FROM chat_queue WHERE session_id = @sid AND (@id IS NULL OR id = @id)
          ORDER BY position, created_at LIMIT 1
-       ) RETURNING id, text, images, sent_by, created_at`
+       ) RETURNING id, text, images, files, sent_by, created_at`
     )
     .get({ sid: sessionId, id: id ?? null }) as Row | undefined;
   if (!row) return null;
@@ -94,6 +110,7 @@ export function claimNext(
     id: row.id,
     text: row.text,
     images: row.images ? (JSON.parse(row.images) as ChatImage[]) : undefined,
+    files: row.files ? (JSON.parse(row.files) as ChatFile[]) : undefined,
     ...(row.sent_by ? (JSON.parse(row.sent_by) as SentBy) : {}),
   };
 }
