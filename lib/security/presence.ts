@@ -147,13 +147,7 @@ const transportsOf = (k: PasskeyRow) =>
     ? (JSON.parse(k.transports) as AuthenticatorTransport[])
     : undefined;
 type AuthenticatorTransport =
-  | "ble"
-  | "cable"
-  | "hybrid"
-  | "internal"
-  | "nfc"
-  | "smart-card"
-  | "usb";
+  "ble" | "cable" | "hybrid" | "internal" | "nfc" | "smart-card" | "usb";
 
 // Options for an assertion on this host, or null when it has no passkey.
 export async function assertionOptions(

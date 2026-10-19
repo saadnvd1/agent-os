@@ -33,8 +33,7 @@ const FINISHED: Record<string, TaskStatus> = {
 
 const getSession = (id: string) =>
   db.prepare(`SELECT * FROM session_rows WHERE id = ?`).get(id) as
-    | Session
-    | undefined;
+    Session | undefined;
 
 // The plan-written line a held task stored on its machine (plan-step.ts),
 // once per distinct plan: the mirror keeps the last one it told about.

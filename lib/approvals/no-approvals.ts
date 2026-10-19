@@ -14,13 +14,7 @@ import { markAllStatusDirty } from "../status/dirty";
 export const NO_APPROVALS_KEY = "approvals.none";
 
 export type AuditSource =
-  | "ask"
-  | "brake"
-  | "plan"
-  | "chat"
-  | "terminal"
-  | "merge-approval"
-  | "mode";
+  "ask" | "brake" | "plan" | "chat" | "terminal" | "merge-approval" | "mode";
 
 export interface AuditRow {
   id: number;

@@ -17,13 +17,7 @@ import {
 } from "./redact";
 
 export type SnapshotType =
-  | "user"
-  | "assistant"
-  | "plan"
-  | "error"
-  | "divider"
-  | "artifact"
-  | "detail";
+  "user" | "assistant" | "plan" | "error" | "divider" | "artifact" | "detail";
 
 export interface SnapshotItem {
   id: string;

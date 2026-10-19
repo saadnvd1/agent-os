@@ -447,8 +447,7 @@ export async function shellOnly(tmuxName: string): Promise<boolean> {
 
 // A chat's turn as its worker says: "unknown" when it can't be reached.
 type ChatTurn =
-  | NonNullable<Awaited<ReturnType<typeof chatStateNow>>>
-  | "unknown";
+  NonNullable<Awaited<ReturnType<typeof chatStateNow>>> | "unknown";
 
 // A chat between turns waits on the next message, as a terminal at its
 // prompt does. One whose worker can't be reached counts as busy.

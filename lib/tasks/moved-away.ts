@@ -14,8 +14,7 @@ import { archiveSession } from "../done/archive";
 
 export async function cleanUpMovedAway(id: string): Promise<WorktreeFate> {
   const s = db.prepare(`SELECT * FROM session_rows WHERE id = ?`).get(id) as
-    | Session
-    | undefined;
+    Session | undefined;
   if (!s || s.task_status !== "moved" || !s.held_by_device)
     return { action: "none" };
   await endSessionAgent(s).catch((err) =>

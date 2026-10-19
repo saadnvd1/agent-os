@@ -42,13 +42,7 @@ export interface Session {
   // done: finished without a merge (no PR, or its PR closed).
   // moving: handing it to another machine (moved_to); moved: handed over.
   task_status:
-    | "running"
-    | "merged"
-    | "dropped"
-    | "done"
-    | "moving"
-    | "moved"
-    | null;
+    "running" | "merged" | "dropped" | "done" | "moving" | "moved" | null;
   moved_to: string | null;
   // The session on another machine this task arrived from.
   moved_from: string | null;

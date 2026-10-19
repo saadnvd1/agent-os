@@ -20,8 +20,7 @@ interface NpmVuln {
   isDirect?: boolean;
   via?: (string | { title?: string; source?: number })[];
   fixAvailable?:
-    | boolean
-    | { name?: string; version?: string; isSemVerMajor?: boolean };
+    boolean | { name?: string; version?: string; isSemVerMajor?: boolean };
 }
 
 interface PnpmAdvisory {

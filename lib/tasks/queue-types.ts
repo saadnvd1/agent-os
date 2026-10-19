@@ -6,11 +6,7 @@ import type { Priority, WaitCode } from "./schedule-types";
 import type { StartVia } from "./starter";
 
 export type QueueStatus =
-  | "queued"
-  | "starting"
-  | "started"
-  | "failed"
-  | "removed";
+  "queued" | "starting" | "started" | "failed" | "removed";
 
 export interface QueueRow {
   id: string;

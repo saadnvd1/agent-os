@@ -83,8 +83,7 @@ function toBookmark(r: Joined): Bookmark {
 
 export function getBookmark(id: string): Bookmark | null {
   const r = db.prepare(`${SELECT} WHERE b.id = ?`).get(id) as
-    | Joined
-    | undefined;
+    Joined | undefined;
   return r ? toBookmark(r) : null;
 }
 

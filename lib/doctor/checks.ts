@@ -207,15 +207,13 @@ export function runDoctor(
     d
       .probe(fresh)
       .then(checkAgents)
-      .catch(
-        (): DoctorCheck => ({
-          id: "agents",
-          label: "Agent CLI",
-          status: "warn",
-          detail: "Couldn't check the agent CLIs",
-          fix: "Check again",
-        })
-      ),
+      .catch((): DoctorCheck => ({
+        id: "agents",
+        label: "Agent CLI",
+        status: "warn",
+        detail: "Couldn't check the agent CLIs",
+        fix: "Check again",
+      })),
   ]);
   if (!custom) cache = { at: Date.now(), checks };
   return checks;

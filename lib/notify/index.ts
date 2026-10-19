@@ -161,8 +161,7 @@ export async function notifyFrom(
 ): Promise<Outcome> {
   const session = from
     ? (db.prepare(`SELECT * FROM session_rows WHERE id = ?`).get(from) as
-        | Session
-        | undefined)
+        Session | undefined)
     : undefined;
   if (from && !session) throw new Error("Unknown sender session");
   const body = text.trim();

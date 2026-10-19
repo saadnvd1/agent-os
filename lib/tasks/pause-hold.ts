@@ -16,8 +16,7 @@ export function pauseHoldOf(sessionId: string): PauseHold | null {
        WHERE id = ? AND pause_state IN ('pausing', 'paused') AND pause_id IS NOT NULL`
     )
     .get(sessionId) as
-    | { pause_id: number; paused_until: string | null }
-    | undefined;
+    { pause_id: number; paused_until: string | null } | undefined;
   return row ? { pauseId: row.pause_id, until: row.paused_until } : null;
 }
 

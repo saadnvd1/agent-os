@@ -50,9 +50,7 @@ export interface ToolCall {
 }
 
 export type InjectedKind =
-  | "nudge"
-  | "restart-mid-turn"
-  | "restart-between-turns";
+  "nudge" | "restart-mid-turn" | "restart-between-turns";
 
 export interface Injected {
   kind: InjectedKind;

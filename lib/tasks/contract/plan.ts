@@ -41,8 +41,7 @@ export { remotePlanPath };
 
 const getSession = (id: string) =>
   db.prepare(`SELECT * FROM session_rows WHERE id = ?`).get(id) as
-    | Session
-    | undefined;
+    Session | undefined;
 
 async function readCopy(id: string): Promise<string | null> {
   try {

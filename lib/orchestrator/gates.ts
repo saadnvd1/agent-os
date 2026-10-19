@@ -19,12 +19,7 @@ import { untrusted } from "./untrusted";
 import { markStatusDirty } from "../status/dirty";
 
 export type GateName =
-  | "ci"
-  | "review"
-  | "code-review"
-  | "blocked"
-  | "scope"
-  | "stack";
+  "ci" | "review" | "code-review" | "blocked" | "scope" | "stack";
 
 export interface GateOutcome {
   gate: GateName;

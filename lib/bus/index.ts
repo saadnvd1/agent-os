@@ -70,8 +70,7 @@ function candidates(sessions: Session[]): Candidate[] {
 const sessionById = (id: string | null | undefined) =>
   id
     ? (db.prepare(`SELECT * FROM session_rows WHERE id = ?`).get(id) as
-        | Session
-        | undefined)
+        Session | undefined)
     : undefined;
 
 // A chat has no pane: its worker is the state, and it can always take a

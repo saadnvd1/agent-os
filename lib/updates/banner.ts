@@ -68,12 +68,7 @@ export interface UpdateView {
 }
 
 export type BannerState =
-  | "hidden"
-  | "available"
-  | "pending"
-  | "running"
-  | "failed"
-  | "built";
+  "hidden" | "available" | "pending" | "running" | "failed" | "built";
 
 export const DISMISSED_VERSION_KEY = "agentos.update.dismissed";
 export const DISMISSED_RUN_KEY = "agentos.update.dismissedRun";

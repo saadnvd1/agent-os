@@ -127,8 +127,7 @@ function orchestratorOf(
   const by = starterOrchestrator(session.started_by);
   if (!by) return undefined;
   const o = db.prepare(`SELECT name FROM sessions WHERE id = ?`).get(by) as
-    | { name: string }
-    | undefined;
+    { name: string } | undefined;
   return o ? { id: by, name: o.name } : undefined;
 }
 

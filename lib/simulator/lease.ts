@@ -8,11 +8,7 @@ import { db } from "../db";
 import { baseName, deviceNameFor, ownsDevice, type SimDevice } from "./simctl";
 
 export type LeaseState =
-  | "creating"
-  | "starting"
-  | "ready"
-  | "failed"
-  | "shutdown";
+  "creating" | "starting" | "ready" | "failed" | "shutdown";
 
 export interface Lease {
   session_id: string;

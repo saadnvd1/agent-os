@@ -138,8 +138,7 @@ export function finishOneOff(id: string, now = Date.now()): boolean {
 
 export function getSchedule(id: string): Schedule | null {
   const row = db.prepare(`SELECT * FROM schedules WHERE id = ?`).get(id) as
-    | Row
-    | undefined;
+    Row | undefined;
   return row ? toSchedule(row) : null;
 }
 
@@ -164,8 +163,7 @@ export function findSchedule(ref: string): Schedule {
 export function getSessionRow(id: string): Session | null {
   return (
     (db.prepare(`SELECT * FROM session_rows WHERE id = ?`).get(id) as
-      | Session
-      | undefined) ?? null
+      Session | undefined) ?? null
   );
 }
 

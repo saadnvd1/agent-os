@@ -70,8 +70,7 @@ function orchestrated(): { workspaceId: string; orchestratorId: string }[] {
 
 const sessionRow = (id: string) =>
   db.prepare(`SELECT * FROM session_rows WHERE id = ?`).get(id) as
-    | Session
-    | undefined;
+    Session | undefined;
 
 // Away mode reaches a workspace only through an orchestrator that's been
 // working inside the window: one left alone isn't told or woken.

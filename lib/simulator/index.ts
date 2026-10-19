@@ -71,8 +71,7 @@ export { shutTaskSimulators, shutFinishedTaskSimulators } from "./task-devices";
 
 const session = (id: string) =>
   db.prepare(`SELECT * FROM session_rows WHERE id = ?`).get(id) as
-    | Session
-    | undefined;
+    Session | undefined;
 
 function declared(sessionId: string): {
   config: NonNullable<ProjectConfig["simulator"]>;

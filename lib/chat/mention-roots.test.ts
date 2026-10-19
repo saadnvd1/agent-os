@@ -96,8 +96,7 @@ describe("mentionRoots", () => {
     project(w.id, "here", here);
     project(w.id, "gone", path.join(tmp(), "missing"));
     const other = db.prepare(`SELECT id FROM hosts LIMIT 1`).get() as
-      | { id: string }
-      | undefined;
+      { id: string } | undefined;
     if (other) project(w.id, "remote", repo(), other.id);
     expect(
       mentionRoots(session("orchestrator", w.id))!.map((r) => r.label)

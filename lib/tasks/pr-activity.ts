@@ -59,9 +59,7 @@ export async function fingerprints(
   );
   for (const n of prs) {
     const pr = res.data?.repository?.[`p${n}`] as
-      | { createdAt: string; reviews: Last; comments: Last }
-      | null
-      | undefined;
+      { createdAt: string; reviews: Last; comments: Last } | null | undefined;
     if (!pr) continue;
     const part = (l: Last) => `${l.totalCount}:${l.nodes[0]?.id ?? ""}`;
     out.set(n, {

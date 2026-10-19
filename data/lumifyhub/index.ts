@@ -86,8 +86,7 @@ export function useLhWorkspaces(enabled: boolean) {
 }
 
 export type WorkspaceLinkTarget =
-  | { lhWorkspaceId: string }
-  | { create: true; name?: string };
+  { lhWorkspaceId: string } | { create: true; name?: string };
 
 export function useLinkWorkspace() {
   return useInvalidating(
@@ -120,8 +119,7 @@ export function useWorkspaceBoards(workspaceId: string | null) {
 }
 
 export type BoardLinkTarget =
-  | { boardId: string }
-  | { create: true; title?: string };
+  { boardId: string } | { create: true; title?: string };
 
 export function useLinkBoard() {
   return useInvalidating(

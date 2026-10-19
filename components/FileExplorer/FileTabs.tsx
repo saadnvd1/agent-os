@@ -41,7 +41,7 @@ export function FileTabs({
   return (
     <div
       ref={scrollRef}
-      className="bg-muted/30 scrollbar-none flex items-center gap-0.5 overflow-x-auto px-1"
+      className="bg-muted/30 flex scrollbar-none items-center gap-0.5 overflow-x-auto px-1"
     >
       {files.map((file) => {
         const isActive = file.path === activeFilePath;

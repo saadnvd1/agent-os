@@ -132,7 +132,7 @@ export function planStack(cards: PlanCard[]): PlanItem[] {
           : best;
       });
       const chain = new Set<string>();
-      for (let node: string | null = parent; node; ) {
+      for (let node: string | null = parent; node;) {
         chain.add(node);
         node = items.get(node)!.parent;
       }

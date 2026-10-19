@@ -111,8 +111,7 @@ export function recordCompaction(
   const current = db
     .prepare(`SELECT name, workspace_id FROM sessions WHERE id = ?`)
     .get(session.id) as
-    | { name: string; workspace_id: string | null }
-    | undefined;
+    { name: string; workspace_id: string | null } | undefined;
   db.prepare(
     `INSERT INTO chat_compactions (session_id, session_name, workspace_id, at, trigger, phase, before_tokens, after_tokens)
      VALUES (?, ?, ?, ?, ?, ?, ?, ?)`

@@ -31,8 +31,7 @@ export async function compactContext(sessionId: string): Promise<string> {
       `SELECT working_directory, task_prompt, role FROM session_rows WHERE id = ?`
     )
     .get(sessionId) as
-    | Pick<Session, "working_directory" | "task_prompt" | "role">
-    | undefined;
+    Pick<Session, "working_directory" | "task_prompt" | "role"> | undefined;
   // An orchestrator starts fresh instead of compacting.
   if (!session || session.role === "orchestrator") return "";
   const tools = lastItems(sessionId, 400, "tool").filter(

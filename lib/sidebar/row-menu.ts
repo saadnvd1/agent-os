@@ -38,8 +38,7 @@ export type RowMenuItem =
 export type RowMenuGroup = "open" | "share" | "restart" | "move" | "automate";
 
 export type RowMenuEntry =
-  | RowMenuItem
-  | { group: RowMenuGroup; items: RowMenuItem[] };
+  RowMenuItem | { group: RowMenuGroup; items: RowMenuItem[] };
 
 export interface RowMenuInput {
   session: Pick<

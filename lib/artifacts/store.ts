@@ -54,8 +54,7 @@ export function createArtifact(
 export function getArtifact(id: string): Artifact | undefined {
   if (!ID.test(id)) return undefined;
   return db.prepare(`SELECT * FROM artifacts WHERE id = ?`).get(id) as
-    | Artifact
-    | undefined;
+    Artifact | undefined;
 }
 
 export function listArtifacts(sessionId: string): Artifact[] {

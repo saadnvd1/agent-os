@@ -52,8 +52,7 @@ export function moveRefusal(session: Session): string | null {
        FROM session_rows s WHERE id = ?`
     )
     .get(session.id) as
-    | { lh_card_id: string | null; stacked: number }
-    | undefined;
+    { lh_card_id: string | null; stacked: number } | undefined;
   if (row?.lh_card_id) return "Card tasks run on this machine only for now";
   if (row?.stacked) return "Stacked tasks run on this machine only for now";
   return null;

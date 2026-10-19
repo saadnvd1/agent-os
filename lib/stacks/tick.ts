@@ -40,8 +40,7 @@ const LIVE = new Set(["running", "pr"]);
 
 const sessionOf = (id: string) =>
   db.prepare(`SELECT * FROM session_rows WHERE id = ?`).get(id) as
-    | Session
-    | undefined;
+    Session | undefined;
 
 async function refreshItem(item: StackItemRow): Promise<void> {
   if (!item.session_id || !LIVE.has(item.status)) return;

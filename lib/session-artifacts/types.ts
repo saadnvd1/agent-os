@@ -1,14 +1,7 @@
 // What a session produced, as the Artifacts view lists it. Client-safe.
 
 export type ArtifactKind =
-  | "plan"
-  | "file"
-  | "page"
-  | "image"
-  | "log"
-  | "pr"
-  | "run"
-  | "session-log";
+  "plan" | "file" | "page" | "image" | "log" | "pr" | "run" | "session-log";
 
 // live: there to open. kept: its worktree went, a copy was kept. in-pr:
 // committed, so the PR has it. gone: nothing left to open. outside: there,

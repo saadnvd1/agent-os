@@ -20,8 +20,7 @@ export const REMOTE_HEADER = "x-agentos-remote";
 export type Trust = "loopback" | "tailnet" | "device" | "open";
 
 export type AuthResult =
-  | { ok: true; via: Trust; deviceId?: string }
-  | { ok: false };
+  { ok: true; via: Trust; deviceId?: string } | { ok: false };
 
 export interface AuthRequest {
   url?: string;

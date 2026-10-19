@@ -95,8 +95,7 @@ export function syncPeerMirrors(
     const [name, view, tmuxName, projectId, prUrl, prNumber, prStatus, at] =
       fields;
     const cur = current.get(peer.id, hostId) as
-      | Record<string, string | number | null>
-      | undefined;
+      Record<string, string | number | null> | undefined;
     if (!cur) return;
     const same =
       cur.name === name &&
@@ -126,8 +125,7 @@ export function syncPeerMirrors(
   db.transaction(() => {
     for (const peer of listed) {
       const row = owner.get(peer.id) as
-        | { host_id: string; project_id: string | null }
-        | undefined;
+        { host_id: string; project_id: string | null } | undefined;
       // One started here for a project here keeps it (lib/hosts/peer-actions.ts).
       const kept =
         row?.project_id && here.has(row.project_id) ? row.project_id : null;

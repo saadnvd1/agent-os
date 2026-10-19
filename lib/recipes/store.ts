@@ -26,8 +26,7 @@ export const toRun = (r: RunRow): RecipeRun => ({
 
 export function getRecipe(id: string): Recipe | null {
   const row = db.prepare(`SELECT * FROM recipes WHERE id = ?`).get(id) as
-    | RecipeRow
-    | undefined;
+    RecipeRow | undefined;
   return row ? toRecipe(row) : null;
 }
 
@@ -285,8 +284,7 @@ export function lastRevisionId(recipeId: string): number | null {
 
 export function getRun(id: number): RecipeRun | null {
   const row = db.prepare(`SELECT * FROM recipe_runs WHERE id = ?`).get(id) as
-    | RunRow
-    | undefined;
+    RunRow | undefined;
   return row ? toRun(row) : null;
 }
 

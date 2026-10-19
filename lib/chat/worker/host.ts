@@ -551,7 +551,7 @@ export class ChatHost {
       this.compactingNow
     )
       return;
-    for (let next; (next = claimNext(this.session.id)); ) {
+    for (let next; (next = claimNext(this.session.id));) {
       this.emit({ type: "queue" });
       this.sendUser(next);
     }

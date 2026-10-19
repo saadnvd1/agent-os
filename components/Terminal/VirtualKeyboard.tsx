@@ -295,7 +295,7 @@ function TerminalShortcutsBar({
         onClose={() => setShowPasteModal(false)}
         onPaste={handleModalPaste}
       />
-      <div className="scrollbar-none flex items-center gap-1.5 overflow-x-auto px-2 py-1.5">
+      <div className="flex scrollbar-none items-center gap-1.5 overflow-x-auto px-2 py-1.5">
         {/* Paste button */}
         <FastButton
           onPress={handlePaste}

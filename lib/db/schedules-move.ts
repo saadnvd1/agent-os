@@ -200,8 +200,7 @@ export function revertSchedulesMove(db: Database.Database): {
     for (const s of moved) {
       const r = s.recipe_id
         ? (recipe.get(s.recipe_id) as
-            | { brief: string; project_id: string }
-            | undefined)
+            { brief: string; project_id: string } | undefined)
         : undefined;
       restore.run(
         s.migrated_from_kind,

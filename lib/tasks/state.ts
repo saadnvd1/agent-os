@@ -1,12 +1,7 @@
 import type { AttributionKind } from "./code-review";
 
 export type TaskStatus =
-  | "running"
-  | "merged"
-  | "dropped"
-  | "done"
-  | "moving"
-  | "moved";
+  "running" | "merged" | "dropped" | "done" | "moving" | "moved";
 
 export type ChecksVerdict = "pass" | "fail" | "pending" | "none";
 

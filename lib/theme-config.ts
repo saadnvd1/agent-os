@@ -30,14 +30,7 @@ export type DarkThemeVariant =
   | "ocean"
   | "mocha";
 export type LightThemeVariant =
-  | "default"
-  | "warm"
-  | "cool"
-  | "soft"
-  | "rose"
-  | "lavender"
-  | "mint"
-  | "peach";
+  "default" | "warm" | "cool" | "soft" | "rose" | "lavender" | "mint" | "peach";
 export type Theme =
   | "light"
   | `light-${LightThemeVariant}`

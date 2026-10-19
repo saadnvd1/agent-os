@@ -45,8 +45,7 @@ const later = () => Date.now() + 2000;
 
 const row = (id: string) =>
   db.prepare(`SELECT * FROM session_rows WHERE id = ?`).get(id) as
-    | Session
-    | undefined;
+    Session | undefined;
 
 function project(hostId: string, dir: string): string {
   const id = randomUUID();

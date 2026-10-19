@@ -95,7 +95,7 @@ const RANK: Record<ProgramState, number> = {
 };
 
 function appOf(records: Records, id: string): string | undefined {
-  for (let path = id; ; ) {
+  for (let path = id; ;) {
     const app = records[path]?.app;
     if (app) return app;
     if (path === "") return undefined;

@@ -28,8 +28,7 @@ export function listSharedLinks(): SharedLink[] {
 
 export function getSharedLink(id: string): SharedLink | undefined {
   return db.prepare(`SELECT * FROM shared_links WHERE id = ?`).get(id) as
-    | SharedLink
-    | undefined;
+    SharedLink | undefined;
 }
 
 export function markRevoked(id: string): void {

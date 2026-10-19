@@ -107,7 +107,7 @@ export function retryItem(stackId: string, itemId: string): StackView {
   }
   const items = q.items(db, stackId);
   const reset = new Set([item.id]);
-  for (let grew = true; grew; ) {
+  for (let grew = true; grew;) {
     grew = false;
     for (const i of items) {
       if (reset.has(i.id) || i.status !== "held" || i.held_outside) continue;

@@ -102,7 +102,7 @@ export function DesktopTabBar({
   return (
     <div
       className={cn(
-        "scrollbar-none @container/bar flex items-center gap-1 overflow-x-auto px-1.5 py-1.5 transition-colors",
+        "@container/bar flex scrollbar-none items-center gap-1 overflow-x-auto px-1.5 py-1.5 transition-colors",
         "shadow-[inset_0_-1px_0_hsl(var(--foreground)/0.06)]",
         isFocused ? "bg-foreground/[0.025]" : "bg-transparent"
       )}
@@ -110,7 +110,7 @@ export function DesktopTabBar({
       {leading}
 
       {/* Tabs */}
-      <div className="scrollbar-none flex min-w-28 flex-1 items-center gap-0.5 overflow-x-auto">
+      <div className="flex min-w-28 flex-1 scrollbar-none items-center gap-0.5 overflow-x-auto">
         {tabs.map((tab) => (
           <div
             key={tab.id}

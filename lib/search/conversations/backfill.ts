@@ -13,8 +13,7 @@ interface State {
 
 const stateOf = (db: Database.Database): State | undefined =>
   db.prepare(`SELECT * FROM chat_search_state WHERE id = 1`).get() as
-    | State
-    | undefined;
+    State | undefined;
 
 // Starts the index over: the stored version is not this build's.
 function reset(db: Database.Database): void {
@@ -68,8 +67,7 @@ export function backfillStep(db: Database.Database, batch = BATCH): boolean {
     for (const r of rows) {
       if (!r.text) continue;
       const have = key.get(r.session_id, r.item_id) as
-        | { id: number }
-        | undefined;
+        { id: number } | undefined;
       if (have) del.run(have.id);
       else mk.run(r.session_id, r.item_id);
       const id = (key.get(r.session_id, r.item_id) as { id: number }).id;

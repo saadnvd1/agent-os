@@ -39,11 +39,7 @@ export function pushStatus(): { linked: boolean; unavailable: string | null } {
 }
 
 export type PushOutcome =
-  | "queued"
-  | "folded"
-  | "dropped"
-  | "muted"
-  | "unavailable";
+  "queued" | "folded" | "dropped" | "muted" | "unavailable";
 
 export interface PushOptions {
   /** Held text that goes by Telegram if no phone is reached. */
@@ -59,8 +55,7 @@ function isMirrored(sessionId: string): boolean {
   const s = db
     .prepare(`SELECT host_id, peer_mirror FROM session_rows WHERE id = ?`)
     .get(sessionId) as
-    | { host_id: string | null; peer_mirror: number | null }
-    | undefined;
+    { host_id: string | null; peer_mirror: number | null } | undefined;
   return !!s && (!!s.peer_mirror || (!!s.host_id && s.host_id !== "local"));
 }
 

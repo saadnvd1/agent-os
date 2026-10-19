@@ -56,11 +56,7 @@ export interface MachineView {
 }
 
 export type MachineCode =
-  | "needs"
-  | "load_red"
-  | "load_amber"
-  | "heavy"
-  | "spacing";
+  "needs" | "load_red" | "load_amber" | "heavy" | "spacing";
 
 // A reason a task isn't starting. `code` is also what a queue row stores and
 // the client reads. A hold that rests on a machine says which one, and when

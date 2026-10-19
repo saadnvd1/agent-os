@@ -70,8 +70,7 @@ export async function stopChatAtTurnEnd(
 }
 
 export type TurnStop =
-  | { stopped: true; killed: boolean }
-  | { stopped: false; reason: string };
+  { stopped: true; killed: boolean } | { stopped: false; reason: string };
 
 export interface TurnStopOptions {
   // How long the turn gets to end after the interrupt before its agent is

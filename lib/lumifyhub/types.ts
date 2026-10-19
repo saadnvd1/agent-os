@@ -23,11 +23,7 @@ export interface LhBoard {
 }
 
 export type LhListCategory =
-  | "backlog"
-  | "unstarted"
-  | "started"
-  | "completed"
-  | "canceled";
+  "backlog" | "unstarted" | "started" | "completed" | "canceled";
 
 export interface LhList {
   id: string;
@@ -39,9 +35,7 @@ export interface LhList {
 
 // A TipTap/ProseMirror document, or a bare string on older cards.
 export type LhRichText =
-  | string
-  | { type?: string; text?: string; content?: LhRichText[] }
-  | null;
+  string | { type?: string; text?: string; content?: LhRichText[] } | null;
 
 export interface LhCard {
   id: string;

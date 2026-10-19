@@ -33,12 +33,7 @@ import { cn } from "@/lib/utils";
 
 export type AButtonSize = "sm" | "md" | "lg";
 export type AButtonVariant =
-  | "default"
-  | "ghost"
-  | "outline"
-  | "secondary"
-  | "destructive"
-  | "link";
+  "default" | "ghost" | "outline" | "secondary" | "destructive" | "link";
 
 export interface AButtonProps extends Omit<
   React.ButtonHTMLAttributes<HTMLButtonElement>,

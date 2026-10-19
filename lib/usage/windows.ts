@@ -101,13 +101,11 @@ async function planLimits(): Promise<Cached> {
   if (cache && Date.now() - cache.at < TTL_MS) return cache;
   inflight ??= askAgent()
     .then((limits): Cached => ({ at: Date.now(), limits }))
-    .catch(
-      (error: unknown): Cached => ({
-        at: Date.now(),
-        limits: null,
-        error: error instanceof Error ? error.message : String(error),
-      })
-    )
+    .catch((error: unknown): Cached => ({
+      at: Date.now(),
+      limits: null,
+      error: error instanceof Error ? error.message : String(error),
+    }))
     .then((c) => (cache = c))
     .finally(() => {
       inflight = null;

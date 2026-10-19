@@ -132,8 +132,7 @@ export async function allocatePorts(
   const held = db
     .prepare(`SELECT port_slot, ports FROM sessions WHERE id = ?`)
     .get(sessionId) as
-    | { port_slot: number | null; ports: string | null }
-    | undefined;
+    { port_slot: number | null; ports: string | null } | undefined;
   if (!held) throw new Error(`No session ${sessionId}`);
   const existing = parsePorts(held.ports);
   if (held.port_slot != null && existing)

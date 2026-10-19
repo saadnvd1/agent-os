@@ -16,8 +16,7 @@ import { restackBranch, outputOf, type Runner } from "../stacks/git";
 import { run } from "./gh";
 
 export type RefreshResult =
-  | { moved: false; note?: string }
-  | { moved: true; how: "reset" | "rebase" };
+  { moved: false; note?: string } | { moved: true; how: "reset" | "rebase" };
 
 export interface RefreshTarget {
   name: string;

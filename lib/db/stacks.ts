@@ -1,11 +1,7 @@
 import type Database from "better-sqlite3";
 
 export type StackStatus =
-  | "running"
-  | "paused"
-  | "landing"
-  | "landed"
-  | "failed";
+  "running" | "paused" | "landing" | "landed" | "failed";
 
 export type StackItemStatus =
   | "planned"
@@ -131,8 +127,7 @@ export const stackQueries = {
 
   get: (db: Database.Database, id: string) =>
     (db.prepare(`SELECT * FROM stacks WHERE id = ?`).get(id) as
-      | StackRow
-      | undefined) ?? null,
+      StackRow | undefined) ?? null,
 
   // The board's stack that has not finished yet, if any.
   openForBoard: (db: Database.Database, boardId: string) =>
@@ -150,8 +145,7 @@ export const stackQueries = {
 
   item: (db: Database.Database, id: string) =>
     (db.prepare(`SELECT * FROM stack_items WHERE id = ?`).get(id) as
-      | StackItemRow
-      | undefined) ?? null,
+      StackItemRow | undefined) ?? null,
 
   itemForSession: (db: Database.Database, sessionId: string) =>
     (db

@@ -121,8 +121,7 @@ export async function writeLog(
   opts: CaptureOpts & { plan?: string | null } = {}
 ): Promise<boolean> {
   const row = db.prepare(`SELECT * FROM session_rows WHERE id = ?`).get(id) as
-    | Session
-    | undefined;
+    Session | undefined;
   const existing = getLog(id);
   if (!eligible(row) || (existing && !opts.rewrite)) return false;
   const info = opts.noGh

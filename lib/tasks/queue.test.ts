@@ -874,14 +874,13 @@ describe("after any consumes a finish", () => {
     const t = setup(null);
     const b = seedSession({ projectId: t.app.id, name: "b", task: true });
     const c = seedSession({ projectId: t.app.id, name: "c", task: true });
-    const waiters = ["w1", "w2", "w3"].map(
-      (p) =>
-        queueIfNeeded({
-          startedVia: "person",
-          projectId: t.app.id,
-          prompt: p,
-          after: "any",
-        })!
+    const waiters = ["w1", "w2", "w3"].map((p) =>
+      queueIfNeeded({
+        startedVia: "person",
+        projectId: t.app.id,
+        prompt: p,
+        after: "any",
+      })!
     );
     finish(t.task);
     await tick();

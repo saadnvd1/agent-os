@@ -24,8 +24,7 @@ export const ATTEMPT_TTL_MINUTES = 10;
 export const lumifyhubQueries = {
   getConnection: (db: Database.Database) =>
     (db.prepare(`SELECT * FROM lumifyhub_connection WHERE id = 1`).get() as
-      | LumifyHubConnection
-      | undefined) ?? null,
+      LumifyHubConnection | undefined) ?? null,
 
   saveConnection: (
     db: Database.Database,
@@ -65,8 +64,7 @@ export const lumifyhubQueries = {
            FROM lumifyhub_connect_attempts WHERE state = ?`
         )
         .get(`-${ATTEMPT_TTL_MINUTES} minutes`, state) as
-        | (LumifyHubConnectAttempt & { fresh: number })
-        | undefined;
+        (LumifyHubConnectAttempt & { fresh: number }) | undefined;
       db.prepare(`DELETE FROM lumifyhub_connect_attempts WHERE state = ?`).run(
         state
       );

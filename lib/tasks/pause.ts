@@ -74,13 +74,11 @@ const nudge = () =>
 
 const sessionOf = (id: string) =>
   db.prepare(`SELECT * FROM session_rows WHERE id = ?`).get(id) as
-    | Session
-    | undefined;
+    Session | undefined;
 
 const pauseRow = (id: number) =>
   db.prepare(`SELECT * FROM task_pauses WHERE id = ?`).get(id) as
-    | TaskPause
-    | undefined;
+    TaskPause | undefined;
 
 // SQLite's datetime('now') is UTC without a zone.
 const ms = (v: string | null | undefined) =>
@@ -400,8 +398,7 @@ export function setPauseNote(sessionId: string, note: string | null): void {
 }
 
 export type ResumeOutcome =
-  | { outcome: "resumed" | "cancelled" }
-  | { outcome: "held"; note: string };
+  { outcome: "resumed" | "cancelled" } | { outcome: "held"; note: string };
 
 // A deliberate Resume, by a person or the orchestrator: starts at once, past
 // the slot limit, like Start now. A machine in the red still holds it: it is
