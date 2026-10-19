@@ -7,12 +7,7 @@ import { exec } from "child_process";
 import { promisify } from "util";
 import type { SetupResult } from "../env-setup";
 import { NO_FAST_COPY, cloneDeps } from "./clone";
-import {
-  UNFROZEN_WARNING,
-  detectPackageManager,
-  setupEnv,
-  shellCommand,
-} from "./install";
+import { detectPackageManager, setupEnv, shellCommand } from "./install";
 
 const execAsync = promisify(exec);
 
@@ -86,21 +81,15 @@ export async function bringDependencies(
     return;
   }
 
-  let error: string | undefined;
-  for (const [i, command] of pm.installs.entries()) {
-    const run = await deps.run(shellCommand(command), worktreePath, envVars);
-    result.steps.push({
-      name: `Install dependencies (${pm.name})`,
-      command,
-      success: run.success,
-      output: [clone.reason && `Not cloned: ${clone.reason}`, run.output]
-        .filter(Boolean)
-        .join("\n"),
-      error: run.error,
-      warning: run.success && i > 0 ? UNFROZEN_WARNING : undefined,
-    });
-    if (run.success) return;
-    error = run.error;
-  }
-  if (error !== undefined) result.success = false;
+  const run = await deps.run(shellCommand(pm.install), worktreePath, envVars);
+  result.steps.push({
+    name: `Install dependencies (${pm.name})`,
+    command: pm.install,
+    success: run.success,
+    output: [clone.reason && `Not cloned: ${clone.reason}`, run.output]
+      .filter(Boolean)
+      .join("\n"),
+    error: run.error,
+  });
+  if (!run.success) result.success = false;
 }

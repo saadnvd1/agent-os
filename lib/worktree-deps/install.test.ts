@@ -17,36 +17,20 @@ const touch = (...files: string[]) =>
   files.forEach((f) => fs.writeFileSync(path.join(dir, f), "{}"));
 
 describe("detectPackageManager", () => {
-  it("tries the lockfile's frozen install before a plain one, with dev deps", () => {
+  it("runs only the lockfile's frozen install, with dev deps", () => {
     touch("package.json", "package-lock.json");
-    expect(detectPackageManager(dir)?.installs).toEqual([
-      "npm ci --include=dev",
-      "npm install --include=dev",
-    ]);
+    expect(detectPackageManager(dir)?.install).toBe("npm ci --include=dev");
   });
 
   it("picks the package manager by lockfile", () => {
     touch("package.json", "pnpm-lock.yaml");
-    expect(detectPackageManager(dir)?.installs[0]).toBe(
+    expect(detectPackageManager(dir)?.install).toBe(
       "pnpm install --frozen-lockfile --prod=false"
     );
     touch("bun.lock");
-    expect(detectPackageManager(dir)?.installs[0]).toBe(
+    expect(detectPackageManager(dir)?.install).toBe(
       "bun install --frozen-lockfile"
     );
-  });
-
-  it("freezes AgentOS's own install with no plain fallback", () => {
-    touch("pnpm-lock.yaml");
-    fs.writeFileSync(
-      path.join(dir, "package.json"),
-      JSON.stringify({ name: "@saadnvd1/agent-os" })
-    );
-    const pm = detectPackageManager(dir);
-    expect(pm?.installs).toEqual([
-      "pnpm install --frozen-lockfile --prod=false",
-    ]);
-    expect(pm?.frozenOnly).toBe(true);
   });
 
   it("runs pnpm through corepack when it is not on PATH", () => {
@@ -58,9 +42,9 @@ describe("detectPackageManager", () => {
 
   it("has nothing to freeze to without a lockfile", () => {
     touch("package.json");
-    expect(detectPackageManager(dir)?.installs).toEqual([
-      "npm install --include=dev",
-    ]);
+    expect(detectPackageManager(dir)?.install).toBe(
+      "npm install --include=dev"
+    );
     fs.rmSync(path.join(dir, "package.json"));
     expect(detectPackageManager(dir)).toBeNull();
   });
@@ -134,37 +118,7 @@ describe("bringDependencies", () => {
     expect(result.steps.map((s) => s.name)).toEqual(["Clone dependencies"]);
   });
 
-  it("falls back from the frozen install to a plain one", async () => {
-    const ran: string[] = [];
-    const result = fresh();
-    await bringDependencies(
-      result,
-      dir,
-      dir,
-      {},
-      {
-        clone: notCloned,
-        run: async (cmd) => (
-          ran.push(cmd),
-          cmd.startsWith("npm ci")
-            ? { success: false, output: "", error: "out of sync" }
-            : { success: true, output: "" }
-        ),
-      }
-    );
-    expect(ran).toEqual(["npm ci --include=dev", "npm install --include=dev"]);
-    expect(result.success).toBe(true);
-    expect(result.steps[0].warning).toBeUndefined();
-    expect(result.steps[1].warning).toMatch(/lockfile is out of sync/);
-  });
-
-  it("never falls back to a plain install in AgentOS's own checkout", async () => {
-    fs.rmSync(path.join(dir, "package-lock.json"), { force: true });
-    touch("pnpm-lock.yaml");
-    fs.writeFileSync(
-      path.join(dir, "package.json"),
-      JSON.stringify({ name: "@saadnvd1/agent-os" })
-    );
+  it("never falls back to a plain install when the frozen one fails", async () => {
     const ran: string[] = [];
     const result = fresh();
     await bringDependencies(
@@ -180,25 +134,11 @@ describe("bringDependencies", () => {
         ),
       }
     );
-    expect(ran).toHaveLength(1);
-    expect(ran[0]).toMatch(/pnpm install --frozen-lockfile/);
+    expect(ran).toEqual(["npm ci --include=dev"]);
     expect(result.success).toBe(false);
-  });
-
-  it("fails when every install fails", async () => {
-    const result = fresh();
-    await bringDependencies(
-      result,
-      dir,
-      dir,
-      {},
-      {
-        clone: notCloned,
-        run: async () => ({ success: false, output: "", error: "offline" }),
-      }
-    );
-    expect(result.success).toBe(false);
-    expect(result.steps).toHaveLength(2);
+    expect(result.steps).toMatchObject([
+      { success: false, error: "lockfile out of date" },
+    ]);
   });
 });
 
