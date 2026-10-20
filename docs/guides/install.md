@@ -114,10 +114,28 @@ WSL, a Linux box such as an NVIDIA DGX Spark (arm64), a Mac. You don't need a
 Mac. Linked machines take tasks, and AgentOS Connect works from each of them
 (`agent-os connect`, with cloudflared pinned for Linux x64 and arm64).
 
+### With AgentOS Connect (any network, Pro)
+
+This is the default. Neither machine needs Tailscale, sshd or an open port.
 On the machine to be linked (the WSL distro or the Linux box):
 
 ```bash
-agent-os machine
+agent-os connect    # sign in with the code from runagentos.com
+agent-os machine    # prints these steps
+```
+
+Then, on the machine you'll link from, open **Machines**, press **Link** next
+to the machine under **On your AgentOS account**, and type the 6-digit code it
+shows on the machine to be linked (`agent-os link accept <code>` there, if it
+has no browser). Type the second code it shows back to finish. The full flow is
+in [Machines](https://github.com/saadnvd1/agent-os/blob/main/docs/reference/machines.md#linking-through-agentos-connect).
+
+### Without Connect (Tailscale and ssh)
+
+On the machine to be linked:
+
+```bash
+agent-os machine --tailscale
 ```
 
 It installs and starts sshd (Debian and Ubuntu; elsewhere it names what to
@@ -130,12 +148,12 @@ doesn't reach it (mirrored networking is an untested alternative).
 On the machine you'll link from, which also needs Tailscale (inside its
 distro, if it's WSL) and an ssh key the target accepts
 (`ssh-copy-id <user>@<name>`), open **Machines → Add** and enter what
-`agent-os machine` printed. Pairing asks the target for a one-time code over
-ssh, claims it over HTTP, and keeps the device token; tasks and moves then go
-over HTTP.
+`agent-os machine --tailscale` printed. Pairing asks the target for a one-time
+code over ssh, claims it over HTTP, and keeps the device token; tasks and moves
+then go over HTTP.
 
 What's been verified: the WSL detection, the installer's WSL paths, `enable`,
-`disable`, `agent-os machine`, the Windows port check and the Windows-drive CLI
+`disable`, `agent-os machine` (both paths), the Windows port check and the Windows-drive CLI
 filter have unit tests that run on any OS. The [WSL workflow](https://github.com/saadnvd1/agent-os/blob/main/.github/workflows/wsl.yml)
 runs on a GitHub-hosted Windows runner (Windows Server 2025, Ubuntu 24.04
 under WSL 2) on changes to these files and weekly: the installer, tmux and
@@ -217,7 +235,7 @@ agent-os pair             # add a phone, tablet or laptop (prints a QR code)
 agent-os logs             # tail the logs
 agent-os update           # update to the latest version
 agent-os enable           # start at login (disable turns it off)
-agent-os machine          # make this Linux/WSL box linkable from another AgentOS
+agent-os machine          # how to link this box (Connect first; --tailscale sets up sshd + Tailscale)
 agent-os passkeys reset   # when every passkey is lost (see Orchestrator)
 agent-os uninstall
 ```
@@ -230,7 +248,7 @@ agent-os uninstall
 agent-os enable
 ```
 
-This writes a launchd service on macOS or a systemd user service on Linux. `agent-os disable` turns it off. Under WSL, `enable` needs systemd and also registers a Windows login task (see [Windows](#windows-wsl2)). To make a Linux box or WSL distro linkable from another AgentOS, run `agent-os machine` (see [Link a machine](#link-a-machine-windows-pc-linux-box-mac)).
+This writes a launchd service on macOS or a systemd user service on Linux. `agent-os disable` turns it off. Under WSL, `enable` needs systemd and also registers a Windows login task (see [Windows](#windows-wsl2)). To make a Linux box or WSL distro linkable from another AgentOS, run `agent-os machine` (Connect-first; `--tailscale` for the ssh route; see [Link a machine](#link-a-machine-windows-pc-linux-box-mac)).
 
 The everyday commands:
 
