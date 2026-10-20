@@ -1,4 +1,5 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import type { AuditRow } from "@/lib/peer/audit";
 import type { AccountMachines } from "@/lib/peer/machines";
 import type { PendingView } from "@/lib/peer/pairing";
 import type { Outgoing } from "@/lib/peer/pairing-out";
@@ -138,4 +139,34 @@ export function useAnswerLink() {
       onSuccess: done,
     }),
   };
+}
+
+/** Unlinks a machine linked through Connect, here and (if it answers) there. */
+export function useUnlinkPeer() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: async (hostId: string) =>
+      json<{ name: string; told: boolean; removed: boolean }>(
+        await fetch(`/api/peers/${hostId}`, { method: "DELETE" })
+      ),
+    onSettled: () => {
+      void queryClient.invalidateQueries({ queryKey: hostKeys.all });
+      void queryClient.invalidateQueries({ queryKey: peerKeys.account() });
+    },
+  });
+}
+
+/** Every call to and from a linked machine, newest first. */
+export function usePeerAudit(hostId: string | null) {
+  return useQuery({
+    queryKey: peerKeys.audit(hostId ?? ""),
+    queryFn: async () =>
+      (
+        await json<{ rows: AuditRow[] }>(
+          await fetch(`/api/peers/${hostId}/audit`)
+        )
+      ).rows,
+    enabled: !!hostId,
+    refetchInterval: 15_000,
+  });
 }

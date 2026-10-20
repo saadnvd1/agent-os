@@ -160,11 +160,12 @@ describe("agent-os link", () => {
           ],
         },
       ],
-      "DELETE /api/hosts/c1": () => [200, { success: true }],
+      "DELETE /api/peers/c1": () => [200, { told: true, removed: true }],
     });
     expect(await runLinkCli(["--unlink", "spark"], t.io)).toBe(0);
-    expect(t.calls).toContain("DELETE /api/hosts/c1");
-    expect(t.calls).not.toContain("DELETE /api/hosts/s1");
+    expect(t.calls).toContain("DELETE /api/peers/c1");
+    expect(t.calls.some((c) => c.includes("s1"))).toBe(false);
+    expect(t.lines.join("\n")).toContain("on both machines");
   });
 
   it("lists the account and what's waiting", async () => {

@@ -149,7 +149,7 @@ afterEach(() => resetOutgoing());
 
 /** Typed on B: the code A shows. Returns the code B shows back. */
 async function acceptOnB(code: string, deps = bDeps()) {
-  const [req] = pendingRequests(clock);
+  const req = pendingRequests(clock).find((r) => r.state === "pending")!;
   const r = await acceptRequest(req.id, code, deps);
   if (!r.ok) throw new Error(r.error);
   return r.confirmCode;
@@ -209,7 +209,10 @@ describe("pairing", () => {
       aDeps({ list: [listing(B, M)], post: toB(asB) })
     );
     expect(_live(out.id)!.state).toBe("confirm");
-    // The real B shows no code: it never heard of this. Guesses run out.
+    // M can compute the second code too: it chose both sides' inputs. What
+    // protects A is that a person reads that code off the real B's screen,
+    // and the real B never heard of this request, so it shows none. Without
+    // it, a person can only guess, and guesses run out.
     for (const left of [2, 1, 0])
       expect(confirmLink(out.id, "123456", aDeps())).toMatchObject({
         ok: false,
@@ -505,5 +508,70 @@ describe("pairing", () => {
       }
     );
     expect(fromM.status).toBe(404);
+  });
+});
+
+describe("pairing under concurrency and reloads", () => {
+  /** A promise this test settles when it chooses. */
+  const gate = () => {
+    let open!: (v: boolean) => void;
+    const p = new Promise<boolean>((r) => (open = r));
+    return { p, open };
+  };
+  const hellos = () =>
+    (
+      globalThis as unknown as {
+        __agentosPairingIn: {
+          hellos: { from: string | null; source: string }[];
+        };
+      }
+    ).__agentosPairingIn.hellos;
+
+  it("tags each hello with its own sender, whatever arrived meanwhile", async () => {
+    const C = fakeMachine("cccc3333");
+    const first = gate();
+    const slow = receiveHello(
+      helloFrom(A).hello,
+      { ...bDeps({ list: [listing(A), listing(C)] }), allowed: () => first.p },
+      "src-a"
+    );
+    // Another hello lands while A's waits on the plan.
+    const quick = receiveHello(
+      helloFrom(C).hello,
+      bDeps({ list: [listing(A), listing(C)] }),
+      "src-c"
+    );
+    first.open(true);
+    await Promise.all([slow, quick]);
+    expect(hellos().map((h) => [h.source, h.from])).toEqual([
+      ["src-a", A.machineId],
+      ["src-c", C.machineId],
+    ]);
+  });
+
+  it("re-checks the request after the plan check: a decline meanwhile wins", async () => {
+    const out = await startLink(B.machineId, aDeps());
+    const [req] = pendingRequests(clock);
+    const plan = gate();
+    const taking = acceptRequest(req.id, out.code, {
+      ...bDeps(),
+      allowed: () => plan.p,
+    });
+    expect(declineRequest(req.id)).toBe(true);
+    plan.open(true);
+    expect(await taking).toMatchObject({ ok: false, status: 404 });
+    expect(pinnedOnB).toEqual([]);
+  });
+
+  it("keeps the second code for a reload, only for those who could accept", async () => {
+    const out = await startLink(B.machineId, aDeps());
+    const back = await acceptOnB(out.code);
+    const [after] = pendingRequests(clock, { withCodes: true });
+    expect(after).toMatchObject({ state: "accepted", confirmCode: back });
+    expect(pendingRequests(clock)[0].confirmCode).toBeUndefined();
+    // Gone with the request's five minutes.
+    expect(
+      pendingRequests(clock + REQUEST_TTL_MS + 1, { withCodes: true })
+    ).toEqual([]);
   });
 });

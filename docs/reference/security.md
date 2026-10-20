@@ -148,6 +148,24 @@ open at once and one per sender (a newer one replaces it), 5 hellos per
 sender and 20 in all per 10 minutes, and 120 from anyone before a signature
 is checked, at most 20 of them from one address (an IPv6 /64), which bounds
 the work a stranger can cause. Linking sends a "New machine linked" push.
+The account's machine names are shown as plain text only: control and
+direction characters are stripped, the length is capped, and any run of 4 or
+more digits is masked, so a lying service can't name a machine after a code.
+
+Unlinking (`lib/peer/unlink.ts`) drops the pin here first and then tells the
+other machine with a signed `POST /api/peer/unlink`, which drops its pin. The
+unlinked machine's signing key is kept for 30 days (`peer_unlinked`), only so
+that its next call can be answered 403 `unknown peer` with an Ed25519
+signature over this machine's id, its id and its own request nonce
+(`unlinked-proof.ts`): the one refusal that is signed, so nobody on the path
+can forge an unlink, and a captured one never matches another request. Any
+other sender still gets the decoy path. Suspension (`lib/peer/revoke.ts`)
+follows the account: when the heartbeat's `peers_etag` changes the list is
+fetched again, and a pin whose key is no longer listed, or every pin when the
+plan says `link_machines: false`, is suspended, refused both ways. Only the
+service's own reasons are lifted, and only when the same key is listed again
+or the plan allows linking: the service can take a link away, never add one.
+Nothing about existing links depends on reaching the service.
 `agent-os link accept <code>` does the same from a terminal on a machine with
 no browser and prints the code to type back.
 

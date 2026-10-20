@@ -29,7 +29,16 @@ export function listRemoteHosts(): Host[] {
       `SELECT h.*, CASE WHEN h.kind = 'connect'
           THEN EXISTS (SELECT 1 FROM peer_links p WHERE p.host_id = h.id)
           ELSE EXISTS (SELECT 1 FROM host_links l WHERE l.host_id = h.id)
-        END AS linked
+        END AS linked,
+        CASE WHEN h.kind = 'connect' THEN COALESCE(
+          (SELECT p.state FROM peer_links p WHERE p.host_id = h.id),
+          (SELECT 'unlinked' FROM peer_unlinked u WHERE u.host_id = h.id LIMIT 1))
+        END AS peer_state,
+        CASE WHEN h.kind = 'connect' THEN COALESCE(
+          (SELECT p.suspended_reason FROM peer_links p WHERE p.host_id = h.id),
+          (SELECT u.reason FROM peer_unlinked u WHERE u.host_id = h.id
+            ORDER BY u.at DESC LIMIT 1))
+        END AS peer_note
          FROM hosts h ORDER BY sort_order, created_at`
     )
     .all() as Host[];

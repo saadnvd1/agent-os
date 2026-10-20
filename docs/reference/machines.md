@@ -137,7 +137,21 @@ and `agent-os link <name>` starts a link from the terminal and asks for the
 code back. Three wrong codes end the request and each step lasts 5 minutes.
 Both machines then list each other as linked, and you get a "New machine
 linked" push. A machine already linked whose keys changed is refused until
-you unlink it. **Unlink and remove**
-(or `agent-os unlink <name>`) forgets the other machine here. Calls between
+you unlink it.
+
+**Unlink** (or `agent-os unlink <name>`) works from either machine: it stops
+trusting the other one here at once, then tells it, so it drops this one too
+and its Machines says "Unlinked by <name>". If it can't be told (it's
+offline), its next call here is refused and it learns then. The machine stays
+listed, unlinked, while it still has projects or sessions; remove it after.
+**Activity** on a linked machine lists every call between the two, both
+ways, for 30 days.
+
+A link is suspended, not removed, when the other machine leaves your Connect
+account or your plan no longer includes linking (with an **Upgrade** link):
+calls both ways are refused, and it comes back by itself, with no new codes,
+when the machine is listed again with the same keys or the plan allows it. If
+the Connect service can't be reached, links keep working on the keys they
+paired with; after a day, Machines says since when it couldn't check. Calls between
 machines linked this way are still being wired up; until then tasks run on
 machines linked over ssh. How it's kept safe: [Security](security.md).

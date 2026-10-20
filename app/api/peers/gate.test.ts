@@ -9,6 +9,9 @@ const link = await import("./link/route");
 const cancel = await import("./link/[id]/route");
 const confirm = await import("./link/[id]/confirm/route");
 const hello = await import("../peer/hello/route");
+const unlink = await import("./[hostId]/route");
+const audit = await import("./[hostId]/audit/route");
+const hostDelete = await import("../hosts/[id]/route");
 
 const plain = mintDevice("phone").device.id;
 const approver = mintDevice("tablet", null, true).device.id;
@@ -24,7 +27,10 @@ const req = (
       ...(o.device && { "x-agentos-device": o.device }),
       "content-type": "application/json",
     },
-    body: o.body ?? JSON.stringify({ code: "123456" }),
+    body:
+      o.method === "GET"
+        ? undefined
+        : (o.body ?? JSON.stringify({ code: "123456" })),
   });
 const params = { params: Promise.resolve({ id: "nope" }) };
 
@@ -105,7 +111,64 @@ describe("linking routes", () => {
       "/api/peers/account",
       "/api/peers/link",
       "/api/peers/link/x/confirm",
+      "/api/peers/h1",
+      "/api/peers/h1/audit",
+      "/api/peer/unlink",
     ])
       expect(isPublicPath(p)).toBe(false);
+  });
+
+  it("unlink and Activity take the same trust as linking", async () => {
+    const hostParams = { params: Promise.resolve({ hostId: "nope" }) };
+    for (const who of [
+      {},
+      { trust: "device", device: plain },
+      { trust: "peer" },
+      { trust: "open" },
+    ]) {
+      const del = req("/api/peers/nope", {
+        ...who,
+        method: "DELETE",
+        body: "",
+      });
+      expect((await unlink.DELETE(del, hostParams)).status).toBe(403);
+      const get = req("/api/peers/nope/audit", { ...who, method: "GET" });
+      expect((await audit.GET(get, hostParams)).status).toBe(403);
+    }
+    const asApprover = { trust: "device", device: approver };
+    expect(
+      (
+        await unlink.DELETE(
+          req("/x", { ...asApprover, method: "DELETE", body: "" }),
+          hostParams
+        )
+      ).status
+    ).toBe(404);
+    const rows = await audit.GET(
+      req("/x", { ...asApprover, method: "GET" }),
+      hostParams
+    );
+    expect(await rows.json()).toEqual({ rows: [] });
+  });
+
+  it("won't remove a Connect-linked machine without unlinking it", async () => {
+    const { createConnectHost } = await import("@/lib/hosts");
+    const { savePin, pinForHost } = await import("@/lib/peer/links");
+    const id = createConnectHost("Linked").id;
+    savePin({
+      hostId: id,
+      machineId: "f0f0f0f0",
+      hostname: "m-0000000000000000.runagentos.com",
+      signPub: "x",
+      boxPub: "y",
+    });
+    const res = await hostDelete.DELETE(
+      req("/x", { method: "DELETE", body: "" }),
+      {
+        params: Promise.resolve({ id }),
+      }
+    );
+    expect(res.status).toBe(409);
+    expect(pinForHost(id)).not.toBeNull();
   });
 });

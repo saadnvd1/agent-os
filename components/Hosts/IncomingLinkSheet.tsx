@@ -28,6 +28,9 @@ function Origin({ request }: { request: PendingView }) {
   );
 }
 
+const asking = (r: PendingView) =>
+  r.state === "accepted" ? "is linked: finish there" : "wants to link";
+
 /** On the machine being asked: type the code the other one shows. */
 export function IncomingLinkSheet({
   request,
@@ -46,7 +49,12 @@ export function IncomingLinkSheet({
     onClose();
   };
   const left = (accept.error as { attemptsLeft?: number } | null)?.attemptsLeft;
-  const done = accept.data;
+  // Held by the server too, so a reload on this machine still shows it.
+  const done =
+    accept.data ??
+    (request?.confirmCode
+      ? { name: request.name, confirmCode: request.confirmCode }
+      : null);
 
   if (done)
     return (
@@ -154,8 +162,9 @@ export function IncomingLinks() {
   const [open, setOpen] = useState<PendingView | null>(null);
   // Hidden until a request not seen yet arrives; it covers the header on phones.
   const [later, setLater] = useState<string | null>(null);
-  const first = requests[0];
-  const hidden = later !== null && requests.every((r) => later.includes(r.id));
+  const shown = requests.filter((r) => !later?.includes(r.id));
+  const first = shown[0];
+  const hidden = shown.length === 0;
   return (
     <>
       {first && !open && !hidden && (
@@ -166,8 +175,8 @@ export function IncomingLinks() {
           <ShieldAlert className="h-4 w-4 shrink-0 text-amber-600 dark:text-amber-400" />
           <div className="flex min-w-0 flex-1 flex-col">
             <p className="truncate text-sm">
-              <span className="font-medium">{first.name}</span> wants to link
-              {requests.length > 1 ? ` (+${requests.length - 1} more)` : ""}
+              <span className="font-medium">{first.name}</span> {asking(first)}
+              {shown.length > 1 ? ` (+${shown.length - 1} more)` : ""}
             </p>
             <Origin request={first} />
           </div>
@@ -176,20 +185,29 @@ export function IncomingLinks() {
             className="min-h-11 sm:min-h-8"
             onClick={() => setOpen(first)}
           >
-            Review
+            {first.state === "accepted" ? "Show code" : "Review"}
           </Button>
           <Button
             size="icon"
             variant="ghost"
             aria-label="Later"
             className="h-11 w-11 shrink-0 sm:h-8 sm:w-8"
-            onClick={() => setLater(requests.map((r) => r.id).join(" "))}
+            onClick={() =>
+              setLater(`${later ?? ""} ${shown.map((r) => r.id).join(" ")}`)
+            }
           >
             <X className="h-4 w-4" />
           </Button>
         </div>
       )}
-      <IncomingLinkSheet request={open} onClose={() => setOpen(null)} />
+      <IncomingLinkSheet
+        request={open}
+        onClose={() => {
+          // Answered, or put off: either way it stops covering the page.
+          if (open) setLater(`${later ?? ""} ${open.id}`);
+          setOpen(null);
+        }}
+      />
     </>
   );
 }
@@ -209,7 +227,7 @@ export function WaitingLinks() {
           <ShieldAlert className="h-4 w-4 shrink-0 text-amber-600 dark:text-amber-400" />
           <div className="flex min-w-0 flex-1 flex-col">
             <p className="truncate text-sm">
-              <span className="font-medium">{r.name}</span> wants to link
+              <span className="font-medium">{r.name}</span> {asking(r)}
             </p>
             <Origin request={r} />
           </div>
@@ -218,7 +236,7 @@ export function WaitingLinks() {
             className="min-h-11 sm:min-h-8"
             onClick={() => setOpen(r)}
           >
-            Type code
+            {r.state === "accepted" ? "Show code" : "Type code"}
           </Button>
         </div>
       ))}

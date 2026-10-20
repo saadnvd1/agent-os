@@ -17,6 +17,7 @@ export interface AccountMachine {
   /** The Machines host it's linked as, when it is. */
   hostId: string | null;
   linkState: "active" | "suspended" | null;
+  suspendedReason: string | null;
 }
 
 export interface AccountMachines {
@@ -24,6 +25,8 @@ export interface AccountMachines {
   entitlements: Entitlements | null;
   fetchedAt: number;
   error: string | null;
+  /** Set when the service hasn't answered for a day: since when. */
+  uncheckedSince: number | null;
   machines: AccountMachine[];
 }
 
@@ -39,10 +42,16 @@ export async function accountMachines(
     (
       getDb()
         .prepare(
-          `SELECT p.machine_id, p.host_id, p.state FROM peer_links p
+          `SELECT p.machine_id, p.host_id, p.state, p.suspended_reason
+           FROM peer_links p
            JOIN hosts h ON h.id = p.host_id WHERE h.kind = 'connect'`
         )
-        .all() as { machine_id: string; host_id: string; state: string }[]
+        .all() as {
+        machine_id: string;
+        host_id: string;
+        state: string;
+        suspended_reason: string | null;
+      }[]
     ).map((r) => [r.machine_id, r])
   );
   return {
@@ -50,6 +59,7 @@ export async function accountMachines(
     entitlements: view.entitlements,
     fetchedAt: view.fetchedAt,
     error: view.error,
+    uncheckedSince: view.uncheckedSince,
     machines: view.peers.map((p) => {
       const pin = pins.get(p.id);
       const seen = p.lastSeenAt ? Date.parse(p.lastSeenAt) : NaN;
@@ -66,6 +76,8 @@ export async function accountMachines(
             ? "active"
             : "suspended"
           : null,
+        suspendedReason:
+          pin && pin.state !== "active" ? pin.suspended_reason : null,
       };
     }),
   };
