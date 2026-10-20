@@ -10,20 +10,33 @@
  */
 
 import type { IncomingHttpHeaders } from "http";
+import { peerTargetAllowed } from "../peer/allowlist";
+import { secretMatches } from "../peer/internal";
 
 export const DEVICE_COOKIE = "aos_device";
 // Set by server.ts on every request after stripping any client-sent copy.
 export const DEVICE_HEADER = "x-agentos-device";
 export const TRUST_HEADER = "x-agentos-trust";
 export const REMOTE_HEADER = "x-agentos-remote";
+// The rpc server's loopback hop (lib/peer/rpc-server): the per-boot secret,
+// and the linked machine it verified. Never trusted from anywhere else.
+export const PEER_INTERNAL_HEADER = "x-agentos-peer-internal";
+export const PEER_HEADER = "x-agentos-peer";
 
-export type Trust = "loopback" | "tailnet" | "device" | "open";
+/**
+ * `peer`: a linked machine's verified call, re-issued by this machine. It is
+ * never local trust and never an approver, and only reaches its allowlist.
+ */
+export type Trust = "loopback" | "tailnet" | "device" | "open" | "peer";
 
 export type AuthResult =
-  { ok: true; via: Trust; deviceId?: string } | { ok: false };
+  | { ok: true; via: Trust; deviceId?: string; peerHost?: string }
+  // hard: refused outright, even on a path that is otherwise public.
+  | { ok: false; hard?: true };
 
 export interface AuthRequest {
   url?: string;
+  method?: string;
   headers: IncomingHttpHeaders;
   remoteAddress?: string;
   localAddress?: string;
@@ -47,11 +60,14 @@ export interface AuthPolicy {
   /** AGENTOS_AUTH=off: someone else's proxy does the login. */
   off?: boolean;
   lookup: (token: string) => { id: string } | null;
+  /** The rpc server's per-boot secret; without it no request is a peer. */
+  peerSecret?: () => string;
 }
 
 const TAILSCALE_V4 = /^100\.(6[4-9]|[7-9]\d|1[01]\d|12[0-7])\./;
 const LOOPBACK = new Set(["127.0.0.1", "::1"]);
 const LOOPBACK_HOSTS = new Set(["localhost", "127.0.0.1", "::1"]);
+const PEER_HOST_ID = /^[A-Za-z0-9_.-]{1,128}$/;
 // A proxy must send one of these, or it looks like this machine itself.
 // Proxies that send none need AGENTOS_AUTH, see docs/reference/security.md.
 const FORWARDING = new Set([
@@ -64,12 +80,13 @@ const FORWARDING = new Set([
 ]);
 const FORWARDING_PREFIXES = ["x-forwarded-", "cf-", "tailscale-"];
 
-// Reached without a token: the pairing page, what it needs to render, and
-// the claim it posts. Exact paths, plus a few static asset folders whose
+// Reached without a token: the pairing page, what it needs to render, the
+// claim it posts, and a linked machine's rpc (its envelope is the proof). Exact paths, plus a few static asset folders whose
 // paths may only use plain characters (no traversal, no encoding).
 const PUBLIC_EXACT = new Set([
   "/pair",
   "/api/pair/claim",
+  "/api/peer/rpc",
   "/manifest.webmanifest",
   "/manifest.json",
   "/favicon.ico",
@@ -155,11 +172,31 @@ export function authorize(req: AuthRequest, policy: AuthPolicy): AuthResult {
   try {
     return decide(req, policy);
   } catch {
-    return { ok: false };
+    return req.headers[PEER_INTERNAL_HEADER] !== undefined
+      ? { ok: false, hard: true }
+      : { ok: false };
   }
 }
 
+/**
+ * A request carrying the internal header is a peer call or nothing: it
+ * never falls back to loopback trust, whatever its address says.
+ */
+function peerTrust(req: AuthRequest, policy: AuthPolicy): AuthResult {
+  const refuse = { ok: false, hard: true } as const;
+  if (req.tunnel || !policy.peerSecret || proxied(req.headers)) return refuse;
+  if (!LOOPBACK.has(plainAddress(req.remoteAddress))) return refuse;
+  if (!secretMatches(req.headers[PEER_INTERNAL_HEADER], policy.peerSecret()))
+    return refuse;
+  const host = req.headers[PEER_HEADER];
+  if (typeof host !== "string" || !PEER_HOST_ID.test(host)) return refuse;
+  if (!peerTargetAllowed(req.method, req.url)) return refuse;
+  return { ok: true, via: "peer", deviceId: `peer:${host}`, peerHost: host };
+}
+
 function decide(req: AuthRequest, policy: AuthPolicy): AuthResult {
+  if (req.headers[PEER_INTERNAL_HEADER] !== undefined)
+    return peerTrust(req, policy);
   const trusted = req.tunnel ? null : networkTrust(req, policy);
   const token = readToken(req.headers);
   if (trusted) {

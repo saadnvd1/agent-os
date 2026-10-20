@@ -293,3 +293,58 @@ describe("readToken", () => {
     expect(readToken({})).toBeNull();
   });
 });
+
+describe("authorize with the peer internal header", () => {
+  const SECRET = "k".repeat(64);
+  const withSecret: AuthPolicy = { ...policy, peerSecret: () => SECRET };
+  const peerReq = (
+    secret: string,
+    extra: Partial<Parameters<typeof authorize>[0]> = {}
+  ) => ({
+    ...req("127.0.0.1", {
+      "x-agentos-peer-internal": secret,
+      "x-agentos-peer": "host-b",
+    }),
+    method: "GET",
+    ...extra,
+  });
+
+  it("is peer trust for the right secret on an allowlisted route", () => {
+    expect(authorize(peerReq(SECRET), withSecret)).toEqual({
+      ok: true,
+      via: "peer",
+      deviceId: "peer:host-b",
+      peerHost: "host-b",
+    });
+  });
+
+  it("never falls back to loopback for a wrong secret, a device token or AUTH=off", () => {
+    expect(authorize(peerReq("nope"), withSecret)).toEqual({
+      ok: false,
+      hard: true,
+    });
+    const token = peerReq("nope");
+    token.headers.authorization = "Bearer aosd_good";
+    expect(authorize(token, { ...withSecret, off: true }).ok).toBe(false);
+  });
+
+  it("refuses it on a tunnel socket", () => {
+    expect(authorize(peerReq(SECRET, { tunnel: true }), withSecret)).toEqual({
+      ok: false,
+      hard: true,
+    });
+  });
+
+  it("refuses a route outside the allowlist", () => {
+    expect(
+      authorize(peerReq(SECRET, { url: "/api/devices" }), withSecret).ok
+    ).toBe(false);
+    expect(
+      authorize(peerReq(SECRET, { method: "DELETE" }), withSecret).ok
+    ).toBe(false);
+  });
+
+  it("is never peer when no secret is configured", () => {
+    expect(authorize(peerReq(SECRET), policy).ok).toBe(false);
+  });
+});

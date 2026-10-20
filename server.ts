@@ -47,6 +47,7 @@ import {
   refuseNextInternal,
 } from "./lib/security/next-internals";
 import { lanEnabled } from "./lib/security/network-settings";
+import { handlePeerRpc, isPeerRpc, rpcDeps } from "./lib/peer/rpc-server";
 import { startConnect } from "./lib/connect/serve";
 import { serverPort } from "./lib/connect/config";
 import { startUpdateChecks, updateChecksEnabled } from "./lib/updates/check";
@@ -150,6 +151,7 @@ app.prepare().then(async () => {
     .map((h) => h.trim().toLowerCase())
     .filter(Boolean);
   const auth = authPolicy();
+  const peerRpc = rpcDeps(port);
   const header = (v: string | string[] | undefined) =>
     Array.isArray(v) ? v[0] : v;
 
@@ -177,6 +179,22 @@ app.prepare().then(async () => {
     if (refuseNextInternal(req, res)) return;
     if (!gateRequest(req, res, auth)) return;
     if (demo && !gateDemoRequest(req, res)) return;
+    // A linked machine's envelope: verified, then re-issued to loopback.
+    if (isPeerRpc(req)) {
+      if (demo) {
+        res.statusCode = 404;
+        res.end();
+        return;
+      }
+      try {
+        await handlePeerRpc(req, res, peerRpc);
+      } catch (err) {
+        console.error("peer rpc failed:", err);
+        if (!res.headersSent) res.statusCode = 500;
+        res.end();
+      }
+      return;
+    }
     try {
       await compressJson(req, res);
       const parsedUrl = parse(req.url!, true);

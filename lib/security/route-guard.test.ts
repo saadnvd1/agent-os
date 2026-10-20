@@ -1,7 +1,8 @@
 import { describe, it, expect } from "vitest";
 import { NextRequest } from "next/server";
 import { requireLocalTrust } from "./route-guard";
-import { TRUST_HEADER } from "./auth";
+import { DEVICE_HEADER, TRUST_HEADER } from "./auth";
+import { approverOf } from "./approver";
 import { isHttps } from "./cookie";
 
 const req = (via?: string) =>
@@ -26,5 +27,19 @@ describe("isHttps", () => {
     expect(isHttps(false, "https, http")).toBe(true);
     expect(isHttps(false, "http")).toBe(false);
     expect(isHttps(false, null)).toBe(false);
+  });
+});
+
+describe("a linked machine (peer trust)", () => {
+  it("never passes requireLocalTrust", () => {
+    expect(requireLocalTrust(req("peer"))?.status).toBe(403);
+  });
+
+  it("is never an approver", () => {
+    const headers = new Headers({
+      [TRUST_HEADER]: "peer",
+      [DEVICE_HEADER]: "peer:host-b",
+    });
+    expect(approverOf(headers)).toBeNull();
   });
 });
