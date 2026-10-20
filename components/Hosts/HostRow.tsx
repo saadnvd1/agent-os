@@ -11,6 +11,7 @@ export function HostRow({ host }: { host: Host }) {
   const testHost = useTestHost();
   const linkHost = useLinkHost();
   const isLocal = host.id === "local";
+  const viaConnect = host.kind === "connect";
   const result = testHost.data;
   const Icon = isLocal ? Monitor : Server;
 
@@ -23,51 +24,59 @@ export function HostRow({ host }: { host: Host }) {
           <p className="text-muted-foreground truncate text-xs">
             {isLocal
               ? "Where agent-os is running"
-              : host.linked
-                ? `${host.ssh_target} · tasks run on its AgentOS`
-                : host.ssh_target}
+              : viaConnect
+                ? host.linked
+                  ? "Linked through Connect · tasks run on its AgentOS"
+                  : "Through Connect · not linked"
+                : host.linked
+                  ? `${host.ssh_target} · tasks run on its AgentOS`
+                  : host.ssh_target}
           </p>
         </div>
         {!isLocal && (
           <>
-            <Button
-              variant="ghost"
-              size="icon-sm"
-              className="h-11 w-11 sm:h-8 sm:w-8"
-              onClick={() => testHost.mutate(host.id)}
-              disabled={testHost.isPending}
-              aria-label="Test connection"
-            >
-              {testHost.isPending ? (
-                <Loader2 className="h-4 w-4 animate-spin" />
-              ) : (
-                <PlugZap className="h-4 w-4" />
-              )}
-            </Button>
-            <Button
-              variant="ghost"
-              size="icon-sm"
-              className="h-11 w-11 sm:h-8 sm:w-8"
-              onClick={() => linkHost.mutate(host.id)}
-              disabled={linkHost.isPending}
-              aria-label={
-                host.linked ? "Link its AgentOS again" : "Link its AgentOS"
-              }
-              title="Pair with the AgentOS running there, so tasks can run on it"
-            >
-              {linkHost.isPending ? (
-                <Loader2 className="h-4 w-4 animate-spin" />
-              ) : (
-                <Link2 className="h-4 w-4" />
-              )}
-            </Button>
+            {!viaConnect && (
+              <>
+                <Button
+                  variant="ghost"
+                  size="icon-sm"
+                  className="h-11 w-11 sm:h-8 sm:w-8"
+                  onClick={() => testHost.mutate(host.id)}
+                  disabled={testHost.isPending}
+                  aria-label="Test connection"
+                >
+                  {testHost.isPending ? (
+                    <Loader2 className="h-4 w-4 animate-spin" />
+                  ) : (
+                    <PlugZap className="h-4 w-4" />
+                  )}
+                </Button>
+                <Button
+                  variant="ghost"
+                  size="icon-sm"
+                  className="h-11 w-11 sm:h-8 sm:w-8"
+                  onClick={() => linkHost.mutate(host.id)}
+                  disabled={linkHost.isPending}
+                  aria-label={
+                    host.linked ? "Link its AgentOS again" : "Link its AgentOS"
+                  }
+                  title="Pair with the AgentOS running there, so tasks can run on it"
+                >
+                  {linkHost.isPending ? (
+                    <Loader2 className="h-4 w-4 animate-spin" />
+                  ) : (
+                    <Link2 className="h-4 w-4" />
+                  )}
+                </Button>
+              </>
+            )}
             <Button
               variant="ghost"
               size="icon-sm"
               className="h-11 w-11 sm:h-8 sm:w-8"
               onClick={() => deleteHost.mutate(host.id)}
               disabled={deleteHost.isPending}
-              aria-label="Remove machine"
+              aria-label={viaConnect ? "Unlink and remove" : "Remove machine"}
             >
               <Trash2 className="h-4 w-4" />
             </Button>

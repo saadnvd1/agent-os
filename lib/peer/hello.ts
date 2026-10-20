@@ -115,9 +115,7 @@ export function deriveCode(o: {
     .padStart(6, "0");
 }
 
-/** "482913" as people read it. */
-export const showCode = (code: string) =>
-  `${code.slice(0, 3)} ${code.slice(3)}`;
+export { showCode } from "./code";
 
 /** What a person typed, as six digits, or null. */
 export function typedCode(input: unknown): string | null {
