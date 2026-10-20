@@ -6,6 +6,7 @@ import { clientSend } from "@/lib/chat/client-send";
 import { CHAT_ACCESS } from "@/lib/chat/events";
 import { launchSession } from "@/lib/sessions/launch";
 import { namesLine, waitBadges } from "@/lib/bus/waits/store";
+import { claimsSnapshot } from "@/lib/claims";
 import { isProjectRef } from "@/lib/tasks/project-ref";
 
 // GET /api/sessions - List the sidebar's sessions and the user's groups
@@ -16,12 +17,15 @@ export async function GET() {
     // tasks live in the Tasks panel, a moved one on the machine it moved to,
     // and archived sessions in the Archived view: none is in the sidebar.
     const badges = waitBadges();
+    const claims = claimsSnapshot();
     const sessions = (queries.getSidebarSessions(db).all() as Session[]).map(
       (s) => {
         const b = badges.get(s.id);
+        const overlap = claims.bySession.get(s.id);
+        const row = overlap ? { ...s, overlap } : s;
         return b
           ? {
-              ...s,
+              ...row,
               waiting_on: b.on.length
                 ? namesLine(b.on.map((w) => w.name))
                 : null,
@@ -29,10 +33,15 @@ export async function GET() {
                 ? namesLine(b.by.map((w) => w.name))
                 : null,
             }
-          : s;
+          : row;
       }
     );
-    return NextResponse.json({ sessions, sessionGroups: listGroups() });
+    return NextResponse.json({
+      sessions,
+      sessionGroups: listGroups(),
+      claims: claims.claims,
+      claimOverlaps: claims.overlaps,
+    });
   } catch (error) {
     console.error("Error fetching sessions:", error);
     return NextResponse.json(

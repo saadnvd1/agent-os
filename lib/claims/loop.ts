@@ -4,6 +4,7 @@ import { claimsShared } from "./machine";
 import { dropViaInactive } from "./peers";
 import { notifyOverlaps } from "./notifyOverlaps";
 import { handleMerged } from "./onMerged";
+import { refreshOverlapCache } from "./overlapCache";
 import { purgeExpired } from "./store";
 import { CLAIMS_SYNC_MS } from "./types";
 
@@ -18,6 +19,7 @@ export async function claimsTick(
     await handleMerged();
     dropViaInactive();
     purgeExpired();
+    refreshOverlapCache();
   } catch (err) {
     log(`claims: ${(err as Error)?.message ?? err}`);
   }

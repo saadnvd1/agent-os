@@ -15,6 +15,7 @@ import {
   MoreHorizontal,
   Pin,
   PinOff,
+  Network,
   Plus,
   Server,
   Settings,
@@ -30,6 +31,7 @@ import {
 import { Button } from "@/components/ui/button";
 import type { Workspace } from "@/lib/db";
 import { archivedUiActions } from "@/stores/archivedUi";
+import { claimsUiActions } from "@/stores/claimsUi";
 import { bookmarksUiActions } from "@/stores/bookmarksUi";
 import { inboxUiActions } from "@/stores/inboxUi";
 import { newDraft } from "@/stores/drafts";
@@ -134,6 +136,9 @@ export function SidebarHeader(props: SidebarHeaderProps) {
             }),
             separator(),
             menuItem("Machines", props.onManageHosts, { icon: Server }),
+            menuItem("Work across machines", () => claimsUiActions.open(), {
+              icon: Network,
+            }),
             menuItem("Settings", () => settingsUiActions.open(), {
               icon: Settings,
             }),
