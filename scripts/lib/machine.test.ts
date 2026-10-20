@@ -95,6 +95,7 @@ describe("agent-os machine", () => {
     expect(r.status).toBe(0);
     expect(r.stdout).toContain("agent-os connect");
     expect(r.stdout).toContain("agent-os link accept");
+    expect(r.stdout).toContain("second code");
     expect(r.stdout).toContain("agent-os machine --tailscale");
     expect(r.stdout).not.toContain("enable called");
     expect(log()).toBe("");

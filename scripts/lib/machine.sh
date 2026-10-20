@@ -29,6 +29,8 @@ machine_connect_help() {
     echo "    2. On the other one: open Machines and press Link next to this machine"
     echo "       (or run 'agent-os link <name>'). It shows a 6-digit code; type it here:"
     echo "       agent-os link accept <code>"
+    echo "    3. This machine then shows a second code. Type it back on the machine you're"
+    echo "       linking from (in Machines, or at the 'agent-os link' prompt) to finish."
     echo ""
     log_info "No Connect? Use ssh over Tailscale instead: agent-os machine --tailscale"
 }
