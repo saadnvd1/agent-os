@@ -119,16 +119,35 @@ export function createBodyBudget(o: Partial<BudgetLimits> = {}): BodyBudget {
 /**
  * Where a request came from: the visitor's address Cloudflare stamps on a
  * tunnel request (the socket there is always cloudflared), else the socket's.
+ * An IPv6 address counts by its /64: one host is usually handed a whole one.
  */
 export function sourceOf(req: IncomingMessage): string {
+  let addr = req.socket.remoteAddress ?? "unknown";
   if (isTunnelSocket(req.socket)) {
     const cf = String(req.headers["cf-connecting-ip"] ?? "").trim();
-    if (isIP(cf)) return cf;
+    if (isIP(cf)) addr = cf;
   }
-  return req.socket.remoteAddress ?? "unknown";
+  return isIP(addr) === 6 ? ipv6Prefix64(addr) : addr;
+}
+
+/** The first four groups of an IPv6 address, expanded: its /64. */
+export function ipv6Prefix64(addr: string): string {
+  const plain = addr.split("%")[0].toLowerCase();
+  if (/^::ffff:\d+\.\d+\.\d+\.\d+$/.test(plain)) return plain.slice(7);
+  const [head, tail = ""] = plain.split("::");
+  const a = head ? head.split(":") : [];
+  const b = plain.includes("::") && tail ? tail.split(":") : [];
+  // An embedded IPv4 tail takes two groups; it never reaches the first four
+  // unless the address is mostly zeros, which then pads them.
+  const fill = Array(Math.max(0, 8 - a.length - b.length)).fill("0");
+  const groups = [...a, ...fill, ...b].slice(0, 4);
+  return `${groups.map((g) => g.replace(/^0+(?=.)/, "")).join(":")}::/64`;
 }
 
 export interface Pace {
+  /** How long the header and its signature may take: they fit in the
+   * first packet, so a sender that holds them back is stalling. */
+  headerMs: number;
   /** How long the first bytes may take before a rate is required. */
   graceMs: number;
   /** Bytes per second the body must keep up after the grace period, */
@@ -138,6 +157,7 @@ export interface Pace {
 }
 
 export const DEFAULT_PACE: Pace = {
+  headerMs: 3_000,
   graceMs: 10_000,
   minRate: 512 * 1024,
   windowMs: 5_000,
@@ -183,7 +203,7 @@ export function readEnvelope(
       if (v instanceof Error) reject(v);
       else resolve(v);
     };
-    const { graceMs, minRate, windowMs } = o.pace;
+    const { headerMs, graceMs, minRate, windowMs } = o.pace;
     // (time, bytes so far), back to the start of the current window.
     const samples = [{ t: started, total: 0 }];
     const timer = setInterval(
@@ -192,12 +212,14 @@ export function readEnvelope(
         samples.push({ t: now, total });
         while (samples.length > 1 && samples[1].t <= now - windowMs)
           samples.shift();
+        if (!proven && now - started > headerMs)
+          return finish({ tooSlow: true });
         if (now - started <= graceMs) return;
         const base = samples[0];
         if (total - base.total < ((now - base.t) / 1000) * minRate)
           finish({ tooSlow: true });
       },
-      Math.max(25, Math.min(1000, graceMs / 4, windowMs / 4))
+      Math.max(25, Math.min(1000, headerMs / 4, graceMs / 4, windowMs / 4))
     );
     req.on("data", (chunk: Buffer) => {
       if (done) return;
@@ -211,10 +233,17 @@ export function readEnvelope(
       const len = head.readUInt32BE(0);
       if (len > MAX_HEADER) return finish({ refusal: "bad_envelope" });
       if (head.length < 4 + len + HEADER_SIG) return;
-      const seen = o.early(
-        head.subarray(4, 4 + len),
-        head.subarray(4 + len, 4 + len + HEADER_SIG)
-      );
+      let seen;
+      try {
+        seen = o.early(
+          head.subarray(4, 4 + len),
+          head.subarray(4 + len, 4 + len + HEADER_SIG)
+        );
+      } catch {
+        // A throw here would escape the 'data' handler and take the server
+        // down; whatever failed (the database, say), the caller is told busy.
+        return finish({ refusal: "busy" });
+      }
       if ("refusal" in seen) return finish({ refusal: seen.refusal });
       if (!o.ticket.prove(seen.peer)) return finish({ refusal: "busy" });
       proven = true;

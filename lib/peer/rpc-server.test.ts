@@ -516,7 +516,12 @@ describe("the rpc server against hostile envelopes", () => {
   it("drops a sender that bursts and then stalls, by the rate of the last window", async () => {
     const saved = mB.deps.pace;
     // 6 KB at 1 KB/s would buy six seconds averaged over the whole body.
-    mB.deps.pace = { graceMs: 100, minRate: 1000, windowMs: 200 };
+    mB.deps.pace = {
+      headerMs: 5_000,
+      graceMs: 100,
+      minRate: 1000,
+      windowMs: 200,
+    };
     try {
       const env = sealAt({
         method: "POST",
@@ -552,18 +557,25 @@ describe("the rpc server against hostile envelopes", () => {
   it("drops a sender that stalls, and gives its share back", async () => {
     const saved = { budget: mB.deps.budget, pace: mB.deps.pace };
     mB.deps.budget = createBodyBudget({ perPeer: 8192 });
-    mB.deps.pace = { graceMs: 200, minRate: 1_000_000, windowMs: 200 };
+    mB.deps.pace = {
+      headerMs: 5_000,
+      graceMs: 200,
+      minRate: 1_000_000,
+      windowMs: 200,
+    };
     try {
-      const env = sealAt({
-        method: "POST",
-        path: "/api/tasks",
-        contentType: "application/json",
-        body: Buffer.from(JSON.stringify({ pad: "x".repeat(6000) })),
-      }).envelope;
+      const big = () =>
+        sealAt({
+          method: "POST",
+          path: "/api/tasks",
+          contentType: "application/json",
+          body: Buffer.from(JSON.stringify({ pad: "x".repeat(6000) })),
+        }).envelope;
+      const env = big();
       // Claims A and holds most of A's share, then sends nothing more.
       const stalled = partial(mB, env, env.length - 10);
       await new Promise((r) => setTimeout(r, 50));
-      expect(await post(mB, env)).toEqual({ status: 429, text: "busy" });
+      expect(await post(mB, big())).toEqual({ status: 429, text: "busy" });
       expect(await stalled.response).toEqual({
         status: 408,
         text: "too slow",
