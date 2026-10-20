@@ -15,6 +15,12 @@
  * The code is HKDF over both machines' keys and both nonces. A has fixed
  * its keys and nonce before it sees b_nonce, and B's nonce is fresh, so
  * whoever substitutes keys gets one guess in a million per attempt.
+ *
+ * Two codes come from that transcript. A shows the first and a person types
+ * it on B, which proves to B that A's keys are the ones it holds. B then
+ * shows the second (a different HKDF info) and the person types it on A:
+ * that proves B's keys to A, so a control plane that lists a key of its own
+ * for B gets nothing pinned on either side.
  */
 
 import crypto, { type KeyObject } from "crypto";
@@ -87,8 +93,7 @@ export const commitTo = (boxPub: string, signPub: string, nonce: string) =>
       .digest()
   );
 
-/** The six digits both screens show, from both sides' keys and nonces. */
-export function deriveCode(o: {
+export interface Transcript {
   from: string;
   to: string;
   aSign: string;
@@ -97,7 +102,18 @@ export function deriveCode(o: {
   bBox: string;
   aNonce: string;
   bNonce: string;
-}): string {
+}
+
+const INFO = { sas: "agentos-peer-sas-v1", confirm: "agentos-peer-confirm-v1" };
+
+/**
+ * Six digits from both sides' keys and nonces: `sas` is shown on A and typed
+ * on B, `confirm` is shown on B once that matched and typed on A.
+ */
+export function deriveCode(
+  o: Transcript,
+  purpose: keyof typeof INFO = "sas"
+): string {
   const ikm = Buffer.concat(
     [o.aSign, o.aBox, o.bSign, o.bBox, o.aNonce, o.bNonce].map(raw)
   );
@@ -106,7 +122,7 @@ export function deriveCode(o: {
       "sha256",
       ikm,
       Buffer.alloc(0),
-      `agentos-peer-sas-v1|${o.from}|${o.to}`,
+      `${INFO[purpose]}|${o.from}|${o.to}`,
       8
     )
   );

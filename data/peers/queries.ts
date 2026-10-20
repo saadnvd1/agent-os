@@ -87,6 +87,27 @@ export function useOutgoingLink(id: string | null) {
   });
 }
 
+/** The code the other machine shows once it took ours: only it pins it. */
+export function useConfirmLink() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: async (o: { id: string; code: string }) =>
+      (
+        await json<{ link: Outgoing }>(
+          await post(`/api/peers/link/${o.id}/confirm`, { code: o.code })
+        )
+      ).link,
+    onSuccess: (link) => {
+      queryClient.setQueryData(peerKeys.link(link.id), link);
+      void queryClient.invalidateQueries({ queryKey: hostKeys.all });
+      void queryClient.invalidateQueries({ queryKey: peerKeys.account() });
+    },
+    // Three wrong codes end it: show that.
+    onError: (_e, o) =>
+      void queryClient.invalidateQueries({ queryKey: peerKeys.link(o.id) }),
+  });
+}
+
 export function useCancelLink() {
   return useMutation({
     mutationFn: async (id: string) =>
@@ -103,7 +124,7 @@ export function useAnswerLink() {
   return {
     accept: useMutation({
       mutationFn: async (o: { id: string; code: string }) =>
-        json<{ hostId: string; name: string }>(
+        json<{ hostId: string; name: string; confirmCode: string }>(
           await post(`/api/peers/pending/${o.id}/accept`, { code: o.code })
         ),
       onSuccess: done,

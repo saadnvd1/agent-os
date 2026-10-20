@@ -24,13 +24,14 @@ import {
 } from "./pairing";
 import {
   _live,
+  confirmLink,
   httpsPost,
   poll,
   resetOutgoing,
   startLink,
   type OutDeps,
 } from "./pairing-out";
-import { pinPeer } from "./pin";
+import { KEY_CHANGED, pinPeer } from "./pin";
 
 const A = fakeMachine("aaaa1111");
 const B = fakeMachine("bbbb2222");
@@ -125,9 +126,14 @@ describe("pairing through the tunnel", () => {
     const out = await startLink(B.machineId, aDeps);
     expect(seen.every((i) => i.redirect === "error")).toBe(true);
     const [req] = pendingRequests();
-    expect((await acceptRequest(req.id, out.code, bDeps)).ok).toBe(true);
+    const took = await acceptRequest(req.id, out.code, bDeps);
+    if (!took.ok) throw new Error(took.error);
     await poll(_live(out.id)!, A, aDeps);
-    expect(_live(out.id)!.state).toBe("accepted");
+    expect(_live(out.id)!.state).toBe("confirm");
+    expect(pinForMachine(B.machineId)).toBeNull();
+    expect(confirmLink(out.id, took.confirmCode, aDeps)).toMatchObject({
+      ok: true,
+    });
 
     const onB = pinForMachine(A.machineId)!;
     const onA = pinForMachine(B.machineId)!;
@@ -152,21 +158,52 @@ describe("pairing through the tunnel", () => {
       name: "Studio",
     });
 
-    // Pairing again keeps the same host and takes the new keys.
+    // Pairing again with the same keys keeps the same host.
     const before = listRemoteHosts().length;
-    const B2 = fakeMachine(B.machineId);
-    pinPeer({
-      id: B.machineId,
-      name: "Spark",
-      hostname: B.hostname,
-      signPub: B2.signPub,
-      boxPub: B2.box.publicRaw,
-    });
+    expect(
+      pinPeer({
+        id: B.machineId,
+        name: "Spark",
+        hostname: B.hostname,
+        signPub: B.signPub,
+        boxPub: B.box.publicRaw,
+      })
+    ).toBe(onA.hostId);
     expect(listRemoteHosts()).toHaveLength(before);
-    expect(pinForMachine(B.machineId)).toMatchObject({
-      hostId: onA.hostId,
-      signPub: B2.signPub,
-    });
+
+    // A machine that comes back with other keys is refused on both sides,
+    // and its pin keeps the keys it linked with.
+    const B2 = fakeMachine(B.machineId);
+    const A2 = fakeMachine(A.machineId);
+    expect(() =>
+      pinPeer({
+        id: B.machineId,
+        name: "Spark",
+        hostname: B.hostname,
+        signPub: B2.signPub,
+        boxPub: B.box.publicRaw,
+      })
+    ).toThrow(KEY_CHANGED);
+    await expect(
+      startLink(B.machineId, {
+        ...aDeps,
+        listed: async () => ({ ...listing(B, "Spark"), signPub: B2.signPub }),
+      })
+    ).rejects.toMatchObject({ status: 409, message: KEY_CHANGED });
+    // The account now lists A's new key; B still refuses it.
+    bDeps.listed = async (id) =>
+      id === A.machineId
+        ? { ...listing(A, "Studio"), signPub: A2.signPub }
+        : null;
+    await expect(
+      startLink(B.machineId, {
+        ...aDeps,
+        identity: () => A2,
+        boxPub: () => A2.box.publicRaw,
+      })
+    ).rejects.toThrow(KEY_CHANGED);
+    expect(pinForMachine(B.machineId)).toMatchObject({ signPub: B.signPub });
+    expect(pinForMachine(A.machineId)).toMatchObject({ signPub: A.signPub });
   });
 
   it("refuses to post anywhere but a Connect machine's name", async () => {

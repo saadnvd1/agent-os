@@ -1,8 +1,7 @@
 "use client";
 
 import { useState } from "react";
-import { ShieldAlert, X } from "lucide-react";
-import { toast } from "sonner";
+import { CheckCircle2, ShieldAlert, X } from "lucide-react";
 import {
   Dialog,
   DialogContent,
@@ -13,8 +12,21 @@ import {
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { useAnswerLink, usePendingLinks } from "@/data/peers";
+import { showCode } from "@/lib/peer/code";
 import type { PendingView } from "@/lib/peer/pairing";
+import { relativeTime } from "@/lib/schedules/when";
 import { SHEET } from "./sheet";
+
+/** Its Connect id and when it was last online, next to the account's name. */
+function Origin({ request }: { request: PendingView }) {
+  const seen = request.lastSeenAt ? Date.parse(request.lastSeenAt) : NaN;
+  return (
+    <span className="text-muted-foreground font-mono text-xs">
+      {request.machineId.slice(0, 8)}
+      {Number.isFinite(seen) && ` · seen ${relativeTime(seen)}`}
+    </span>
+  );
+}
 
 /** On the machine being asked: type the code the other one shows. */
 export function IncomingLinkSheet({
@@ -34,6 +46,38 @@ export function IncomingLinkSheet({
     onClose();
   };
   const left = (accept.error as { attemptsLeft?: number } | null)?.attemptsLeft;
+  const done = accept.data;
+
+  if (done)
+    return (
+      <Dialog open={!!request} onOpenChange={(o) => !o && close()}>
+        <DialogContent className={SHEET}>
+          <DialogHeader>
+            <DialogTitle>Finish on {done.name}</DialogTitle>
+            <DialogDescription>
+              {done.name} is linked here. Type this code on {done.name} so it
+              links back to this machine.
+            </DialogDescription>
+          </DialogHeader>
+          <p
+            className="text-center font-mono text-4xl font-semibold tracking-[0.2em] tabular-nums sm:text-5xl"
+            aria-label={`Code ${done.confirmCode.split("").join(" ")}`}
+            data-testid="confirm-code"
+          >
+            {showCode(done.confirmCode)}
+          </p>
+          <p className="flex items-center justify-center gap-2 text-sm">
+            <CheckCircle2 className="h-4 w-4 text-emerald-600 dark:text-emerald-400" />
+            Code matched
+          </p>
+          <div className="flex justify-end">
+            <Button className="min-h-11 sm:min-h-9" onClick={close}>
+              Done
+            </Button>
+          </div>
+        </DialogContent>
+      </Dialog>
+    );
 
   return (
     <Dialog open={!!request} onOpenChange={(o) => !o && close()}>
@@ -44,6 +88,7 @@ export function IncomingLinkSheet({
             {request?.name} asked to link with this machine. Type the code it
             shows to allow it.
           </DialogDescription>
+          {request && <Origin request={request} />}
         </DialogHeader>
         <div className="flex gap-2 rounded-lg border border-amber-500/40 bg-amber-500/10 p-3 text-sm">
           <ShieldAlert className="mt-0.5 h-4 w-4 shrink-0 text-amber-600 dark:text-amber-400" />
@@ -57,15 +102,7 @@ export function IncomingLinkSheet({
           onSubmit={(e) => {
             e.preventDefault();
             if (request && digits.length === 6)
-              accept.mutate(
-                { id: request.id, code: digits },
-                {
-                  onSuccess: () => {
-                    toast.success(`Linked with ${request.name}`);
-                    close();
-                  },
-                }
-              );
+              accept.mutate({ id: request.id, code: digits });
           }}
         >
           <Input
@@ -127,10 +164,13 @@ export function IncomingLinks() {
           className="popover-surface fixed top-[max(0.75rem,env(safe-area-inset-top))] left-1/2 z-50 flex w-[min(28rem,calc(100%-1.5rem))] -translate-x-1/2 items-center gap-3 rounded-xl px-3 py-2 shadow-lg"
         >
           <ShieldAlert className="h-4 w-4 shrink-0 text-amber-600 dark:text-amber-400" />
-          <p className="min-w-0 flex-1 truncate text-sm">
-            <span className="font-medium">{first.name}</span> wants to link
-            {requests.length > 1 ? ` (+${requests.length - 1} more)` : ""}
-          </p>
+          <div className="flex min-w-0 flex-1 flex-col">
+            <p className="truncate text-sm">
+              <span className="font-medium">{first.name}</span> wants to link
+              {requests.length > 1 ? ` (+${requests.length - 1} more)` : ""}
+            </p>
+            <Origin request={first} />
+          </div>
           <Button
             size="sm"
             className="min-h-11 sm:min-h-8"
@@ -167,9 +207,12 @@ export function WaitingLinks() {
           className="flex items-center gap-3 rounded-lg border border-amber-500/40 bg-amber-500/10 px-3 py-2"
         >
           <ShieldAlert className="h-4 w-4 shrink-0 text-amber-600 dark:text-amber-400" />
-          <p className="min-w-0 flex-1 truncate text-sm">
-            <span className="font-medium">{r.name}</span> wants to link
-          </p>
+          <div className="flex min-w-0 flex-1 flex-col">
+            <p className="truncate text-sm">
+              <span className="font-medium">{r.name}</span> wants to link
+            </p>
+            <Origin request={r} />
+          </div>
           <Button
             size="sm"
             className="min-h-11 sm:min-h-8"

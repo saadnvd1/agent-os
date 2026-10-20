@@ -22,6 +22,7 @@ import {
 } from "./pairing";
 import {
   _live,
+  confirmLink,
   poll,
   resetOutgoing,
   startLink,
@@ -146,31 +147,150 @@ beforeEach(() => {
 });
 afterEach(() => resetOutgoing());
 
+/** Typed on B: the code A shows. Returns the code B shows back. */
+async function acceptOnB(code: string, deps = bDeps()) {
+  const [req] = pendingRequests(clock);
+  const r = await acceptRequest(req.id, code, deps);
+  if (!r.ok) throw new Error(r.error);
+  return r.confirmCode;
+}
+
+const otherThan = (code: string) => (code === "000000" ? "111111" : "000000");
+
 describe("pairing", () => {
-  it("links both ways once the code shown on A is typed on B", async () => {
+  it("links both ways: A's code typed on B, then B's code typed on A", async () => {
     const out = await startLink(B.machineId, aDeps());
     expect(out.code).toMatch(/^\d{6}$/);
     expect(requestsOnB).toEqual([`machine ${A.machineId}`]);
     const [req] = pendingRequests(clock);
-    expect(req).toMatchObject({ machineId: A.machineId, attemptsLeft: 3 });
+    expect(req).toMatchObject({
+      machineId: A.machineId,
+      lastSeenAt: null,
+      attemptsLeft: 3,
+    });
 
-    expect(
-      await acceptRequest(
-        req.id,
-        `${out.code.slice(0, 3)} ${out.code.slice(3)}`,
-        bDeps()
-      )
-    ).toMatchObject({ ok: true });
+    const back = await acceptOnB(
+      `${out.code.slice(0, 3)} ${out.code.slice(3)}`
+    );
+    expect(back).toMatch(/^\d{6}$/);
+    expect(back).not.toBe(out.code);
     expect(pinnedOnB).toEqual([
       { id: A.machineId, signPub: A.signPub, boxPub: A.box.publicRaw },
     ]);
-    // A pins B only when B says so, signed.
-    expect(pinnedOnA).toEqual([]);
+    // B's signed "accepted" alone pins nothing on A.
     await poll(_live(out.id)!, A, aDeps());
+    expect(_live(out.id)!.state).toBe("confirm");
+    expect(pinnedOnA).toEqual([]);
+    // A's own code typed back doesn't do it either.
+    expect(confirmLink(out.id, out.code, aDeps())).toMatchObject({
+      ok: false,
+      attemptsLeft: 2,
+    });
+    expect(confirmLink(out.id, back, aDeps())).toMatchObject({ ok: true });
     expect(_live(out.id)!.state).toBe("accepted");
     expect(pinnedOnA).toEqual([
       { id: B.machineId, signPub: B.signPub, boxPub: B.box.publicRaw },
     ]);
+  });
+
+  it("pins nothing on A for a control plane that lists its own key for B", async () => {
+    // To A, control lists M's key (and a name M answers on) as B's. M plays
+    // B, knows every input, so it "accepts" its own request and says so.
+    const asB = bDeps({ me: { ...M, machineId: B.machineId } });
+    const out = await startLink(
+      B.machineId,
+      aDeps({ list: [listing(B, M)], post: toB(asB) })
+    );
+    await acceptOnB(out.code, asB);
+    pinnedOnB = []; // that pin was on M
+    await poll(
+      _live(out.id)!,
+      A,
+      aDeps({ list: [listing(B, M)], post: toB(asB) })
+    );
+    expect(_live(out.id)!.state).toBe("confirm");
+    // The real B shows no code: it never heard of this. Guesses run out.
+    for (const left of [2, 1, 0])
+      expect(confirmLink(out.id, "123456", aDeps())).toMatchObject({
+        ok: false,
+        attemptsLeft: left,
+      });
+    expect(_live(out.id)!.state).toBe("failed");
+    expect(pinnedOnA).toEqual([]);
+    expect(pinnedOnB).toEqual([]);
+  });
+
+  it("pins nothing on either side when control lies to both", async () => {
+    const onA = await startLink(
+      B.machineId,
+      aDeps({
+        list: [listing(B, M)],
+        post: toB(bDeps({ me: { ...M, machineId: B.machineId } })),
+      })
+    );
+    resetIncoming();
+    const realB = bDeps({ list: [listing(A, M)] });
+    const viaM = await startLink(
+      B.machineId,
+      aDeps({ me: { ...M, machineId: A.machineId }, post: toB(realB) })
+    );
+    // The person types what A shows on B: wrong, so B shows nothing back...
+    const [req] = pendingRequests(clock);
+    expect(viaM.code).not.toBe(onA.code);
+    expect(await acceptRequest(req.id, onA.code, realB)).toMatchObject({
+      ok: false,
+    });
+    // ...and whatever M tells A, A only pins on a code from B's screen.
+    expect(confirmLink(onA.id, viaM.code, aDeps())).toMatchObject({
+      ok: false,
+      status: 404,
+    });
+    expect(pinnedOnA).toEqual([]);
+    expect(pinnedOnB).toEqual([]);
+  });
+
+  it("ends the confirm step after three wrong codes or five minutes", async () => {
+    const one = await startLink(B.machineId, aDeps());
+    const back = await acceptOnB(one.code);
+    await poll(_live(one.id)!, A, aDeps());
+    for (let i = 0; i < 3; i++) confirmLink(one.id, otherThan(back), aDeps());
+    expect(confirmLink(one.id, back, aDeps())).toMatchObject({ status: 404 });
+    expect(_live(one.id)!).toMatchObject({ state: "failed", attemptsLeft: 0 });
+
+    const two = await startLink(B.machineId, aDeps());
+    const back2 = await acceptOnB(two.code);
+    await poll(_live(two.id)!, A, aDeps());
+    clock += REQUEST_TTL_MS + 1;
+    expect(confirmLink(two.id, back2, aDeps())).toMatchObject({ status: 404 });
+    expect(_live(two.id)!.state).toBe("expired");
+    expect(pinnedOnA).toEqual([]);
+  });
+
+  it("keeps one open request per sender: a newer one replaces it", async () => {
+    const first = await startLink(B.machineId, aDeps());
+    await startLink(B.machineId, aDeps());
+    expect(pendingRequests(clock)).toHaveLength(1);
+    expect(_live(first.id)!.state).toBe("declined");
+    // Its old request on B is over too: its code does nothing there.
+    await poll(_live(first.id)!, A, aDeps());
+    expect(
+      await acceptRequest(pendingRequests(clock)[0].id, first.code, bDeps())
+    ).toMatchObject({ ok: false });
+  });
+
+  it("holds one address to its share of the hellos anyone may send", async () => {
+    const deps = bDeps({ list: [] });
+    for (let i = 0; i < 20; i++)
+      expect(
+        (await receiveHello(helloFrom(M).hello, deps, "198.51.100.7")).status
+      ).toBe(403);
+    expect(
+      await receiveHello(helloFrom(M).hello, deps, "198.51.100.7")
+    ).toMatchObject({ status: 429 });
+    // Someone else still gets through.
+    expect(
+      (await receiveHello(helloFrom(A).hello, bDeps(), "203.0.113.9")).status
+    ).toBe(200);
   });
 
   it("refuses a hello from a key the account doesn't list, before anything shows", async () => {
@@ -236,37 +356,10 @@ describe("pairing", () => {
     );
   });
 
-  it("gives a key-substituting middle a different code on each side", async () => {
-    // Control lies to both: to A it lists M's key for B, to B M's key for A.
-    // M answers A as "B", with its own keys...
-    const onA = await startLink(
-      B.machineId,
-      aDeps({
-        list: [listing(B, M)],
-        post: toB(bDeps({ me: { ...M, machineId: B.machineId } })),
-      })
-    );
-    resetIncoming(); // that request lived on M, not on B
-    // ...and asks the real B as "A", with its own keys.
-    const realB = bDeps({ list: [listing(A, M)] });
-    const viaM = await startLink(
-      B.machineId,
-      aDeps({ me: { ...M, machineId: A.machineId }, post: toB(realB) })
-    );
-    const [req] = pendingRequests(clock);
-    expect(viaM.code).not.toBe(onA.code);
-    // The person types A's code on B: it doesn't match, and nothing is pinned.
-    expect(await acceptRequest(req.id, onA.code, realB)).toMatchObject({
-      ok: false,
-      status: 403,
-    });
-    expect(pinnedOnB).toEqual([]);
-  });
-
   it("voids a request after three wrong codes", async () => {
     const out = await startLink(B.machineId, aDeps());
     const [req] = pendingRequests(clock);
-    const wrong = out.code === "000000" ? "111111" : "000000";
+    const wrong = otherThan(out.code);
     expect(await acceptRequest(req.id, wrong, bDeps())).toMatchObject({
       ok: false,
       attemptsLeft: 2,

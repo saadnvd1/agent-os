@@ -129,11 +129,15 @@ With AgentOS Connect Pro, Machines lists every machine on your account under
 Press **Link** next to one: this machine shows a 6-digit code, and the other
 one shows a banner (and a row in its Machines) asking you to type it. Typing
 it there needs that machine itself, its tailnet or a device with **Can
-approve**. On a box with no browser, `agent-os link accept 482913` takes the
-code; `agent-os link` lists the account's machines and what's waiting, and
-`agent-os link <name>` starts a link from the terminal. Three wrong codes end
-the request and a request lasts 5 minutes. Both machines then list each other
-as linked, and you get a "New machine linked" push. **Unlink and remove**
+approve**. The other machine then shows a second code, which you type back
+here to finish: only then does this machine link it. On a box with no
+browser, `agent-os link accept 482913` takes the code and prints the one to
+type back; `agent-os link` lists the account's machines and what's waiting,
+and `agent-os link <name>` starts a link from the terminal and asks for the
+code back. Three wrong codes end the request and each step lasts 5 minutes.
+Both machines then list each other as linked, and you get a "New machine
+linked" push. A machine already linked whose keys changed is refused until
+you unlink it. **Unlink and remove**
 (or `agent-os unlink <name>`) forgets the other machine here. Calls between
 machines linked this way are still being wired up; until then tasks run on
 machines linked over ssh. How it's kept safe: [Security](security.md).

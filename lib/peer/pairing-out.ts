@@ -2,8 +2,9 @@
  * Pairing, on the machine that asks (A): send the hello to the machine the
  * account lists, check its answer is signed by the key the account lists
  * for it, reveal, show the code, then ask every couple of seconds until a
- * person on the other machine has typed it. Only an "accepted" signed by
- * that key and bound to this call pins it here.
+ * person on the other machine has typed it. B then shows a second code, and
+ * only that code typed here pins B: the account list alone never does, so a
+ * control plane that lists a key of its own for B can't get itself pinned.
  */
 
 import { readCappedBytes } from "../hosts/read-capped-bytes";
@@ -16,19 +17,22 @@ import {
   parseAck,
   parseAnswer,
   randomNonce,
+  sameCode,
   signHello,
   signReveal,
   signStatusAsk,
+  typedCode,
   verifyAck,
   verifyAnswer,
   type LinkState,
 } from "./hello";
 import { currentIdentity, loadBoxKey, type Identity } from "./keys";
 import { notifyLinked } from "./notify";
-import { REQUEST_TTL_MS } from "./pairing";
-import { pinPeer } from "./pin";
+import { MAX_WRONG, REQUEST_TTL_MS } from "./pairing";
+import { KEY_CHANGED, keysChanged, pinPeer } from "./pin";
 
-export type OutState = LinkState | "failed";
+/** `confirm`: B took the code and shows its own, to be typed here. */
+export type OutState = LinkState | "confirm" | "failed";
 
 export interface Outgoing {
   id: string;
@@ -38,6 +42,7 @@ export interface Outgoing {
   state: OutState;
   error: string | null;
   hostId: string | null;
+  attemptsLeft: number;
   startedAt: number;
   expiresAt: number;
 }
@@ -46,6 +51,7 @@ interface Live extends Outgoing {
   peer: AccountPeer;
   requestId: string;
   bBox: string;
+  confirmCode: string;
   timer: NodeJS.Timeout | null;
 }
 
@@ -117,6 +123,7 @@ const view = (l: Live): Outgoing => ({
   state: l.state,
   error: l.error,
   hostId: l.hostId,
+  attemptsLeft: l.attemptsLeft,
   startedAt: l.startedAt,
   expiresAt: l.expiresAt,
 });
@@ -155,8 +162,9 @@ export async function startLink(
     throw new LinkError("That machine isn't on your AgentOS account.", 404);
   if (!peerHostAllowed(peer.hostname))
     throw new LinkError("Its address isn't a Connect machine's.", 502);
+  if (keysChanged(peer.id, peer)) throw new LinkError(KEY_CHANGED, 409);
   for (const l of links().values())
-    if (l.machineId === machineId && l.state === "pending")
+    if (l.machineId === machineId && open(l))
       stop(l, "declined", "replaced by a new request");
 
   const aNonce = randomNonce(32);
@@ -190,6 +198,8 @@ export async function startLink(
   // Signed by the key the account lists for it, answering this hello.
   if (!ack || !verifyAck(ack, hello, peer.signPub))
     throw new LinkError(`${peer.name} answered with the wrong key.`, 502);
+  if (keysChanged(peer.id, { signPub: ack.sign_pub, boxPub: ack.box_pub }))
+    throw new LinkError(KEY_CHANGED, 409);
 
   const reveal = signReveal(self.signKey, {
     from: self.machineId,
@@ -213,34 +223,39 @@ export async function startLink(
     );
 
   const now = deps.now();
+  const transcript = {
+    from: self.machineId,
+    to: peer.id,
+    aSign: self.signPub,
+    aBox,
+    bSign: ack.sign_pub,
+    bBox: ack.box_pub,
+    aNonce,
+    bNonce: ack.b_nonce,
+  };
   const live: Live = {
     id: randomNonce(16),
     machineId: peer.id,
     name: peer.name,
-    code: deriveCode({
-      from: self.machineId,
-      to: peer.id,
-      aSign: self.signPub,
-      aBox,
-      bSign: ack.sign_pub,
-      bBox: ack.box_pub,
-      aNonce,
-      bNonce: ack.b_nonce,
-    }),
+    code: deriveCode(transcript),
     state: "pending",
     error: null,
     hostId: null,
+    attemptsLeft: MAX_WRONG,
     startedAt: now,
     expiresAt: now + REQUEST_TTL_MS,
     peer,
     requestId: ack.request_id,
     bBox: ack.box_pub,
+    confirmCode: deriveCode(transcript, "confirm"),
     timer: null,
   };
   links().set(live.id, live);
   schedule(live, self, deps);
   return view(live);
 }
+
+const open = (l: Live) => l.state === "pending" || l.state === "confirm";
 
 function stop(l: Live, state: OutState, error: string | null = null) {
   if (l.timer) clearTimeout(l.timer);
@@ -280,23 +295,10 @@ export async function poll(l: Live, self: Identity, deps: OutDeps) {
   }
   if (l.state !== "pending") return;
   if (answer?.state === "accepted") {
-    try {
-      l.hostId = deps.pin({
-        id: l.peer.id,
-        name: l.peer.name,
-        hostname: l.peer.hostname,
-        signPub: l.peer.signPub,
-        boxPub: l.bBox,
-      });
-    } catch (err) {
-      return stop(
-        l,
-        "failed",
-        err instanceof Error ? err.message : String(err)
-      );
-    }
-    stop(l, "accepted");
-    deps.onLinked(l.name);
+    // Nothing is pinned yet: B's say-so is only as good as its key, and the
+    // key came from the account list. The person types B's code here next.
+    stop(l, "confirm");
+    l.expiresAt = deps.now() + REQUEST_TTL_MS;
     return;
   }
   if (answer && answer.state !== "pending") return stop(l, answer.state);
@@ -309,9 +311,69 @@ export function outgoingLink(id: string): Outgoing | null {
   return l ? view(l) : null;
 }
 
+export type ConfirmResult =
+  | { ok: true; link: Outgoing }
+  | { ok: false; status: number; error: string; attemptsLeft?: number };
+
+/** The code the other machine shows once it took ours, typed here. */
+export function confirmLink(
+  id: string,
+  input: unknown,
+  deps: OutDeps = realOutDeps()
+): ConfirmResult {
+  const l = links().get(id);
+  if (l?.state === "confirm" && deps.now() > l.expiresAt) stop(l, "expired");
+  if (!l || l.state !== "confirm")
+    return {
+      ok: false,
+      status: 404,
+      error: "That request has ended. Start again.",
+    };
+  const code = typedCode(input);
+  if (!code)
+    return {
+      ok: false,
+      status: 400,
+      error: `Type the 6 digits ${l.name} shows.`,
+    };
+  if (!sameCode(code, l.confirmCode)) {
+    l.attemptsLeft -= 1;
+    if (l.attemptsLeft <= 0) {
+      stop(l, "failed", "wrong code 3 times");
+      return {
+        ok: false,
+        status: 403,
+        error: "Wrong code 3 times: nothing was linked here. Start again.",
+        attemptsLeft: 0,
+      };
+    }
+    return {
+      ok: false,
+      status: 403,
+      error: "That code doesn't match.",
+      attemptsLeft: l.attemptsLeft,
+    };
+  }
+  try {
+    l.hostId = deps.pin({
+      id: l.peer.id,
+      name: l.peer.name,
+      hostname: l.peer.hostname,
+      signPub: l.peer.signPub,
+      boxPub: l.bBox,
+    });
+  } catch (err) {
+    stop(l, "failed", err instanceof Error ? err.message : String(err));
+    return { ok: false, status: 409, error: l.error! };
+  }
+  stop(l, "accepted");
+  deps.onLinked(l.name);
+  return { ok: true, link: view(l) };
+}
+
 export function cancelLink(id: string): boolean {
   const l = links().get(id);
-  if (!l || l.state !== "pending") return false;
+  if (!l || !open(l)) return false;
   stop(l, "declined", "cancelled here");
   return true;
 }

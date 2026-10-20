@@ -23,5 +23,9 @@ export async function POST(
       { error: result.error, attemptsLeft: result.attemptsLeft },
       { status: result.status }
     );
-  return NextResponse.json({ hostId: result.hostId, name: result.name });
+  return NextResponse.json({
+    hostId: result.hostId,
+    name: result.name,
+    confirmCode: result.confirmCode,
+  });
 }

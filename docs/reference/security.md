@@ -135,11 +135,21 @@ machines' keys and both nonces (HKDF-SHA256), so a party in the middle, even
 one the Connect service lied for, ends up with codes that differ. A person
 types the code on the machine being asked, which needs this machine, the
 tailnet or a device with **Can approve**; `peer` trust never can. Three wrong
-codes void the request. A request lives 5 minutes; at most 3 are open at once,
-5 hellos per sender and 20 in all per 10 minutes, and 120 from anyone
-before a signature is checked, which bounds the work a stranger can cause. Acceptance pins the other machine's keys on both sides and
-sends a "New machine linked" push. `agent-os link accept <code>` does the same
-from a terminal on a machine with no browser.
+codes void the request. That proves the asking machine's keys to the one
+being asked, which pins them. The asking machine trusts nothing the other one
+says on its own word, since its key came from the same list: the machine
+being asked shows a second code from the same transcript (another HKDF info
+string), and the person types it on the asking machine, which pins only on a
+constant-time match, again with 3 tries and 5 minutes. A Connect service that
+lists a key of its own for either machine so gets nothing pinned on either
+side. A pin never changes keys: a machine that comes back with other keys is
+refused until a person unlinks it. A request lives 5 minutes; at most 3 are
+open at once and one per sender (a newer one replaces it), 5 hellos per
+sender and 20 in all per 10 minutes, and 120 from anyone before a signature
+is checked, at most 20 of them from one address (an IPv6 /64), which bounds
+the work a stranger can cause. Linking sends a "New machine linked" push.
+`agent-os link accept <code>` does the same from a terminal on a machine with
+no browser and prints the code to type back.
 
 ### Shared links
 

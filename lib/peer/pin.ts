@@ -1,6 +1,7 @@
 /**
  * Pins a machine after pairing: its keys on a Connect host of its own, the
- * one it already has if it paired before (a re-pair replaces the keys).
+ * one it already has if it paired before. A re-pair never changes the keys
+ * of a pin: a machine whose keys changed is unlinked first, by a person.
  */
 
 import { createConnectHost, listRemoteHosts } from "../hosts";
@@ -23,9 +24,26 @@ function freeName(name: string): string {
     if (!taken.has(`${name} (${n})`.toLowerCase())) return `${name} (${n})`;
 }
 
+export const KEY_CHANGED =
+  "This machine's keys changed since it was linked. Unlink it here first, then link it again.";
+
+/** Whether a machine already linked here holds other keys than these. */
+export function keysChanged(
+  machineId: string,
+  keys: { signPub: string; boxPub?: string }
+): boolean {
+  const pin = pinForMachine(machineId);
+  return (
+    !!pin &&
+    (pin.signPub !== keys.signPub ||
+      (keys.boxPub !== undefined && pin.boxPub !== keys.boxPub))
+  );
+}
+
 export function pinPeer(p: Paired): string {
-  const hostId =
-    pinForMachine(p.id)?.hostId ?? createConnectHost(freeName(p.name)).id;
+  const pinned = pinForMachine(p.id);
+  if (keysChanged(p.id, p)) throw new Error(KEY_CHANGED);
+  const hostId = pinned?.hostId ?? createConnectHost(freeName(p.name)).id;
   savePin({
     hostId,
     machineId: p.id,

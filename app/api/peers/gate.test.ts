@@ -7,6 +7,7 @@ const accept = await import("./pending/[id]/accept/route");
 const decline = await import("./pending/[id]/decline/route");
 const link = await import("./link/route");
 const cancel = await import("./link/[id]/route");
+const confirm = await import("./link/[id]/confirm/route");
 const hello = await import("../peer/hello/route");
 
 const plain = mintDevice("phone").device.id;
@@ -42,6 +43,7 @@ describe("linking routes", () => {
       );
       expect(r.status).toBe(403);
       expect((await decline.POST(req("/x", who), params)).status).toBe(403);
+      expect((await confirm.POST(req("/x", who), params)).status).toBe(403);
       expect((await link.POST(req("/x", { ...who, body: "{}" }))).status).toBe(
         403
       );
@@ -65,17 +67,17 @@ describe("linking routes", () => {
           .status
       ).toBe(404);
     expect(
+      (await confirm.POST(req("/x", { trust: "loopback" }), params)).status
+    ).toBe(404);
+    expect(
       (await link.POST(req("/x", { trust: "loopback", body: "{}" }))).status
     ).toBe(400);
     for (const body of ['{"code":482913}', "{", "{}"])
-      expect(
-        (
-          await accept.POST(
-            req("/api/peers/pending/nope/accept", { trust: "loopback", body }),
-            params
-          )
-        ).status
-      ).toBe(400);
+      for (const route of [accept, confirm])
+        expect(
+          (await route.POST(req("/x", { trust: "loopback", body }), params))
+            .status
+        ).toBe(400);
   });
 
   it("caps a hello at 4 KiB and refuses junk", async () => {
@@ -102,6 +104,7 @@ describe("linking routes", () => {
       "/api/peers/pending",
       "/api/peers/account",
       "/api/peers/link",
+      "/api/peers/link/x/confirm",
     ])
       expect(isPublicPath(p)).toBe(false);
   });

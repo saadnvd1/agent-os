@@ -8,7 +8,9 @@ import { readCapped } from "../security/read-capped";
 import { HELLO_MAX_BYTES } from "./hello";
 import type { Reply } from "./pairing";
 
-export function helloRoute(handle: (body: unknown) => Reply | Promise<Reply>) {
+export function helloRoute(
+  handle: (body: unknown, request: NextRequest) => Reply | Promise<Reply>
+) {
   return async (request: NextRequest) => {
     const raw = await readCapped(request, HELLO_MAX_BYTES);
     let reply: Reply;
@@ -20,7 +22,7 @@ export function helloRoute(handle: (body: unknown) => Reply | Promise<Reply>) {
       } catch {
         // parsed as nothing: refused as a bad message
       }
-      reply = await handle(body);
+      reply = await handle(body, request);
     }
     return NextResponse.json(reply.body, {
       status: reply.status,

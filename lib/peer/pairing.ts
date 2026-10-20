@@ -3,11 +3,14 @@
  * the Connect account lists for its sender, and only while the plan
  * includes linking; it then waits, in memory, for the sender to reveal the
  * nonce it committed to, and then for a person here to type the code the
- * sender shows. Nothing is trusted until that code matches: B pins A then,
- * and A pins B when it next asks and is told "accepted".
+ * sender shows. Nothing is trusted until that code matches: B pins A then
+ * and shows a second code, which the person types on A before A pins B.
+ * A machine linked here already keeps its keys: one that comes back with
+ * other keys is refused until a person unlinks it.
  *
  * Limits: hellos 5 per sender and 20 in all per 10 minutes, at most 3
- * requests open, each for 5 minutes, and 3 wrong codes void a request.
+ * requests open and one per sender (a newer one replaces it), each for 5
+ * minutes, and 3 wrong codes void a request.
  * A server restart forgets every open request (the sender sees "expired").
  */
 
@@ -31,7 +34,7 @@ import {
   SKEW_MS,
   type LinkState,
 } from "./hello";
-import { pinPeer } from "./pin";
+import { KEY_CHANGED, keysChanged, pinPeer } from "./pin";
 import { notifyLinked, notifyLinkRequest } from "./notify";
 
 export const REQUEST_TTL_MS = 5 * 60_000;
@@ -41,8 +44,10 @@ const WINDOW_MS = 10 * 60_000;
 const PER_SENDER = 5;
 const GLOBAL = 20;
 // Hellos that get as far as the account list, from anyone: bounds the
-// signature checks and list fetches a stranger can cause.
+// signature checks and list fetches a stranger can cause. One address (an
+// IPv6 /64) is held to a share of it first, so it can't use it all up.
 const UNPROVEN = 120;
+const PER_SOURCE = 20;
 
 interface Incoming {
   id: string;
@@ -52,6 +57,7 @@ interface Incoming {
   commit: string;
   bNonce: string;
   code: string | null;
+  confirm: string | null;
   state: "revealing" | LinkState;
   why: string | null;
   wrong: number;
@@ -71,7 +77,7 @@ export interface PairingDeps {
 
 interface Store {
   requests: Map<string, Incoming>;
-  hellos: { at: number; from: string | null }[];
+  hellos: { at: number; from: string | null; source: string }[];
   seen: Map<string, number>;
 }
 
@@ -135,7 +141,8 @@ function fresh(s: Store, from: string, nonce: string, ts: number): boolean {
 /** POST /api/peer/hello */
 export async function receiveHello(
   body: unknown,
-  deps: PairingDeps = realPairingDeps()
+  deps: PairingDeps = realPairingDeps(),
+  source = "unknown"
 ): Promise<Reply> {
   const s = store();
   const now = deps.now();
@@ -147,8 +154,12 @@ export async function receiveHello(
     return no(403, "this isn't the machine you meant");
   if (!withinSkew(hello.ts, now))
     return no(401, "stale: the clocks on the two machines differ");
-  if (s.hellos.length >= UNPROVEN) return no(429, "too many requests");
-  s.hellos.push({ at: now, from: null });
+  if (
+    s.hellos.filter((h) => h.source === source).length >= PER_SOURCE ||
+    s.hellos.length >= UNPROVEN
+  )
+    return no(429, "too many requests");
+  s.hellos.push({ at: now, from: null, source });
   const allowed = await deps.allowed();
   if (allowed !== true)
     return no(402, "Linking machines needs AgentOS Connect Pro");
@@ -158,6 +169,10 @@ export async function receiveHello(
     return no(403, "that machine isn't on this account");
   if (!verifyHello(hello)) return no(401, "bad signature");
   if (!fresh(s, hello.from, hello.nonce, hello.ts)) return no(401, "replay");
+  if (
+    keysChanged(hello.from, { signPub: hello.sign_pub, boxPub: hello.box_pub })
+  )
+    return no(409, KEY_CHANGED);
   const proven = s.hellos.filter((h) => h.from !== null);
   if (
     proven.length >= GLOBAL ||
@@ -165,6 +180,11 @@ export async function receiveHello(
   )
     return no(429, "too many link requests; wait a few minutes");
   s.hellos[s.hellos.length - 1].from = hello.from;
+  for (const old of s.requests.values())
+    if (old.peer.id === hello.from && open(old)) {
+      old.state = "declined";
+      old.why = "replaced by a newer request";
+    }
   if ([...s.requests.values()].filter(open).length >= MAX_OPEN)
     return no(429, "too many link requests waiting here");
 
@@ -176,6 +196,7 @@ export async function receiveHello(
     commit: hello.commit,
     bNonce: randomNonce(32),
     code: null,
+    confirm: null,
     state: "revealing",
     why: null,
     wrong: 0,
@@ -242,7 +263,7 @@ export function receiveReveal(
     r.why = "its keys didn't match what it committed to";
     return no(403, "that doesn't match the hello");
   }
-  r.code = deriveCode({
+  const transcript = {
     from: r.peer.id,
     to: self!.machineId,
     aSign: r.aSign,
@@ -251,7 +272,9 @@ export function receiveReveal(
     bBox: deps.boxPub(),
     aNonce: reveal.a_nonce,
     bNonce: r.bNonce,
-  });
+  };
+  r.code = deriveCode(transcript);
+  r.confirm = deriveCode(transcript, "confirm");
   r.state = "pending";
   deps.onRequest(r.peer.name);
   return {
@@ -283,6 +306,7 @@ export interface PendingView {
   id: string;
   machineId: string;
   name: string;
+  lastSeenAt: string | null;
   expiresAt: number;
   attemptsLeft: number;
 }
@@ -297,13 +321,14 @@ export function pendingRequests(now = Date.now()): PendingView[] {
       id: r.id,
       machineId: r.peer.id,
       name: r.peer.name,
+      lastSeenAt: r.peer.lastSeenAt,
       expiresAt: r.createdAt + REQUEST_TTL_MS,
       attemptsLeft: MAX_WRONG - r.wrong,
     }));
 }
 
 export type AcceptResult =
-  | { ok: true; hostId: string; name: string }
+  | { ok: true; hostId: string; name: string; confirmCode: string }
   | { ok: false; status: number; error: string; attemptsLeft?: number };
 
 /** The code a person typed here, from a trusted device (the route checks). */
@@ -315,7 +340,7 @@ export async function acceptRequest(
   const s = store();
   sweep(s, deps.now());
   const r = s.requests.get(id);
-  if (!r || r.state !== "pending" || !r.code)
+  if (!r || r.state !== "pending" || !r.code || !r.confirm)
     return {
       ok: false,
       status: 404,
@@ -354,10 +379,19 @@ export async function acceptRequest(
       status: 402,
       error: "Linking machines needs AgentOS Connect Pro.",
     };
-  const hostId = deps.pin({ ...r.peer, signPub: r.aSign, boxPub: r.aBox });
+  let hostId: string;
+  try {
+    hostId = deps.pin({ ...r.peer, signPub: r.aSign, boxPub: r.aBox });
+  } catch (err) {
+    r.state = "declined";
+    r.why = "it couldn't be linked here";
+    const error = err instanceof Error ? err.message : String(err);
+    return { ok: false, status: 409, error };
+  }
   r.state = "accepted";
   deps.onLinked(r.peer.name);
-  return { ok: true, hostId, name: r.peer.name };
+  // The person types this on the other machine, which pins this one then.
+  return { ok: true, hostId, name: r.peer.name, confirmCode: r.confirm };
 }
 
 export function declineRequest(id: string): boolean {

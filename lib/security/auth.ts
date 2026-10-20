@@ -18,6 +18,9 @@ export const DEVICE_COOKIE = "aos_device";
 export const DEVICE_HEADER = "x-agentos-device";
 export const TRUST_HEADER = "x-agentos-trust";
 export const REMOTE_HEADER = "x-agentos-remote";
+// Who sent it, for per-sender limits: the visitor's address on a Connect
+// request (lib/peer/rpc-intake sourceOf), an IPv6 address by its /64.
+export const SOURCE_HEADER = "x-agentos-source";
 // The rpc server's loopback hop (lib/peer/rpc-server): the per-boot secret,
 // and the linked machine it verified. Never trusted from anywhere else.
 export const PEER_INTERNAL_HEADER = "x-agentos-peer-internal";

@@ -4,8 +4,9 @@
  * over loopback, which counts as this machine (it may accept a code).
  *
  *   agent-os link                     the account's machines and requests waiting here
- *   agent-os link <machine>           start a link; prints the code to type there
- *   agent-os link accept <code> [--from <machine>]
+ *   agent-os link <machine>           start a link; prints the code to type there,
+ *                                     then asks for the one it shows back
+ *   agent-os link accept <code> [--from <machine>]   prints the code to type back
  *   agent-os link decline [<machine>]
  *   agent-os unlink <machine>
  */
@@ -20,6 +21,8 @@ export interface CliIo {
   fetch: typeof fetch;
   out: (line: string) => void;
   sleep: (ms: number) => Promise<void>;
+  /** One line typed in the terminal, or null when there's none to read. */
+  ask: (prompt: string) => Promise<string | null>;
 }
 
 class CliError extends Error {}
@@ -130,6 +133,27 @@ async function start(io: CliIo, ref: string) {
     state = (await call<{ link: Outgoing }>(io, `/api/peers/link/${link.id}`))
       .link;
   }
+  while (state.state === "confirm") {
+    const typed = await io.ask(
+      `\n  The code matched on ${state.name}. Type the code it shows now: `
+    );
+    if (typed === null)
+      throw new CliError("No code typed: nothing was linked.");
+    const res = await io.fetch(`${io.base}/api/peers/link/${link.id}/confirm`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ code: typed }),
+    });
+    const data = (await res.json().catch(() => ({}))) as {
+      link?: Outgoing;
+      error?: string;
+      attemptsLeft?: number;
+    };
+    if (data.link) state = data.link;
+    else if (data.attemptsLeft)
+      io.out(`  ${data.error} ${data.attemptsLeft} left.`);
+    else throw new CliError(data.error ?? `HTTP ${res.status}`);
+  }
   if (state.state !== "accepted")
     throw new CliError(
       state.state === "expired"
@@ -159,7 +183,7 @@ async function answer(io: CliIo, verb: "accept" | "decline", rest: string[]) {
     io.out(`Declined ${req.name}.`);
     return;
   }
-  const r = await call<{ name: string }>(
+  const r = await call<{ name: string; confirmCode: string }>(
     io,
     `/api/peers/pending/${req.id}/accept`,
     {
@@ -169,6 +193,9 @@ async function answer(io: CliIo, verb: "accept" | "decline", rest: string[]) {
   );
   io.out(
     `Linked with ${r.name}. It can start agents and run code here; unlink with agent-os unlink "${r.name}".`
+  );
+  io.out(
+    `\n  To finish, type this code on ${r.name}:\n\n      ${showCode(r.confirmCode)}\n`
   );
 }
 
