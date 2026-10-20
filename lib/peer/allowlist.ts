@@ -67,7 +67,7 @@ export const PEER_ROUTES: readonly PeerRoute[] = [
   { method: "POST", pattern: "/api/peer/unlink" },
   { method: "GET", pattern: "/api/peer/ping" },
 
-  // The work registry's exchange (not built yet: 404 until it is).
+  // The work registry's exchange.
   { method: "POST", pattern: "/api/claims/exchange" },
 ];
 

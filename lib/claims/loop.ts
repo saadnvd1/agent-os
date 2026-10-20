@@ -1,6 +1,7 @@
 import { collectLocal } from "./collectLocal";
 import { selfMachine, syncPeers } from "./exchange";
 import { claimsShared } from "./machine";
+import { dropViaInactive } from "./peers";
 import { notifyOverlaps } from "./notifyOverlaps";
 import { handleMerged } from "./onMerged";
 import { purgeExpired } from "./store";
@@ -15,6 +16,7 @@ export async function claimsTick(
     await syncPeers(log);
     await notifyOverlaps();
     await handleMerged();
+    dropViaInactive();
     purgeExpired();
   } catch (err) {
     log(`claims: ${(err as Error)?.message ?? err}`);

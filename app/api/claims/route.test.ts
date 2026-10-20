@@ -2,6 +2,9 @@ import { beforeEach, describe, expect, it } from "vitest";
 import { NextRequest } from "next/server";
 import { db } from "@/lib/db";
 import { machineId } from "@/lib/claims/machine";
+import { createConnectHost } from "@/lib/hosts";
+import { putSetting } from "@/lib/settings-store";
+import { savePin, suspendPin } from "@/lib/peer/links";
 import { upsertLocal } from "@/lib/claims/store";
 import { GET } from "./route";
 import { POST } from "./exchange/route";
@@ -77,6 +80,77 @@ describe("POST /api/claims/exchange", () => {
         })
       ).status
     ).toBe(400);
+  });
+});
+
+describe("POST /api/claims/exchange as a Connect peer", () => {
+  const asPeer = (hostId: string | null) =>
+    POST(
+      new NextRequest("http://localhost/api/claims/exchange", {
+        method: "POST",
+        headers: {
+          "x-agentos-trust": "peer",
+          ...(hostId && { "x-agentos-peer": hostId }),
+        },
+        body: JSON.stringify({
+          machine: { id: "peer-1", name: "box" },
+          claims: [claim],
+        }),
+      })
+    );
+
+  it("refuses a host with no active pin and stores nothing", async () => {
+    expect((await asPeer("no-such-host")).status).toBe(403);
+    expect((await asPeer(null)).status).toBe(403);
+    expect(db.prepare(`SELECT 1 FROM work_claims`).all()).toEqual([]);
+  });
+
+  it("refuses a suspended pin, and an active one keeps its via_host", async () => {
+    const host = createConnectHost(`Spark-${Date.now()}`).id;
+    savePin({
+      hostId: host,
+      machineId: "b2b2b2b2",
+      hostname: "m-0123456789abcdef.runagentos.com",
+      signPub: "s",
+      boxPub: "b",
+    });
+    expect((await asPeer(host)).status).toBe(200);
+    const via = () =>
+      (
+        db.prepare(`SELECT via_host FROM work_claims WHERE id='r1'`).get() as {
+          via_host: string | null;
+        }
+      ).via_host;
+    expect(via()).toBe(host);
+    // A token caller re-sending it, with more life, must not clear the pin.
+    await post({
+      machine: { id: "peer-1", name: "box" },
+      claims: [{ ...claim, ttl_s: 600 }],
+    });
+    expect(via()).toBe(host);
+    suspendPin(host, "revoked");
+    db.prepare(`DELETE FROM work_claims`).run();
+    expect((await asPeer(host)).status).toBe(403);
+    expect(db.prepare(`SELECT 1 FROM work_claims`).all()).toEqual([]);
+  });
+
+  it("writes nothing when sharing is off", async () => {
+    const host = createConnectHost(`Studio-${Date.now()}`).id;
+    savePin({
+      hostId: host,
+      machineId: "c3c3c3c3",
+      hostname: "m-fedcba9876543210.runagentos.com",
+      signPub: "s",
+      boxPub: "b",
+    });
+    db.prepare(`DELETE FROM claim_peers`).run();
+    putSetting("claims.share", "off");
+    try {
+      expect((await asPeer(host)).status).toBe(200);
+    } finally {
+      putSetting("claims.share", "on");
+    }
+    expect(db.prepare(`SELECT 1 FROM claim_peers`).all()).toEqual([]);
   });
 });
 

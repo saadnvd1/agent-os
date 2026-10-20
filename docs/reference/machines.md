@@ -156,3 +156,12 @@ the Connect service can't be reached, links keep working on the keys they
 paired with; after a day, Machines says since when it couldn't check. Calls between
 machines linked this way are still being wired up; until then tasks run on
 machines linked over ssh. How it's kept safe: [Security](security.md).
+
+#### Work claims over Connect
+
+Machines linked through Connect swap work claims (repo, branch, a one-line goal
+and file paths, never code) once a minute, over the same signed envelope as
+everything else. A suspended or unlinked link is skipped and the claims that
+came through it are dropped at the next tick. A machine linked both ways is
+asked once per tick, over its token link first. `claims.share` off stops it on
+every link.
