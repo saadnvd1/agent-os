@@ -15,6 +15,9 @@ import { useGitCheck } from "@/data/git/queries";
 import { useSelectedWorkspace } from "@/hooks/useSelectedWorkspace";
 import { useLaunchSession } from "@/data/sessions";
 import { useCreateTask } from "@/data/tasks";
+import { useCheckStart } from "@/data/claims";
+import { StartClaimsNotice } from "@/components/Claims";
+import type { StartWarning } from "@/lib/claims/startWarning";
 import { usePanes } from "@/contexts/PaneContext";
 import { setPendingPrompt } from "@/stores/initialPrompt";
 import { draftsActions, draftsStore, newDraft } from "@/stores/drafts";
@@ -53,8 +56,15 @@ export function DraftPanel({
   const launch = useLaunchSession();
   const { workspace } = useSelectedWorkspace();
   const createTask = useCreateTask();
+  const checkStart = useCheckStart();
   const [prefill, setPrefill] = useState<{ text: string; at: number }>();
-  const pending = launch.isPending || createTask.isPending;
+  // A task start that overlaps claimed work waits here for the person's choice.
+  const [held, setHeld] = useState<{
+    text: string;
+    warnings: StartWarning[];
+  } | null>(null);
+  const pending =
+    launch.isPending || createTask.isPending || checkStart.isPending;
 
   if (!hydrated) return null;
   if (!draft)
@@ -67,15 +77,32 @@ export function DraftPanel({
       </div>
     );
 
-  const send = async (text: string, images: ChatImage[], files: ChatFile[]) => {
+  const send = async (
+    text: string,
+    images: ChatImage[],
+    files: ChatFile[],
+    claim?: { after?: string }
+  ) => {
     try {
       if (draft.openPr) {
         if (!project) throw new Error("Pick a project for a task");
         if (images.length || files.length)
           throw new Error("A task takes text only");
+        if (!claim && draft.hostId === project.host_id) {
+          const warnings = await checkStart.mutateAsync({
+            projectId: project.id,
+            prompt: text,
+          });
+          if (warnings.length) {
+            setHeld({ text, warnings });
+            return;
+          }
+        }
+        setHeld(null);
         const { session, queued } = await createTask.mutateAsync({
           projectId: project.id,
           prompt: text,
+          after: claim?.after,
           model: draft.taskModel ?? undefined,
           priority: draft.taskPriority,
           baseBranch: draft.baseBranch ?? undefined,
@@ -145,6 +172,17 @@ export function DraftPanel({
           git={git}
           onChange={(patch) => draftsActions.update(draft.id, patch)}
         />
+        {held && (
+          <StartClaimsNotice
+            warnings={held.warnings}
+            busy={pending}
+            onStart={(after) => void send(held.text, [], [], { after })}
+            onDismiss={() => {
+              setPrefill({ text: held.text, at: Date.now() });
+              setHeld(null);
+            }}
+          />
+        )}
         <Composer
           draftKey={draftComposerKey(draft.id)}
           attachScope="draft"

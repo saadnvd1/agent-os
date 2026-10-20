@@ -94,6 +94,16 @@ export interface Session {
   // it, as a short line (lib/bus/waits/store).
   waiting_on?: string | null;
   waited_by?: string | null;
+  // Set only by GET /api/sessions: the strongest overlap of this session's
+  // work with a claim here or on a linked machine (lib/claims/overlapCache).
+  overlap?: {
+    strength: "strong" | "weak";
+    machine: string;
+    goal: string;
+    shared: number;
+    claimId: string;
+    mineId: string;
+  } | null;
   placed_note?: string | null;
   // Set by done: hidden from the sidebar and the orchestrator, never deleted.
   archived_at: string | null;

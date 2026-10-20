@@ -47,6 +47,8 @@ export function useCreateTask() {
       priority?: Priority;
       baseBranch?: string;
       hostId?: string;
+      // Queue behind other work: a task, or "claim:<id>".
+      after?: string;
       view?: "chat" | "terminal";
     }) =>
       // Over the workspace's running task limit it's queued instead.

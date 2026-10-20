@@ -9,6 +9,7 @@ import { headerParts } from "@/lib/orchestrator/header-line";
 import { cn } from "@/lib/utils";
 import { usageLabel, useSessionUsage } from "@/data/load";
 import { useRowContext } from "./RowContext";
+import { OverlapPill } from "@/components/Claims/OverlapPill";
 import { pauseSubtitle } from "@/lib/sidebar/paused";
 
 const ATTENTION = (part: string) => part === "paused" || /\basks?$/.test(part);
@@ -66,6 +67,7 @@ export function RowSubtitle({
   return (
     <span className="flex min-w-0 items-center gap-1.5">
       <LiveLine {...live} />
+      {session.overlap && <OverlapPill overlap={session.overlap} />}
       {pause && (
         <span className="flex min-w-0 items-center gap-1 text-xs text-amber-600 dark:text-amber-400">
           <Pause aria-hidden className="h-3 w-3 shrink-0" />

@@ -122,6 +122,10 @@ const LumifyHubDialogs = dynamic(
     ),
   { ssr: false }
 );
+const ClaimsSheet = dynamic(
+  () => import("@/components/Claims/ClaimsSheet").then((m) => m.ClaimsSheet),
+  { ssr: false }
+);
 const UsageDialog = dynamic(
   () => import("@/components/Usage/UsageDialog").then((m) => m.UsageDialog),
   { ssr: false }
@@ -159,6 +163,7 @@ const AppDialogs = memo(function AppDialogs({
       <CleanupDialog />
       <LumifyHubDialogs />
       <UsageDialog />
+      <ClaimsSheet />
       <MoveDialog />
       <ShareDialog />
       <AwayReport />
