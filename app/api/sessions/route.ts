@@ -61,6 +61,7 @@ export async function POST(request: NextRequest) {
     const { session, initialPrompt, repeat } = await launchSession({
       id: str(body.id),
       projectId: str(body.projectId),
+      workspaceId: str(body.workspaceId),
       project: projectRefOf(body.project),
       workingDirectory: str(body.workingDirectory),
       agentType:

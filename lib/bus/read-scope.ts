@@ -60,7 +60,8 @@ function inScope(s: ReadableSession, scope: ReaderScope): boolean {
   if (s.role) return false;
   if (scope.workspaceId) {
     const p = s.project_id ? getProject(s.project_id) : null;
-    return !!p && p.workspace_id === scope.workspaceId;
+    // A session in no project is in the workspace it was started in.
+    return (p?.workspace_id ?? s.workspace_id) === scope.workspaceId;
   }
   return s.project_id === scope.projectId;
 }

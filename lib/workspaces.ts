@@ -115,6 +115,11 @@ export function deleteWorkspace(id: string): void {
       `UPDATE projects SET workspace_id = NULL WHERE workspace_id = ?`
     ).run(id);
     db.prepare(`DELETE FROM workspaces WHERE id = ?`).run(id);
+    // Sessions filed here by being started here go back to "All workspaces".
+    db.prepare(
+      `UPDATE sessions SET workspace_id = NULL
+       WHERE role IS NULL AND workspace_id = ?`
+    ).run(id);
     // Its orchestrator goes with it; a running worker idles out on its own.
     db.prepare(
       `DELETE FROM sessions WHERE role = 'orchestrator' AND workspace_id = ?`
@@ -128,6 +133,7 @@ export function deleteWorkspace(id: string): void {
   })();
 }
 
+// A project's sessions follow it, so moving one needs no change to them.
 export function setProjectWorkspace(
   projectId: string,
   workspaceId: string | null

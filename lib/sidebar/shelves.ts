@@ -382,7 +382,9 @@ export function doneSummary(
 }
 
 // A workspace holds its projects' sessions and its own orchestrator; no
-// workspace selected means every session.
+// workspace selected means every session. A session in a project follows the
+// project, so moving it moves them; one in no project (scratch) belongs to the
+// workspace it was started in, kept on the session.
 export function inWorkspace(
   session: Pick<Session, "project_id" | "workspace_id" | "role">,
   workspaceOf: (projectId: string) => string | null | undefined,
@@ -391,9 +393,8 @@ export function inWorkspace(
   if (!workspaceId) return true;
   if (session.role === "orchestrator")
     return session.workspace_id === workspaceId;
-  return (
-    !!session.project_id && workspaceOf(session.project_id) === workspaceId
-  );
+  const byProject = session.project_id ? workspaceOf(session.project_id) : null;
+  return (byProject ?? session.workspace_id) === workspaceId;
 }
 
 // A workspace's projects, or every project when none is selected.

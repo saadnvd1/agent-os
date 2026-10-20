@@ -30,6 +30,7 @@ vi.mock("../chat/discovered-models", () => ({
 
 import { db, insertSessionRow, type Session } from "../db";
 import { createProject } from "../projects";
+import { createWorkspace, setProjectWorkspace } from "../workspaces";
 import { listQueue } from "../chat/queued";
 import { saveItem } from "../chat/store";
 import type { ChatItem } from "../chat/events";
@@ -102,6 +103,39 @@ describe("launchSession (a draft's first send)", () => {
       "ollama/qwen3"
     );
     expect(row((await start("ollama/nope")).session.id).model).toBe("default");
+  });
+
+  it("files a session in no project under the workspace it was started in", async () => {
+    const w = createWorkspace("Fresh");
+    const inW = await launchSession({
+      agentType: "shell",
+      view: "terminal",
+      workspaceId: w.id,
+    });
+    expect(row(inW.session.id)).toMatchObject({
+      project_id: "uncategorized",
+      workspace_id: w.id,
+    });
+    expect(inW.session.workspace_id).toBe(w.id);
+    // A deleted workspace's draft still sends, filed nowhere.
+    const gone = await launchSession({
+      agentType: "shell",
+      view: "terminal",
+      workspaceId: "gone",
+    });
+    expect(row(gone.session.id).workspace_id).toBeNull();
+    // A session in a project follows the project, whatever was selected.
+    const repo = makeRepo();
+    const project = createProject({ name: "p-in-w", workingDirectory: repo });
+    setProjectWorkspace(project.id, w.id);
+    const other = createWorkspace("Other");
+    const filed = await launchSession({
+      agentType: "shell",
+      view: "terminal",
+      projectId: project.id,
+      workspaceId: other.id,
+    });
+    expect(row(filed.session.id).workspace_id).toBeNull();
   });
 
   it("runs a session an orchestrator started on the implementation model, and Saad's on the interactive one", async () => {

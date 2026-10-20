@@ -16,6 +16,7 @@ import { isDiscoveredModel } from "../chat/discovered-models";
 import { parseOverride, resolveRole, setSessionModel } from "../models/resolve";
 import { ANTHROPIC } from "../models/roles";
 import { getProject } from "../projects";
+import { getWorkspace } from "../workspaces";
 import { getHost, isRemoteHost } from "../hosts";
 import { hostLink } from "../hosts/remote-api";
 import { startOnPeer } from "../hosts/peer-actions";
@@ -78,6 +79,9 @@ export interface LaunchInput {
   // role's model (or `model`), not the interactive one's.
   startedBy?: string | null;
   startedVia?: StartVia;
+  // The workspace selected when it was started. A session in a project
+  // follows the project; one in none keeps this (see inWorkspace).
+  workspaceId?: string | null;
   groupPath?: string;
   systemPrompt?: string | null;
 }
@@ -178,6 +182,29 @@ export function launchSession(input: LaunchInput): Promise<Launched> {
   return p;
 }
 
+// The workspace a project-less session is filed under: the one it was started
+// from, else that of the orchestrator starting it. A workspace deleted since
+// the draft was made is dropped rather than failing the send.
+function homeWorkspace(input: LaunchInput): string | null {
+  const picked = input.workspaceId?.trim();
+  if (picked) return getWorkspace(picked) ? picked : null;
+  if (!input.startedBy) return null;
+  const by = db
+    .prepare(
+      `SELECT workspace_id FROM sessions WHERE id = ? AND role = 'orchestrator'`
+    )
+    .get(input.startedBy) as { workspace_id: string | null } | undefined;
+  return by?.workspace_id ?? null;
+}
+
+function setHome(id: string, workspaceId: string | null): void {
+  if (workspaceId)
+    db.prepare(`UPDATE sessions SET workspace_id = ? WHERE id = ?`).run(
+      workspaceId,
+      id
+    );
+}
+
 async function launch(input: LaunchInput, id: string): Promise<Launched> {
   const project = input.project
     ? await ensureProject(input.project)
@@ -185,6 +212,7 @@ async function launch(input: LaunchInput, id: string): Promise<Launched> {
       ? getProject(input.projectId)
       : undefined;
   const scratch = !project || project.is_uncategorized;
+  const home = scratch ? homeWorkspace(input) : null;
   const hostId = (scratch ? input.hostId : null) || project?.host_id || "local";
   // A project here can start on a linked machine, which finds or clones it.
   const carried =
@@ -210,7 +238,7 @@ async function launch(input: LaunchInput, id: string): Promise<Launched> {
   if (link) {
     if (input.images?.length || input.files?.length)
       throw new Error(`Images and files can't be sent to ${link.hostName} yet`);
-    return startOnPeer(link, {
+    const started = await startOnPeer(link, {
       id,
       project: scratch ? null : (project ?? null),
       ref: carried && project ? await projectRef(project) : undefined,
@@ -222,6 +250,10 @@ async function launch(input: LaunchInput, id: string): Promise<Launched> {
       prompt: input.prompt?.trim(),
       view: input.view ?? DEFAULT_START_VIEW,
     });
+    setHome(started.session.id, home);
+    return home
+      ? { ...started, session: { ...started.session, workspace_id: home } }
+      : started;
   }
   const projectPath = expand(folder);
   if (scratch && projectPath === SCRATCH_DIR)
@@ -242,7 +274,7 @@ async function launch(input: LaunchInput, id: string): Promise<Launched> {
   const routed =
     agentType === "claude" && (picked || !input.model?.trim()) && !remote
       ? resolveRole(role, {
-          workspaceId: project?.workspace_id,
+          workspaceId: project?.workspace_id ?? home,
           override: picked,
         })
       : null;
@@ -302,6 +334,7 @@ async function launch(input: LaunchInput, id: string): Promise<Launched> {
     input.startedVia ?? (input.startedBy ? "orchestrator" : null),
     id
   );
+  setHome(id, home);
   if (interactive) setSessionModel(id, interactive);
   if (input.access)
     db.prepare(`UPDATE sessions SET chat_access = ? WHERE id = ?`).run(

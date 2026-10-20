@@ -46,9 +46,15 @@ export function useDraftRequests(options: Options) {
   useEffect(() => {
     hydrateDrafts();
     const open = (projectId: string | null, openPr = false) => {
-      const { projects, viewing, show } = latest.current;
+      const { projects, viewing, show, workspaceId } = latest.current;
       const drafts = Object.values(draftsStore.drafts) as Draft[];
-      const found = reusableDraft(drafts, projectId, draftHasText, openPr);
+      const found = reusableDraft(
+        drafts,
+        projectId,
+        draftHasText,
+        openPr,
+        workspaceId
+      );
       if (found) return show(found.id);
       const from = viewing.draftId ? draftsStore.drafts[viewing.draftId] : null;
       const s = viewing.session;
@@ -58,7 +64,7 @@ export function useDraftRequests(options: Options) {
           ? { agentType: s.agent_type, model: s.model, access: s.chat_access }
           : {};
       const project = projects.find((p) => p.id === projectId) ?? null;
-      const draft = makeDraft(uuid(), project, carry, { openPr });
+      const draft = makeDraft(uuid(), project, carry, { openPr, workspaceId });
       draftsActions.put(draft);
       show(draft.id);
     };

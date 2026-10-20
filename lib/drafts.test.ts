@@ -77,6 +77,17 @@ describe("reusableDraft", () => {
     expect(reusableDraft(drafts, "p1", hasText)?.id).toBe("empty");
   });
 
+  it("reuses an empty scratch chat only inside the workspace it was made in", () => {
+    const scratch = (id: string, workspaceId: string | null) =>
+      newDraft(id, null, {}, { workspaceId });
+    const drafts = [scratch("in-w1", "w1"), scratch("in-all", null)];
+    expect(reusableDraft(drafts, null, hasText, false, "w1")?.id).toBe("in-w1");
+    expect(reusableDraft(drafts, null, hasText, false, "w2")).toBeNull();
+    expect(reusableDraft(drafts, null, hasText, false, null)?.id).toBe(
+      "in-all"
+    );
+  });
+
   it("keeps a draft with text in it and makes a new one", () => {
     expect(reusableDraft([draft("typed")], "p1", hasText)).toBeNull();
   });
@@ -93,6 +104,17 @@ describe("reusableDraft", () => {
   it("reuses an empty scratch draft for a scratch chat", () => {
     const drafts = [draft("s", { projectId: null })];
     expect(reusableDraft(drafts, null, hasText)?.id).toBe("s");
+  });
+});
+
+describe("newDraft's workspace", () => {
+  it("is kept on a scratch chat and dropped for a real project", () => {
+    expect(newDraft("d", null, {}, { workspaceId: "w1" }).workspaceId).toBe(
+      "w1"
+    );
+    expect(
+      newDraft("d", project(), {}, { workspaceId: "w1" }).workspaceId
+    ).toBeNull();
   });
 });
 
@@ -168,6 +190,18 @@ describe("currentProjectId", () => {
           projectId: "b",
         })
       ).toBe("c");
+    });
+
+    it("falls back to a scratch chat, not another workspace's project, in a workspace with none", () => {
+      const w3 = { workspaceId: "w3", projectId: null };
+      expect(
+        currentProjectId(
+          { projectId: "a" },
+          [{ project_id: "b", updated_at: "2026-10-09 10:00:00" }],
+          projects,
+          w3
+        )
+      ).toBeNull();
     });
 
     it("ignores a filter left over from another workspace", () => {
