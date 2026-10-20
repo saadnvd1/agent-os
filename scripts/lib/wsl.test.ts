@@ -33,6 +33,12 @@ const TOOLS = [
   "id",
 ];
 
+// Bash 4+ (Linux, CI) fails `set -e` on `((n++))` at 0; macOS's 3.2 doesn't.
+const BASH =
+  ["/opt/homebrew/bin/bash", "/usr/local/bin/bash", "/bin/bash"].find(
+    existsSync
+  ) ?? "/bin/bash";
+
 let dir: string;
 
 function fake(name: string, body: string) {
@@ -48,7 +54,7 @@ function run(
 ) {
   writeFileSync(join(dir, "osrelease"), osrelease);
   return spawnSync(
-    "/bin/bash",
+    BASH,
     [
       "-euo",
       "pipefail",
@@ -311,5 +317,49 @@ describe("installing prerequisites", () => {
     expect(r.status).toBe(1);
     expect(r.stdout).toContain("Still missing: tmux");
     expect(r.stdout).not.toContain("Prerequisites installed");
+  });
+});
+
+describe("cmd_stop", () => {
+  // `ps` reports the server alive for the first `alive` checks, then gone.
+  // A server that takes a moment to exit used to trip `((count++))` (status 1
+  // at 0) under `set -e`, so stop exited 1 after the server had stopped.
+  const stop = (alive: number) => {
+    mkdirSync(join(dir, "home"), { recursive: true });
+    fake(
+      "ps",
+      `n=$(cat "${dir}/ps-count" 2>/dev/null || echo 0); echo $((n + 1)) > "${dir}/ps-count"; [ "$n" -lt ${alive} ]`
+    );
+    fake("sleep", "exit 0");
+    return run(
+      `AGENT_OS_HOME="${dir}/home"; PID_FILE="$AGENT_OS_HOME/agent-os.pid"; echo $$ > "$PID_FILE"; kill() { return 0; }; cmd_stop`,
+      ""
+    );
+  };
+
+  it("returns 0 when the server exits after a few checks", () => {
+    const r = stop(3);
+    expect(r.status).toBe(0);
+    expect(r.stdout).toContain("AgentOS stopped");
+    expect(existsSync(join(dir, "home", "agent-os.pid"))).toBe(false);
+  });
+
+  it("force kills and still returns 0 when it outlives the timeout", () => {
+    const r = stop(1000);
+    expect(r.status).toBe(0);
+    expect(r.stdout).toContain("Force killing");
+  });
+
+  it("has no bare ((x++)) in scripts/lib: it returns 1 at 0 under set -e", () => {
+    for (const f of [
+      "commands.sh",
+      "common.sh",
+      "machine.sh",
+      "prerequisites.sh",
+    ]) {
+      expect(readFileSync(join(LIB, f), "utf8"), f).not.toMatch(
+        /^\s*\(\(\s*\w+(\+\+|--)\s*\)\)\s*$/m
+      );
+    }
   });
 });
