@@ -333,3 +333,10 @@
 - Group-level actions: finish all, snooze all, an orchestrator view per group.
 - Groups across workspaces, or a group filter on the project chip.
 - Drop the old `groups` table and `sessions.group_path` once nothing reads them.
+
+## Work claims (follow-ups)
+
+- Queue a start after another machine's claim (`after: claim:<id>`), mid-work overlap notices with a yield rule, outside Claude Code sessions (`aos claim` + hook), sidebar pill and a claims sheet, linking machines with a pairing code. Plan in the work-claims task.
+- A PC with no AgentOS at all needs a claims-only token; a git-ref fallback could reach it.
+- Connect could serve as a directory so an account's machines find each other to link; never as the store (its privacy page promises it sees no files).
+- Per-project `claims.share: false` in `.agent-os.json`.

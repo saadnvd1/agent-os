@@ -1,0 +1,119 @@
+import { beforeEach, describe, expect, it } from "vitest";
+import { NextRequest } from "next/server";
+import { db } from "@/lib/db";
+import { machineId } from "@/lib/claims/machine";
+import { upsertLocal } from "@/lib/claims/store";
+import { GET } from "./route";
+import { POST } from "./exchange/route";
+
+const post = (body: unknown) =>
+  POST(
+    new NextRequest("http://localhost/api/claims/exchange", {
+      method: "POST",
+      body: typeof body === "string" ? body : JSON.stringify(body),
+    })
+  );
+
+beforeEach(() => {
+  db.prepare(`DELETE FROM work_claims`).run();
+});
+
+const claim = {
+  id: "r1",
+  origin: "peer-1",
+  origin_name: "box",
+  goal: "Add oauth",
+  repo: "github.com/acme/widgets",
+  branch: "feature/oauth",
+  files: ["a.ts"],
+  ttl_s: 300,
+  age_s: 5,
+};
+
+describe("POST /api/claims/exchange", () => {
+  it("stores a peer's claims and answers with ours", async () => {
+    upsertLocal(
+      { id: machineId(), name: "here" },
+      {
+        sessionId: "s",
+        sessionName: "Mine",
+        repo: "github.com/acme/widgets",
+        branch: "feature/mine",
+        base: "main",
+        goal: "Mine",
+        files: [],
+        filesMore: 0,
+        prUrl: null,
+      }
+    );
+    const res = await post({
+      machine: { id: "peer-1", name: "box" },
+      claims: [claim],
+    });
+    expect(res.status).toBe(200);
+    const body = await res.json();
+    expect(body.machine.id).toBe(machineId());
+    expect(body.claims.map((c: { id: string }) => c.id)).toEqual(["s-s"]);
+    const list = await (
+      await GET(new NextRequest("http://localhost/api/claims"))
+    ).json();
+    expect(list.claims.map((c: { id: string }) => c.id).sort()).toEqual([
+      "r1",
+      "s-s",
+    ]);
+  });
+
+  it("refuses bodies that are not claims", async () => {
+    expect((await post("{nope")).status).toBe(400);
+    expect(
+      (await post({ machine: { id: "p", name: "n" }, claims: [{ id: "x" }] }))
+        .status
+    ).toBe(400);
+    expect(
+      (
+        await post({
+          machine: { id: "p", name: "n" },
+          claims: [{ ...claim, ttl_s: -5 }],
+        })
+      ).status
+    ).toBe(400);
+  });
+});
+
+describe("GET /api/claims", () => {
+  it("rejects a bad query and an unknown session", async () => {
+    const bad = await GET(
+      new NextRequest(`http://localhost/api/claims?repo=${"x".repeat(400)}`)
+    );
+    expect(bad.status).toBe(400);
+    const none = await GET(
+      new NextRequest("http://localhost/api/claims?session=missing")
+    );
+    expect(none.status).toBe(404);
+  });
+
+  it("narrows to a repo and lists overlaps", async () => {
+    await post({
+      machine: { id: "peer-1", name: "box" },
+      claims: [
+        claim,
+        {
+          ...claim,
+          id: "r2",
+          origin: "peer-2",
+          origin_name: "pc",
+          repo: "github.com/acme/other",
+        },
+      ],
+    });
+    const body = await (
+      await GET(
+        new NextRequest(
+          "http://localhost/api/claims?repo=github.com/acme/widgets"
+        )
+      )
+    ).json();
+    expect(body.claims.map((c: { id: string }) => c.id)).toEqual(["r1"]);
+    expect(body.overlaps).toEqual([]);
+  });
+});

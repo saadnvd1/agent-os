@@ -9,6 +9,8 @@ const [cmd, ...args] = process.argv.slice(2);
 const usage = `aos: talk to other agent sessions in AgentOS
 
   aos peers                          sessions, their project and what each is doing
+  aos claims [--all] [--json]        what live sessions here and on linked machines are
+                                     working on, and where they overlap
   aos send <session> <message...>    message a session (name, old name, project/name,
                                      <workspace>/<name>, <workspace>/orchestrator, id or
                                      id prefix; "orchestrator" is yours); says delivered,
@@ -141,7 +143,7 @@ const dropped = (err) =>
 // GETs that change nothing, so a lost response can be fetched again. Other GETs
 // (the inbox marks what it returns as read) are retried only on a refusal.
 const PURE_READS =
-  /^\/api\/(bus\/(peers|messages|docs|read)|tasks\/queue|stacks|schedules)(\/|\?|$)/;
+  /^\/api\/(bus\/(peers|messages|docs|read)|claims|tasks\/queue|stacks|schedules)(\/|\?|$)/;
 
 async function call(path, init = {}) {
   const reads =
@@ -199,6 +201,9 @@ const sim = require("./aos-lib/sim.js")({ me, call, post, fail });
 const waitLib = require("./aos-lib/wait.js")({ post, fail, needMe, me });
 const readCmd = (words) =>
   require("./aos-lib/read.js")({ call, fail, needMe, me })(words);
+
+const claimsCmd = (words) =>
+  require("./aos-lib/claims.js")({ call, me })(words);
 
 function needMe() {
   if (!me) fail("not inside an AgentOS session (AGENTOS_SESSION_ID is unset)");
@@ -404,6 +409,8 @@ async function main() {
   switch (cmd) {
     case "heavy":
       return heavy(args);
+    case "claims":
+      return claimsCmd(args);
     case "peers": {
       const { peers } = await call(
         `/api/bus/peers${me ? `?from=${encodeURIComponent(me)}` : ""}`
