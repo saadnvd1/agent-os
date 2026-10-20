@@ -125,3 +125,9 @@ name, the current owner wins and `aos send` says so. A name that matches more
 than one session is refused with the candidates listed. The
 **Messages** panel shows every conversation and lets you message any session.
 Sessions on other machines can receive messages but not yet send them.
+
+Link machines through AgentOS Connect (Pro): it works from any network with no
+Tailscale or ssh. `agent-os machine` prints the steps (`agent-os connect`, then
+Link from Machines or `agent-os link`). `agent-os machine --tailscale` is the
+alternative for machines without Connect: sshd plus Tailscale, linked with
+Machines → Add. See [Machines](https://github.com/saadnvd1/agent-os/blob/main/docs/reference/machines.md#linking-through-agentos-connect).

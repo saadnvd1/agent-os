@@ -88,7 +88,7 @@ case "${1:-}" in
     passkeys)         shift; (cd "$(dirname "$SCRIPT_DIR")" && npx tsx lib/security/passkeys-cli.ts "$@") ;;
     logs)             cmd_logs ;;
     update)           cmd_update ;;
-    machine)          cmd_machine ;;
+    machine)          shift; cmd_machine "$@" ;;
     enable)           cmd_enable ;;
     disable)          cmd_disable ;;
     uninstall)        cmd_uninstall ;;

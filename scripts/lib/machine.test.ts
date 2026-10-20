@@ -42,7 +42,11 @@ const log = () =>
 const record = (name: string) =>
   fake(name, `echo "${name} $*" >> "${dir}/calls.log"`);
 
-function machine(env: Record<string, string> = {}, os = "debian") {
+function machine(
+  env: Record<string, string> = {},
+  os = "debian",
+  args = "--tailscale"
+) {
   mkdirSync(join(dir, "repo"), { recursive: true });
   return spawnSync(
     "/bin/bash",
@@ -50,7 +54,7 @@ function machine(env: Record<string, string> = {}, os = "debian") {
       "-euo",
       "pipefail",
       "-c",
-      `source "${LIB}/common.sh"; source "${LIB}/prerequisites.sh"; source "${LIB}/commands.sh"; source "${LIB}/machine.sh"; WSL=2 OS=${os} REPO_DIR="${dir}/repo" PORT=3011; has_systemd() { return 0; }; is_running() { return 0; }; cmd_enable() { echo "enable called"; }; cmd_machine`,
+      `source "${LIB}/common.sh"; source "${LIB}/prerequisites.sh"; source "${LIB}/commands.sh"; source "${LIB}/machine.sh"; WSL=2 OS=${os} REPO_DIR="${dir}/repo" PORT=3011; has_systemd() { return 0; }; is_running() { return 0; }; cmd_enable() { echo "enable called"; }; cmd_machine ${args}`,
       join(dir, "agent-os"),
     ],
     {
@@ -86,6 +90,24 @@ beforeEach(() => {
 afterEach(() => rmSync(dir, { recursive: true, force: true }));
 
 describe("agent-os machine", () => {
+  it("bare, points at Connect first, mentions --tailscale and changes nothing", () => {
+    const r = machine({}, "debian", "");
+    expect(r.status).toBe(0);
+    expect(r.stdout).toContain("agent-os connect");
+    expect(r.stdout).toContain("agent-os link accept");
+    expect(r.stdout).toContain("second code");
+    expect(r.stdout).toContain("agent-os machine --tailscale");
+    expect(r.stdout).not.toContain("enable called");
+    expect(log()).toBe("");
+  });
+
+  it("rejects an unknown option", () => {
+    const r = machine({}, "debian", "--bogus");
+    expect(r.status).toBe(1);
+    expect(r.stdout + r.stderr).toContain("Usage: agent-os machine");
+    expect(log()).toBe("");
+  });
+
   it("stops with the install pointer when Tailscale is missing", () => {
     const r = machine();
     expect(r.status).toBe(1);
@@ -128,7 +150,7 @@ describe("agent-os machine", () => {
       "/bin/bash",
       [
         "-c",
-        `source "${LIB}/common.sh"; source "${LIB}/machine.sh"; WSL=2 OS=debian REPO_DIR="${dir}/repo"; has_systemd() { return 1; }; cmd_machine`,
+        `source "${LIB}/common.sh"; source "${LIB}/machine.sh"; WSL=2 OS=debian REPO_DIR="${dir}/repo"; has_systemd() { return 1; }; cmd_machine --tailscale`,
       ],
       {
         encoding: "utf8",
