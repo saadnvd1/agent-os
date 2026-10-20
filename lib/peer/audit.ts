@@ -13,6 +13,10 @@ import { getDb } from "../db";
 export type Outcome =
   | "ok"
   | "denied_route"
+  | "bad_envelope"
+  | "too_large"
+  | "too_slow"
+  | "busy"
   | "bad_sig"
   | "stale"
   | "replay"
@@ -47,8 +51,12 @@ export const resetAuditLimits = () => {
 };
 
 // Refusals of an inbound envelope that anyone could have sent: a stranger's,
-// a forgery, or a captured envelope sent again.
+// a forgery, a malformed or oversized one, or a captured one sent again.
 const UNPROVEN: ReadonlySet<Outcome> = new Set([
+  "bad_envelope",
+  "too_large",
+  "too_slow",
+  "busy",
   "bad_sig",
   "unknown_peer",
   "suspended",

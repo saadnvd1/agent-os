@@ -2,8 +2,10 @@
  * POST /api/peer/rpc: a linked machine's call, served before Next on any
  * listener (the envelope is the authentication, not where it came from).
  *
- *  1. read the envelope under a budget for unverified bytes and a minimum
- *     transfer rate (rpc-intake.ts), the same way whoever it claims to be;
+ *  0. with no active link, refuse before reading anything;
+ *  1. read the envelope under a byte budget and a minimum transfer rate
+ *     (rpc-intake.ts), proving the sender from the header's own signature
+ *     before any of the body is held for it;
  *  2. verify and decrypt it against the sender's pinned keys (envelope.ts);
  *  3. match the inner method, path and query against the allowlist;
  *  4. re-issue it to this machine's own loopback listener with the per-boot
@@ -27,11 +29,13 @@ import { recordPeerCall, type AuditEntry, type Outcome } from "./audit";
 import {
   MAX_RESPONSE_BODY,
   RPC_PATH,
+  SKEW_MS,
   openRequest,
   parseHeaderBytes,
   sealResponse,
   type PeerResponse,
   type Refusal,
+  verifyHeader,
 } from "./envelope";
 import { peerSecret } from "./internal";
 import {
@@ -41,7 +45,7 @@ import {
   type BoxKey,
   type Identity,
 } from "./keys";
-import { pinForMachine, type PeerPin } from "./links";
+import { hasActivePin, pinForMachine, type PeerPin } from "./links";
 import { sqliteNonceStore } from "./nonce-store";
 import { createReplayGuard, type ReplayGuard } from "./replay";
 import {
@@ -71,6 +75,8 @@ export interface RpcDeps {
   identity: () => Identity | null;
   boxKey: () => BoxKey;
   pinForMachine: (machineId: string) => PeerPin | null;
+  /** False while no link is active: the route is closed to everyone. */
+  anyActive: () => boolean;
   replay: ReplayGuard;
   dispatch: (d: Dispatch) => Promise<PeerResponse>;
   audit: (e: AuditEntry) => void;
@@ -87,14 +93,14 @@ export const isPeerRpc = (req: IncomingMessage) =>
   (req.url ?? "").split("?")[0] === RPC_PATH;
 
 const REFUSED: Record<Refusal, [number, string, Outcome]> = {
-  bad_envelope: [400, "bad envelope", "bad_sig"],
+  bad_envelope: [400, "bad envelope", "bad_envelope"],
   wrong_machine: [401, "bad signature", "bad_sig"],
   unknown_peer: [401, "bad signature", "unknown_peer"],
   suspended: [401, "bad signature", "suspended"],
   bad_sig: [401, "bad signature", "bad_sig"],
   stale: [401, "stale", "stale"],
   replay: [401, "replay", "replay"],
-  busy: [429, "busy", "replay"],
+  busy: [429, "busy", "busy"],
 };
 
 function plain(res: ServerResponse, status: number, text: string) {
@@ -143,62 +149,66 @@ export async function handlePeerRpc(
     plain(res, status, text);
     return null;
   };
-  const lookup = (machineId: string) => {
+  // The sender's pinned signing key, or a decoy that verifies nothing for an
+  // unknown or suspended one, so its refusal takes the same path and time
+  // as a bad signature; `hidden` keeps what the check would have said.
+  let hidden: "unknown_peer" | "suspended" | null = null;
+  const signKeyFor = (machineId: string) => {
     fromMachine = machineId;
-    pin = deps.pinForMachine(machineId);
-    return pin;
+    const found = (pin = deps.pinForMachine(machineId));
+    hidden = !found
+      ? "unknown_peer"
+      : found.state !== "active"
+        ? "suspended"
+        : null;
+    if (!found || hidden) return DECOY_KEY;
+    try {
+      return signPublic(found.signPub);
+    } catch {
+      hidden = "unknown_peer";
+      return DECOY_KEY;
+    }
+  };
+  const refuseHidden = (refusal: Refusal): null =>
+    refuse(refusal === "bad_sig" && hidden ? hidden : refusal);
+  const drop = (status: number, text: string, outcome: Outcome): null => {
+    audit(outcome, status);
+    plain(res, status, text);
+    return null;
   };
 
-  // What the signature check would have said, hidden behind it.
-  let hidden: "unknown_peer" | "suspended" | null = null;
+  if (!deps.anyActive()) return plain(res, 404, "not found");
   const ticket = deps.budget.open(sourceOf(req));
   if (!ticket) return void refuse("busy");
   const readAndOpen = async () => {
     let read;
     try {
       read = await readEnvelope(req, {
-        early: (headerBytes) => {
+        early: (headerBytes, headerSig) => {
           const header = parseHeaderBytes(headerBytes);
           if (!header) return { refusal: "bad_envelope" };
           if (!self || header.to !== self.machineId)
             return { refusal: "wrong_machine" };
+          if (!verifyHeader(headerBytes, headerSig, signKeyFor(header.from)))
+            return { refusal: "bad_sig" };
+          const now = deps.now?.() ?? Date.now();
+          if (Math.abs(now - header.ts) > SKEW_MS) return { refusal: "stale" };
           return { peer: header.from };
         },
         ticket,
         pace: deps.pace ?? DEFAULT_PACE,
       });
     } catch {
-      plain(res, 400, "bad envelope");
-      return null;
+      return drop(400, "bad envelope", "bad_envelope");
     }
-    if ("tooLarge" in read) {
-      plain(res, 413, "too large");
-      return null;
-    }
-    if ("tooSlow" in read) {
-      plain(res, 408, "too slow");
-      return null;
-    }
-    if ("refusal" in read) return refuse(read.refusal);
+    if ("tooLarge" in read) return drop(413, "too large", "too_large");
+    if ("tooSlow" in read) return drop(408, "too slow", "too_slow");
+    if ("refusal" in read) return refuseHidden(read.refusal);
     if (!self) return refuse("wrong_machine");
     return openRequest(read.body, {
       self: self.machineId,
       boxKey: deps.boxKey().privateKey,
-      signKeyFor: (machineId) => {
-        const found = lookup(machineId);
-        hidden = !found
-          ? "unknown_peer"
-          : found.state !== "active"
-            ? "suspended"
-            : null;
-        if (hidden) return DECOY_KEY;
-        try {
-          return signPublic(found!.signPub);
-        } catch {
-          hidden = "unknown_peer";
-          return DECOY_KEY;
-        }
-      },
+      signKeyFor,
       replay: deps.replay,
       now: deps.now?.(),
     });
@@ -210,10 +220,7 @@ export async function handlePeerRpc(
     ticket.close();
   }
   if (!opened || !self) return;
-  if (!opened.ok)
-    return void refuse(
-      opened.refusal === "bad_sig" && hidden ? hidden : opened.refusal
-    );
+  if (!opened.ok) return void refuseHidden(opened.refusal);
   const host = pin as PeerPin | null;
   if (!host) return void refuse("unknown_peer");
 
@@ -335,6 +342,7 @@ export function rpcDeps(port: number): RpcDeps {
     identity: () => currentIdentity(),
     boxKey: () => (box ??= loadBoxKey()),
     pinForMachine,
+    anyActive: hasActivePin,
     replay: createReplayGuard({ store: sqliteNonceStore() }),
     dispatch: loopbackDispatch(port),
     audit: recordPeerCall,

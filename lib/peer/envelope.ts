@@ -2,8 +2,10 @@
  * The signed, encrypted envelope linked machines call each other with
  * (Node's crypto only).
  *
- * Request body: u32 header length ‖ header JSON ‖ ciphertext ‖ signature.
+ * Request body: u32 header length ‖ header JSON ‖ hsig ‖ ciphertext ‖ sig.
  *   header  {v:1, from, to, ts, nonce, epk}, epk a fresh X25519 key per call
+ *   hsig    Ed25519_A("agentos-peer-hdr-v1" ‖ header), so the receiver can
+ *           prove the sender before it holds any of the body
  *   keys    HKDF-SHA256(X25519(epk, B_box), salt=nonce,
  *                       info="agentos-peer-v1|from|to") → k_req ‖ k_res
  *   ct      ChaCha20-Poly1305(k_req, AAD=header) over the inner request
@@ -38,6 +40,8 @@ const SIG = 64;
 const TAG = 16;
 const ZERO_IV = Buffer.alloc(12);
 const IV_LEN = 12;
+export const HEADER_SIG = SIG;
+const HDR_DOMAIN = Buffer.from("agentos-peer-hdr-v1");
 const REQ_DOMAIN = Buffer.from("agentos-peer-req-v1");
 const RES_DOMAIN = Buffer.from("agentos-peer-res-v1");
 const B64_16 = /^[A-Za-z0-9_-]{22}$/;
@@ -181,10 +185,15 @@ export function sealRequest(o: {
     Buffer.concat([REQ_DOMAIN, headerBytes, sha256(ct)]),
     o.signKey
   );
+  const hsig = crypto.sign(
+    null,
+    Buffer.concat([HDR_DOMAIN, headerBytes]),
+    o.signKey
+  );
   const len = Buffer.alloc(4);
   len.writeUInt32BE(headerBytes.length);
   return {
-    envelope: Buffer.concat([len, headerBytes, ct, sig]),
+    envelope: Buffer.concat([len, headerBytes, hsig, ct, sig]),
     nonce,
     resKey: keys.res,
   };
@@ -213,9 +222,28 @@ export function parseHeaderBytes(bytes: Buffer): RequestHeader | null {
   }
 }
 
+/** Whether the header alone is signed by `signKey`. */
+export function verifyHeader(
+  headerBytes: Buffer,
+  hsig: Buffer,
+  signKey: KeyObject
+): boolean {
+  try {
+    return crypto.verify(
+      null,
+      Buffer.concat([HDR_DOMAIN, headerBytes]),
+      signKey,
+      hsig
+    );
+  } catch {
+    return false;
+  }
+}
+
 export interface ParsedRequest {
   header: RequestHeader;
   headerBytes: Buffer;
+  hsig: Buffer;
   ct: Buffer;
   sig: Buffer;
 }
@@ -226,12 +254,13 @@ export function parseRequest(envelope: Buffer): ParsedRequest | null {
     if (envelope.length > MAX_REQUEST_ENVELOPE) return null;
     const { meta, rest } = unframe(envelope, MAX_HEADER);
     const header = parseHeader(meta);
-    if (!header || rest.length < TAG + SIG) return null;
+    if (!header || rest.length < SIG + TAG + SIG) return null;
     const headerLen = envelope.readUInt32BE(0);
     return {
       header,
       headerBytes: envelope.subarray(4, 4 + headerLen),
-      ct: rest.subarray(0, rest.length - SIG),
+      hsig: rest.subarray(0, SIG),
+      ct: rest.subarray(SIG, rest.length - SIG),
       sig: rest.subarray(rest.length - SIG),
     };
   } catch {
@@ -267,14 +296,14 @@ export type Opened =
 export function openRequest(envelope: Buffer, deps: OpenDeps): Opened {
   const parsed = parseRequest(envelope);
   if (!parsed) return { ok: false, refusal: "bad_envelope" };
-  const { header, headerBytes, ct, sig } = parsed;
+  const { header, headerBytes, hsig, ct, sig } = parsed;
   const fail = (refusal: Refusal): Opened => ({ ok: false, refusal, header });
   if (header.to !== deps.self) return fail("wrong_machine");
   const signKey = deps.signKeyFor(header.from);
   if (typeof signKey === "string") return fail(signKey);
-  let verified = false;
+  let verified = verifyHeader(headerBytes, hsig, signKey);
   try {
-    verified = crypto.verify(
+    verified &&= crypto.verify(
       null,
       Buffer.concat([REQ_DOMAIN, headerBytes, sha256(ct)]),
       signKey,

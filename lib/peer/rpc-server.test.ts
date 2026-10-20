@@ -7,14 +7,20 @@ import {
   it,
   vi,
 } from "vitest";
-import http, { type IncomingMessage, type ServerResponse } from "http";
-import type { AddressInfo } from "net";
+import http from "http";
 import {
   fakeMachine,
   writeConnectDir,
   type FakeMachine,
 } from "@/lib/__fixtures__/peer-machine";
-import { tunnelListener } from "@/lib/connect/serve";
+import {
+  edge,
+  machine,
+  outcomesOf,
+  partial,
+  post,
+  type Machine,
+} from "@/lib/__fixtures__/peer-rpc";
 import {
   createConnectHost,
   deleteHost,
@@ -31,8 +37,6 @@ import {
   requireTokenLink,
 } from "@/lib/hosts/remote-api";
 import { getDb } from "@/lib/db";
-import { gateRequest, gateUpgrade } from "@/lib/security/gate";
-import type { AuthPolicy } from "@/lib/security/auth";
 import { peerAudit, recordPeerCall, resetAuditLimits } from "./audit";
 import {
   MAX_REQUEST_ENVELOPE,
@@ -41,164 +45,13 @@ import {
 } from "./envelope";
 import { peerSecret } from "./internal";
 import { boxPublic } from "./keys";
-import { pinForHost, savePin, suspendPin, type PeerPin } from "./links";
-import { createReplayGuard } from "./replay";
-import {
-  createBodyBudget,
-  handlePeerRpc,
-  isPeerRpc,
-  loopbackDispatch,
-  type RpcDeps,
-} from "./rpc-server";
+import { hasActivePin, pinForHost, savePin, suspendPin } from "./links";
+import { createBodyBudget } from "./rpc-server";
 
 const A = fakeMachine("aaaa1111");
 const B = fakeMachine("bbbb2222");
 const C = fakeMachine("cccc3333");
 process.env.AGENTOS_CONNECT_DIR = writeConnectDir(A);
-
-interface Seen {
-  method: string;
-  url: string;
-  headers: IncomingMessage["headers"];
-  body: string;
-}
-
-/** What Next would be: echoes how the gate saw the call. */
-function fakeNext(seen: Seen[]) {
-  return async (req: IncomingMessage, res: ServerResponse) => {
-    let body = "";
-    for await (const c of req) body += c;
-    seen.push({
-      method: req.method ?? "",
-      url: req.url ?? "",
-      headers: { ...req.headers },
-      body,
-    });
-    res.setHeader("Content-Type", "application/json");
-    res.setHeader("Set-Cookie", "aos_device=leak");
-    if (req.url?.startsWith("/api/tasks/t-9/merge")) {
-      res.statusCode = 409;
-      return res.end(JSON.stringify({ error: "not mergeable" }));
-    }
-    res.end(
-      JSON.stringify({
-        url: req.url,
-        method: req.method,
-        trust: req.headers["x-agentos-trust"],
-        device: req.headers["x-agentos-device"],
-        peer: req.headers["x-agentos-peer"],
-        internal: req.headers["x-agentos-peer-internal"] ?? null,
-        body: body ? JSON.parse(body) : null,
-      })
-    );
-  };
-}
-
-interface Machine {
-  hostname: string;
-  tunnelPort: number;
-  seen: Seen[];
-  deps: RpcDeps;
-  close: () => Promise<void>;
-}
-
-const listen = (s: http.Server) =>
-  new Promise<number>((r) =>
-    s.listen(0, "127.0.0.1", () => r((s.address() as AddressInfo).port))
-  );
-
-/** One machine's AgentOS: its loopback listener and its tunnel listener. */
-async function machine(
-  me: FakeMachine,
-  pinFor: (machineId: string) => PeerPin | null
-): Promise<Machine> {
-  const seen: Seen[] = [];
-  const policy: AuthPolicy = {
-    tailnet: [],
-    lookup: (t) => (t === "aosd_phone" ? { id: "phone" } : null),
-    peerSecret,
-  };
-  const next = fakeNext(seen);
-  let internalPort = 0;
-  const deps: RpcDeps = {
-    identity: () => me,
-    boxKey: () => me.box,
-    pinForMachine: pinFor,
-    replay: createReplayGuard(),
-    dispatch: (d: Parameters<ReturnType<typeof loopbackDispatch>>[0]) =>
-      loopbackDispatch(internalPort)(d),
-    audit: recordPeerCall,
-    budget: createBodyBudget(),
-  };
-  const onRequest = (req: IncomingMessage, res: ServerResponse) => {
-    if (!gateRequest(req, res, policy)) return;
-    if (isPeerRpc(req)) return void handlePeerRpc(req, res, deps);
-    void next(req, res);
-  };
-  const internal = http.createServer(onRequest);
-  internalPort = await listen(internal);
-  const tunnel = tunnelListener(() => me.hostname, {
-    onRequest,
-    onUpgrade: (req, socket) => {
-      if (!gateUpgrade(req, socket, policy)) return;
-      socket.end("HTTP/1.1 101 Switching Protocols\r\n\r\n");
-    },
-  });
-  const tunnelPort = await listen(tunnel);
-  return {
-    hostname: me.hostname,
-    tunnelPort,
-    seen,
-    deps,
-    close: async () => {
-      await new Promise((r) => internal.close(r));
-      await new Promise((r) => tunnel.close(r));
-    },
-  };
-}
-
-/** What Cloudflare does: https://<m- name>/… to that machine's tunnel. */
-function edge(
-  machines: Machine[],
-  tamper?: (body: Buffer) => Buffer
-): typeof fetch {
-  return (async (input: string | URL | Request, init?: RequestInit) => {
-    const url = new URL(String(input));
-    const m = machines.find((x) => x.hostname === url.hostname);
-    if (url.protocol !== "https:" || !m) throw new Error("no such host");
-    const body = init?.body ? Buffer.from(init.body as Uint8Array) : undefined;
-    const { status, buf } = await new Promise<{ status: number; buf: Buffer }>(
-      (resolve, reject) => {
-        const out = http.request(
-          {
-            host: "127.0.0.1",
-            port: m.tunnelPort,
-            method: init?.method ?? "GET",
-            path: url.pathname + url.search,
-            headers: {
-              ...(init?.headers as Record<string, string>),
-              host: url.hostname,
-              ...(body && { "content-length": String(body.length) }),
-            },
-          },
-          (res) => {
-            const chunks: Buffer[] = [];
-            res.on("data", (c) => chunks.push(c));
-            res.on("end", () =>
-              resolve({
-                status: res.statusCode ?? 0,
-                buf: Buffer.concat(chunks),
-              })
-            );
-          }
-        );
-        out.on("error", reject);
-        out.end(body);
-      }
-    );
-    return new Response(new Uint8Array(tamper ? tamper(buf) : buf), { status });
-  }) as typeof fetch;
-}
 
 let mB: Machine;
 let mC: Machine;
@@ -257,52 +110,6 @@ const refusal = async (p: Promise<unknown>) => {
   }
   throw new Error("expected a refusal");
 };
-
-/** A raw POST to a machine's rpc through the edge. */
-async function post(m: Machine, body: Buffer) {
-  const res = await fetch(`https://${m.hostname}/api/peer/rpc`, {
-    method: "POST",
-    body: new Uint8Array(body),
-  });
-  return { status: res.status, text: await res.text() };
-}
-
-/** An envelope sent to the tunnel only up to `upTo` bytes, the rest held back. */
-function partial(m: Machine, envelope: Buffer, upTo: number) {
-  const out = http.request({
-    host: "127.0.0.1",
-    port: m.tunnelPort,
-    method: "POST",
-    path: "/api/peer/rpc",
-    headers: { host: m.hostname, "content-length": String(envelope.length) },
-  });
-  let answered = false;
-  const response = new Promise<{ status: number; text: string }>(
-    (resolve, reject) => {
-      out.on("response", (res) => {
-        answered = true;
-        let text = "";
-        res.on("data", (c) => (text += c));
-        res.on("end", () => resolve({ status: res.statusCode ?? 0, text }));
-      });
-      out.on("error", (err) => (answered ? undefined : reject(err)));
-    }
-  );
-  response.catch(() => {});
-  const closed = new Promise((r) => out.on("close", r));
-  out.write(envelope.subarray(0, upTo));
-  return {
-    response,
-    closed,
-    within: (ms: number) =>
-      Promise.race([
-        response.then(() => "answered"),
-        new Promise((r) => setTimeout(() => r("pending"), ms)),
-      ]),
-    finish: () => out.end(envelope.subarray(upTo)),
-    destroy: () => out.destroy(),
-  };
-}
 
 const sealAt = (
   inner: Partial<PeerRequest>,
@@ -655,9 +462,10 @@ describe("the rpc server against hostile envelopes", () => {
       out.flushHeaders();
     });
     expect(status).toBe(413);
+    expect(outcomesOf("/api/peer/rpc")).toEqual(["too_large"]);
   });
 
-  it("reads an unpinned sender's body like anyone's, then refuses it as a bad signature", async () => {
+  it("refuses an unpinned or forged sender as soon as its header is in, the same way", async () => {
     const forged = (from: string) =>
       sealRequest({
         from,
@@ -672,27 +480,79 @@ describe("the rpc server against hostile envelopes", () => {
           body: Buffer.from(JSON.stringify({ pad: "x".repeat(4000) })),
         },
       }).envelope;
-    // A stranger and a forger claiming a linked machine: both still waiting
-    // for their body after the header, both refused the same way after it.
+    // A stranger and a forger claiming a linked machine: neither gets to
+    // send its body, and both read alike.
     for (const from of ["eeee5555", A.machineId]) {
       const env = forged(from);
-      const p = partial(mB, env, 4 + env.readUInt32BE(0) + 100);
-      expect(await p.within(300)).toBe("pending");
-      p.finish();
+      const p = partial(mB, env, 4 + env.readUInt32BE(0) + 64);
+      expect(await p.within(1000)).toBe("answered");
       expect(await p.response).toEqual({ status: 401, text: "bad signature" });
+      p.destroy();
     }
-    const outcomes = getDb()
-      .prepare(
-        `SELECT outcome FROM peer_audit WHERE route = '/api/peer/rpc' ORDER BY id`
-      )
-      .all() as { outcome: string }[];
-    expect(outcomes.map((r) => r.outcome)).toEqual(["unknown_peer", "bad_sig"]);
+    expect(outcomesOf("/api/peer/rpc")).toEqual(["unknown_peer", "bad_sig"]);
+  });
+
+  it("closes the route to everyone while no link is active", async () => {
+    mB.deps.anyActive = hasActivePin;
+    try {
+      expect(hasActivePin()).toBe(true);
+      suspendPin(hostA, "test");
+      suspendPin(hostB, "test");
+      expect(hasActivePin()).toBe(false);
+      // Refused at once, without waiting for (or holding) any of the body.
+      const env = sealAt({}).envelope;
+      const p = partial(mB, env, 0);
+      expect(await p.within(1000)).toBe("answered");
+      expect(await p.response).toEqual({ status: 404, text: "not found" });
+      p.destroy();
+      expect(mB.seen).toHaveLength(0);
+    } finally {
+      mB.deps.anyActive = () => true;
+      savePin(pinOf(A, hostA));
+      savePin(pinOf(B, hostB));
+    }
+  });
+
+  it("drops a sender that bursts and then stalls, by the rate of the last window", async () => {
+    const saved = mB.deps.pace;
+    // 6 KB at 1 KB/s would buy six seconds averaged over the whole body.
+    mB.deps.pace = { graceMs: 100, minRate: 1000, windowMs: 200 };
+    try {
+      const env = sealAt({
+        method: "POST",
+        path: "/api/tasks",
+        contentType: "application/json",
+        body: Buffer.from(JSON.stringify({ pad: "x".repeat(6000) })),
+      }).envelope;
+      const burst = partial(mB, env, env.length - 10);
+      expect(await burst.within(1500)).toBe("answered");
+      expect(await burst.response).toEqual({ status: 408, text: "too slow" });
+      burst.destroy();
+      expect(outcomesOf("/api/peer/rpc")).toEqual(["too_slow"]);
+    } finally {
+      mB.deps.pace = saved;
+    }
+  });
+
+  it("charges bytes that arrive before the header is complete", async () => {
+    const saved = mB.deps.budget;
+    mB.deps.budget = createBodyBudget({ perSource: 100 });
+    try {
+      const junk = Buffer.alloc(300, 0x20);
+      junk.writeUInt32BE(1000, 0);
+      const p = partial(mB, junk, junk.length);
+      expect(await p.within(1000)).toBe("answered");
+      expect(await p.response).toEqual({ status: 429, text: "busy" });
+      p.destroy();
+    } finally {
+      mB.deps.budget = saved;
+    }
   });
 
   it("drops a sender that stalls, and gives its share back", async () => {
     const saved = { budget: mB.deps.budget, pace: mB.deps.pace };
     mB.deps.budget = createBodyBudget({ perPeer: 8192 });
-    mB.deps.pace = { graceMs: 200, minRate: 1_000_000 };
+    mB.deps.pace = { graceMs: 200, minRate: 1_000_000, windowMs: 200 };
     try {
       const env = sealAt({
         method: "POST",
@@ -740,6 +600,7 @@ describe("the rpc server against hostile envelopes", () => {
         text: "busy",
       });
       expect(await post(mB, stranger)).toEqual({ status: 429, text: "busy" });
+      expect(outcomesOf("/api/peer/rpc")).toEqual(["busy", "busy"]);
       held.destroy();
       await held.closed;
       await new Promise((r) => setTimeout(r, 50));
@@ -776,7 +637,32 @@ describe("the rpc server against hostile envelopes", () => {
     expect(peerAudit(hostA)[0]).toMatchObject({ outcome: "denied_route" });
   });
 
-  it("holds only so much unverified envelope per sender, then says busy", async () => {
+  it("never lets a forger claiming a linked sender spend that sender's share", async () => {
+    const saved = mB.deps.budget;
+    mB.deps.budget = createBodyBudget({ perPeer: 8192 });
+    const body = Buffer.from(JSON.stringify({ pad: "x".repeat(6000) }));
+    const inner = {
+      method: "POST",
+      path: "/api/tasks",
+      contentType: "application/json",
+      body,
+    };
+    try {
+      const forged = sealAt(inner, { signKey: C.signKey }).envelope;
+      const held = partial(mB, forged, forged.length - 10);
+      await new Promise((r) => setTimeout(r, 50));
+      expect((await post(mB, sealAt(inner).envelope)).status).toBe(200);
+      expect(await held.response).toEqual({
+        status: 401,
+        text: "bad signature",
+      });
+      held.destroy();
+    } finally {
+      mB.deps.budget = saved;
+    }
+  });
+
+  it("holds only so much envelope per proven sender, then says busy", async () => {
     const saved = mB.deps.budget;
     mB.deps.budget = createBodyBudget({ total: 1 << 20, perPeer: 8192 });
     const sealPost = (bytes: number) =>

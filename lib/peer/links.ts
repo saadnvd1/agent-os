@@ -51,6 +51,11 @@ export const pinForMachine = (machineId: string): PeerPin | null =>
       Row | undefined
   );
 
+/** Whether any linked machine may call in at all. */
+export const hasActivePin = (): boolean =>
+  getDb().prepare(`${SELECT} AND p.state = 'active' LIMIT 1`).get() !==
+  undefined;
+
 export const pinForHost = (hostId: string): PeerPin | null =>
   toPin(
     getDb().prepare(`${SELECT} AND p.host_id = ?`).get(hostId) as

@@ -7,6 +7,8 @@ import {
   parseRequest,
   sealRequest,
   sealResponse,
+  verifyHeader,
+  HEADER_SIG,
   type OpenDeps,
   type PeerRequest,
 } from "./envelope";
@@ -134,9 +136,29 @@ describe("request envelope", () => {
     const lastSig = Buffer.from(envelope);
     lastSig[lastSig.length - 1] ^= 0x80;
     expect(openRequest(lastSig, deps())).toMatchObject({ refusal: "bad_sig" });
+    const firstHsig = Buffer.from(envelope);
+    firstHsig[4 + headerOf(envelope).len] ^= 0x01;
+    expect(openRequest(firstHsig, deps())).toMatchObject({
+      refusal: "bad_sig",
+    });
     const firstCt = Buffer.from(envelope);
-    firstCt[4 + headerOf(envelope).len] ^= 0x01;
+    firstCt[4 + headerOf(envelope).len + HEADER_SIG] ^= 0x01;
     expect(openRequest(firstCt, deps())).toMatchObject({ refusal: "bad_sig" });
+  });
+
+  it("signs the header on its own, so the sender is proven before the body", () => {
+    const { envelope } = seal();
+    const { len } = headerOf(envelope);
+    const headerBytes = envelope.subarray(4, 4 + len);
+    const hsig = envelope.subarray(4 + len, 4 + len + HEADER_SIG);
+    expect(verifyHeader(headerBytes, hsig, signPublic(A.signPub))).toBe(true);
+    expect(verifyHeader(headerBytes, hsig, signPublic(C.signPub))).toBe(false);
+    const other = Buffer.from(headerBytes);
+    other[other.length - 2] ^= 0x01;
+    expect(verifyHeader(other, hsig, signPublic(A.signPub))).toBe(false);
+    // Not interchangeable with the whole-envelope signature.
+    const sig = envelope.subarray(envelope.length - HEADER_SIG);
+    expect(verifyHeader(headerBytes, sig, signPublic(A.signPub))).toBe(false);
   });
 
   it("refuses an envelope for another machine (cross-machine replay)", () => {
