@@ -1,6 +1,14 @@
 import { NextRequest, NextResponse } from "next/server";
 import { z } from "zod";
-import { findOverlaps, liveClaims, machineId, machineName } from "@/lib/claims";
+import {
+  claimsShared,
+  findOverlaps,
+  liveClaims,
+  machineId,
+  machineName,
+  registerOutside,
+} from "@/lib/claims";
+import { outsideBody } from "@/lib/claims/types";
 import { repoKey } from "@/lib/git-remote";
 import { getDb, queries, type Session } from "@/lib/db";
 import { expandHome } from "@/lib/tasks/session";
@@ -31,6 +39,28 @@ export async function GET(request: NextRequest) {
     if (!repo) return NextResponse.json(shape([]));
   }
   return NextResponse.json(shape(liveClaims({ repo })));
+}
+
+// POST /api/claims - a session AgentOS didn't start registers or renews its
+// claim (`aos claim start|touch`). The CLI read git in its own folder and
+// sends the remote URL, branch and paths; nothing is run here.
+export async function POST(request: NextRequest) {
+  const body = outsideBody.safeParse(await request.json().catch(() => null));
+  if (!body.success)
+    return NextResponse.json({ error: "Bad claim" }, { status: 400 });
+  if (!claimsShared())
+    return NextResponse.json({ error: "Claims are off" }, { status: 409 });
+  const result = registerOutside(body.data);
+  if (!result)
+    return NextResponse.json(
+      { error: "No repository remote, or that id belongs to another claim" },
+      { status: 422 }
+    );
+  const claims = liveClaims({ repo: result.claim.repo });
+  const overlaps = shape(claims).overlaps.filter(
+    (o) => o.a === result.claim.id || o.b === result.claim.id
+  );
+  return NextResponse.json({ ...shape(claims), id: result.claim.id, overlaps });
 }
 
 function shape(claims: ReturnType<typeof liveClaims>) {
