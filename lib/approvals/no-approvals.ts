@@ -1,7 +1,7 @@
 /**
  * No approvals mode: while it's on, nothing AgentOS starts or runs waits on
  * a person. Asks are approved as they're raised, brakes let starts through,
- * plan-only tasks go on to implement, and agents launch with their harness's
+ * and agents launch with their harness's
  * permission prompts off. Off by default; app-wide; every point that honours
  * it reads it here and records what it did with recordAutoApproval.
  */

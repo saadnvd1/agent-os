@@ -16,10 +16,6 @@ import { isRemoteHost } from "../../hosts";
 import { peerSource } from "../../hosts/peer-load";
 import { hostLink, requireHostLink } from "../../hosts/remote-api";
 import { LOCAL, machineCapabilities } from "../../load/machines";
-import {
-  noApprovalsOn,
-  recordAutoApproval,
-} from "../../approvals/no-approvals";
 import { implementArrived, planNoteFor } from "../../models/plan-step";
 import { sessionWorkspace } from "../../models/resolve";
 import { queueEvent } from "../../orchestrator/events";
@@ -112,8 +108,7 @@ export async function planWritten(
   // As for a task planned here: a plan-first task goes on by itself, a
   // plan-only one waits unless no-approvals is on, and pieces that couldn't
   // be registered always hold it.
-  const auto = !!fresh.plan_only && noApprovalsOn();
-  const goOn = (!fresh.plan_only || auto) && !errors.length;
+  const goOn = !fresh.plan_only && !errors.length;
   const target = goOn ? implementTarget(fresh, split) : null;
   const next =
     target === "there"
@@ -148,14 +143,6 @@ export async function planWritten(
     return;
   }
   await continuePlanThere(fresh);
-  if (auto)
-    recordAutoApproval({
-      source: "plan",
-      workspaceId,
-      sessionId: s.id,
-      subject: `plan for ${s.name}`,
-      detail: "implementing without waiting for approve_plan",
-    });
 }
 
 /**

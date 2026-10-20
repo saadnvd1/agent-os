@@ -19,7 +19,7 @@ import {
 } from "./resolve";
 import { ANTHROPIC } from "./roles";
 import { queueEvent } from "../orchestrator/events";
-import { noApprovalsOn, recordAutoApproval } from "../approvals/no-approvals";
+import { recordAutoApproval } from "../approvals/no-approvals";
 import { addNote } from "../orchestrator/notes";
 import { amendBrief, scopeChangesOf } from "../orchestrator/amendments";
 import { PIECES_PROMPT, foldedBrief, pieceBrief } from "../plans/pieces";
@@ -451,15 +451,15 @@ export async function handoffAfterPlan(
   deleteQueued(sessionId, planRetryMessageId(sessionId));
   const retried = waiting.get(sessionId)?.retried ?? false;
   forget(sessionId);
-  // No approvals mode doesn't stop at the plan to wait for one. Pieces that
-  // couldn't be registered always do: building on a guess is the bug.
-  const auto = !!s.plan_only && noApprovalsOn() && !s.plan_waits_for_caller;
+  // A plan-only task never goes on by itself, in No approvals mode too: it
+  // was asked to stop and show the plan. Pieces that couldn't be registered
+  // always hold a plan-first one: building on a guess is the bug.
   const planText = readPlan(s);
   const pieceErrors =
     (planText && !s.plan_waits_for_caller
       ? splitOf(s, planText)?.errors
       : null) ?? [];
-  if ((!s.plan_only || auto) && !pieceErrors.length) {
+  if (!s.plan_only && !pieceErrors.length) {
     const ref = await startImplementing(
       s,
       "planning",
@@ -467,14 +467,6 @@ export async function handoffAfterPlan(
       undefined,
       retried
     );
-    if (ref && auto)
-      recordAutoApproval({
-        source: "plan",
-        workspaceId: sessionWorkspace(s),
-        sessionId,
-        subject: `plan for ${s.name}`,
-        detail: "implementing without waiting for approve_plan",
-      });
     return ref !== null;
   }
   if (!advancePlan(db, sessionId, "planning", "awaiting")) return false;

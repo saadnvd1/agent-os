@@ -110,40 +110,31 @@ describe("plan only", () => {
     expect(planPrompt("Build X")).toContain("takes over this conversation");
   });
 
-  it("goes on to implement, and says so in the audit, in No approvals mode", async () => {
-    const { id } = planOnlyTask();
+  it("still stops at the plan and waits for approve_plan in No approvals mode", async () => {
+    const { id, worktree } = planOnlyTask();
     setNoApprovals(true);
     try {
       const send = vi.fn(async () => {});
       expect(await handoffAfterPlan(id, send)).toBe(true);
-      expect(row(id).plan_phase).toBe("implementing");
-      expect(send).toHaveBeenCalled();
-      expect(retireChat).not.toHaveBeenCalled();
+      expect(row(id)).toEqual({
+        model: "claude-opus-5-5",
+        plan_phase: "awaiting",
+      });
+      expect(send).not.toHaveBeenCalled();
+      const events = pendingEvents(workspaceOf(id)).filter(
+        (e) => e.subject === id
+      );
+      expect(events[0].line).toContain(path.join(worktree, PLAN_FILE));
+      expect(events[0].line).toContain("waiting for approval");
+      expect(events[0].line).not.toContain("implementing on");
       expect(
         listAutoApprovals(50).some(
           (a) => a.source === "plan" && a.session_id === id
         )
-      ).toBe(true);
+      ).toBe(false);
     } finally {
       setNoApprovals(false);
     }
-  });
-
-  it("approves a plan already waiting when the mode is turned on", async () => {
-    const { id } = planOnlyTask();
-    await handoffAfterPlan(
-      id,
-      vi.fn(async () => {})
-    );
-    expect(row(id).plan_phase).toBe("awaiting");
-    const send = vi.fn(async () => {});
-    await approvePlan(id, undefined, send, "no-approvals");
-    expect(row(id).plan_phase).toBe("implementing");
-    expect(
-      listAutoApprovals(50).some(
-        (a) => a.source === "plan" && a.session_id === id
-      )
-    ).toBe(true);
   });
 
   it("waits for approval instead of implementing", async () => {
