@@ -14,6 +14,9 @@ import { deliverEvents } from "./deliver";
 import { recordConditions } from "./events";
 import { sessionFacts, type SessionFacts } from "./facts";
 import { listOrchestrators } from "./home";
+import { claimsShared, machineId } from "../claims/machine";
+import { sessionOverlaps, type SessionOverlap } from "../claims/mine";
+import { liveClaims } from "../claims/store";
 import { BRAKE_SUBJECT, openAsks } from "./asks";
 import { settleStaleAsks } from "./ask-settle";
 import { brakesOn, liftBrake } from "./brakes";
@@ -33,6 +36,15 @@ async function settleAsks(workspaceId: string): Promise<void> {
   await settleStaleAsks(workspaceId);
   const brake = openAsks(workspaceId).some((a) => a.subject === BRAKE_SUBJECT);
   if (brake && !(await brakesOn(workspaceId)).length) liftBrake(workspaceId);
+}
+
+// Claims code never breaks the watcher: any error means no overlaps.
+function localOverlaps(): SessionOverlap[] {
+  try {
+    return claimsShared() ? sessionOverlaps(machineId(), liveClaims()) : [];
+  } catch {
+    return [];
+  }
 }
 
 const DELIVER_EVERY_MS = 5000;
@@ -58,7 +70,13 @@ export async function diffWorkspace(
   ];
   recordConditions(
     workspaceId,
-    conditionsFor(facts, stacks, now, recentlyMessaged(orchestratorId, now)),
+    conditionsFor(
+      facts,
+      stacks,
+      now,
+      recentlyMessaged(orchestratorId, now),
+      localOverlaps()
+    ),
     subjects,
     now
   );
