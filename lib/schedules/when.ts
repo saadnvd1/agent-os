@@ -26,7 +26,7 @@ const UNIT_MS: Record<string, number> = {
   d: 86_400_000,
 };
 
-function duration(text: string): number | null {
+export function duration(text: string): number | null {
   let total = 0;
   const rest = text.replace(
     /(\d+(?:\.\d+)?|an?)\s*(minutes?|mins?|m|hours?|hrs?|h|days?|d)\b/g,

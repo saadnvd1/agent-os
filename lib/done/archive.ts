@@ -4,6 +4,7 @@
 import fs from "fs";
 import { db, queries, type Session } from "../db";
 import { statusOf } from "../orchestrator/facts";
+import { kickWaits } from "../bus/waits/kick";
 import { peerSessionLink } from "../hosts/peer-actions";
 
 export interface ArchivedView {
@@ -26,6 +27,7 @@ export function archiveSession(id: string): void {
   db.prepare(
     `UPDATE sessions SET archived_at = datetime('now') WHERE id = ? AND archived_at IS NULL`
   ).run(id);
+  kickWaits();
 }
 
 export function unarchiveSession(id: string): Session {

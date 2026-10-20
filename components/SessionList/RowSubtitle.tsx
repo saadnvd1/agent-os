@@ -1,6 +1,6 @@
 "use client";
 
-import { Repeat, Layers, Pause } from "lucide-react";
+import { Repeat, Layers, Pause, Hourglass } from "lucide-react";
 import { HostBadge } from "@/components/Hosts";
 import { rowGroup } from "@/lib/recipes/chip";
 import type { Session } from "@/lib/db";
@@ -74,6 +74,16 @@ export function RowSubtitle({
                 : null,
               note: session.pause_note,
             })}
+          </span>
+        </span>
+      )}
+      {(session.waiting_on || session.waited_by) && (
+        <span className="text-muted-foreground flex min-w-0 items-center gap-1 text-xs">
+          <Hourglass aria-hidden className="h-3 w-3 shrink-0" />
+          <span className="truncate">
+            {session.waiting_on
+              ? `waiting on ${session.waiting_on}`
+              : `${session.waited_by} waiting on it`}
           </span>
         </span>
       )}

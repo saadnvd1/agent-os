@@ -23,6 +23,38 @@ describe("wakeLine", () => {
   });
 });
 
+describe("wakeLine for a reply", () => {
+  it("says which request it answers and keeps the message prefix", () => {
+    const line = wakeLine(
+      { fromName: "b", fromId: "3f2a9c1e-0000", body: "done" },
+      { replyTo: { id: 12, excerpt: "ship it?" } }
+    );
+    expect(line).toBe(
+      '[AgentOS message from "b" (3f2a9c1e), replying to your #12 ("ship it?")]: done. Reply with: aos send 3f2a9c1e "<message>"'
+    );
+    expect(line.startsWith("[AgentOS message from")).toBe(true);
+  });
+});
+
+describe("matchesRef across workspaces", () => {
+  const s = {
+    id: "id-1",
+    name: "planner",
+    projectName: "app",
+    tmuxName: "claude-1",
+    workspaceName: "Alpha",
+    orchestrator: true,
+  };
+  it("matches workspace/name and, for an orchestrator, workspace/orchestrator", () => {
+    expect(matchesRef("alpha/planner", s)).toBe(true);
+    expect(matchesRef("ALPHA/orchestrator", s)).toBe(true);
+    expect(
+      matchesRef("alpha/orchestrator", { ...s, orchestrator: false })
+    ).toBe(false);
+    expect(matchesRef("beta/orchestrator", s)).toBe(false);
+  });
+});
+
 describe("wakeLine for a linked machine", () => {
   const long = "word ".repeat(400).trim();
   it("carries a long body whole instead of a stub", () => {

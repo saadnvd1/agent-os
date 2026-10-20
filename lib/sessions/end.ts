@@ -4,6 +4,7 @@ import { waitForExit } from "../chat/worker/client";
 import { endTmuxSession } from "../tmux/end";
 import { releaseOnEnd, shutTaskSimulators } from "../simulator";
 import { forgetPlanWait } from "../models/plan-step";
+import { kickWaits } from "../bus/waits/kick";
 
 type Agent = Pick<Session, "id" | "host_id" | "tmux_name"> &
   Partial<Pick<Session, "worktree_path" | "branch_name">>;
@@ -20,4 +21,6 @@ export async function endSessionAgent(s: Agent): Promise<void> {
   shutTaskSimulators(s);
   void waitForExit(s.id).catch(() => {});
   await endTmuxSession(s.host_id, s.tmux_name);
+  // Whoever waits on it is told now, not at the next sweep.
+  kickWaits();
 }

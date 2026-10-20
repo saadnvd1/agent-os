@@ -32,3 +32,22 @@ describe("describeSessions", () => {
     expect(describeSessions("ws", [facts(null)])).not.toMatch(/plan/);
   });
 });
+
+describe("sessions that wait on each other", () => {
+  it("shows who a session waits on and who waits on it", () => {
+    const text = describeSessions("ws", [
+      {
+        ...facts(null),
+        waits: {
+          on: [{ name: "builder", kind: "reply", leftMs: 12 * 60_000 }],
+          by: ["tester"],
+        },
+      },
+    ]);
+    expect(text).toContain("waiting on");
+    expect(text).toContain("builder");
+    expect(text).toContain("12m left");
+    expect(text).toContain("tester");
+    expect(text).toContain("waiting on it");
+  });
+});
