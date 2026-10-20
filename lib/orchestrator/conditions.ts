@@ -10,6 +10,8 @@
 import { runForSession } from "../recipes/store";
 import { db, type StackItemStatus, type StackStatus } from "../db";
 import { isFinished, type TaskPR } from "../tasks/state";
+import { eventLine } from "../claims/overlapText";
+import type { SessionOverlap } from "../claims/mine";
 import { ciWord } from "./describe";
 import type { SessionFacts } from "./facts";
 import { untrusted } from "./untrusted";
@@ -192,6 +194,29 @@ function stackConditions(s: StackFacts): Condition[] {
   return out;
 }
 
+// A strong overlap between a session here and other work, anywhere. Held
+// until it ends, so it goes through the events' two-diff damping and
+// REFIRE_MS, and an overlap that only flickers is dropped.
+function overlapConditions(
+  facts: SessionFacts[],
+  overlaps: SessionOverlap[]
+): Condition[] {
+  const names = new Map(facts.map((f) => [f.id, f.name]));
+  return overlaps.flatMap((o) => {
+    const name = names.get(o.sessionId);
+    if (!name) return [];
+    return [
+      {
+        key: conditionKey(`overlap:${o.pairKey}`, o.sessionId),
+        subject: o.sessionId,
+        line: eventLine(o, name),
+        sticky: false,
+        low: true,
+      },
+    ];
+  });
+}
+
 // Sessions the orchestrator itself messaged this recently don't raise
 // "needs input": that's most likely it waiting on its own question.
 export const QUIET_AFTER_MESSAGE_MS = 2 * 60 * 1000;
@@ -200,11 +225,13 @@ export function conditionsFor(
   facts: SessionFacts[],
   stacks: StackFacts[],
   now = Date.now(),
-  quiet: ReadonlySet<string> = new Set()
+  quiet: ReadonlySet<string> = new Set(),
+  overlaps: SessionOverlap[] = []
 ): Condition[] {
   return [
     ...facts.flatMap((f) => sessionConditions(f, now, quiet.has(f.id))),
     ...stacks.flatMap(stackConditions),
+    ...overlapConditions(facts, overlaps),
   ];
 }
 

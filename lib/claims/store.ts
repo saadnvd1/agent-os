@@ -276,3 +276,10 @@ export function wireFor(
       released: (r.released as Released | null) ?? null,
     }));
 }
+
+// One claim by id even when released: a tombstone says how it ended.
+export function claimById(id: string): Claim | null {
+  const r = getDb().prepare(`${SELECT} WHERE id = ?`).get(id) as
+    Row | undefined;
+  return r ? fromRow(r) : null;
+}
