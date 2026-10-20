@@ -177,6 +177,13 @@ export async function handlePeerRpc(
     return null;
   };
 
+  // The one nonce the header claimed: the whole envelope must carry it.
+  let claimed: string | null = null;
+  const spent: ReplayGuard = {
+    check: (peer, nonce) =>
+      claimed !== null && claimed === `${peer}:${nonce}` ? "ok" : "replay",
+  };
+
   if (!deps.anyActive()) return plain(res, 404, "not found");
   const ticket = deps.budget.open(sourceOf(req));
   if (!ticket) return void refuse("busy");
@@ -193,6 +200,17 @@ export async function handlePeerRpc(
             return { refusal: "bad_sig" };
           const now = deps.now?.() ?? Date.now();
           if (Math.abs(now - header.ts) > SKEW_MS) return { refusal: "stale" };
+          // The nonce is spent the moment its header is proven, so a header
+          // seen on the wire can't be sent again with junk bodies to hold
+          // the sender's share while the first is still arriving.
+          const fresh = deps.replay.check(
+            header.from,
+            header.nonce,
+            header.ts,
+            now
+          );
+          if (fresh !== "ok") return { refusal: fresh };
+          claimed = `${header.from}:${header.nonce}`;
           return { peer: header.from };
         },
         ticket,
@@ -209,7 +227,7 @@ export async function handlePeerRpc(
       self: self.machineId,
       boxKey: deps.boxKey().privateKey,
       signKeyFor,
-      replay: deps.replay,
+      replay: spent,
       now: deps.now?.(),
     });
   };

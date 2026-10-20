@@ -14,6 +14,7 @@ import {
   DEVICE_HEADER,
   TRUST_HEADER,
   REMOTE_HEADER,
+  SOURCE_HEADER,
   PEER_HEADER,
   PEER_INTERNAL_HEADER,
   type AuthPolicy,
@@ -25,6 +26,7 @@ import { tailscaleAddresses } from "./net";
 import { networkSetting } from "./network-settings";
 import { pairLocation } from "../session-url";
 import { peerSecret } from "../peer/internal";
+import { sourceOf } from "../peer/rpc-intake";
 
 // Interface addresses change rarely; don't re-read them on every request.
 let tailnetCache = { at: 0, ips: [] as string[] };
@@ -63,6 +65,7 @@ function decide(req: IncomingMessage, policy: AuthPolicy): AuthResult {
     delete req.headers[PEER_HEADER];
   const tunnel = isTunnelSocket(req.socket);
   req.headers[REMOTE_HEADER] = sourceLabel(req.socket.remoteAddress, tunnel);
+  req.headers[SOURCE_HEADER] = sourceOf(req);
   let result: AuthResult;
   try {
     result = authorize(

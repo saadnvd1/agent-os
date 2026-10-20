@@ -7,12 +7,14 @@
 
 import fs from "fs";
 import path from "path";
-import { ApiError, clean } from "./control-api";
+import { ApiError, clean, type Beat } from "./control-api";
 
 export const HEARTBEAT_MS = 60_000;
 
 export interface HeartbeatOptions {
-  beat: () => Promise<{ enabled: boolean }>;
+  beat: () => Promise<Beat>;
+  /** Every answer, for what it says about the account (plan, peers). */
+  onBeat?: (beat: Beat) => void;
   /** The account disabled this machine: stop the tunnel. */
   onDisabled: () => void;
   /** The service no longer knows this machine. */
@@ -43,9 +45,15 @@ export function startHeartbeat(opts: HeartbeatOptions) {
   const tick = async () => {
     timer = null;
     try {
-      const { enabled } = await opts.beat();
+      const answer = await opts.beat();
+      const { enabled } = answer;
       if (stopped) return;
       failing = false;
+      try {
+        opts.onBeat?.(answer);
+      } catch (err) {
+        log(`connect: ${clean((err as Error)?.message ?? String(err))}`);
+      }
       if (enabled === false) {
         stop();
         log("connect: this machine was disabled in your account; tunnel off");

@@ -40,6 +40,7 @@ import {
   type Tunnel,
 } from "./control-api";
 import { appVersion, startHeartbeat } from "./heartbeat";
+import { noteHeartbeat } from "@/lib/peer/account";
 import { ensureCloudflared } from "./cloudflared";
 import {
   reapTunnel,
@@ -331,6 +332,7 @@ export function startConnect(
     const version = appVersion();
     const heartbeat = startHeartbeat({
       beat: () => beat(config, machineKey, version),
+      onBeat: noteHeartbeat,
       log,
       intervalMs: deps.heartbeatMs,
       onDisabled: () => {

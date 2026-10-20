@@ -18,6 +18,9 @@ export const DEVICE_COOKIE = "aos_device";
 export const DEVICE_HEADER = "x-agentos-device";
 export const TRUST_HEADER = "x-agentos-trust";
 export const REMOTE_HEADER = "x-agentos-remote";
+// Who sent it, for per-sender limits: the visitor's address on a Connect
+// request (lib/peer/rpc-intake sourceOf), an IPv6 address by its /64.
+export const SOURCE_HEADER = "x-agentos-source";
 // The rpc server's loopback hop (lib/peer/rpc-server): the per-boot secret,
 // and the linked machine it verified. Never trusted from anywhere else.
 export const PEER_INTERNAL_HEADER = "x-agentos-peer-internal";
@@ -81,12 +84,17 @@ const FORWARDING = new Set([
 const FORWARDING_PREFIXES = ["x-forwarded-", "cf-", "tailscale-"];
 
 // Reached without a token: the pairing page, what it needs to render, the
-// claim it posts, and a linked machine's rpc (its envelope is the proof). Exact paths, plus a few static asset folders whose
-// paths may only use plain characters (no traversal, no encoding).
+// claim it posts, a linked machine's rpc (its envelope is the proof) and
+// the pairing hellos (signed by a key the account lists). Exact paths, plus
+// a few static asset folders whose paths may only use plain characters (no
+// traversal, no encoding).
 const PUBLIC_EXACT = new Set([
   "/pair",
   "/api/pair/claim",
   "/api/peer/rpc",
+  "/api/peer/hello",
+  "/api/peer/hello/reveal",
+  "/api/peer/hello/status",
   "/manifest.webmanifest",
   "/manifest.json",
   "/favicon.ico",

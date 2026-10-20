@@ -29,7 +29,7 @@ function Command() {
   );
 }
 
-function LinkForm() {
+export function LinkForm() {
   const [code, setCode] = useState("");
   const link = useLinkConnect();
   const submit = () => {

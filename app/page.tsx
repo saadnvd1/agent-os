@@ -34,6 +34,7 @@ if (typeof window !== "undefined") {
 import { PaneProvider, usePanes } from "@/contexts/PaneContext";
 import { Pane } from "@/components/Pane";
 import { AwayReport } from "@/components/Away/AwayReport";
+import { IncomingLinks } from "@/components/Hosts/IncomingLinkSheet";
 import type { BrowserNotifications } from "@/components/Settings/NotificationsSection";
 import { useNotifications } from "@/hooks/useNotifications";
 import { useViewport } from "@/hooks/useViewport";
@@ -161,6 +162,7 @@ const AppDialogs = memo(function AppDialogs({
       <MoveDialog />
       <ShareDialog />
       <AwayReport />
+      <IncomingLinks />
       <CommandPalette />
     </>
   );

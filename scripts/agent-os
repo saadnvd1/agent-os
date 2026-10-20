@@ -83,6 +83,8 @@ case "${1:-}" in
     pair)             node "$SCRIPT_DIR/pair.mjs" "$PORT" ;;
     connect)          shift; (cd "$(dirname "$SCRIPT_DIR")" && npx tsx lib/connect/cli.ts "$@") ;;
     disconnect)       (cd "$(dirname "$SCRIPT_DIR")" && npx tsx lib/connect/cli.ts --off) ;;
+    link)             shift; (cd "$(dirname "$SCRIPT_DIR")" && npx tsx lib/peer/cli.ts "$PORT" "$@") ;;
+    unlink)           shift; (cd "$(dirname "$SCRIPT_DIR")" && npx tsx lib/peer/cli.ts "$PORT" --unlink "$@") ;;
     passkeys)         shift; (cd "$(dirname "$SCRIPT_DIR")" && npx tsx lib/security/passkeys-cli.ts "$@") ;;
     logs)             cmd_logs ;;
     update)           cmd_update ;;

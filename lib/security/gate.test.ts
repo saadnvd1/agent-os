@@ -8,6 +8,7 @@ import {
   PEER_HEADER,
   PEER_INTERNAL_HEADER,
   REMOTE_HEADER,
+  SOURCE_HEADER,
   TRUST_HEADER,
   markTunnelSocket,
   type AuthPolicy,
@@ -126,6 +127,29 @@ describe("sourceLabel", () => {
     expect(sourceLabel("127.0.0.1", true)).toBe("connect");
     expect(sourceLabel(undefined)).toBe("unknown");
     expect(sourceLabel("::ffff:10.0.0.9")).toBe("10.0.0.9");
+  });
+
+  it("stamps who sent it, Cloudflare's visitor on the tunnel, never the client's copy", () => {
+    const socket = { remoteAddress: "127.0.0.1", localAddress: "127.0.0.1" };
+    markTunnelSocket(socket as never);
+    const req = {
+      url: "/api/peer/hello",
+      method: "POST",
+      headers: {
+        host: "m.runagentos.com",
+        "cf-connecting-ip": "2001:db8:aa:bb:1:2:3:4",
+        [SOURCE_HEADER]: "chosen",
+      },
+      socket,
+    } as unknown as IncomingMessage;
+    const res = { statusCode: 200, setHeader() {}, end() {} };
+    gateRequest(req, res as unknown as ServerResponse, policy);
+    expect(req.headers[SOURCE_HEADER]).toBe("2001:db8:aa:bb::/64");
+    expect(
+      call("/api/x", "192.168.1.20", { [SOURCE_HEADER]: "chosen" }).req.headers[
+        SOURCE_HEADER
+      ]
+    ).toBe("192.168.1.20");
   });
 });
 

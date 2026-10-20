@@ -86,9 +86,9 @@ them.
 
 ### Linked machines over Connect (in development)
 
-Two machines on the same Connect account will be able to link without a
-tailnet (`lib/peer`; pairing is not built yet, so nothing creates a link
-today). A link stores the other machine's public keys, never a token. Each
+Two machines on the same Connect account can link without a tailnet
+(`lib/peer`, Connect Pro only; calls between linked machines are still being
+wired up). A link stores the other machine's public keys, never a token. Each
 call is `POST /api/peer/rpc` carrying an envelope signed with the caller's
 Ed25519 machine key and encrypted (X25519, HKDF-SHA256, ChaCha20-Poly1305) to
 the other machine's box key, `~/.agent-os/connect/peer.key`, which never goes
@@ -118,6 +118,38 @@ per minute, with refusals anyone could cause apart from the rest, so a flood
 of forged envelopes can't fill the disk or hide this machine's own failures. An unsigned
 refusal of a write is treated as an unknown outcome, since anyone on the path
 could forge one.
+
+Pairing (`lib/peer/pairing.ts` on the machine asked, `pairing-out.ts` on the
+one asking) trusts the Connect service only for the list of the account's
+machines and their Ed25519 keys (`GET /api/v1/machines/:id/peers`, fetched at
+most once a minute and again when the heartbeat's `peers_etag` changes), and
+for the plan: linking is refused unless the heartbeat or that list says
+`link_machines`. The three hello routes, `/api/peer/hello`, `/hello/reveal`
+and `/hello/status`, are the only public ones; each takes at most 4 KiB, signed
+by a key the list holds for the sender, addressed to this machine, within ±120 s
+and with a nonce not seen before. The asking machine sends a commitment to its
+box key and a random nonce; the answer is signed by the key the list holds for
+this machine and carries its own nonce; only then is the first nonce revealed
+and checked against the commitment. Both sides derive a 6-digit code over both
+machines' keys and both nonces (HKDF-SHA256), so a party in the middle, even
+one the Connect service lied for, ends up with codes that differ. A person
+types the code on the machine being asked, which needs this machine, the
+tailnet or a device with **Can approve**; `peer` trust never can. Three wrong
+codes void the request. That proves the asking machine's keys to the one
+being asked, which pins them. The asking machine trusts nothing the other one
+says on its own word, since its key came from the same list: the machine
+being asked shows a second code from the same transcript (another HKDF info
+string), and the person types it on the asking machine, which pins only on a
+constant-time match, again with 3 tries and 5 minutes. A Connect service that
+lists a key of its own for either machine so gets nothing pinned on either
+side. A pin never changes keys: a machine that comes back with other keys is
+refused until a person unlinks it. A request lives 5 minutes; at most 3 are
+open at once and one per sender (a newer one replaces it), 5 hellos per
+sender and 20 in all per 10 minutes, and 120 from anyone before a signature
+is checked, at most 20 of them from one address (an IPv6 /64), which bounds
+the work a stranger can cause. Linking sends a "New machine linked" push.
+`agent-os link accept <code>` does the same from a terminal on a machine with
+no browser and prints the code to type back.
 
 ### Shared links
 
