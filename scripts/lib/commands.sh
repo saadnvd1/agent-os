@@ -189,7 +189,7 @@ cmd_stop() {
     while ps -p "$pid" &> /dev/null && [[ $count -lt 10 ]]; do
         printf "."
         sleep 1
-        ((count++))
+        count=$((count + 1))
     done
     echo ""
 
