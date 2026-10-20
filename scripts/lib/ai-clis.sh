@@ -4,19 +4,19 @@
 detect_ai_clis() {
     local installed=()
 
-    command -v claude &> /dev/null && installed+=("claude")
-    command -v codex &> /dev/null && installed+=("codex")
-    command -v opencode &> /dev/null && installed+=("opencode")
-    command -v kilo &> /dev/null && installed+=("kilo")
-    command -v gemini &> /dev/null && installed+=("gemini")
-    command -v aider &> /dev/null && installed+=("aider")
-    command -v cursor &> /dev/null && installed+=("cursor")
+    have_cli claude && installed+=("claude")
+    have_cli codex && installed+=("codex")
+    have_cli opencode && installed+=("opencode")
+    have_cli kilo && installed+=("kilo")
+    have_cli gemini && installed+=("gemini")
+    have_cli aider && installed+=("aider")
+    have_cli cursor && installed+=("cursor")
 
     echo "${installed[*]}"
 }
 
 install_claude_code() {
-    if command -v claude &> /dev/null; then
+    if have_cli claude; then
         log_success "Claude Code already installed"
         return 0
     fi
@@ -36,7 +36,7 @@ install_claude_code() {
 }
 
 install_codex() {
-    if command -v codex &> /dev/null; then
+    if have_cli codex; then
         log_success "Codex already installed"
         return 0
     fi
@@ -51,16 +51,16 @@ install_codex() {
 }
 
 install_aider() {
-    if command -v aider &> /dev/null; then
+    if have_cli aider; then
         log_success "Aider already installed"
         return 0
     fi
 
     log_info "Installing Aider..."
 
-    if command -v pipx &> /dev/null; then
+    if have_cli pipx; then
         pipx install aider-chat
-    elif command -v pip3 &> /dev/null; then
+    elif have_cli pip3; then
         pip3 install aider-chat
     else
         log_error "Please install Python/pip first, then run: pip install aider-chat"
@@ -69,7 +69,7 @@ install_aider() {
 }
 
 install_gemini_cli() {
-    if command -v gemini &> /dev/null; then
+    if have_cli gemini; then
         log_success "Gemini CLI already installed"
         return 0
     fi
@@ -84,7 +84,7 @@ install_gemini_cli() {
 }
 
 install_kilocode_cli() {
-    if command -v kilo &> /dev/null; then
+    if have_cli kilo; then
         log_success "Kilo Code CLI already installed"
         return 0
     fi

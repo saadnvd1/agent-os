@@ -1,6 +1,7 @@
 import fs from "fs";
 import os from "os";
 import path from "path";
+import { onWindowsDrive, wslVersion } from "../wsl";
 
 // Where agent CLIs install themselves outside a login shell's PATH: a chat
 // worker and the server never source ~/.zshrc, so a CLI that lives under nvm
@@ -37,6 +38,13 @@ function executable(file: string): boolean {
   }
 }
 
+// WSL appends the Windows PATH, so a CLI installed only on Windows (an npm
+// shim under /mnt/c) would be found and run with a Windows home and config
+// over the slow drive. Only the Linux install counts.
+export function skipDir(dir: string, wsl = wslVersion()): boolean {
+  return wsl !== 0 && onWindowsDrive(dir);
+}
+
 const found = new Map<string, string | null>();
 
 // The absolute path of a CLI, or null when it isn't installed.
@@ -45,7 +53,7 @@ export function resolveCli(name: string, fresh = false): string | null {
   const dirs = [
     ...(process.env.PATH ?? "").split(path.delimiter).filter(Boolean),
     ...extraDirs(),
-  ];
+  ].filter((d) => !skipDir(d));
   const hit = dirs.map((d) => path.join(d, name)).find(executable) ?? null;
   found.set(name, hit);
   return hit;

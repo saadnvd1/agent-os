@@ -7,13 +7,17 @@
 import { execFile } from "child_process";
 import { promisify } from "util";
 import { db } from "./db";
+import { windowsListeningPorts } from "./windows-ports";
 
 const execFileAsync = promisify(execFile);
 
 export const MAX_SLOT = 200;
 
 // Something outside AgentOS listening on it. lsof exits 1 when nothing is.
+// Under WSL 2 a Windows process on the port counts too: localhost is shared
+// with Windows, which lsof can't see. When Windows can't be asked, lsof alone.
 export async function isPortInUse(port: number): Promise<boolean> {
+  if ((await windowsListeningPorts())?.has(port)) return true;
   try {
     const { stdout } = await execFileAsync(
       "lsof",

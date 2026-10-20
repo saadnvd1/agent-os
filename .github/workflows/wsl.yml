@@ -1,10 +1,25 @@
 name: WSL
 
-# Manual only: a spot check that the installer and the server work under
-# WSL 2 on a GitHub-hosted Windows runner. Run it from the Actions tab or
+# A Windows PC runs AgentOS inside WSL 2, and a Linux arm64 box (a DGX Spark)
+# runs it as plain Linux. This installs and smoke-tests both. Advisory: it
+# isn't a required check (it takes 15-25 minutes), so it runs on the changes
+# that can break it, weekly, and by hand from the Actions tab or
 # `gh workflow run wsl.yml --ref <branch>`.
 on:
   workflow_dispatch:
+  schedule:
+    - cron: "17 6 * * 1"
+  pull_request:
+    paths:
+      - ".github/workflows/wsl.yml"
+      - "scripts/agent-os"
+      - "scripts/lib/**"
+      - "scripts/ci-machine-link.sh"
+      - "lib/wsl.ts"
+      - "lib/windows-ports.ts"
+      - "lib/agents/cli-path.ts"
+      - "lib/connect/**"
+      - "lib/hosts/**"
 
 jobs:
   wsl:
@@ -17,7 +32,10 @@ jobs:
         with:
           distribution: Ubuntu-24.04
           wsl-version: 2
-          additional-packages: rsync curl ca-certificates
+          wsl-conf: |
+            [boot]
+            systemd=true
+          additional-packages: rsync curl ca-certificates openssh-server
 
       - name: Kernel
         shell: wsl-bash {0}
@@ -57,7 +75,96 @@ jobs:
           done
           agent-os stop
 
+      # A Windows process on a port must count as taken: lsof in the distro
+      # can't see it, but localhost is shared.
+      - name: Windows listeners are seen from WSL
+        shell: wsl-bash {0}
+        run: |
+          set -euo pipefail
+          powershell.exe -NoProfile -Command "\$l = [Net.Sockets.TcpListener]::new([Net.IPAddress]::Loopback, 38123); \$l.Start(); Start-Sleep -Seconds 40" &
+          sleep 5
+          cd ~/.agent-os/repo
+          npx tsx -e "
+            import { windowsListeningPorts } from './lib/windows-ports';
+            windowsListeningPorts().then((p) => {
+              console.log('windows listeners:', p ? p.size : 'unknown');
+              if (!p?.has(38123)) process.exit(1);
+            });"
+
+      # The real cloudflared download for linux-x64 and its pinned hash check.
+      # No tunnel token: Connect itself needs an account.
+      - name: Connect's cloudflared downloads and verifies
+        shell: wsl-bash {0}
+        run: |
+          set -euo pipefail
+          cd ~/.agent-os/repo
+          dir=$(mktemp -d)
+          bin=$(npx tsx -e "
+            import { ensureCloudflared } from './lib/connect/cloudflared';
+            ensureCloudflared({ dir: '$dir' }).then((p) => console.log(p));" | tail -1)
+          "$bin" --version
+
+      # The same box is both ends here. A Windows logon task and linger need
+      # a systemd user session, which a runner may not give: advisory.
+      - name: Start at login, and the machine-link path
+        shell: wsl-bash {0}
+        continue-on-error: true
+        run: |
+          set -euo pipefail
+          export PATH="$HOME/.local/bin:$PATH"
+          ps -p 1 -o comm= | grep -q systemd
+          sudo systemctl enable --now ssh
+          agent-os enable
+          loginctl show-user "$USER" -p Linger | grep -q yes
+          schtasks.exe /Query /TN "AgentOS ($WSL_DISTRO_NAME)"
+          agent-os start
+          for _ in $(seq 1 90); do
+            curl -sf http://localhost:3011/api/projects > /dev/null && break
+            sleep 2
+          done
+          ~/.agent-os/repo/scripts/ci-machine-link.sh 3011
+          agent-os stop
+          agent-os disable
+          ! schtasks.exe /Query /TN "AgentOS ($WSL_DISTRO_NAME)"
+
       - name: Server log
         if: always()
         shell: wsl-bash {0}
+        run: tail -100 ~/.agent-os/agent-os.log || true
+
+  linux-arm64:
+    name: Install and smoke test on Linux arm64
+    runs-on: ubuntu-24.04-arm
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@v7
+      - name: Install
+        run: scripts/agent-os install --local
+      - name: Start, node-pty, cloudflared arm64, linked-machine path
+        run: |
+          set -euo pipefail
+          export PATH="$HOME/.local/bin:$PATH"
+          uname -m
+          sudo apt-get install -y openssh-server
+          sudo systemctl enable --now ssh
+          (cd ~/.agent-os/repo && node -e "
+            const p = require('node-pty').spawn('bash', ['-c', 'echo pty-ok'], {});
+            let out = ''; p.onData((d) => (out += d));
+            p.onExit(() => { if (!out.includes('pty-ok')) process.exit(1); console.log('node-pty ok'); });")
+          agent-os start
+          for _ in $(seq 1 90); do
+            curl -sf http://localhost:3011/api/projects > /dev/null && break
+            sleep 2
+          done
+          curl -sf http://localhost:3011/api/projects > /dev/null
+          cd ~/.agent-os/repo
+          dir=$(mktemp -d)
+          bin=$(npx tsx -e "
+            import { ensureCloudflared } from './lib/connect/cloudflared';
+            ensureCloudflared({ dir: '$dir' }).then((p) => console.log(p));" | tail -1)
+          "$bin" --version
+          scripts/ci-machine-link.sh 3011
+          agent-os stop
+      - name: Server log
+        if: always()
         run: tail -100 ~/.agent-os/agent-os.log || true
