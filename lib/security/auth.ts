@@ -81,12 +81,17 @@ const FORWARDING = new Set([
 const FORWARDING_PREFIXES = ["x-forwarded-", "cf-", "tailscale-"];
 
 // Reached without a token: the pairing page, what it needs to render, the
-// claim it posts, and a linked machine's rpc (its envelope is the proof). Exact paths, plus a few static asset folders whose
-// paths may only use plain characters (no traversal, no encoding).
+// claim it posts, a linked machine's rpc (its envelope is the proof) and
+// the pairing hellos (signed by a key the account lists). Exact paths, plus
+// a few static asset folders whose paths may only use plain characters (no
+// traversal, no encoding).
 const PUBLIC_EXACT = new Set([
   "/pair",
   "/api/pair/claim",
   "/api/peer/rpc",
+  "/api/peer/hello",
+  "/api/peer/hello/reveal",
+  "/api/peer/hello/status",
   "/manifest.webmanifest",
   "/manifest.json",
   "/favicon.ico",

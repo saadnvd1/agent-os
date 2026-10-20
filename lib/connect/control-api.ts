@@ -214,17 +214,123 @@ export async function requestTunnel(
   return { hostname: hostnameFrom(r), token: tokenFrom(r) };
 }
 
+/** What the account's plan allows; absent from an older Connect service. */
+export interface Entitlements {
+  plan: string;
+  linkMachines: boolean;
+  machineLimit: number;
+}
+
+export interface Beat {
+  enabled: boolean;
+  entitlements?: Entitlements;
+  /** Changes whenever the list `peers` would give changes. */
+  peersEtag?: string;
+}
+
+const ETAG = /^[A-Za-z0-9_-]{1,128}$/;
+
+export function entitlementsFrom(raw: unknown): Entitlements | undefined {
+  const e = (raw ?? null) as Record<string, unknown> | null;
+  if (!e || typeof e !== "object" || typeof e.link_machines !== "boolean")
+    return undefined;
+  return {
+    plan: typeof e.plan === "string" ? clean(e.plan, 32) : "unknown",
+    linkMachines: e.link_machines,
+    machineLimit:
+      typeof e.machine_limit === "number" &&
+      Number.isSafeInteger(e.machine_limit)
+        ? e.machine_limit
+        : 0,
+  };
+}
+
+const etagFrom = (raw: unknown) =>
+  typeof raw === "string" && ETAG.test(raw) ? raw : undefined;
+
 export async function heartbeat(
   config: ConnectConfig,
   privateKey: string,
   version: string
-) {
+): Promise<Beat> {
   const res = await signed(config, privateKey)(
     "POST",
     `/api/v1/machines/${config.machineId}/heartbeat`,
     { version }
   );
-  return (await res.json()) as { enabled: boolean };
+  const r = ((await res.json().catch(() => null)) ?? {}) as Record<
+    string,
+    unknown
+  >;
+  return {
+    enabled: r.enabled !== false,
+    entitlements: entitlementsFrom(r.entitlements),
+    peersEtag: etagFrom(r.peers_etag),
+  };
+}
+
+/** Another machine on this account, as the Connect service introduces it. */
+export interface ListedMachine {
+  id: string;
+  name: string;
+  hostname: string;
+  /** Its Ed25519 key as the service holds it: SPKI PEM. */
+  publicKey: string;
+  lastSeenAt: string | null;
+  version: string | null;
+}
+
+export interface PeerList {
+  entitlements?: Entitlements;
+  peersEtag?: string;
+  peers: ListedMachine[];
+}
+
+const MAX_PEERS = 100;
+
+/**
+ * The account's other machines this one may link to. Only an introduction:
+ * anything malformed is dropped here, and the keys still have to be
+ * confirmed by a person on both machines before either trusts the other.
+ */
+export async function listPeers(
+  config: ConnectConfig,
+  privateKey: string
+): Promise<PeerList> {
+  const res = await signed(config, privateKey)(
+    "GET",
+    `/api/v1/machines/${config.machineId}/peers`
+  );
+  const r = (await res.json().catch(() => null)) as Record<
+    string,
+    unknown
+  > | null;
+  if (!r || !Array.isArray(r.peers))
+    throw new Error("the Connect service sent no machine list");
+  const str = (v: unknown, max: number) =>
+    typeof v === "string" && v.length <= max ? v : null;
+  const peers: ListedMachine[] = [];
+  for (const raw of r.peers.slice(0, MAX_PEERS)) {
+    const m = (raw ?? {}) as Record<string, unknown>;
+    const id = str(m.id, 8);
+    const hostname = str(m.hostname, 253);
+    const publicKey = str(m.public_key, 1024);
+    if (!id || !MACHINE_ID.test(id) || !hostname || !publicKey) continue;
+    if (id === config.machineId) continue;
+    peers.push({
+      id,
+      name: clean(str(m.name, 500) ?? id, 80),
+      hostname,
+      publicKey,
+      lastSeenAt: str(m.last_seen_at, 64),
+      version: str(m.agent_os_version, 64),
+    });
+  }
+  return {
+    entitlements: entitlementsFrom(r.entitlements),
+    peersEtag: etagFrom(r.peers_etag),
+    peers,
+  };
 }
 
 export interface PushRequestBody {
