@@ -5,6 +5,7 @@
 
 import { randomUUID } from "crypto";
 import { db, type Workspace } from "./db";
+import { clearForeignGroup } from "./session-groups/assignSessions";
 
 type WorkspaceRow = Omit<
   Workspace,
@@ -141,7 +142,14 @@ export function setProjectWorkspace(
   if (workspaceId && !getWorkspace(workspaceId)) {
     throw new Error("Unknown workspace");
   }
-  db.prepare(
-    `UPDATE projects SET workspace_id = ? WHERE id = ? AND is_uncategorized = 0`
-  ).run(workspaceId, projectId);
+  db.transaction(() => {
+    db.prepare(
+      `UPDATE projects SET workspace_id = ? WHERE id = ? AND is_uncategorized = 0`
+    ).run(workspaceId, projectId);
+    // Its sessions changed workspace, so they leave the old one's groups.
+    const ids = db
+      .prepare(`SELECT id FROM sessions WHERE project_id = ?`)
+      .all(projectId) as { id: string }[];
+    for (const { id } of ids) clearForeignGroup(id);
+  })();
 }

@@ -99,6 +99,8 @@ export interface Session {
   archived_at: string | null;
   // On the sidebar's Pinned shelf (0/1 from SQLite).
   pinned: boolean;
+  // The user's group it sits in (session_groups), or null.
+  session_group_id?: string | null;
   // A workspace's standing orchestrator chat (and that workspace), or null.
   role: "orchestrator" | null;
   // An orchestrator's tool-call secret.
@@ -163,14 +165,6 @@ export interface Session {
   conductor_session_id: string | null;
   worker_task: string | null;
   worker_status: "pending" | "running" | "completed" | "failed" | null;
-}
-
-export interface Group {
-  path: string;
-  name: string;
-  expanded: boolean;
-  sort_order: number;
-  created_at: string;
 }
 
 // production: every merge gate applies. fast: a task's PR merges when it opens.

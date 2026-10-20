@@ -183,4 +183,5 @@ export const SESSION_ROW_COLUMNS: readonly string[] = [
   "started_via",
   "plan_waits_for_caller",
   "plan_handoff_message",
+  "session_group_id",
 ];

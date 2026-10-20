@@ -61,6 +61,7 @@ import {
   type RowMenuItem,
 } from "@/lib/sidebar/row-menu";
 import { Expander, MenuItem, PARTS, icon, type MenuKind } from "./RowMenuParts";
+import { MoveToGroupMenu } from "./MoveToGroupMenu";
 
 const GROUP_ICON: Record<RowMenuGroup, typeof Copy> = {
   open: ExternalLink,
@@ -103,6 +104,12 @@ export function SessionRowMenu({
   const workspaceId =
     session.workspace_id ??
     ctx.projects.find((p) => p.id === session.project_id)?.workspace_id ??
+    null;
+
+  // The server files by the project's workspace first.
+  const groupWorkspaceId =
+    ctx.projects.find((p) => p.id === session.project_id)?.workspace_id ??
+    session.workspace_id ??
     null;
 
   const plan = rowMenu({
@@ -221,6 +228,16 @@ export function SessionRowMenu({
           >
             {projects}
           </Expander>
+        );
+      case "move-group":
+        return (
+          <MoveToGroupMenu
+            key={it}
+            kind={kind}
+            sessionId={session.id}
+            groupId={session.session_group_id}
+            workspaceId={groupWorkspaceId}
+          />
         );
       case "check-ins":
         return item("Schedule check-ins", Clock, () =>

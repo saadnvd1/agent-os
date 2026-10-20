@@ -1,13 +1,15 @@
+import { toast } from "sonner";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
-import type { Session, Group } from "@/lib/db";
+import type { Session } from "@/lib/db";
+import type { SessionGroup } from "@/lib/sidebar/shelves";
 import type { AgentType } from "@/lib/providers";
 import type { ChatAccess, ChatFile, ChatImage } from "@/lib/chat/events";
 import { sessionKeys } from "./keys";
 import { usePollWhenOffline, usePushConnected } from "../push/connection";
 
-interface SessionsResponse {
+export interface SessionsResponse {
   sessions: Session[];
-  groups: Group[];
+  sessionGroups: SessionGroup[];
 }
 
 async function fetchSessions(): Promise<SessionsResponse> {
@@ -128,31 +130,6 @@ export function useSummarizeSession() {
   });
 }
 
-export function useMoveSessionToGroup() {
-  const queryClient = useQueryClient();
-
-  return useMutation({
-    mutationFn: async ({
-      sessionId,
-      groupPath,
-    }: {
-      sessionId: string;
-      groupPath: string;
-    }) => {
-      const res = await fetch(`/api/sessions/${sessionId}`, {
-        method: "PATCH",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ groupPath }),
-      });
-      if (!res.ok) throw new Error("Failed to move session");
-      return res.json();
-    },
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: sessionKeys.list() });
-    },
-  });
-}
-
 export function useMoveSessionToProject() {
   const queryClient = useQueryClient();
 
@@ -172,7 +149,11 @@ export function useMoveSessionToProject() {
       if (!res.ok) throw new Error("Failed to move session");
       return res.json();
     },
-    onSuccess: () => {
+    onSuccess: (data: { clearedGroup?: string | null }) => {
+      if (data.clearedGroup)
+        toast(`Removed from ${data.clearedGroup}`, {
+          description: "Groups stay inside one workspace.",
+        });
       queryClient.invalidateQueries({ queryKey: sessionKeys.list() });
     },
   });

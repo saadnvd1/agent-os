@@ -47,6 +47,14 @@ const usage = `aos: talk to other agent sessions in AgentOS
                                      (--terminal: run it in a terminal, not a chat)
                                      (--priority urgent|blocking|normal|background: where it
                                       stands in the queue; --on-mac: it needs this Mac)
+                                     (--group "<name>": file it in one of your workspace's
+                                      groups; it must exist)
+  aos group                          your workspace's groups and how many sessions each holds
+  aos group new "<name>"             a new group at the bottom of the list
+  aos group add "<group>" <session...>
+                                     put sessions in a group ("me" is this session)
+  aos group rm <session...>          take sessions out of their group
+  aos group rename "<group>" "<name>"
   aos queue                          the queued tasks, their place and why they wait
   aos priority <task> <level>        change a queued task's priority
   aos move <session> <machine>       carry a task on on a linked machine, with its
@@ -214,6 +222,7 @@ function parseSpawnArgs(words) {
   let piece;
   let priority;
   let onMac = false;
+  let group;
   let project;
   let i = 0;
   for (; i < words.length; i++) {
@@ -241,6 +250,10 @@ function parseSpawnArgs(words) {
       priority = words[++i];
       if (priority === undefined) fail("--priority needs a value");
     } else if (w.startsWith("--priority=")) priority = w.slice(11);
+    else if (w === "--group") {
+      group = words[++i];
+      if (group === undefined) fail("--group needs a group name");
+    } else if (w.startsWith("--group=")) group = w.slice(8);
     else if (project === undefined) project = w;
     else break;
   }
@@ -253,6 +266,7 @@ function parseSpawnArgs(words) {
     piece: piece?.trim() || undefined,
     priority: priority?.trim().toLowerCase() || undefined,
     onMac,
+    group: group?.trim() || undefined,
     project,
     prompt: words.slice(i),
   };
@@ -403,13 +417,14 @@ async function main() {
           : p.orchestratorOf
             ? `  ·  orchestrator of ${p.orchestratorOf}`
             : "";
+        const filed = p.group ? ` [${p.group}]` : "";
         const was = p.was.length ? ` (was ${p.was.join(", ")})` : "";
         const waits = [
           p.waitingOn?.length ? `waiting on ${p.waitingOn.join(", ")}` : "",
           p.waitedBy?.length ? `${p.waitedBy.join(", ")} waiting on it` : "",
         ].filter(Boolean);
         console.log(
-          `${p.id.slice(0, 8)}  ${where}${p.name}${was}  ·  ${state}${role}${waits.length ? `  ·  ${waits.join("  ·  ")}` : ""}`
+          `${p.id.slice(0, 8)}  ${where}${p.name}${filed}${was}  ·  ${state}${role}${waits.length ? `  ·  ${waits.join("  ·  ")}` : ""}`
         );
       }
       return;
@@ -501,12 +516,13 @@ async function main() {
         piece,
         priority,
         onMac,
+        group,
         project,
         prompt: words,
       } = parseSpawnArgs(args);
       if (!project || !words.length)
         fail(
-          `usage: aos ${cmd} <project> [--name "<name>"]${cmd === "task" ? " [--on <machine>] [--after <task|any>] [--terminal] [--plan-only] [--piece <name>] [--priority urgent|blocking|normal|background] [--on-mac]" : ""} <prompt...>`
+          `usage: aos ${cmd} <project> [--name "<name>"]${cmd === "task" ? " [--on <machine>] [--after <task|any>] [--terminal] [--plan-only] [--piece <name>] [--priority urgent|blocking|normal|background] [--on-mac]" : ""} [--group "<name>"] <prompt...>`
         );
       if ((priority || onMac) && cmd !== "task")
         fail("--priority and --on-mac work for tasks only");
@@ -531,6 +547,7 @@ async function main() {
         ...(planOnly && { planOnly: true }),
         ...(priority && { priority }),
         ...(onMac && { machine: "mac" }),
+        ...(group && { group }),
       });
       if (queued) {
         console.log(
@@ -757,6 +774,36 @@ async function main() {
         session,
         allIdle,
       });
+      console.log(summary);
+      return;
+    }
+    case "group": {
+      needMe();
+      const [sub, ...rest] = args;
+      const help =
+        'usage: aos group | new "<name>" | add "<group>" <session...> | rm <session...> | rename "<group>" "<name>"';
+      const commands = {
+        undefined: () => ({ action: "list" }),
+        new: () => rest.length === 1 && { action: "new", name: rest[0] },
+        rename: () =>
+          rest.length === 2 && {
+            action: "rename",
+            group: rest[0],
+            name: rest[1],
+          },
+        add: () =>
+          rest.length >= 2 && {
+            action: "add",
+            group: rest[0],
+            sessions: rest.slice(1),
+          },
+        rm: () => rest.length >= 1 && { action: "rm", sessions: rest },
+      };
+      const command = Object.hasOwn(commands, String(sub))
+        ? commands[String(sub)]()
+        : false;
+      if (!command) fail(help);
+      const { summary } = await post("/api/bus/groups", { from: me, command });
       console.log(summary);
       return;
     }

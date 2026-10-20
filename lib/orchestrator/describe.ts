@@ -37,6 +37,7 @@ function sessionLine(f: SessionFacts): string {
       task += `, BLOCKED: ${untrusted(f.name, f.task.blocked)}`;
     parts.push(task);
   }
+  if (f.group) parts.push(`in group "${f.group}"`);
   if (f.plan)
     parts.push(
       `${f.plan.awaiting ? "plan ready, awaiting your approve_plan" : f.plan.planned ? "planned" : "no plan"}${f.plan.reason ? `: ${untrusted(f.name, f.plan.reason)}` : ""}`
@@ -66,7 +67,8 @@ function sessionLine(f: SessionFacts): string {
 // The sessions tool's answer: one line per session, busiest news first.
 export function describeSessions(
   workspace: string,
-  facts: SessionFacts[]
+  facts: SessionFacts[],
+  groups: readonly string[] = []
 ): string {
   if (!facts.length) return `No sessions are running in ${workspace}.`;
   const rank = { waiting: 0, running: 1, idle: 2, dead: 3 };
@@ -82,5 +84,8 @@ export function describeSessions(
   return [
     `${facts.length} ${noun} in ${workspace}${summary}:`,
     ...sorted.map(sessionLine),
+    ...(groups.length
+      ? [`Saad's groups here: ${groups.map((g) => `"${g}"`).join(", ")}.`]
+      : []),
   ].join("\n");
 }

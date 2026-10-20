@@ -14,6 +14,7 @@ import { sidebarUiActions } from "@/stores/sidebarUi";
 import { cn } from "@/lib/utils";
 import { usePendingCardSessions } from "@/data/learning-cards";
 import { SessionRow } from "./SessionRow";
+import { GroupShelves } from "./GroupShelves";
 import { OrchestratorPinRow, OrchestratorStartRow } from "./OrchestratorPinRow";
 import { QueuedRow } from "./QueuedRow";
 import type { QueuedRow as QueuedRowData } from "@/lib/sidebar/queued";
@@ -117,6 +118,7 @@ export function SessionShelves({
   doneCollapsed,
   snoozedCollapsed,
   donePages,
+  workspaceNames,
 }: {
   shelves: Shelves;
   queued: QueuedRowData[];
@@ -124,6 +126,7 @@ export function SessionShelves({
   doneCollapsed: boolean;
   snoozedCollapsed: boolean;
   donePages: number;
+  workspaceNames?: Map<string, string>;
 }) {
   const folds = { doneCollapsed, snoozedCollapsed, donePages };
   const shown = shelves.done.slice(0, doneLimit(donePages));
@@ -142,6 +145,7 @@ export function SessionShelves({
     shelves.orchestrators.length +
       toStart.length +
       shelves.pinned.length +
+      shelves.groups.length +
       shelves.needsYou.length +
       shelves.working.length +
       shelves.inReview.length +
@@ -167,6 +171,7 @@ export function SessionShelves({
           ))}
         </Shelf>
       )}
+      <GroupShelves groups={shelves.groups} workspaceNames={workspaceNames} />
       {shelves.needsYou.length > 0 && (
         <Shelf label="Needs you" count={shelves.needsYou.length} accent>
           {shelves.needsYou.map((r) => (

@@ -152,6 +152,12 @@ const columnsOf = (db: Database.Database, table: string) =>
   );
 const all = (db: Database.Database, from: string) =>
   db.prepare(`SELECT * FROM ${from} ORDER BY id`).all() as Row[];
+// Columns added by migrations after the split these tests seed an old database for.
+const sinceSplit = (rows: Row[]) =>
+  rows.map((r) => {
+    const { session_group_id: _g, ...rest } = r;
+    return rest;
+  });
 const backups = () => {
   const dir = path.join(os.homedir(), ".agent-os", "backups");
   return fs.existsSync(dir)
@@ -211,7 +217,7 @@ describe("dropping the moved columns from sessions", () => {
     runMigrations(db);
 
     expect(columnsOf(db, "sessions").filter(isMovedColumn)).toEqual([]);
-    const after = all(db, "session_rows");
+    const after = sinceSplit(all(db, "session_rows"));
     expect(after).toEqual(before);
     expect(Object.keys(after[0])).toEqual(oldColumns);
     // Every moved column carries a real value in some row.
@@ -247,7 +253,7 @@ describe("dropping the moved columns from sessions", () => {
         ? { ...r, task_prompt: "Refactor the loader, newer." }
         : r
     );
-    expect(all(db, "session_rows")).toEqual(expected);
+    expect(sinceSplit(all(db, "session_rows"))).toEqual(expected);
   });
 
   it("writes a full copy of the database first", () => {

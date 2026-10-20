@@ -19,6 +19,7 @@ import {
   type DevServerType,
 } from "./db";
 import { resolveModelForAgent } from "./model-catalog";
+import { clearForeignGroup } from "./session-groups/assignSessions";
 import type { AgentType } from "./providers";
 
 const execAsync = promisify(exec);
@@ -312,7 +313,7 @@ export function getProjectSessions(projectId: string): Session[] {
 export function moveSessionToProject(
   sessionId: string,
   projectId: string
-): void {
+): { clearedGroup: string | null } {
   const to = getProject(projectId);
   const from = db
     .prepare(
@@ -321,7 +322,7 @@ export function moveSessionToProject(
     )
     .get(sessionId) as
     { workspace_id: string | null; own: string | null } | undefined;
-  db.transaction(() => {
+  return db.transaction(() => {
     queries.updateSessionProject(db).run(projectId, sessionId);
     // A project's session follows the project; one left in none keeps the
     // workspace it was in.
@@ -333,6 +334,8 @@ export function moveSessionToProject(
         : (from?.workspace_id ?? from?.own ?? null),
       sessionId
     );
+    // A group belongs to the workspace the session just left.
+    return { clearedGroup: clearForeignGroup(sessionId) };
   })();
 }
 

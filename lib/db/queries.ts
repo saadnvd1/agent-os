@@ -94,24 +94,6 @@ export const queries = {
       `UPDATE sessions SET worktree_path = ?, branch_name = ?, base_branch = ?, dev_server_port = ?, updated_at = datetime('now') WHERE id = ?`
     ),
 
-  updateSessionGroup: (db: Database.Database) =>
-    getStmt(
-      db,
-      `UPDATE sessions SET group_path = ?, updated_at = datetime('now') WHERE id = ?`
-    ),
-
-  getSessionsByGroup: (db: Database.Database) =>
-    getStmt(
-      db,
-      `SELECT * FROM session_rows WHERE group_path = ? ORDER BY updated_at DESC`
-    ),
-
-  moveSessionsToGroup: (db: Database.Database) =>
-    getStmt(
-      db,
-      `UPDATE sessions SET group_path = ?, updated_at = datetime('now') WHERE group_path = ?`
-    ),
-
   updateSessionProject: (db: Database.Database) =>
     getStmt(
       db,
@@ -195,28 +177,6 @@ export const queries = {
       db,
       `SELECT * FROM tool_calls WHERE message_id = ? ORDER BY timestamp ASC`
     ),
-
-  // Groups
-  getAllGroups: (db: Database.Database) =>
-    getStmt(db, `SELECT * FROM groups ORDER BY sort_order ASC, name ASC`),
-
-  getGroup: (db: Database.Database) =>
-    getStmt(db, `SELECT * FROM groups WHERE path = ?`),
-
-  createGroup: (db: Database.Database) =>
-    getStmt(db, `INSERT INTO groups (path, name, sort_order) VALUES (?, ?, ?)`),
-
-  updateGroupName: (db: Database.Database) =>
-    getStmt(db, `UPDATE groups SET name = ? WHERE path = ?`),
-
-  updateGroupExpanded: (db: Database.Database) =>
-    getStmt(db, `UPDATE groups SET expanded = ? WHERE path = ?`),
-
-  updateGroupOrder: (db: Database.Database) =>
-    getStmt(db, `UPDATE groups SET sort_order = ? WHERE path = ?`),
-
-  deleteGroup: (db: Database.Database) =>
-    getStmt(db, `DELETE FROM groups WHERE path = ?`),
 
   // Projects
   createProject: (db: Database.Database) =>

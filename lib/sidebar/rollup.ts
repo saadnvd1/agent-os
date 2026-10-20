@@ -28,6 +28,7 @@ export function rollups(
   const rows = flatten([
     ...shelves.orchestrators,
     ...shelves.pinned,
+    ...shelves.groups.flatMap((g) => g.rows),
     ...shelves.needsYou,
     ...shelves.working,
     ...shelves.inReview,

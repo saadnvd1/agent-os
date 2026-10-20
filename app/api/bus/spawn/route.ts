@@ -4,6 +4,7 @@ import { createTask } from "@/lib/tasks";
 import { startOrQueue, stampPriority } from "@/lib/tasks/queue";
 import { isPriority } from "@/lib/tasks/schedule-types";
 import { hostIdNamed } from "@/lib/hosts";
+import { resolveGroup } from "@/lib/session-groups";
 import { startView } from "@/lib/sessions/launch";
 import { callerSession, starterOf } from "@/lib/tasks/starter";
 import { callingDevice } from "@/lib/security/device-me";
@@ -33,6 +34,7 @@ export async function POST(request: NextRequest) {
       from,
       cwd,
       piece,
+      group,
     } = await request.json();
     // Whoever called: a session (by `from`, else the worktree it runs in) or a person.
     const starter = starterOf(
@@ -53,8 +55,15 @@ export async function POST(request: NextRequest) {
       throw new Error('machine is "mac" or "any"');
     if (piece !== undefined && mode !== "task")
       throw new Error("--piece works for tasks only");
+    const target = findProject(String(project ?? ""));
+    if (group !== undefined && (typeof group !== "string" || !group.trim()))
+      throw new Error("--group needs a group name");
+    const groupId =
+      typeof group === "string"
+        ? resolveGroup(target.workspace_id ?? null, group).id
+        : undefined;
     if (mode === "task") {
-      const projectId = findProject(String(project ?? "")).id;
+      const projectId = target.id;
       // A task whose plan has pieces waiting here must say which it builds.
       const waiting = startedBy ? waitingPiecesFor(startedBy, projectId) : [];
       let pieceId: number | undefined;
@@ -73,6 +82,7 @@ export async function POST(request: NextRequest) {
         model,
         hostId: on ? hostIdNamed(String(on)) : undefined,
         view: startView(view),
+        groupId,
         planOnly: planOnly === true ? true : undefined,
       };
       const out = await startOrQueue(
@@ -100,6 +110,7 @@ export async function POST(request: NextRequest) {
       model,
       startedBy,
       parentSessionId: starter.parentSessionId,
+      groupId,
     });
     return NextResponse.json({ session }, { status: 201 });
   } catch (error) {

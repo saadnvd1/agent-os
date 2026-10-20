@@ -326,3 +326,10 @@
 - Key rotation for machine and box keys: the old key signs the new ones to each peer.
 - Before S2 creates real pins: audit the ~30 `hostLink()` callers that assume a token link (sweep arming, the terminal's PeerPty and others). They fail safely on a Connect link today, but each needs a Connect path or an explicit refusal.
 - S2 client: a 403 from Connect's `/peers` (machine disabled or over its limit) means "no peers"; don't retry it on every etag change.
+
+## Session groups
+
+- Drag a session onto a group, and drag groups to reorder (menus only in V1).
+- Group-level actions: finish all, snooze all, an orchestrator view per group.
+- Groups across workspaces, or a group filter on the project chip.
+- Drop the old `groups` table and `sessions.group_path` once nothing reads them.

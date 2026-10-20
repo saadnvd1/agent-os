@@ -1,12 +1,8 @@
 import { useMutation, useQueryClient } from "@tanstack/react-query";
-import type { Session, Group } from "@/lib/db";
+import type { Session } from "@/lib/db";
 import { toSqliteTime } from "@/lib/session-meta";
 import { sessionKeys } from "./keys";
-
-interface SessionsResponse {
-  sessions: Session[];
-  groups: Group[];
-}
+import type { SessionsResponse } from "./queries";
 
 async function post(url: string, body: object) {
   const res = await fetch(url, {

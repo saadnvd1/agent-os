@@ -3,6 +3,7 @@
  * then (for a worktree) the setup in the background, then the first message.
  */
 
+import { fileInGroup } from "../session-groups/assignSessions";
 import { agentosHome } from "../agentos-home";
 import type { StartVia } from "../tasks/starter";
 import fs from "fs";
@@ -82,8 +83,9 @@ export interface LaunchInput {
   // The workspace selected when it was started. A session in a project
   // follows the project; one in none keeps this (see inWorkspace).
   workspaceId?: string | null;
-  groupPath?: string;
   systemPrompt?: string | null;
+  // The user's group it starts in (lib/session-groups).
+  groupId?: string;
 }
 
 export interface Launched {
@@ -317,7 +319,7 @@ async function launch(input: LaunchInput, id: string): Promise<Launched> {
       input.parentSessionId ?? null,
       model,
       input.systemPrompt ?? null,
-      input.groupPath ?? "sessions",
+      "sessions",
       agentType,
       input.autoApprove || input.access === "full" ? 1 : 0,
       project?.id ?? "uncategorized",
@@ -335,6 +337,7 @@ async function launch(input: LaunchInput, id: string): Promise<Launched> {
     id
   );
   setHome(id, home);
+  if (input.groupId) fileInGroup(id, input.groupId);
   if (interactive) setSessionModel(id, interactive);
   if (input.access)
     db.prepare(`UPDATE sessions SET chat_access = ? WHERE id = ?`).run(

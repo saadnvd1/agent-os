@@ -5,6 +5,7 @@
  * read this.
  */
 
+import { groupNames } from "../session-groups/store";
 import { db, type Session, type StackItemStatus } from "../db";
 import { statusDetector } from "../status-detector";
 import { hostLink } from "../hosts/remote-api";
@@ -43,6 +44,8 @@ export interface SessionFacts {
   stalled?: Stall | null;
   // Its agent is summarising the context: not stuck, not plain work.
   compacting?: boolean;
+  // Saad's group it sits in, when it is in one.
+  group?: string | null;
   // Last sign of life, in ms.
   lastActive: number;
   // Open waits (aos send --await, aos wait): who it waits on, and who waits on it.
@@ -308,6 +311,7 @@ export async function sessionFacts(
 ): Promise<SessionFacts[]> {
   await statusDetector.refreshCache();
   const badges = waitBadges();
+  const groups = groupNames();
   return Promise.all(
     workspaceSessions(workspaceId).map(async (s) => {
       const [{ status, activity, needsInput }, task] = await Promise.all([
@@ -336,6 +340,7 @@ export async function sessionFacts(
           s.view === "chat" && !hostLink(s.host_id) ? chatStall(s.id) : null,
         compacting:
           s.view === "chat" && !hostLink(s.host_id) && !!chatCompacting(s.id),
+        group: groups.get(s.session_group_id ?? "") ?? null,
         lastActive: await lastActiveFor(s),
         branch: s.branch_name,
         quick: !!s.quick_of,

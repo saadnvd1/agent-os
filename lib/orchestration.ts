@@ -19,6 +19,7 @@ import { UNSET_SERVER_ENV } from "./agents/server-env";
 import { runInBackground } from "./async-operations";
 import { tmux } from "./tmux/exec";
 import { endTmuxSession } from "./tmux/end";
+import { inheritGroup } from "@/lib/session-groups/assignSessions";
 
 export interface SpawnWorkerOptions {
   conductorSessionId: string;
@@ -146,6 +147,7 @@ export async function spawnWorker(
     agentType,
     "uncategorized" // project_id
   );
+  inheritGroup(conductorSessionId, sessionId);
 
   // Update worktree info if created
   if (worktreePath) {

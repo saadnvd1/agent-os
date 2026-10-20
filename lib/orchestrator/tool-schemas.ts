@@ -22,6 +22,16 @@ const view = z
     "How its agent runs: chat (the default), or terminal only when the job needs a TUI (an interactive program, a full-screen tool)"
   );
 
+const group = z
+  .string()
+  .trim()
+  .min(1)
+  .max(60)
+  .optional()
+  .describe(
+    "One of Saad's groups in this workspace, by name (see sessions): file it there when he asked, or when it continues work already in that group. It must exist; you can't create groups"
+  );
+
 const sweepMachine = z
   .string()
   .trim()
@@ -96,6 +106,7 @@ export const TOOL_SHAPES = {
   },
   start_task: {
     project,
+    group,
     prompt: z
       .string()
       .trim()
@@ -196,6 +207,7 @@ export const TOOL_SHAPES = {
   },
   start_session: {
     project,
+    group,
     prompt: z.string().trim().min(1).max(20000),
     name: z
       .string()
@@ -209,6 +221,18 @@ export const TOOL_SHAPES = {
       .optional()
       .describe(
         'One model for the session, "provider/model"; default: the implementation model. Opus only when the work needs deep reasoning'
+      ),
+  },
+  set_group: {
+    session,
+    group: z
+      .string()
+      .trim()
+      .min(1)
+      .max(60)
+      .nullable()
+      .describe(
+        "One of Saad's groups in this workspace by name, or null to take the session out of its group"
       ),
   },
   quick_change: {

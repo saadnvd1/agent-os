@@ -1,6 +1,7 @@
 import { resumeOnModel } from "../models/resume";
 import { workspaceTask } from "./targets";
 import { getWorkspace } from "../workspaces";
+import { listGroups } from "../session-groups/store";
 import {
   approveTaskPlan,
   archive,
@@ -11,6 +12,7 @@ import {
   send,
   stack,
   stackStatus,
+  setGroup,
   startSession,
   startTask,
   startNow,
@@ -59,6 +61,7 @@ const ACTING = new Set<ToolName>([
   "start_task",
   "set_task_model",
   "start_session",
+  "set_group",
   "run_recipe",
   "recipe_save",
   "recipe_update",
@@ -103,7 +106,11 @@ export async function runTool(
       ]);
       resolveStaleAsks(w);
       return [
-        describeSessions(workspace.name, facts),
+        describeSessions(
+          workspace.name,
+          facts,
+          listGroups(w).map((g) => g.name)
+        ),
         describeExternal(external),
       ]
         .filter(Boolean)
@@ -148,6 +155,7 @@ export async function runTool(
         now: a.now,
         nowReason: a.now_reason,
         piece: a.piece,
+        group: a.group,
       });
     }
     case "start_now": {
@@ -187,7 +195,12 @@ export async function runTool(
         name: a.name,
         view: a.view,
         model: a.model,
+        group: a.group,
       });
+    }
+    case "set_group": {
+      const a = p(tool, raw);
+      return setGroup(w, a.session, a.group);
     }
     case "quick_change": {
       const a = p(tool, raw);

@@ -138,6 +138,7 @@ export async function startRow(
     startedVia: (r.started_via ??
       (r.started_by ? "session" : "person")) as StartVia,
     view: r.view ?? undefined,
+    groupId: r.session_group_id ?? undefined,
     agent: (r.agent_type as AgentType | null) ?? undefined,
     baseBranch: r.base_branch ?? undefined,
     hostId: placed?.hostId ?? r.host_id ?? undefined,

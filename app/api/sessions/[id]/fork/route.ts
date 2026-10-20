@@ -1,3 +1,4 @@
+import { inheritGroup } from "@/lib/session-groups/assignSessions";
 import { NextRequest, NextResponse } from "next/server";
 import { randomUUID } from "crypto";
 import { getDb, queries, type Session, type Message } from "@/lib/db";
@@ -62,6 +63,8 @@ export async function POST(request: NextRequest, { params }: RouteParams) {
         parent.project_id || "uncategorized",
         parent.host_id
       );
+
+    inheritGroup(parentId, newId);
 
     // NOTE: We do NOT copy claude_session_id here.
     // When the forked session is first attached, it will use --fork-session flag

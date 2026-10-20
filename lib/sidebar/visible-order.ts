@@ -11,6 +11,10 @@ export interface ShelfFolds {
 // to the pages shown. SessionShelves renders from this too, so the two agree.
 export function shownShelves(shelves: Shelves, folds: ShelfFolds) {
   return {
+    groups: shelves.groups.map((g) => ({
+      ...g,
+      rows: g.group.collapsed ? [] : g.rows,
+    })),
     snoozed: folds.snoozedCollapsed ? [] : shelves.snoozed,
     done: folds.doneCollapsed
       ? []
@@ -32,6 +36,7 @@ export function visibleSessionIds(
   return flatten([
     ...shelves.orchestrators,
     ...shelves.pinned,
+    ...shown.groups.flatMap((g) => g.rows),
     ...shelves.needsYou,
     ...shelves.working,
     ...shelves.inReview,
