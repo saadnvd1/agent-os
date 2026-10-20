@@ -60,6 +60,7 @@ export const STATIC_SIBLINGS = [
   "done-idle",
   "draft",
   "ended",
+  "exchange",
   "held-replies",
   "import",
   "init",

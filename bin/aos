@@ -11,6 +11,10 @@ const usage = `aos: talk to other agent sessions in AgentOS
   aos peers                          sessions, their project and what each is doing
   aos claims [--all] [--json]        what live sessions here and on linked machines are
                                      working on, and where they overlap
+  aos claim start "<goal>" | touch | end | check | install-hook [--user]
+                                     from a session AgentOS didn't start: claim the
+                                     repo's work so other agents see it; "check" exits 1
+                                     on a strong overlap. Sends paths, never contents
   aos send <session> <message...>    message a session (name, old name, project/name,
                                      <workspace>/<name>, <workspace>/orchestrator, id or
                                      id prefix; "orchestrator" is yours); says delivered,
@@ -202,6 +206,8 @@ const waitLib = require("./aos-lib/wait.js")({ post, fail, needMe, me });
 const readCmd = (words) =>
   require("./aos-lib/read.js")({ call, fail, needMe, me })(words);
 
+const claimCmd = (words) =>
+  require("./aos-lib/claim.js")({ url, token, fail })(words);
 const claimsCmd = (words) =>
   require("./aos-lib/claims.js")({ call, me })(words);
 
@@ -411,6 +417,8 @@ async function main() {
       return heavy(args);
     case "claims":
       return claimsCmd(args);
+    case "claim":
+      return claimCmd(args);
     case "peers": {
       const { peers } = await call(
         `/api/bus/peers${me ? `?from=${encodeURIComponent(me)}` : ""}`

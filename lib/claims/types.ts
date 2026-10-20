@@ -3,6 +3,8 @@ import { z } from "zod";
 export const CLAIMS_SYNC_MS = 60_000;
 // A local session's claim, renewed every sync while the session lives.
 export const CLAIM_TTL_MS = 10 * 60_000;
+// An outside session's claim, renewed by its hook or `aos claim touch`.
+export const OUTSIDE_TTL_MS = 30 * 60_000;
 // The most life a peer can give a claim here.
 export const REMOTE_TTL_CAP_MS = 15 * 60_000;
 export const TOMBSTONE_MS = 15 * 60_000;
@@ -10,7 +12,10 @@ export const MAX_WIRE_CLAIMS = 500;
 export const MAX_FILES = 300;
 export const MAX_HOPS = 2;
 
-export type ClaimSource = "session";
+export const CLAIM_SOURCES = ["session", "outside"] as const;
+export type ClaimSource = (typeof CLAIM_SOURCES)[number];
+export const asSource = (s: unknown): ClaimSource =>
+  s === "outside" ? "outside" : "session";
 export type Released = "done" | "merged" | "abandoned";
 
 export interface Claim {
@@ -79,3 +84,19 @@ export interface Overlap {
   shared: string[];
   strength: "strong" | "weak";
 }
+
+// What an outside session posts: its folder's remote URL, branch and the
+// paths of its diff. Never file contents.
+export const outsideBody = z.object({
+  id: z
+    .string()
+    .regex(/^o-[0-9a-f-]{36}$/)
+    .optional(),
+  remote: z.string().min(3).max(500),
+  branch: z.string().max(250).nullable().optional(),
+  base: z.string().max(250).nullable().optional(),
+  goal: text(120).optional(),
+  name: text(120).optional(),
+  files: z.array(z.string().max(300)).max(5000).default([]),
+});
+export type OutsideBody = z.infer<typeof outsideBody>;

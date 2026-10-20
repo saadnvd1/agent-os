@@ -1,6 +1,9 @@
+import { randomUUID } from "crypto";
 import { getDb } from "../db";
 import {
   CLAIM_TTL_MS,
+  OUTSIDE_TTL_MS,
+  asSource,
   MAX_FILES,
   MAX_HOPS,
   REMOTE_TTL_CAP_MS,
@@ -56,7 +59,7 @@ const fromRow = (r: Row): Claim => ({
   originName: r.origin_name,
   viaMachine: r.via_machine,
   hops: r.hops,
-  source: "session",
+  source: asSource(r.source),
   sessionId: r.session_id,
   sessionName: r.session_name,
   repo: r.repo,
@@ -141,6 +144,81 @@ export function release(
     .run(why, now + TOMBSTONE_MS, now, localClaimId(sessionId), why);
 }
 
+export interface OutsideClaim {
+  id: string;
+  sessionName: string | null;
+  repo: string;
+  branch: string | null;
+  base: string | null;
+  goal: string;
+  files: string[];
+}
+
+export const newOutsideId = () => `o-${randomUUID()}`;
+
+// Registers or renews a claim for a session AgentOS didn't start. It lives
+// OUTSIDE_TTL_MS from its last touch. False when the id is another claim's.
+export function upsertOutside(
+  origin: { id: string; name: string },
+  c: OutsideClaim,
+  now = Date.now()
+): boolean {
+  const db = getDb();
+  const have = db
+    .prepare(`SELECT origin, source FROM work_claims WHERE id = ?`)
+    .get(c.id) as { origin: string; source: string } | undefined;
+  if (have && (have.origin !== origin.id || have.source !== "outside"))
+    return false;
+  const files = c.files.map((f) => f.trim()).filter(safePath);
+  const kept = files.slice(0, MAX_FILES);
+  db.prepare(
+    `INSERT INTO work_claims (id, origin, origin_name, hops, source, session_id,
+       session_name, repo, branch, base, goal, files, files_more, pr_url,
+       started_at, expires_at, released, updated_at)
+     VALUES (@id, @origin, @originName, 0, 'outside', NULL, @sessionName,
+       @repo, @branch, @base, @goal, @files, @filesMore, NULL,
+       @now, @expires, NULL, @now)
+     ON CONFLICT(id) DO UPDATE SET origin_name = @originName,
+       session_name = @sessionName, repo = @repo, branch = @branch, base = @base,
+       goal = @goal, files = @files, files_more = @filesMore,
+       expires_at = @expires, released = NULL, updated_at = @now`
+  ).run({
+    id: c.id,
+    origin: origin.id,
+    originName: cleanLine(origin.name, 60),
+    sessionName: cleanLine(c.sessionName, 120) || null,
+    repo: c.repo,
+    branch: cleanLine(c.branch, 250) || null,
+    base: cleanLine(c.base, 250) || null,
+    goal: cleanLine(c.goal, 120) || "(unnamed)",
+    files: JSON.stringify(kept),
+    filesMore: Math.max(0, files.length - kept.length),
+    now,
+    expires: now + OUTSIDE_TTL_MS,
+  });
+  return true;
+}
+
+// Ends an outside claim of this machine; a task's or a peer's is refused.
+export function releaseOutside(
+  self: string,
+  id: string,
+  now = Date.now()
+): "ended" | "missing" | "forbidden" {
+  const row = getDb()
+    .prepare(`SELECT origin, source FROM work_claims WHERE id = ?`)
+    .get(id) as { origin: string; source: string } | undefined;
+  if (!row) return "missing";
+  if (row.origin !== self || row.source !== "outside") return "forbidden";
+  getDb()
+    .prepare(
+      `UPDATE work_claims SET released = 'done', expires_at = ?, updated_at = ?
+       WHERE id = ? AND released IS NULL`
+    )
+    .run(now + TOMBSTONE_MS, now, id);
+  return "ended";
+}
+
 // Takes one claim a peer sent. Returns whether it was stored. The row with
 // the most life wins, unless a nearer copy (fewer hops) says something newer.
 export function upsertRemote(
@@ -167,7 +245,7 @@ export function upsertRemote(
     `INSERT INTO work_claims (id, origin, origin_name, via_machine, via_host, hops, source,
        session_id, session_name, repo, branch, base, goal, files, files_more,
        pr_url, started_at, expires_at, released, updated_at)
-     VALUES (@id, @origin, @originName, @via, @viaHost, @hops, 'session', NULL, @sessionName,
+     VALUES (@id, @origin, @originName, @via, @viaHost, @hops, @source, NULL, @sessionName,
        @repo, @branch, @base, @goal, @files, @filesMore, @prUrl, @started,
        @expires, @released, @now)
      ON CONFLICT(id) DO UPDATE SET origin_name = @originName, via_machine = @via, via_host = COALESCE(@viaHost, via_host),
@@ -182,6 +260,7 @@ export function upsertRemote(
     via: sender,
     viaHost,
     hops: w.hops,
+    source: asSource(w.source),
     sessionName: cleanLine(w.session_name, 120) || null,
     repo: cleanLine(w.repo, 300).toLowerCase(),
     branch: cleanLine(w.branch, 250) || null,
@@ -264,7 +343,7 @@ export function wireFor(
       origin: r.origin,
       origin_name: r.origin_name,
       hops: r.origin === self ? 0 : r.hops + 1,
-      source: "session",
+      source: asSource(r.source),
       session_name: r.session_name,
       repo: r.repo,
       branch: r.branch,
