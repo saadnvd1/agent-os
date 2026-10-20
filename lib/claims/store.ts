@@ -147,7 +147,8 @@ export function upsertRemote(
   self: string,
   sender: string,
   w: ClaimWire,
-  now = Date.now()
+  now = Date.now(),
+  viaHost: string | null = null
 ): boolean {
   if (w.origin === self || w.hops > MAX_HOPS) return false;
   const files = w.files.map((f) => f.trim()).filter(safePath);
@@ -163,13 +164,13 @@ export function upsertRemote(
     if (expires <= have.expires_at && w.hops >= have.hops) return false;
   }
   db.prepare(
-    `INSERT INTO work_claims (id, origin, origin_name, via_machine, hops, source,
+    `INSERT INTO work_claims (id, origin, origin_name, via_machine, via_host, hops, source,
        session_id, session_name, repo, branch, base, goal, files, files_more,
        pr_url, started_at, expires_at, released, updated_at)
-     VALUES (@id, @origin, @originName, @via, @hops, 'session', NULL, @sessionName,
+     VALUES (@id, @origin, @originName, @via, @viaHost, @hops, 'session', NULL, @sessionName,
        @repo, @branch, @base, @goal, @files, @filesMore, @prUrl, @started,
        @expires, @released, @now)
-     ON CONFLICT(id) DO UPDATE SET origin_name = @originName, via_machine = @via,
+     ON CONFLICT(id) DO UPDATE SET origin_name = @originName, via_machine = @via, via_host = @viaHost,
        hops = @hops, session_name = @sessionName, repo = @repo, branch = @branch,
        base = @base, goal = @goal, files = @files, files_more = @filesMore,
        pr_url = @prUrl, started_at = MIN(started_at, @started),
@@ -179,6 +180,7 @@ export function upsertRemote(
     origin: w.origin,
     originName: cleanLine(w.origin_name, 60) || "machine",
     via: sender,
+    viaHost,
     hops: w.hops,
     sessionName: cleanLine(w.session_name, 120) || null,
     repo: cleanLine(w.repo, 300).toLowerCase(),

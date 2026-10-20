@@ -80,6 +80,29 @@ describe("POST /api/claims/exchange", () => {
   });
 });
 
+describe("POST /api/claims/exchange as a Connect peer", () => {
+  const asPeer = (hostId: string | null) =>
+    POST(
+      new NextRequest("http://localhost/api/claims/exchange", {
+        method: "POST",
+        headers: {
+          "x-agentos-trust": "peer",
+          ...(hostId && { "x-agentos-peer": hostId }),
+        },
+        body: JSON.stringify({
+          machine: { id: "peer-1", name: "box" },
+          claims: [claim],
+        }),
+      })
+    );
+
+  it("refuses a host with no active pin and stores nothing", async () => {
+    expect((await asPeer("no-such-host")).status).toBe(403);
+    expect((await asPeer(null)).status).toBe(403);
+    expect(db.prepare(`SELECT 1 FROM work_claims`).all()).toEqual([]);
+  });
+});
+
 describe("GET /api/claims", () => {
   it("rejects a bad query and an unknown session", async () => {
     const bad = await GET(
