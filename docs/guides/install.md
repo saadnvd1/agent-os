@@ -89,37 +89,65 @@ release names Microsoft, or `WSL_DISTRO_NAME` is set).
 - **Approvals with a passkey** use Windows Hello in the Windows browser,
   registered for `localhost` (a passkey made on the tailnet https address is
   a separate one).
-- **Start at login**: `agent-os enable` writes a systemd user service, which
-  needs systemd in the distro. Add this to `/etc/wsl.conf`, then run
-  `wsl --shutdown` from Windows and reopen the terminal:
+- **Start at login**: `agent-os enable` writes a systemd user service,
+  turns on linger (so it runs with no terminal open), and registers a
+  Windows logon task that holds the distro open, because WSL otherwise stops
+  an idle distro, service and all, seconds after its last terminal closes.
+  The task starts when you log in to Windows, not at boot; a PC that should
+  come up unattended needs Windows auto-login. It needs systemd in the
+  distro: if it's off, `enable` offers to add `systemd=true` under `[boot]` in
+  `/etc/wsl.conf` (it keeps a `.agentos-bak` copy), then asks you to run
+  `wsl --shutdown` from Windows, reopen the terminal and run `enable` again.
+  `agent-os disable` removes the service and the task.
+- **Agent CLIs** installed only on Windows (an npm `claude` under `/mnt/c`)
+  are ignored: they would run with a Windows home and config. The installer
+  installs the Linux copy inside the distro, including Claude Code.
+- **Ports** are shared with Windows through localhost forwarding. Before a
+  session takes a port slot, AgentOS asks Windows (`netstat.exe`) what is
+  listening, so a dev server on Windows `:3000` isn't collided with. If
+  Windows can't be asked, it falls back to checking the distro alone.
 
-  ```ini
-  [boot]
-  systemd=true
-  ```
+## Link a machine (Windows PC, Linux box, Mac)
 
-  WSL still stops an idle distro, service and all, a few seconds after its
-  last terminal closes. To keep AgentOS up without a terminal open, add this
-  to `%UserProfile%\.wslconfig` (Windows 11) and start the distro at Windows
-  login, for example with a Task Scheduler task running
-  `wsl.exe -d <distro> -- sleep infinity`:
+Any AgentOS machine can link any other, in either direction: a Windows PC in
+WSL, a Linux box such as an NVIDIA DGX Spark (arm64), a Mac. You don't need a
+Mac. Linked machines take tasks, and AgentOS Connect works from each of them
+(`agent-os connect`, with cloudflared pinned for Linux x64 and arm64).
 
-  ```ini
-  [general]
-  instanceIdleTimeout=-1
-  [wsl2]
-  vmIdleTimeout=-1
-  ```
+On the machine to be linked (the WSL distro or the Linux box):
 
-What's been verified: the WSL detection and the installer's WSL paths have
-unit tests that run on any OS, and the manual [WSL workflow](https://github.com/saadnvd1/agent-os/blob/main/.github/workflows/wsl.yml)
-ran on a GitHub-hosted Windows runner (Windows Server 2025, Ubuntu 24.04
-under WSL 2): the installer detected WSL 2 and installed what was missing
-through apt, tmux, lsof and node-pty worked, the server started and logged
-its WSL note, and Windows reached it at both `localhost:3011` and
-`127.0.0.1:3011`. Untested: Windows Hello approvals, links opening through
-`wslview`/`explorer.exe`, mirrored networking, `agent-os enable` under
-systemd, the idle-timeout settings above, and Debian or other distros.
+```bash
+agent-os machine
+```
+
+It installs and starts sshd (Debian and Ubuntu; elsewhere it names what to
+install), checks that Tailscale is installed and signed in **inside this
+machine**, runs `agent-os enable`, and prints the values to enter. It never
+edits `sshd_config` or `authorized_keys`. Install Tailscale inside the WSL
+distro itself: a WSL 2 distro sits behind NAT, so the Windows host's Tailscale
+doesn't reach it (mirrored networking is an untested alternative).
+
+On the machine you'll link from, which also needs Tailscale (inside its
+distro, if it's WSL) and an ssh key the target accepts
+(`ssh-copy-id <user>@<name>`), open **Machines → Add** and enter what
+`agent-os machine` printed. Pairing asks the target for a one-time code over
+ssh, claims it over HTTP, and keeps the device token; tasks and moves then go
+over HTTP.
+
+What's been verified: the WSL detection, the installer's WSL paths, `enable`,
+`disable`, `agent-os machine`, the Windows port check and the Windows-drive CLI
+filter have unit tests that run on any OS. The [WSL workflow](https://github.com/saadnvd1/agent-os/blob/main/.github/workflows/wsl.yml)
+runs on a GitHub-hosted Windows runner (Windows Server 2025, Ubuntu 24.04
+under WSL 2) on changes to these files and weekly: the installer, tmux and
+node-pty, the server reached from Windows at `localhost` and `127.0.0.1`,
+Windows listeners seen from the distro, the real cloudflared download with
+its pinned hash, and, as an advisory step, `enable` under systemd (linger and
+the Windows logon task) and the ssh, pairing, token and API path that linking
+uses. A Linux arm64 job (`ubuntu-24.04-arm`) stands in for a DGX Spark.
+Untested, because it needs real hardware: a real Windows login starting the
+distro, Tailscale inside WSL, linking across the tailnet, a live Connect
+tunnel, Windows Hello approvals, links opening through `wslview`,
+mirrored networking, WSL on Windows arm64, and distros other than Ubuntu.
 
 ## First run
 
@@ -189,6 +217,7 @@ agent-os pair             # add a phone, tablet or laptop (prints a QR code)
 agent-os logs             # tail the logs
 agent-os update           # update to the latest version
 agent-os enable           # start at login (disable turns it off)
+agent-os machine          # make this Linux/WSL box linkable from another AgentOS
 agent-os passkeys reset   # when every passkey is lost (see Orchestrator)
 agent-os uninstall
 ```
@@ -201,7 +230,7 @@ agent-os uninstall
 agent-os enable
 ```
 
-This writes a launchd service on macOS or a systemd user service on Linux. `agent-os disable` turns it off. Under WSL, `enable` needs systemd, which is set in `/etc/wsl.conf` (see [Windows](#windows-wsl2) for the lines).
+This writes a launchd service on macOS or a systemd user service on Linux. `agent-os disable` turns it off. Under WSL, `enable` needs systemd and also registers a Windows login task (see [Windows](#windows-wsl2)). To make a Linux box or WSL distro linkable from another AgentOS, run `agent-os machine` (see [Link a machine](#link-a-machine-windows-pc-linux-box-mac)).
 
 The everyday commands:
 

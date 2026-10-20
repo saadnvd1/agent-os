@@ -18,7 +18,20 @@ import { tempDir } from "@/lib/test-temp";
 // tools) and the environment only this, so a run inside WSL sees neither
 // the real wslview nor WSL_DISTRO_NAME.
 const LIB = join(import.meta.dirname);
-const TOOLS = ["tr", "cat", "sed", "cut", "awk", "head", "grep", "mkdir"];
+const TOOLS = [
+  "tr",
+  "cat",
+  "sed",
+  "cut",
+  "awk",
+  "head",
+  "grep",
+  "mkdir",
+  "mktemp",
+  "cp",
+  "rm",
+  "id",
+];
 
 let dir: string;
 
@@ -167,6 +180,101 @@ describe("agent-os enable", () => {
     expect(readFileSync(join(dir, "systemctl.log"), "utf8")).toContain(
       "systemctl --user enable agent-os"
     );
+  });
+});
+
+describe("agent-os enable keeping the box up", () => {
+  const log = (n: string) =>
+    existsSync(join(dir, n)) ? readFileSync(join(dir, n), "utf8") : "";
+  const setup = () => {
+    fake("ps", "echo systemd");
+    fake("systemctl", 'echo "systemctl $*" >> "' + dir + '/systemctl.log"');
+    fake("loginctl", 'echo "loginctl $*" >> "' + dir + '/loginctl.log"');
+    fake("schtasks.exe", 'echo "schtasks $*" >> "' + dir + '/schtasks.log"');
+    mkdirSync(join(dir, "repo"));
+  };
+  const enable = (env: Record<string, string> = {}) =>
+    run(`WSL=2 OS=debian REPO_DIR="${dir}/repo"; cmd_enable`, "", {
+      USER: "tester",
+      WSL_DISTRO_NAME: "Ubuntu-24.04",
+      ...env,
+    });
+
+  it("turns on linger and registers a Windows login task that runs once", () => {
+    setup();
+    const r = enable();
+    expect(r.status).toBe(0);
+    expect(log("loginctl.log")).toContain("loginctl enable-linger tester");
+    const task = log("schtasks.log");
+    expect(task).toContain(
+      "/Create /F /SC ONLOGON /TN AgentOS (Ubuntu-24.04) /TR conhost.exe --headless wsl.exe -d Ubuntu-24.04 --exec /bin/sleep infinity"
+    );
+    expect(task).toContain("/Run /TN AgentOS (Ubuntu-24.04)");
+  });
+
+  it("makes no Windows task off WSL, and none without a distro name", () => {
+    setup();
+    run(`WSL=0 OS=debian REPO_DIR="${dir}/repo"; cmd_enable`, "", {
+      USER: "tester",
+    });
+    expect(log("schtasks.log")).toBe("");
+    expect(log("loginctl.log")).toContain("enable-linger");
+    const r = enable({ WSL_DISTRO_NAME: "" });
+    expect(r.stdout + r.stderr).toContain("WSL_DISTRO_NAME");
+    expect(log("schtasks.log")).toBe("");
+  });
+
+  it("disable deletes the Windows task", () => {
+    setup();
+    const r = run(`WSL=2 OS=debian; cmd_disable`, "", {
+      WSL_DISTRO_NAME: "Ubuntu-24.04",
+    });
+    expect(r.status).toBe(0);
+    expect(log("schtasks.log")).toContain(
+      "/Delete /F /TN AgentOS (Ubuntu-24.04)"
+    );
+  });
+
+  it("adds systemd=true to wsl.conf, keeping the rest and a backup", () => {
+    const conf = join(dir, "wsl.conf");
+    writeFileSync(conf, "[user]\ndefault=me\n[boot]\ncommand=true\n");
+    const r = run("enable_wsl_systemd", "", { WSL_CONF: conf });
+    expect(r.status).toBe(0);
+    expect(readFileSync(conf, "utf8")).toBe(
+      "[user]\ndefault=me\n[boot]\nsystemd=true\ncommand=true\n"
+    );
+    expect(readFileSync(conf + ".agentos-bak", "utf8")).toContain(
+      "command=true"
+    );
+  });
+
+  it("creates [boot] when missing, and flips systemd=false", () => {
+    const conf = join(dir, "wsl.conf");
+    run("enable_wsl_systemd", "", { WSL_CONF: conf });
+    expect(readFileSync(conf, "utf8")).toContain("[boot]\nsystemd=true");
+    writeFileSync(conf, "[boot]\nsystemd=false\n");
+    run("enable_wsl_systemd", "", { WSL_CONF: conf });
+    expect(readFileSync(conf, "utf8")).toBe("[boot]\nsystemd=true\n");
+  });
+});
+
+describe("have_cli", () => {
+  it("ignores a CLI that only exists on the Windows drive, under WSL", () => {
+    const win = join(dir, "mnt", "c");
+    mkdirSync(win, { recursive: true });
+    const shim = join(win, "claude");
+    writeFileSync(shim, "#!/bin/sh\n");
+    chmodSync(shim, 0o755);
+    // The path has no /mnt/c prefix here, so check the pattern with a stub.
+    fake("command", "true");
+    const hit = (wsl: string, p: string) =>
+      run(
+        `WSL=${wsl}; command() { echo "${p}"; }; have_cli claude && echo yes || echo no`,
+        ""
+      ).stdout.trim();
+    expect(hit("2", "/mnt/c/Users/me/npm/claude")).toBe("no");
+    expect(hit("2", "/home/me/.local/bin/claude")).toBe("yes");
+    expect(hit("0", "/mnt/c/Users/me/npm/claude")).toBe("yes");
   });
 });
 

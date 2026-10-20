@@ -309,6 +309,50 @@ cmd_update() {
     fi
 }
 
+# Turn systemd on in wsl.conf: add [boot] systemd=true, keeping the rest of
+# the file, after a backup. Nothing is removed.
+enable_wsl_systemd() {
+    local conf="${WSL_CONF:-/etc/wsl.conf}" cur out
+    cur=$(mktemp) out=$(mktemp)
+    [[ -f "$conf" ]] && cat "$conf" > "$cur"
+    if grep -qiE '^[[:space:]]*systemd[[:space:]]*=' "$cur"; then
+        awk '{ if (tolower($0) ~ /^[ \t]*systemd[ \t]*=/) print "systemd=true"; else print }' "$cur" > "$out"
+    elif grep -qiE '^\[boot\]' "$cur"; then
+        awk '{ print } tolower($0) ~ /^\[boot\]/ { print "systemd=true" }' "$cur" > "$out"
+    else
+        { cat "$cur"; printf '\n[boot]\nsystemd=true\n'; } > "$out"
+    fi
+    local rc=0
+    if [[ -n "${WSL_CONF:-}" || "$(id -u)" == 0 ]]; then
+        { [[ ! -f "$conf" ]] || cp "$conf" "$conf.agentos-bak"; } && cp "$out" "$conf" || rc=$?
+    else
+        { [[ ! -f "$conf" ]] || sudo cp "$conf" "$conf.agentos-bak"; } && sudo cp "$out" "$conf" || rc=$?
+    fi
+    rm -f "$cur" "$out"
+    return $rc
+}
+
+# Register the Windows logon task (current user, no admin) and run it once.
+enable_wsl_logon_task() {
+    if ! command -v schtasks.exe &> /dev/null; then
+        log_warn "schtasks.exe isn't reachable from WSL; keep a terminal open or start the distro from Windows"
+        return 0
+    fi
+    if [[ -z "${WSL_DISTRO_NAME:-}" ]]; then
+        log_warn "WSL_DISTRO_NAME isn't set here, so no Windows login task was made. Run 'agent-os enable' from a normal WSL terminal."
+        return 0
+    fi
+    local name launcher
+    name=$(wsl_task_name "$WSL_DISTRO_NAME")
+    launcher=$(wsl_launcher "$WSL_DISTRO_NAME" 1)
+    if schtasks.exe /Create /F /SC ONLOGON /TN "$name" /TR "$launcher" > /dev/null 2>&1; then
+        schtasks.exe /Run /TN "$name" > /dev/null 2>&1 || true
+        log_success "Windows login task \"$name\" keeps the distro running"
+    else
+        log_warn "Couldn't create the Windows login task. Without it WSL stops the distro, and AgentOS, when no terminal is open."
+    fi
+}
+
 cmd_enable() {
     if [[ ! -d "$REPO_DIR" ]]; then
         log_error "AgentOS is not installed. Run 'agent-os install' first."
@@ -378,8 +422,12 @@ EOF
 
         systemctl --user daemon-reload
         systemctl --user enable agent-os
+        enable_linger
         log_success "Auto-start enabled (systemd)"
         echo "  Service: $service_path"
+        if [[ "${WSL:-0}" != 0 ]]; then
+            enable_wsl_logon_task
+        fi
 
     elif [[ "${WSL:-0}" != 0 ]]; then
         log_error "Auto-start under WSL needs systemd. Add this to /etc/wsl.conf:"
@@ -387,6 +435,13 @@ EOF
         echo "    systemd=true"
         echo "  then run 'wsl --shutdown' from Windows, reopen your terminal, and run"
         echo "  'agent-os enable' again."
+        if is_interactive && prompt_yn "Add it to ${WSL_CONF:-/etc/wsl.conf} for you?" "y"; then
+            if enable_wsl_systemd; then
+                echo ""
+                log_success "systemd is on for the next start. Run 'wsl --shutdown' from Windows, reopen, then 'agent-os enable'."
+                return 0
+            fi
+        fi
         exit 1
 
     else
@@ -411,7 +466,10 @@ cmd_disable() {
         systemctl --user disable agent-os 2>/dev/null || true
         rm -f "$HOME/.config/systemd/user/agent-os.service"
         systemctl --user daemon-reload
-        log_success "Auto-start disabled"
+        if [[ "${WSL:-0}" != 0 && -n "${WSL_DISTRO_NAME:-}" ]] && command -v schtasks.exe &> /dev/null; then
+            schtasks.exe /Delete /F /TN "$(wsl_task_name "$WSL_DISTRO_NAME")" > /dev/null 2>&1 || true
+        fi
+        log_success "Auto-start disabled (linger is left on; other services may use it)"
 
     else
         log_error "Could not detect init system"
@@ -503,6 +561,7 @@ cmd_help() {
     echo "  passkeys reset  Revoke every passkey (recovery; asks you to confirm)"
     echo "  logs        Tail server logs"
     echo "  update      Update to latest version"
+    echo "  machine     Make this Linux box or WSL distro linkable from another AgentOS"
     echo "  enable      Enable auto-start on boot"
     echo "  disable     Disable auto-start"
     echo "  uninstall   Remove AgentOS completely"

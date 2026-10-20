@@ -65,6 +65,7 @@ source "$SCRIPT_DIR/lib/common.sh"
 source "$SCRIPT_DIR/lib/prerequisites.sh"
 source "$SCRIPT_DIR/lib/ai-clis.sh"
 source "$SCRIPT_DIR/lib/commands.sh"
+source "$SCRIPT_DIR/lib/machine.sh"
 
 # The package family the installers key off (debian, redhat, linux, macos),
 # and the WSL version (0 off WSL).
@@ -85,6 +86,7 @@ case "${1:-}" in
     passkeys)         shift; (cd "$(dirname "$SCRIPT_DIR")" && npx tsx lib/security/passkeys-cli.ts "$@") ;;
     logs)             cmd_logs ;;
     update)           cmd_update ;;
+    machine)          cmd_machine ;;
     enable)           cmd_enable ;;
     disable)          cmd_disable ;;
     uninstall)        cmd_uninstall ;;

@@ -132,3 +132,45 @@ get_tailscale_ip() {
         tailscale ip -4 2>/dev/null | head -1
     fi
 }
+
+# Is this CLI installed here? Under WSL the Windows PATH is appended, and a
+# CLI only installed on Windows (/mnt/c/...) doesn't count: it would run with
+# a Windows home and config.
+have_cli() {
+    local path
+    path=$(command -v "$1" 2>/dev/null) || return 1
+    if [[ "${WSL:-0}" != 0 && "$path" == /mnt/[a-zA-Z]/* ]]; then
+        return 1
+    fi
+    return 0
+}
+
+# The Windows logon task that keeps the WSL distro running. WSL stops an idle
+# distro seconds after its last process exits, service and all, so this holds
+# one `sleep infinity` open from Windows login on.
+wsl_task_name() {
+    echo "AgentOS ($1)"
+}
+
+# conhost --headless hides the console window (Windows 11); the plain wsl.exe
+# fallback flashes one on older builds.
+wsl_launcher() {
+    local distro="$1" headless="${2:-1}"
+    if [[ "$headless" == 1 ]]; then
+        echo "conhost.exe --headless wsl.exe -d $distro --exec /bin/sleep infinity"
+    else
+        echo "wsl.exe -d $distro --exec /bin/sleep infinity"
+    fi
+}
+
+# Keep user services running without a login session (a headless box, or a
+# WSL distro with no terminal open). Tries without sudo first.
+enable_linger() {
+    command -v loginctl &> /dev/null || return 0
+    local user="${USER:-$(id -un)}"
+    if loginctl enable-linger "$user" 2>/dev/null \
+        || sudo -n loginctl enable-linger "$user" 2>/dev/null; then
+        return 0
+    fi
+    log_warn "Couldn't turn on linger, so AgentOS stops when you log out. Run: sudo loginctl enable-linger $user"
+}
