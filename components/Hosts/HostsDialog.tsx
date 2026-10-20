@@ -40,7 +40,7 @@ export function HostsDialog({ open, onClose }: HostsDialogProps) {
 
   return (
     <Dialog open={open} onOpenChange={(o) => !o && onClose()}>
-      <DialogContent className="max-h-[90vh] max-w-lg overflow-y-auto">
+      <DialogContent className="max-h-[90vh] max-w-lg overflow-y-auto [&>*]:min-w-0">
         <DialogHeader>
           <DialogTitle>Machines</DialogTitle>
           <DialogDescription>

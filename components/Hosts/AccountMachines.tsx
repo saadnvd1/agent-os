@@ -12,6 +12,7 @@ import {
 import { CONNECT_SITE } from "@/lib/connect/view";
 import type { AccountMachine } from "@/lib/peer/machines";
 import { cn } from "@/lib/utils";
+import { WaitingLinks } from "./IncomingLinkSheet";
 import { LinkCodeSheet } from "./LinkCodeSheet";
 
 function MachineRow({
@@ -139,6 +140,7 @@ export function AccountMachines() {
           </Button>
         </div>
       )}
+      {entitled && <WaitingLinks />}
       {data.error && (
         <p className="text-muted-foreground text-xs">{data.error}</p>
       )}

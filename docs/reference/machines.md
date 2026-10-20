@@ -121,3 +121,19 @@ Works for any project. Requests to the other machine carry its device token,
 so it can sit behind a proxy that never trusts loopback. Linking needs this
 machine or the tailnet, and only pairs with the ssh target's own host name.
 The orchestrator starts tasks on its own machine and moves them afterwards.
+
+### Linking through AgentOS Connect
+
+With AgentOS Connect Pro, Machines lists every machine on your account under
+**On your AgentOS account**, online or not, with no ssh or tailnet needed.
+Press **Link** next to one: this machine shows a 6-digit code, and the other
+one shows a banner (and a row in its Machines) asking you to type it. Typing
+it there needs that machine itself, its tailnet or a device with **Can
+approve**. On a box with no browser, `agent-os link accept 482913` takes the
+code; `agent-os link` lists the account's machines and what's waiting, and
+`agent-os link <name>` starts a link from the terminal. Three wrong codes end
+the request and a request lasts 5 minutes. Both machines then list each other
+as linked, and you get a "New machine linked" push. **Unlink and remove**
+(or `agent-os unlink <name>`) forgets the other machine here. Calls between
+machines linked this way are still being wired up; until then tasks run on
+machines linked over ssh. How it's kept safe: [Security](security.md).

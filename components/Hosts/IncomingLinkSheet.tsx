@@ -1,7 +1,8 @@
 "use client";
 
 import { useState } from "react";
-import { ShieldAlert } from "lucide-react";
+import { ShieldAlert, X } from "lucide-react";
+import { toast } from "sonner";
 import {
   Dialog,
   DialogContent,
@@ -58,7 +59,12 @@ export function IncomingLinkSheet({
             if (request && digits.length === 6)
               accept.mutate(
                 { id: request.id, code: digits },
-                { onSuccess: close }
+                {
+                  onSuccess: () => {
+                    toast.success(`Linked with ${request.name}`);
+                    close();
+                  },
+                }
               );
           }}
         >
@@ -109,10 +115,13 @@ export function IncomingLinks() {
   const { data: requests = [] } = usePendingLinks();
   // Held while open, so a request voided by a wrong code still says why.
   const [open, setOpen] = useState<PendingView | null>(null);
+  // Hidden until a request not seen yet arrives; it covers the header on phones.
+  const [later, setLater] = useState<string | null>(null);
   const first = requests[0];
+  const hidden = later !== null && requests.every((r) => later.includes(r.id));
   return (
     <>
-      {first && !open && (
+      {first && !open && !hidden && (
         <div
           role="status"
           className="popover-surface fixed top-[max(0.75rem,env(safe-area-inset-top))] left-1/2 z-50 flex w-[min(28rem,calc(100%-1.5rem))] -translate-x-1/2 items-center gap-3 rounded-xl px-3 py-2 shadow-lg"
@@ -129,8 +138,47 @@ export function IncomingLinks() {
           >
             Review
           </Button>
+          <Button
+            size="icon"
+            variant="ghost"
+            aria-label="Later"
+            className="h-11 w-11 shrink-0 sm:h-8 sm:w-8"
+            onClick={() => setLater(requests.map((r) => r.id).join(" "))}
+          >
+            <X className="h-4 w-4" />
+          </Button>
         </div>
       )}
+      <IncomingLinkSheet request={open} onClose={() => setOpen(null)} />
+    </>
+  );
+}
+
+/** In Machines: the requests waiting here, for after the banner was put off. */
+export function WaitingLinks() {
+  const { data: requests = [] } = usePendingLinks();
+  const [open, setOpen] = useState<PendingView | null>(null);
+  if (requests.length === 0 && !open) return null;
+  return (
+    <>
+      {requests.map((r) => (
+        <div
+          key={r.id}
+          className="flex items-center gap-3 rounded-lg border border-amber-500/40 bg-amber-500/10 px-3 py-2"
+        >
+          <ShieldAlert className="h-4 w-4 shrink-0 text-amber-600 dark:text-amber-400" />
+          <p className="min-w-0 flex-1 truncate text-sm">
+            <span className="font-medium">{r.name}</span> wants to link
+          </p>
+          <Button
+            size="sm"
+            className="min-h-11 sm:min-h-8"
+            onClick={() => setOpen(r)}
+          >
+            Type code
+          </Button>
+        </div>
+      ))}
       <IncomingLinkSheet request={open} onClose={() => setOpen(null)} />
     </>
   );

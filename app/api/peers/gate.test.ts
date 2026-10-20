@@ -67,6 +67,15 @@ describe("linking routes", () => {
     expect(
       (await link.POST(req("/x", { trust: "loopback", body: "{}" }))).status
     ).toBe(400);
+    for (const body of ['{"code":482913}', "{", "{}"])
+      expect(
+        (
+          await accept.POST(
+            req("/api/peers/pending/nope/accept", { trust: "loopback", body }),
+            params
+          )
+        ).status
+      ).toBe(400);
   });
 
   it("caps a hello at 4 KiB and refuses junk", async () => {
