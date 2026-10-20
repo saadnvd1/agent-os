@@ -21,6 +21,7 @@ import { SidebarSearch } from "./SidebarSearch";
 import { ProjectFilter } from "./ProjectFilter";
 import { SelectionToolbar } from "./SelectionToolbar";
 import { SidebarBody } from "./SidebarBody";
+import { SidebarContextMenu } from "./SidebarContextMenu";
 import { SidebarDialogs, type SidebarDialog } from "./SidebarDialogs";
 import type { SessionListProps } from "./SessionList.types";
 
@@ -193,20 +194,23 @@ export function SessionList({
       )}
 
       <ScrollArea className="w-full flex-1">
-        <div className="max-w-full px-1.5 pb-6">
-          <RowProvider value={rowContext}>
-            <SidebarBody
-              data={data}
-              onNewProject={addProject}
-              devServerHandlers={{
-                onStop: mutations.handleStopDevServer,
-                onRestart: mutations.handleRestartDevServer,
-                onRemove: mutations.handleRemoveDevServer,
-                onViewLogs: (serverId) => setDialog({ kind: "logs", serverId }),
-              }}
-            />
-          </RowProvider>
-        </div>
+        <SidebarContextMenu workspaceId={data.workspace?.id ?? null}>
+          <div className="min-h-[60vh] max-w-full px-1.5 pb-6">
+            <RowProvider value={rowContext}>
+              <SidebarBody
+                data={data}
+                onNewProject={addProject}
+                devServerHandlers={{
+                  onStop: mutations.handleStopDevServer,
+                  onRestart: mutations.handleRestartDevServer,
+                  onRemove: mutations.handleRemoveDevServer,
+                  onViewLogs: (serverId) =>
+                    setDialog({ kind: "logs", serverId }),
+                }}
+              />
+            </RowProvider>
+          </div>
+        </SidebarContextMenu>
       </ScrollArea>
 
       <SidebarDialogs
