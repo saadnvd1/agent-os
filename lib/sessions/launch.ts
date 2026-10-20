@@ -11,7 +11,8 @@ import { randomUUID } from "crypto";
 import { db, queries, type Session } from "../db";
 import type { AgentType } from "../providers";
 import type { ChatAccess, ChatFile, ChatImage } from "../chat/events";
-import { resolveModelForAgent } from "../model-catalog";
+import { discoversModels, resolveModelForAgent } from "../model-catalog";
+import { isDiscoveredModel } from "../chat/discovered-models";
 import { parseOverride, resolveRole, setSessionModel } from "../models/resolve";
 import { ANTHROPIC } from "../models/roles";
 import { getProject } from "../projects";
@@ -251,12 +252,18 @@ async function launch(input: LaunchInput, id: string): Promise<Launched> {
     routed && (routed.provider.id === ANTHROPIC || view === "chat")
       ? routed
       : null;
+  const wanted = input.model?.trim() || project?.default_model;
+  // An agent without a static list runs what it reports for this folder.
+  const discovered =
+    !interactive &&
+    wanted &&
+    discoversModels(agentType) &&
+    (await isDiscoveredModel(agentType, projectPath, wanted));
   const model = interactive
     ? interactive.model
-    : resolveModelForAgent(
-        agentType,
-        input.model?.trim() || project?.default_model
-      );
+    : discovered && wanted
+      ? wanted
+      : resolveModelForAgent(agentType, wanted);
   const text = input.prompt?.trim() ?? "";
   const naming: Naming = text
     ? await nameFor(text, projectPath, input.name)

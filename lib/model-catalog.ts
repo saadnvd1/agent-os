@@ -1,5 +1,6 @@
 import type { AgentType } from "./providers";
 import { AGENT_DEFAULT_MODEL } from "./providers/registry";
+import { supportsChat } from "./chat/capabilities";
 
 export interface ModelOption {
   value: string;
@@ -47,6 +48,14 @@ const DEFAULT_MODEL_BY_AGENT: Partial<Record<AgentType, string>> = {
   codex: "gpt-6-luna",
   gemini: "gemini-3.8-flash",
 };
+
+export function hasStaticModelCatalog(agentType: string): boolean {
+  return agentType in MODEL_OPTIONS_BY_AGENT;
+}
+
+// A chat agent with no fixed list: it reports what it can run itself.
+export const discoversModels = (agentType: string): boolean =>
+  supportsChat(agentType) && !hasStaticModelCatalog(agentType);
 
 export function getModelOptions(agentType: AgentType): ModelOption[] {
   return MODEL_OPTIONS_BY_AGENT[agentType] ?? AGENT_DEFAULT_OPTIONS;

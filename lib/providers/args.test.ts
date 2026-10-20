@@ -101,6 +101,7 @@ describe("browser safety", () => {
       "./registry",
       "./providers",
       "./agents/signin-screen",
+      "./chat/capabilities",
     ]);
     expect(imports.filter((i) => !allowed.has(i))).toEqual([]);
   });

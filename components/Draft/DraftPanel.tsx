@@ -8,7 +8,8 @@ import { Button } from "@/components/ui/button";
 import type { ChatFile, ChatImage } from "@/lib/chat/events";
 import type { Project } from "@/lib/db";
 import { draftComposerKey, type Draft } from "@/lib/drafts";
-import { getModelOptions } from "@/lib/model-catalog";
+import { discoversModels } from "@/lib/model-catalog";
+import { useDiscoveredModels } from "@/data/agents";
 import { useHostsQuery } from "@/data/hosts";
 import { useGitCheck } from "@/data/git/queries";
 import { useLaunchSession } from "@/data/sessions";
@@ -18,6 +19,7 @@ import { setPendingPrompt } from "@/stores/initialPrompt";
 import { draftsActions, draftsStore, newDraft } from "@/stores/drafts";
 import { DraftChips } from "./DraftChips";
 import { DraftHeading } from "./DraftHeading";
+import { draftModels } from "./draftModels";
 
 // A new session before its first send: choices on top, a composer below.
 // Sending makes the session (and its worktree) and turns this tab into it.
@@ -40,6 +42,12 @@ export function DraftPanel({
   const project = projects.find((p) => p.id === draft?.projectId) ?? null;
   const { data: git } = useGitCheck(
     project && draft?.hostId === "local" ? project.working_directory : ""
+  );
+  const discovers = !!draft && discoversModels(draft.agentType);
+  const found = useDiscoveredModels(
+    draft?.agentType ?? "",
+    draft?.projectId ?? null,
+    discovers
   );
   const launch = useLaunchSession();
   const createTask = useCreateTask();
@@ -148,7 +156,7 @@ export function DraftPanel({
           }
           onSend={(text, images, files) => void send(text, images, files)}
           onStop={() => {}}
-          models={getModelOptions(draft.agentType)}
+          models={draftModels(draft.agentType, found)}
           model={draft.model}
           onSetModel={(model) => draftsActions.update(draft.id, { model })}
           access={draft.openPr ? undefined : draft.access}
