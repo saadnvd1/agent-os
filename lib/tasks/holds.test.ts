@@ -319,6 +319,7 @@ describe("holdsFor", () => {
     expect(HOLD_ORDER).toEqual([
       "after",
       "after_any",
+      "after_claim",
       "orch_paused",
       "window",
       "needs",
@@ -366,6 +367,7 @@ describe("what a hold says about itself", () => {
     expect(by).toEqual({
       after: true,
       after_any: true,
+      after_claim: true,
       orch_paused: false,
       window: true,
       needs: false,

@@ -23,6 +23,7 @@ import { randomUUID } from "crypto";
 import { db } from "../db";
 import { getProject } from "../projects";
 import { isRemoteHost } from "../hosts";
+import { liveClaim } from "../claims/store";
 import { isPaused } from "../orchestrator/pause";
 import { BrakeRefused, recordStart } from "../orchestrator/brakes";
 import { discardQueuedHeld, queuedLabel } from "./queue-held";
@@ -81,6 +82,7 @@ export function queueIfNeeded(req: QueueRequest): QueuedTaskView | null {
   const limit = limitOf(workspaceId);
   let afterTask: string | null = null;
   let afterAny: string[] | null = null;
+  let afterClaim: string | null = null;
   const after = req.after?.trim();
   // "any" with nothing working is nothing to wait for: it starts at once.
   let waits = !!after;
@@ -92,6 +94,12 @@ export function queueIfNeeded(req: QueueRequest): QueuedTaskView | null {
       afterAny = null;
       waits = false;
     }
+  } else if (after?.toLowerCase().startsWith("claim:")) {
+    afterClaim = after.slice("claim:".length).trim();
+    if (!liveClaim(afterClaim))
+      throw new Error(
+        `No live work claim "${afterClaim}": it ended, or it isn't known here`
+      );
   } else if (after)
     afterTask = resolveAfter(after, req.originWorkspaceId ?? workspaceId).id;
   if (req.now && waits)
@@ -134,9 +142,9 @@ export function queueIfNeeded(req: QueueRequest): QueuedTaskView | null {
   db.transaction(() => {
     db.prepare(
       `INSERT INTO task_queue (id, project_id, prompt, name, model, model_overrides, plan, plan_reason, plan_only, started_by, parent_session_id, started_by_device, started_via, view, session_group_id, agent_type, base_branch,
-         host_id, after_task, after_any, origin_workspace_id, priority, machine_needs, position)
+         host_id, after_task, after_any, after_claim, origin_workspace_id, priority, machine_needs, position)
        VALUES (@id, @project_id, @prompt, @name, @model, @model_overrides, @plan, @plan_reason, @plan_only, @started_by, @parent_session_id, @started_by_device, @started_via, @view, @session_group_id, @agent_type, @base_branch,
-         @host_id, @after_task, @after_any, @origin, @priority, @machine_needs,
+         @host_id, @after_task, @after_any, @after_claim, @origin, @priority, @machine_needs,
          (SELECT COALESCE(MAX(position), 0) + 1 FROM task_queue))`
     ).run({
       id,
@@ -162,6 +170,7 @@ export function queueIfNeeded(req: QueueRequest): QueuedTaskView | null {
       host_id: req.hostId || null,
       after_task: afterTask,
       after_any: afterAny ? JSON.stringify(afterAny) : null,
+      after_claim: afterClaim,
       origin: req.originWorkspaceId ?? null,
       priority: req.priority ?? DEFAULT_PRIORITY,
       machine_needs: setting ? JSON.stringify(setting) : null,
@@ -218,7 +227,7 @@ export async function startQueuedForOrchestrator(
     wasFull: slots.full,
     running: slots.running,
     limit: slots.limit,
-    skippedAfter: !!(r.after_task || r.after_any),
+    skippedAfter: !!(r.after_task || r.after_any || r.after_claim),
   };
   const held = (text: string): ForcedStart => ({
     ...base,

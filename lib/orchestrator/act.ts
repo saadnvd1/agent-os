@@ -22,6 +22,7 @@ import {
 import { assertMovable, createTask, dropTask, moveTask } from "../tasks";
 import { getHost, hostIdNamed } from "../hosts";
 import { queueEvent } from "./events";
+import { claimQueuedEvent, claimWait } from "./claim-wait";
 import {
   findQueued,
   queuedLabel,
@@ -163,6 +164,7 @@ export async function startTask(
     machine?: "mac" | "any";
     now?: boolean;
     nowReason?: string;
+    ignoreClaims?: boolean;
     piece?: string;
     group?: string;
   } = {}
@@ -185,6 +187,19 @@ export async function startTask(
     );
   const view = opts.view ?? DEFAULT_START_VIEW;
   const slots = slotState(project.id);
+  // Work claimed elsewhere: a strong overlap queues this start after it,
+  // unless it starts now or the caller said to ignore claims.
+  const claims = opts.ignoreClaims
+    ? null
+    : await claimWait(
+        { projectId: project.id, name: opts.name, prompt, base: opts.base },
+        {
+          workspaceId,
+          queue: !opts.now && !opts.after,
+        }
+      );
+  const after = opts.after ?? claims?.after;
+  const headsUp = claims?.headsUp ?? "";
   // Held for a slot or its `after`, it starts by itself through the brakes;
   // you get an event when it does.
   const out = await startOrQueue(
@@ -202,7 +217,7 @@ export async function startTask(
       startedVia: "orchestrator",
       pieceId,
       baseBranch: opts.base || undefined,
-      after: opts.after,
+      after,
       originWorkspaceId: workspaceId,
       priority: opts.priority,
       machine: opts.machine,
@@ -235,8 +250,10 @@ export async function startTask(
   );
   if ("queued" in out) {
     const { queued } = out;
+    if (claims?.strong && !opts.after)
+      claimQueuedEvent(workspaceId, queued, claims.strong);
     const builds = pieceId ? ` It builds ${pieceLabel(pieceId)}.` : "";
-    return `Queued (position ${queued.position}) task "${queued.name}" (id ${queued.id.slice(0, 8)}) in ${project.name}${queued.after ? `, after ${queued.after}` : ""}.${builds} It starts by itself; you'll get an event when it does.`;
+    return `Queued (position ${queued.position}) task "${queued.name}" (id ${queued.id.slice(0, 8)}) in ${project.name}${queued.after ? `, after ${queued.after}` : ""}.${builds} It starts by itself; you'll get an event when it does.${headsUp}`;
   }
   const task = out.started;
   if (opts.priority) stampPriority(task.id, opts.priority);
@@ -253,7 +270,7 @@ export async function startTask(
     opts.plan && !opts.planOnly && task.plan_phase !== "planning"
       ? ` Plan step skipped: ${view === "terminal" ? "a terminal task has none" : "planning and implementation use the same model"}.`
       : "";
-  return `Started task "${task.name}" (id ${task.id.slice(0, 8)}, ${view}) in ${project.name} on ${task.branch_name} (from ${task.base_branch}). It ends in a PR; you'll get an event when it opens.${pieceId ? ` It builds ${pieceLabel(pieceId)}.` : ""}${skipped}${planOnlyNote}${past ? " Started past the running-task limit." : ""}`;
+  return `Started task "${task.name}" (id ${task.id.slice(0, 8)}, ${view}) in ${project.name} on ${task.branch_name} (from ${task.base_branch}). It ends in a PR; you'll get an event when it opens.${pieceId ? ` It builds ${pieceLabel(pieceId)}.` : ""}${skipped}${planOnlyNote}${past ? " Started past the running-task limit." : ""}${headsUp}`;
 }
 
 // Starts a queued task now, past the running-task limit and its `after`.

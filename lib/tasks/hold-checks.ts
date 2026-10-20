@@ -16,7 +16,7 @@ import { DEFAULT_PRIORITY, type Priority } from "./schedule-types";
 import { machineHolds, holdReason, type Hold } from "./holds";
 import { heavyNeeds, meetsNeeds, needsOf, type Need } from "./placement";
 import { expandHome } from "./session";
-import { afterLabel, hasFinished } from "./queue-rows";
+import { afterLabel, afterMet, hasFinished } from "./queue-rows";
 import type { QueueRow } from "./queue-types";
 import type { PauseBy } from "./schedule-types";
 
@@ -46,6 +46,8 @@ export const autoHold = (
 
 // `after X`: the task it waits on hasn't finished.
 export function afterHold(r: QueueRow): Hold | null {
+  if (r.after_claim && !afterMet(r))
+    return { code: "after_claim", text: `After ${afterLabel(r)}` };
   if (!r.after_task || hasFinished(r.after_task)) return null;
   return {
     code: "after",

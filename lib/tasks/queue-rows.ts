@@ -6,6 +6,7 @@
 import { db, type Session } from "../db";
 import { getProject } from "../projects";
 import { getWorkspace } from "../workspaces";
+import { liveClaim } from "../claims/store";
 import { queuedLabel } from "./queue-held";
 import type { Group } from "./schedule";
 import type { QueueRow } from "./queue-types";
@@ -106,6 +107,8 @@ export function stillWorking(taskId: string): boolean {
 }
 
 export function afterMet(r: QueueRow): boolean {
+  // A claim is over when it is gone, released or expired.
+  if (r.after_claim && liveClaim(r.after_claim)) return false;
   if (r.after_task && !hasFinished(r.after_task)) return false;
   if (r.after_any && !r.after_any_used) {
     const ids = JSON.parse(r.after_any) as string[];
@@ -171,7 +174,7 @@ export const waitingIn = (workspaceId: string) =>
       .prepare(
         `SELECT COUNT(*) AS n FROM task_queue q JOIN projects p ON p.id = q.project_id
          WHERE q.status = 'queued' AND p.workspace_id = ?
-           AND q.after_task IS NULL AND q.after_any IS NULL
+           AND q.after_task IS NULL AND q.after_any IS NULL AND q.after_claim IS NULL
            AND q.plan_only IS NULL`
       )
       .get(workspaceId) as { n: number }
@@ -180,6 +183,10 @@ export const waitingIn = (workspaceId: string) =>
 export const label = queuedLabel;
 
 export function afterLabel(r: QueueRow): string | null {
+  if (r.after_claim) {
+    const c = liveClaim(r.after_claim);
+    return c ? `${c.goal} on ${c.originName}` : "a work claim";
+  }
   if (r.after_task) {
     const s = sessionOf(r.after_task);
     const q = s ? null : row(r.after_task);

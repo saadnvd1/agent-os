@@ -64,6 +64,7 @@ export type MachineCode =
 export type Hold =
   | { code: "after"; text: string }
   | { code: "after_any"; text: string }
+  | { code: "after_claim"; text: string }
   | { code: "orch_paused"; text: string }
   | { code: "window"; text: string }
   | {
@@ -80,6 +81,7 @@ export type Hold =
 export const HOLD_ORDER: readonly WaitCode[] = [
   "after",
   "after_any",
+  "after_claim",
   "orch_paused",
   "window",
   "needs",
@@ -95,6 +97,7 @@ export const HOLD_ORDER: readonly WaitCode[] = [
 const CLEARS_BY_ITSELF: Record<WaitCode, boolean> = {
   after: true,
   after_any: true,
+  after_claim: true,
   orch_paused: false,
   window: true,
   needs: false,

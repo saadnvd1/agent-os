@@ -133,7 +133,7 @@ export const TOOL_SHAPES = {
       .max(200)
       .optional()
       .describe(
-        'Queue it until this task finishes (id or name), or "any" for whichever running task finishes first'
+        'Queue it until this task finishes (id or name), or "any" for whichever running task finishes first, or "claim:<id>" for work another machine has claimed'
       ),
     priority: z
       .enum(PRIORITIES)
@@ -160,6 +160,12 @@ export const TOOL_SHAPES = {
       .max(300)
       .optional()
       .describe("With now: why it can't wait for a slot; logged for Saad"),
+    ignore_claims: z
+      .boolean()
+      .optional()
+      .describe(
+        "Don't queue it after work another session (here or on a linked machine) has claimed on the same branch or files; start it as usual. Not needed with now"
+      ),
     piece: z
       .string()
       .trim()

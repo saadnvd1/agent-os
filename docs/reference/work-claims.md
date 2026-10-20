@@ -27,3 +27,14 @@ prompts or absolute paths leave the machine, and only to machines you linked.
 
 Read it: `aos claims [--all] [--json]`, `GET /api/claims`, and the orchestrator's
 `sessions` tool, which lists what other machines claim in the workspace's repos.
+
+## Queueing a start after a claim
+
+`start_task` (the orchestrator's, never a person's start) checks the repo's live
+claims first (`lib/claims/startCheck.ts`). A **strong** overlap queues the start
+after that claim: a local task is waited on as a task, anything else as
+`after: "claim:<id>"` (`task_queue.after_claim`, wait code `after_claim`). The
+wait ends when the claim is released, merged or expires. The orchestrator gets a
+`claim-queued:` event saying what it waits on and the shared files; `start_now`
+overrides it. Weaker overlaps are only a heads-up in the result. `now`,
+`ignore_claims` or an explicit `after` skip the auto-queue.

@@ -39,6 +39,9 @@ export interface QueueRow {
   // The finish (a task id) this "after any" waiter took; one finish lets one
   // waiter go (a unique index keeps it so).
   after_any_used: string | null;
+  // A work claim (lib/claims) it waits on, by claim id, until the claim is
+  // released or expires.
+  after_claim: string | null;
   priority: Priority;
   // What it needs from a machine, as JSON, when the starter said.
   machine_needs: string | null;
@@ -109,7 +112,8 @@ export interface QueueRequest {
   agent?: AgentType;
   baseBranch?: string;
   hostId?: string;
-  // A task's id or name, or "any" for whichever running task finishes first.
+  // A task's id or name, "any" for whichever running task finishes first, or
+  // "claim:<id>" for a work claim on a linked machine.
   after?: string;
   // Set when the orchestrator starts it.
   originWorkspaceId?: string;
