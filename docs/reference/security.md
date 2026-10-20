@@ -149,8 +149,10 @@ sender and 20 in all per 10 minutes, and 120 from anyone before a signature
 is checked, at most 20 of them from one address (an IPv6 /64), which bounds
 the work a stranger can cause. Linking sends a "New machine linked" push.
 The account's machine names are shown as plain text only: control and
-direction characters are stripped, the length is capped, and any run of 4 or
-more digits is masked, so a lying service can't name a machine after a code.
+direction characters are stripped, the length is capped, and a name holding 4
+or more digits in total has every digit masked (separators can't be listed:
+"482 and 913"), so a lying service can't name a machine after a code. Names
+stored before that are cleaned once by a migration.
 
 Unlinking (`lib/peer/unlink.ts`) drops the pin here first and then tells the
 other machine with a signed `POST /api/peer/unlink`, which drops its pin. The
@@ -164,7 +166,8 @@ follows the account: when the heartbeat's `peers_etag` changes the list is
 fetched again, and a pin whose key is no longer listed, or every pin when the
 plan says `link_machines: false`, is suspended, refused both ways. Only the
 service's own reasons are lifted, and only when the same key is listed again
-or the plan allows linking: the service can take a link away, never add one.
+or the plan allows linking, after a fresh list: the service can take a link
+away, never add one.
 Nothing about existing links depends on reaching the service.
 `agent-os link accept <code>` does the same from a terminal on a machine with
 no browser and prints the code to type back.

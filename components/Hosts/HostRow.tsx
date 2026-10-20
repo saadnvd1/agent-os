@@ -66,6 +66,7 @@ export function HostRow({ host }: { host: Host }) {
   const linkHost = useLinkHost();
   const unlink = useUnlinkPeer();
   const [activity, setActivity] = useState(false);
+  const [confirmUnlink, setConfirmUnlink] = useState(false);
   const isLocal = host.id === "local";
   const viaConnect = host.kind === "connect";
   const pinned =
@@ -144,8 +145,8 @@ export function HostRow({ host }: { host: Host }) {
                 variant="ghost"
                 size="icon-sm"
                 className="h-11 w-11 sm:h-8 sm:w-8"
-                onClick={() => unlink.mutate(host.id)}
-                disabled={unlink.isPending}
+                onClick={() => setConfirmUnlink(true)}
+                disabled={unlink.isPending || confirmUnlink}
                 aria-label="Unlink"
                 title="Unlink: it can no longer call this machine, nor this one it"
               >
@@ -196,6 +197,38 @@ export function HostRow({ host }: { host: Host }) {
       )}
       {host.peer_state === "suspended" && (
         <SuspendedNote reason={host.peer_note} />
+      )}
+      {confirmUnlink && (
+        <Notice
+          tone="warning"
+          className="mt-2"
+          action={
+            <div className="flex gap-2">
+              <Button
+                variant="ghost"
+                size="sm"
+                className="min-h-11 sm:min-h-8"
+                onClick={() => setConfirmUnlink(false)}
+              >
+                Cancel
+              </Button>
+              <Button
+                variant="destructive"
+                size="sm"
+                className="min-h-11 sm:min-h-8"
+                onClick={() => {
+                  setConfirmUnlink(false);
+                  unlink.mutate(host.id);
+                }}
+              >
+                Unlink
+              </Button>
+            </div>
+          }
+        >
+          Unlink {host.name}? It&apos;s unlinked on both machines, and linking
+          them again needs a fresh pairing with new codes.
+        </Notice>
       )}
       {unlink.data && !unlink.data.told && (
         <p className="text-muted-foreground mt-1.5 text-xs">

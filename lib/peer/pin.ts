@@ -6,6 +6,7 @@
 
 import { createConnectHost, getHost, listRemoteHosts } from "../hosts";
 import { pinForMachine, savePin, unlinkedMachine } from "./links";
+import { cleanMachineName } from "./name";
 
 export interface Paired {
   id: string;
@@ -47,7 +48,9 @@ export function pinPeer(p: Paired): string {
   const was = unlinkedMachine(p.id)?.hostId;
   const reuse = was && getHost(was)?.kind === "connect" ? was : null;
   const hostId =
-    pinned?.hostId ?? reuse ?? createConnectHost(freeName(p.name)).id;
+    pinned?.hostId ??
+    reuse ??
+    createConnectHost(freeName(cleanMachineName(p.name))).id;
   savePin({
     hostId,
     machineId: p.id,

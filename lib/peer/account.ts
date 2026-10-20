@@ -261,6 +261,10 @@ export function noteHeartbeat(beat: Beat) {
     s.etag = beat.peersEtag;
     s.stale = true;
   }
-  if (planChanged) applyToPins({ linkMachines: plan, listed: null });
+  // A downgrade suspends now. An upgrade waits for a fresh list, so a pin
+  // whose machine left the account meanwhile isn't resumed on the way.
+  if (planChanged && plan === false)
+    applyToPins({ linkMachines: false, listed: null });
+  else if (planChanged) s.stale = true;
   if (s.stale && enrolled()) void refresh();
 }

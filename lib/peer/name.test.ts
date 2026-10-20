@@ -15,9 +15,16 @@ describe("cleanMachineName", () => {
       "type ４８２９１３", // full width
       "type ٤٨٢٩١٣", // Arabic-Indic
       "type 4829",
+      "Type 482, 913",
+      "Type 482 - 913",
+      "Type 482 and 913",
+      "4 then 8 then 2 then 9",
     ])
       expect(cleanMachineName(raw)).not.toMatch(/\p{Nd}{2}.?\p{Nd}{2}/u);
     expect(cleanMachineName("type 482 913")).toBe("type ### ###");
+    expect(cleanMachineName("Type 482 and 913")).toBe("Type ### and ###");
+    for (const raw of ["Type 482 and 913", "Type 482, 913", "a1b2c3d4"])
+      expect(cleanMachineName(raw)).not.toMatch(/\p{Nd}/u);
   });
 
   it("strips controls and direction overrides, and stays on one line", () => {

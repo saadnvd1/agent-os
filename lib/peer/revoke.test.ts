@@ -27,6 +27,7 @@ import {
   unlinkedByPeer,
   unlinkedMachine,
 } from "./links";
+import cleanNames from "../db/migrations/20261020T1700_clean_connect_names";
 import { pinPeer } from "./pin";
 import { NEEDS_PRO, REMOVED_FROM_ACCOUNT, reconcilePins } from "./revoke";
 import { rpcDeps } from "./rpc-server";
@@ -275,6 +276,21 @@ describe("suspension", () => {
     expect(pinForHost(studio)?.state).toBe("active");
   });
 
+  it("suspends a machine listed under another key", () => {
+    const { spark } = link();
+    reconcilePins({
+      linkMachines: true,
+      listed: new Map([
+        [A.machineId, A.signPub],
+        [B.machineId, A.signPub],
+      ]),
+    });
+    expect(pinForHost(spark)).toMatchObject({
+      state: "suspended",
+      suspendedReason: REMOVED_FROM_ACCOUNT,
+    });
+  });
+
   it("never touches a suspension it didn't make", () => {
     const { spark } = link();
     getDb()
@@ -339,9 +355,11 @@ describe("the account and the pins", () => {
     }
   });
 
-  it("suspends on a downgrade the heartbeat reports", async () => {
-    const { spark } = link();
-    setAccountFetcher(async () => listOf([A, B]));
+  it("suspends on a downgrade the heartbeat reports; an upgrade resumes only what's still listed", async () => {
+    const { spark, studio } = link();
+    let list = listOf([A, B]);
+    const fetcher = vi.fn(async () => list);
+    setAccountFetcher(fetcher);
     await accountView();
     noteHeartbeat({
       enabled: true,
@@ -351,11 +369,25 @@ describe("the account and the pins", () => {
       state: "suspended",
       suspendedReason: NEEDS_PRO,
     });
-    noteHeartbeat({
-      enabled: true,
-      entitlements: { plan: "pro", linkMachines: true, machineLimit: 10 },
-    });
-    expect(pinForHost(spark)?.state).toBe("active");
+    // B left the account while the plan was down: the upgrade refetches
+    // first, so B's link stays suspended and A's comes back.
+    list = listOf([A]);
+    vi.useFakeTimers({ now: Date.now() + 10_000, toFake: ["Date"] });
+    try {
+      noteHeartbeat({
+        enabled: true,
+        entitlements: { plan: "pro", linkMachines: true, machineLimit: 10 },
+      });
+      expect(pinForHost(spark)?.state).toBe("suspended");
+      await vi.waitFor(() => expect(fetcher).toHaveBeenCalledTimes(2));
+      await vi.waitFor(() => expect(pinForHost(studio)?.state).toBe("active"));
+      expect(pinForHost(spark)).toMatchObject({
+        state: "suspended",
+        suspendedReason: REMOVED_FROM_ACCOUNT,
+      });
+    } finally {
+      vi.useRealTimers();
+    }
   });
 
   it("keeps links working while the service is down, and says so after a day", async () => {
@@ -391,5 +423,13 @@ describe("the account and the pins", () => {
     }));
     const [peer] = (await accountView(0)).peers;
     expect(peer.name).toBe("Type ### ### here");
+  });
+
+  it("cleans names stored before cleaning was complete, once", () => {
+    const old = createConnectHost("Type 482, 913").id;
+    const fine = createConnectHost("box-12").id;
+    cleanNames.up(getDb());
+    expect(getHost(old)?.name).toBe("Type ###, ###");
+    expect(getHost(fine)?.name).toBe("box-12");
   });
 });

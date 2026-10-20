@@ -139,7 +139,8 @@ Both machines then list each other as linked, and you get a "New machine
 linked" push. A machine already linked whose keys changed is refused until
 you unlink it.
 
-**Unlink** (or `agent-os unlink <name>`) works from either machine: it stops
+**Unlink** (or `agent-os unlink <name>`) works from either machine, after you
+confirm (linking again needs a fresh pairing): it stops
 trusting the other one here at once, then tells it, so it drops this one too
 and its Machines says "Unlinked by <name>". If it can't be told (it's
 offline), its next call here is refused and it learns then. The machine stays
