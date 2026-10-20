@@ -1,11 +1,10 @@
-import { afterAll, describe, expect, it } from "vitest";
+import { describe, expect, it } from "vitest";
 import fs from "fs";
-import os from "os";
 import path from "path";
+import { tempDir } from "@/lib/test-temp";
 import { loadBoxKey } from "./keys";
 
-const root = fs.mkdtempSync(path.join(os.tmpdir(), "aos-peer-keys-"));
-afterAll(() => fs.rmSync(root, { recursive: true, force: true }));
+const root = tempDir("aos-peer-keys-");
 
 const fresh = (name: string) => path.join(root, name);
 const mode = (p: string) => fs.statSync(p).mode & 0o777;

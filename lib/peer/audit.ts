@@ -1,8 +1,10 @@
 /**
  * Peer calls, in and out. Successful reads (the mirror polls every few
- * seconds) fold into one row per route per hour. Everything that didn't
- * succeed shares a per-minute cap, whoever it claims to be from (the sender
- * of a refused envelope is unverified), so a flood can't fill the disk. Rows older than 30 days go, checked at most hourly.
+ * seconds) fold into one row per route per hour. Failures are capped per
+ * minute so a flood can't fill the disk, in two budgets: envelopes refused
+ * here before their sender was proven (anyone can send those), and
+ * everything else (this machine's own failed calls, a linked machine's
+ * denied routes), so a forger's flood never hides the second kind. Rows older than 30 days go, checked at most hourly.
  * Bookkeeping: a failure here never fails the call.
  */
 
@@ -34,27 +36,41 @@ const HOUR = 3_600_000;
 const RETAIN_MS = 30 * 24 * HOUR;
 const FAILURES_PER_MINUTE = 30;
 
-const state = { prunedAt: 0, minute: 0, failures: 0 };
+const state = { prunedAt: 0, minute: 0, forged: 0, other: 0 };
 
 /** For tests: forget the prune time and the failure budget. */
 export const resetAuditLimits = () => {
   state.prunedAt = 0;
   state.minute = 0;
-  state.failures = 0;
+  state.forged = 0;
+  state.other = 0;
 };
 
-function underFailureCap(now: number): boolean {
+// Refusals of an inbound envelope that anyone could have sent: a stranger's,
+// a forgery, or a captured envelope sent again.
+const UNPROVEN: ReadonlySet<Outcome> = new Set([
+  "bad_sig",
+  "unknown_peer",
+  "suspended",
+  "stale",
+  "replay",
+]);
+
+function underFailureCap(e: AuditEntry, now: number): boolean {
   const minute = Math.floor(now / 60_000);
   if (minute !== state.minute) {
     state.minute = minute;
-    state.failures = 0;
+    state.forged = 0;
+    state.other = 0;
   }
-  return ++state.failures <= FAILURES_PER_MINUTE;
+  const key =
+    e.direction === "in" && UNPROVEN.has(e.outcome) ? "forged" : "other";
+  return ++state[key] <= FAILURES_PER_MINUTE;
 }
 
 export function recordPeerCall(e: AuditEntry, now = Date.now()): void {
   try {
-    if (e.outcome !== "ok" && !underFailureCap(now)) return;
+    if (e.outcome !== "ok" && !underFailureCap(e, now)) return;
     const db = getDb();
     if (now - state.prunedAt > HOUR) {
       state.prunedAt = now;

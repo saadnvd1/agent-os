@@ -2,9 +2,8 @@
  * POST /api/peer/rpc: a linked machine's call, served before Next on any
  * listener (the envelope is the authentication, not where it came from).
  *
- *  1. read the envelope, refusing an unlinked sender as soon as its header
- *     arrives, before the body is buffered, and holding at most a fixed
- *     number of unverified bytes at once (BodyBudget);
+ *  1. read the envelope under a budget for unverified bytes and a minimum
+ *     transfer rate (rpc-intake.ts), the same way whoever it claims to be;
  *  2. verify and decrypt it against the sender's pinned keys (envelope.ts);
  *  3. match the inner method, path and query against the allowlist;
  *  4. re-issue it to this machine's own loopback listener with the per-boot
@@ -20,13 +19,12 @@
  * its status.
  */
 
+import crypto from "crypto";
 import http, { type IncomingMessage, type ServerResponse } from "http";
 import { PEER_HEADER, PEER_INTERNAL_HEADER } from "../security/auth";
 import { matchPeerRoute } from "./allowlist";
 import { recordPeerCall, type AuditEntry, type Outcome } from "./audit";
 import {
-  MAX_HEADER,
-  MAX_REQUEST_ENVELOPE,
   MAX_RESPONSE_BODY,
   RPC_PATH,
   openRequest,
@@ -44,7 +42,18 @@ import {
   type Identity,
 } from "./keys";
 import { pinForMachine, type PeerPin } from "./links";
+import { sqliteNonceStore } from "./nonce-store";
 import { createReplayGuard, type ReplayGuard } from "./replay";
+import {
+  DEFAULT_PACE,
+  createBodyBudget,
+  readEnvelope,
+  sourceOf,
+  type BodyBudget,
+  type Pace,
+} from "./rpc-intake";
+
+export { createBodyBudget };
 
 export { RPC_PATH };
 const DISPATCH_TIMEOUT_MS = 10 * 60_000;
@@ -66,42 +75,13 @@ export interface RpcDeps {
   dispatch: (d: Dispatch) => Promise<PeerResponse>;
   audit: (e: AuditEntry) => void;
   budget: BodyBudget;
+  pace?: Pace;
   now?: () => number;
 }
 
-/**
- * Bytes of envelopes being read whose signature isn't checked yet: in all,
- * and per claimed sender. A sender over it is told it's busy, so forged
- * envelopes can't hold more than `total` of this machine's memory.
- */
-export interface BodyBudget {
-  take(peer: string, bytes: number): boolean;
-  give(peer: string, bytes: number): void;
-}
-
-export function createBodyBudget(
-  o: { total?: number; perPeer?: number } = {}
-): BodyBudget {
-  const total = o.total ?? 2 * MAX_REQUEST_ENVELOPE;
-  const perPeer = o.perPeer ?? MAX_REQUEST_ENVELOPE;
-  let used = 0;
-  const byPeer = new Map<string, number>();
-  return {
-    take(peer, bytes) {
-      const mine = byPeer.get(peer) ?? 0;
-      if (used + bytes > total || mine + bytes > perPeer) return false;
-      used += bytes;
-      byPeer.set(peer, mine + bytes);
-      return true;
-    },
-    give(peer, bytes) {
-      used = Math.max(0, used - bytes);
-      const left = (byPeer.get(peer) ?? 0) - bytes;
-      if (left > 0) byPeer.set(peer, left);
-      else byPeer.delete(peer);
-    },
-  };
-}
+// Stands in for an unknown or suspended sender's key, so its envelope takes
+// the same path, and the same time, to the same refusal as a bad signature.
+const DECOY_KEY = crypto.generateKeyPairSync("ed25519").publicKey;
 
 export const isPeerRpc = (req: IncomingMessage) =>
   (req.url ?? "").split("?")[0] === RPC_PATH;
@@ -124,61 +104,6 @@ function plain(res: ServerResponse, status: number, text: string) {
   res.setHeader("Cache-Control", "no-store");
   res.setHeader("Connection", "close");
   res.end(text);
-}
-
-type Early = Refusal | null;
-
-/**
- * The body, at most MAX_REQUEST_ENVELOPE bytes. `early` sees the header as
- * soon as it has arrived; a refusal there stops reading. From then on every
- * byte held must be granted by `reserve`, or reading stops as busy.
- */
-function readEnvelope(
-  req: IncomingMessage,
-  early: (headerBytes: Buffer) => Early,
-  reserve: (bytes: number) => boolean
-): Promise<{ body: Buffer } | { refusal: Refusal } | { tooLarge: true }> {
-  return new Promise((resolve, reject) => {
-    if (Number(req.headers["content-length"]) > MAX_REQUEST_ENVELOPE)
-      return resolve({ tooLarge: true });
-    const chunks: Buffer[] = [];
-    let total = 0;
-    let checked = false;
-    let done = false;
-    const finish = (v: Parameters<typeof resolve>[0]) => {
-      if (done) return;
-      done = true;
-      // An unread rest is dropped with the connection (Connection: close).
-      req.removeAllListeners("data");
-      resolve(v);
-    };
-    req.on("data", (chunk: Buffer) => {
-      if (done) return;
-      total += chunk.length;
-      if (total > MAX_REQUEST_ENVELOPE) return finish({ tooLarge: true });
-      chunks.push(chunk);
-      if (checked) {
-        if (!reserve(chunk.length)) finish({ refusal: "busy" });
-        return;
-      }
-      if (total < 4) return;
-      const head = chunks.length === 1 ? chunks[0] : Buffer.concat(chunks);
-      const len = head.readUInt32BE(0);
-      if (len > MAX_HEADER) return finish({ refusal: "bad_envelope" });
-      if (head.length < 4 + len) return;
-      checked = true;
-      const refusal = early(head.subarray(4, 4 + len));
-      if (refusal) return finish({ refusal });
-      if (!reserve(total)) finish({ refusal: "busy" });
-    });
-    req.on("end", () => finish({ body: Buffer.concat(chunks) }));
-    req.on("error", (err) => {
-      if (!done) {
-        done = true;
-        reject(err);
-      }
-    });
-  });
 }
 
 export async function handlePeerRpc(
@@ -224,34 +149,34 @@ export async function handlePeerRpc(
     return pin;
   };
 
-  // Unverified bytes this request holds, given back once it's opened.
-  let held = 0;
+  // What the signature check would have said, hidden behind it.
+  let hidden: "unknown_peer" | "suspended" | null = null;
+  const ticket = deps.budget.open(sourceOf(req));
+  if (!ticket) return void refuse("busy");
   const readAndOpen = async () => {
     let read;
     try {
-      read = await readEnvelope(
-        req,
-        (headerBytes) => {
+      read = await readEnvelope(req, {
+        early: (headerBytes) => {
           const header = parseHeaderBytes(headerBytes);
-          if (!header) return "bad_envelope";
-          if (!self || header.to !== self.machineId) return "wrong_machine";
-          const found = lookup(header.from);
-          if (!found) return "unknown_peer";
-          return found.state === "active" ? null : "suspended";
+          if (!header) return { refusal: "bad_envelope" };
+          if (!self || header.to !== self.machineId)
+            return { refusal: "wrong_machine" };
+          return { peer: header.from };
         },
-        (bytes) => {
-          if (!fromMachine || !deps.budget.take(fromMachine, bytes))
-            return false;
-          held += bytes;
-          return true;
-        }
-      );
+        ticket,
+        pace: deps.pace ?? DEFAULT_PACE,
+      });
     } catch {
       plain(res, 400, "bad envelope");
       return null;
     }
     if ("tooLarge" in read) {
       plain(res, 413, "too large");
+      return null;
+    }
+    if ("tooSlow" in read) {
+      plain(res, 408, "too slow");
       return null;
     }
     if ("refusal" in read) return refuse(read.refusal);
@@ -261,12 +186,17 @@ export async function handlePeerRpc(
       boxKey: deps.boxKey().privateKey,
       signKeyFor: (machineId) => {
         const found = lookup(machineId);
-        if (!found) return "unknown_peer";
-        if (found.state !== "active") return "suspended";
+        hidden = !found
+          ? "unknown_peer"
+          : found.state !== "active"
+            ? "suspended"
+            : null;
+        if (hidden) return DECOY_KEY;
         try {
-          return signPublic(found.signPub);
+          return signPublic(found!.signPub);
         } catch {
-          return "unknown_peer";
+          hidden = "unknown_peer";
+          return DECOY_KEY;
         }
       },
       replay: deps.replay,
@@ -277,10 +207,13 @@ export async function handlePeerRpc(
   try {
     opened = await readAndOpen();
   } finally {
-    if (held && fromMachine) deps.budget.give(fromMachine, held);
+    ticket.close();
   }
   if (!opened || !self) return;
-  if (!opened.ok) return void refuse(opened.refusal);
+  if (!opened.ok)
+    return void refuse(
+      opened.refusal === "bad_sig" && hidden ? hidden : opened.refusal
+    );
   const host = pin as PeerPin | null;
   if (!host) return void refuse("unknown_peer");
 
@@ -402,7 +335,7 @@ export function rpcDeps(port: number): RpcDeps {
     identity: () => currentIdentity(),
     boxKey: () => (box ??= loadBoxKey()),
     pinForMachine,
-    replay: createReplayGuard(),
+    replay: createReplayGuard({ store: sqliteNonceStore() }),
     dispatch: loopbackDispatch(port),
     audit: recordPeerCall,
     budget: createBodyBudget(),

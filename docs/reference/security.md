@@ -94,11 +94,13 @@ Ed25519 machine key and encrypted (X25519, HKDF-SHA256, ChaCha20-Poly1305) to
 the other machine's box key, `~/.agent-os/connect/peer.key`, which never goes
 to the Connect service. The envelope names both machines and carries a
 timestamp (±120 s) and a nonce remembered for that window, so a captured call
-can't be replayed here or on another machine; anything stamped before the
-server started is refused, so a restart doesn't reopen that window. An unknown
-sender, a suspended link and a bad signature get the same refusal, and at most
-a fixed amount of unverified envelope is held in memory at once. The answer is sealed and signed
-too, and only opens for the request it answers. Cloudflare sees that a POST
+can't be replayed here or on another machine. Nonces are kept in SQLite until
+their timestamp is stale, so a restart doesn't reopen that window. Every
+envelope is read the same way whoever it claims to be from, under a budget for
+unverified bytes (in total, per claimed sender and per source address) and a
+minimum transfer rate; an unknown sender, a suspended link and a bad signature
+then get the same refusal. The answer is sealed with a fresh IV and
+signed, and only opens for the request it answers. Cloudflare sees that a POST
 happened, its size and its timing, not the route or the status.
 
 A verified call is checked against an allowlist (`lib/peer/allowlist.ts`: the

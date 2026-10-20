@@ -1,4 +1,5 @@
 import { describe, it, expect } from "vitest";
+import { sqliteNonceStore } from "./nonce-store";
 import { createReplayGuard } from "./replay";
 
 const NOW = 1_800_000_000_000;
@@ -44,12 +45,41 @@ describe("replay guard", () => {
     expect(g.check("p", "c", NOW + 2000, later)).toBe("replay");
   });
 
-  it("refuses anything stamped before it was made, so a restart can't reopen the window", () => {
-    const before = createReplayGuard({ startedAt: NOW - 60_000 });
-    expect(before.check("p", "n", NOW - 30_000, NOW)).toBe("ok");
-    // The server restarts: a fresh guard has forgotten "n".
-    const after = createReplayGuard({ startedAt: NOW });
-    expect(after.check("p", "n", NOW - 30_000, NOW)).toBe("stale");
-    expect(after.check("p", "m", NOW, NOW)).toBe("ok");
+  it("remembers nonces across a restart through the store, even ahead of its clock", () => {
+    const store = sqliteNonceStore();
+    const now = Date.now();
+    // Stamped 60 s ahead of this machine's clock (a fast peer, or a server
+    // that booted with a slow clock).
+    const ts = now + 60_000;
+    const before = createReplayGuard({ store });
+    expect(before.check("aaaa1111", "restart-n", ts, now)).toBe("ok");
+    // The server restarts: a fresh guard, nothing in memory, the same DB.
+    const after = createReplayGuard({ store: sqliteNonceStore() });
+    expect(after.check("aaaa1111", "restart-n", ts, now + 5_000)).toBe(
+      "replay"
+    );
+    expect(after.check("aaaa1111", "restart-m", ts, now + 5_000)).toBe("ok");
+    // Another peer's same nonce is its own.
+    expect(after.check("bbbb2222", "restart-n", ts, now + 5_000)).toBe("ok");
+  });
+
+  it("forgets a stored nonce only once its timestamp is stale", () => {
+    const store = sqliteNonceStore();
+    expect(store.claim("p", "x", NOW + 120_000, NOW)).toBe(true);
+    expect(store.claim("p", "x", NOW + 120_000, NOW + 1)).toBe(false);
+    store.prune(NOW + 120_001);
+    expect(store.claim("p", "x", NOW + 240_001, NOW + 120_001)).toBe(true);
+  });
+
+  it("refuses as busy, never ok, when the store can't be written", () => {
+    const g = createReplayGuard({
+      store: {
+        claim: () => {
+          throw new Error("disk full");
+        },
+        prune: () => {},
+      },
+    });
+    expect(g.check("p", "n", NOW, NOW)).toBe("busy");
   });
 });

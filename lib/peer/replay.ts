@@ -5,24 +5,31 @@
  * fills its cache inside the window is told it's busy rather than letting an
  * older nonce be replayed.
  *
- * The cache lives in memory, so anything stamped before this guard was made
- * (before the server started) is stale: otherwise a restart would forget the
- * nonces of envelopes still inside the window, and one could run twice, its
- * answer sealed again under the same one-time key.
+ * The server's guard also writes each nonce to a NonceStore (SQLite,
+ * nonce-store.ts) before the call runs, so a restart doesn't forget the
+ * nonces still inside the window. Memory is only a cache in front of it; if
+ * the store can't be written the call is refused as busy.
  */
 
 import { SKEW_MS } from "./envelope";
 
 export type Freshness = "ok" | "stale" | "replay" | "busy";
 
+export interface NonceStore {
+  /** Records the nonce until `until`; false if it's already recorded. */
+  claim(peer: string, nonce: string, until: number, now: number): boolean;
+  /** Forgets nonces whose time is up. */
+  prune(now: number): void;
+}
+
 export interface ReplayGuard {
   check(peer: string, nonce: string, ts: number, now?: number): Freshness;
 }
 
 export function createReplayGuard(
-  opts: { windowMs?: number; maxPerPeer?: number; startedAt?: number } = {}
+  opts: { windowMs?: number; maxPerPeer?: number; store?: NonceStore } = {}
 ): ReplayGuard {
-  const startedAt = opts.startedAt ?? Date.now();
+  const { store } = opts;
   const windowMs = opts.windowMs ?? SKEW_MS;
   const maxPerPeer = opts.maxPerPeer ?? 50_000;
   // nonce → the time after which its timestamp is stale anyway.
@@ -36,10 +43,14 @@ export function createReplayGuard(
   return {
     check(peer, nonce, ts, now = Date.now()) {
       if (!Number.isFinite(ts) || Math.abs(now - ts) > windowMs) return "stale";
-      if (ts < startedAt) return "stale";
       if (now - sweptAt > windowMs) {
         sweptAt = now;
         for (const nonces of seen.values()) sweep(nonces, now);
+        try {
+          store?.prune(now);
+        } catch {
+          // pruned again next window
+        }
       }
       let nonces = seen.get(peer);
       if (!nonces) seen.set(peer, (nonces = new Map()));
@@ -50,7 +61,20 @@ export function createReplayGuard(
         if (nonces.size >= maxPerPeer) return "busy";
       }
       // Past ts + window the timestamp check refuses it on its own.
-      nonces.set(nonce, ts + windowMs);
+      const expires = ts + windowMs;
+      if (store) {
+        let fresh: boolean;
+        try {
+          fresh = store.claim(peer, nonce, expires, now);
+        } catch {
+          return "busy";
+        }
+        if (!fresh) {
+          nonces.set(nonce, expires);
+          return "replay";
+        }
+      }
+      nonces.set(nonce, expires);
       return "ok";
     },
   };

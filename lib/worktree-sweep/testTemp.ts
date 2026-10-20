@@ -67,6 +67,8 @@ export const TEST_TEMP_PREFIXES: readonly string[] = [
   "aos-orch-sweep-",
   "aos-origin-",
   "aos-path-",
+  "aos-peer-connect-",
+  "aos-peer-keys-",
   "aos-plain-",
   "aos-plan-",
   "aos-ports-",

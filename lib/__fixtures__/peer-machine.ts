@@ -1,7 +1,7 @@
 import crypto from "crypto";
 import fs from "fs";
-import os from "os";
 import path from "path";
+import { tempDir } from "../test-temp";
 import { rawPublic, type BoxKey, type Identity } from "../peer/keys";
 
 /** A Connect machine's keys, for tests: never on disk unless asked. */
@@ -24,7 +24,7 @@ export function fakeMachine(machineId: string): FakeMachine {
 
 /** Writes the machine's Connect folder (connect.json, machine.key, peer.key). */
 export function writeConnectDir(m: FakeMachine): string {
-  const dir = fs.mkdtempSync(path.join(os.tmpdir(), "aos-peer-connect-"));
+  const dir = tempDir("aos-peer-connect-");
   fs.writeFileSync(
     path.join(dir, "connect.json"),
     JSON.stringify({

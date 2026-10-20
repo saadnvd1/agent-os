@@ -267,6 +267,43 @@ async function post(m: Machine, body: Buffer) {
   return { status: res.status, text: await res.text() };
 }
 
+/** An envelope sent to the tunnel only up to `upTo` bytes, the rest held back. */
+function partial(m: Machine, envelope: Buffer, upTo: number) {
+  const out = http.request({
+    host: "127.0.0.1",
+    port: m.tunnelPort,
+    method: "POST",
+    path: "/api/peer/rpc",
+    headers: { host: m.hostname, "content-length": String(envelope.length) },
+  });
+  let answered = false;
+  const response = new Promise<{ status: number; text: string }>(
+    (resolve, reject) => {
+      out.on("response", (res) => {
+        answered = true;
+        let text = "";
+        res.on("data", (c) => (text += c));
+        res.on("end", () => resolve({ status: res.statusCode ?? 0, text }));
+      });
+      out.on("error", (err) => (answered ? undefined : reject(err)));
+    }
+  );
+  response.catch(() => {});
+  const closed = new Promise((r) => out.on("close", r));
+  out.write(envelope.subarray(0, upTo));
+  return {
+    response,
+    closed,
+    within: (ms: number) =>
+      Promise.race([
+        response.then(() => "answered"),
+        new Promise((r) => setTimeout(() => r("pending"), ms)),
+      ]),
+    finish: () => out.end(envelope.subarray(upTo)),
+    destroy: () => out.destroy(),
+  };
+}
+
 const sealAt = (
   inner: Partial<PeerRequest>,
   o: { to?: FakeMachine; now?: number; signKey?: FakeMachine["signKey"] } = {}
@@ -620,40 +657,96 @@ describe("the rpc server against hostile envelopes", () => {
     expect(status).toBe(413);
   });
 
-  it("refuses an unpinned sender as soon as its header arrives", async () => {
-    const { envelope } = sealRequest({
-      from: "eeee5555",
-      to: B.machineId,
-      signKey: C.signKey,
-      peerBox: boxPublic(B.box.publicRaw),
-      request: {
-        method: "POST",
-        path: "/api/tasks/import",
-        query: "",
-        contentType: "application/json",
-        body: Buffer.alloc(1024),
-      },
-    });
-    const headerEnd = 4 + envelope.readUInt32BE(0);
-    const status = await new Promise<number>((resolve, reject) => {
-      const out = http.request(
-        {
-          host: "127.0.0.1",
-          port: mB.tunnelPort,
+  it("reads an unpinned sender's body like anyone's, then refuses it as a bad signature", async () => {
+    const forged = (from: string) =>
+      sealRequest({
+        from,
+        to: B.machineId,
+        signKey: C.signKey,
+        peerBox: boxPublic(B.box.publicRaw),
+        request: {
           method: "POST",
-          path: "/api/peer/rpc",
-          headers: { host: B.hostname, "content-length": "50000000" },
+          path: "/api/tasks/import",
+          query: "",
+          contentType: "application/json",
+          body: Buffer.from(JSON.stringify({ pad: "x".repeat(4000) })),
         },
-        (res) => {
-          res.resume();
-          resolve(res.statusCode ?? 0);
-        }
-      );
-      out.on("error", reject);
-      // The header only; the 50 MB it promised never comes.
-      out.write(envelope.subarray(0, headerEnd));
-    });
-    expect(status).toBe(401);
+      }).envelope;
+    // A stranger and a forger claiming a linked machine: both still waiting
+    // for their body after the header, both refused the same way after it.
+    for (const from of ["eeee5555", A.machineId]) {
+      const env = forged(from);
+      const p = partial(mB, env, 4 + env.readUInt32BE(0) + 100);
+      expect(await p.within(300)).toBe("pending");
+      p.finish();
+      expect(await p.response).toEqual({ status: 401, text: "bad signature" });
+    }
+    const outcomes = getDb()
+      .prepare(
+        `SELECT outcome FROM peer_audit WHERE route = '/api/peer/rpc' ORDER BY id`
+      )
+      .all() as { outcome: string }[];
+    expect(outcomes.map((r) => r.outcome)).toEqual(["unknown_peer", "bad_sig"]);
+  });
+
+  it("drops a sender that stalls, and gives its share back", async () => {
+    const saved = { budget: mB.deps.budget, pace: mB.deps.pace };
+    mB.deps.budget = createBodyBudget({ perPeer: 8192 });
+    mB.deps.pace = { graceMs: 200, minRate: 1_000_000 };
+    try {
+      const env = sealAt({
+        method: "POST",
+        path: "/api/tasks",
+        contentType: "application/json",
+        body: Buffer.from(JSON.stringify({ pad: "x".repeat(6000) })),
+      }).envelope;
+      // Claims A and holds most of A's share, then sends nothing more.
+      const stalled = partial(mB, env, env.length - 10);
+      await new Promise((r) => setTimeout(r, 50));
+      expect(await post(mB, env)).toEqual({ status: 429, text: "busy" });
+      expect(await stalled.response).toEqual({
+        status: 408,
+        text: "too slow",
+      });
+      stalled.destroy();
+      expect((await post(mB, sealAt({}).envelope)).status).toBe(200);
+    } finally {
+      Object.assign(mB.deps, saved);
+    }
+  });
+
+  it("caps open unverified requests per source, the same for linked and unknown senders", async () => {
+    const saved = mB.deps.budget;
+    mB.deps.budget = createBodyBudget({ requestsPerSource: 1 });
+    try {
+      const env = sealAt({}).envelope;
+      const held = partial(mB, env, 10);
+      await new Promise((r) => setTimeout(r, 50));
+      const stranger = sealRequest({
+        from: "eeee5555",
+        to: B.machineId,
+        signKey: C.signKey,
+        peerBox: boxPublic(B.box.publicRaw),
+        request: {
+          method: "GET",
+          path: "/api/sessions/status",
+          query: "",
+          contentType: "",
+          body: Buffer.alloc(0),
+        },
+      }).envelope;
+      expect(await post(mB, sealAt({}).envelope)).toEqual({
+        status: 429,
+        text: "busy",
+      });
+      expect(await post(mB, stranger)).toEqual({ status: 429, text: "busy" });
+      held.destroy();
+      await held.closed;
+      await new Promise((r) => setTimeout(r, 50));
+      expect((await post(mB, sealAt({}).envelope)).status).toBe(200);
+    } finally {
+      mB.deps.budget = saved;
+    }
   });
 
   it("caps audit rows for forged envelopes claiming a linked sender", async () => {
@@ -662,6 +755,25 @@ describe("the rpc server against hostile envelopes", () => {
       expect((await post(mB, envelope)).status).toBe(401);
     const rows = peerAudit(hostA).filter((r) => r.outcome === "bad_sig");
     expect(rows).toHaveLength(30);
+    // The flood spent only its own budget: this machine's own failures and
+    // a linked machine's denied routes are still recorded.
+    recordPeerCall({
+      hostId: hostB,
+      machineId: B.machineId,
+      direction: "out",
+      method: "POST",
+      route: "/api/tasks",
+      status: 401,
+      ms: 1,
+      bytes: 0,
+      outcome: "bad_sig",
+    });
+    expect(peerAudit(hostB).map((r) => r.outcome)).toEqual(["bad_sig"]);
+    await fetch(`https://${B.hostname}/api/peer/rpc`, {
+      method: "POST",
+      body: new Uint8Array(sealAt({ path: "/api/devices" }).envelope),
+    });
+    expect(peerAudit(hostA)[0]).toMatchObject({ outcome: "denied_route" });
   });
 
   it("holds only so much unverified envelope per sender, then says busy", async () => {

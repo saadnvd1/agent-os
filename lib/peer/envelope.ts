@@ -9,11 +9,14 @@
  *   ct      ChaCha20-Poly1305(k_req, AAD=header) over the inner request
  *   sig     Ed25519_A("agentos-peer-req-v1" ‖ header ‖ SHA256(ct))
  *
- * Response body: ct ‖ sig, where ct = ChaCha20-Poly1305(k_res) over the
- * inner response and sig = Ed25519_B("agentos-peer-res-v1" ‖ request nonce ‖
- * SHA256(ct)), so it only opens for the request it answers.
+ * Response body: iv ‖ ct ‖ sig, where iv is 12 fresh random bytes, ct =
+ * ChaCha20-Poly1305(k_res, iv) over the inner response and sig =
+ * Ed25519_B("agentos-peer-res-v1" ‖ request nonce ‖ iv ‖ SHA256(ct)), so it
+ * only opens for the request it answers.
  *
- * Each key seals exactly one message, so a fixed all-zero IV is safe.
+ * k_req seals exactly one message, so the request uses a fixed all-zero IV.
+ * The response doesn't rely on that: should a request ever be answered twice,
+ * a fresh IV keeps the two answers from sharing a keystream.
  */
 
 import crypto, { type KeyObject } from "crypto";
@@ -33,7 +36,8 @@ export const MAX_HEADER = 1024;
 const MAX_META = 16 * 1024;
 const SIG = 64;
 const TAG = 16;
-const IV = Buffer.alloc(12);
+const ZERO_IV = Buffer.alloc(12);
+const IV_LEN = 12;
 const REQ_DOMAIN = Buffer.from("agentos-peer-req-v1");
 const RES_DOMAIN = Buffer.from("agentos-peer-res-v1");
 const B64_16 = /^[A-Za-z0-9_-]{22}$/;
@@ -111,17 +115,27 @@ function keysFor(
   return { req: okm.subarray(0, 32), res: okm.subarray(32) };
 }
 
-function seal(key: Buffer, plain: Buffer, aad?: Buffer): Buffer {
-  const c = crypto.createCipheriv("chacha20-poly1305", key, IV, {
+function seal(
+  key: Buffer,
+  plain: Buffer,
+  o: { aad?: Buffer; iv?: Buffer } = {}
+): Buffer {
+  const { aad, iv = ZERO_IV } = o;
+  const c = crypto.createCipheriv("chacha20-poly1305", key, iv, {
     authTagLength: TAG,
   });
   if (aad) c.setAAD(aad, { plaintextLength: plain.length });
   return Buffer.concat([c.update(plain), c.final(), c.getAuthTag()]);
 }
 
-function unseal(key: Buffer, ct: Buffer, aad?: Buffer): Buffer {
+function unseal(
+  key: Buffer,
+  ct: Buffer,
+  o: { aad?: Buffer; iv?: Buffer } = {}
+): Buffer {
+  const { aad, iv = ZERO_IV } = o;
   if (ct.length < TAG) throw new Error("short");
-  const d = crypto.createDecipheriv("chacha20-poly1305", key, IV, {
+  const d = crypto.createDecipheriv("chacha20-poly1305", key, iv, {
     authTagLength: TAG,
   });
   d.setAuthTag(ct.subarray(ct.length - TAG));
@@ -161,7 +175,7 @@ export function sealRequest(o: {
   });
   const keys = keysFor(shared, nonce, o.from, o.to);
   const { body, ...meta } = o.request;
-  const ct = seal(keys.req, frame(meta, body), headerBytes);
+  const ct = seal(keys.req, frame(meta, body), { aad: headerBytes });
   const sig = crypto.sign(
     null,
     Buffer.concat([REQ_DOMAIN, headerBytes, sha256(ct)]),
@@ -284,7 +298,10 @@ export function openRequest(envelope: Buffer, deps: OpenDeps): Opened {
       publicKey: epk,
     });
     const keys = keysFor(shared, nonce, header.from, header.to);
-    const { meta, rest } = unframe(unseal(keys.req, ct, headerBytes), MAX_META);
+    const { meta, rest } = unframe(
+      unseal(keys.req, ct, { aad: headerBytes }),
+      MAX_META
+    );
     const request = parseInner(meta, rest);
     if (!request) return fail("bad_envelope");
     return { ok: true, header, request, nonce, resKey: keys.res };
@@ -320,13 +337,14 @@ export function sealResponse(o: {
   response: PeerResponse;
 }): Buffer {
   const { body, ...meta } = o.response;
-  const ct = seal(o.resKey, frame(meta, body));
+  const iv = crypto.randomBytes(IV_LEN);
+  const ct = seal(o.resKey, frame(meta, body), { iv });
   const sig = crypto.sign(
     null,
-    Buffer.concat([RES_DOMAIN, o.nonce, sha256(ct)]),
+    Buffer.concat([RES_DOMAIN, o.nonce, iv, sha256(ct)]),
     o.signKey
   );
-  return Buffer.concat([ct, sig]);
+  return Buffer.concat([iv, ct, sig]);
 }
 
 /** The answer to the request sealed with this nonce and key, from that peer. */
@@ -337,15 +355,19 @@ export function openResponse(o: {
   peerSign: KeyObject;
 }): PeerResponse {
   const { envelope } = o;
-  if (envelope.length < TAG + SIG || envelope.length > MAX_RESPONSE_ENVELOPE)
+  if (
+    envelope.length < IV_LEN + TAG + SIG ||
+    envelope.length > MAX_RESPONSE_ENVELOPE
+  )
     throw new Error("its answer isn't an envelope");
-  const ct = envelope.subarray(0, envelope.length - SIG);
+  const iv = envelope.subarray(0, IV_LEN);
+  const ct = envelope.subarray(IV_LEN, envelope.length - SIG);
   const sig = envelope.subarray(envelope.length - SIG);
   let ok = false;
   try {
     ok = crypto.verify(
       null,
-      Buffer.concat([RES_DOMAIN, o.nonce, sha256(ct)]),
+      Buffer.concat([RES_DOMAIN, o.nonce, iv, sha256(ct)]),
       o.peerSign,
       sig
     );
@@ -356,7 +378,7 @@ export function openResponse(o: {
   let meta: unknown;
   let body: Buffer;
   try {
-    ({ meta, rest: body } = unframe(unseal(o.resKey, ct), MAX_META));
+    ({ meta, rest: body } = unframe(unseal(o.resKey, ct, { iv }), MAX_META));
   } catch {
     throw new Error("its answer doesn't decrypt");
   }

@@ -202,23 +202,6 @@ describe("request envelope", () => {
     ).toMatchObject({ refusal: "stale" });
   });
 
-  it("refuses an envelope from before a restart, though its nonce is forgotten", () => {
-    const { envelope } = seal({ now: NOW - 30_000 });
-    expect(
-      openRequest(
-        envelope,
-        deps({ replay: createReplayGuard({ startedAt: NOW - 60_000 }) })
-      ).ok
-    ).toBe(true);
-    // Same envelope, fresh guard after the restart: refused, never run twice.
-    expect(
-      openRequest(
-        envelope,
-        deps({ replay: createReplayGuard({ startedAt: NOW }) })
-      )
-    ).toMatchObject({ ok: false, refusal: "stale" });
-  });
-
   it("doesn't burn a nonce for an envelope that fails its signature", () => {
     const replay = createReplayGuard();
     const { envelope } = seal();
@@ -271,6 +254,32 @@ describe("response envelope", () => {
     });
     expect(got.status).toBe(201);
     expect(got.body.toString()).toBe('{"ok":true}');
+  });
+
+  it("never seals two answers to one request under the same key and IV", () => {
+    const sealed = seal();
+    const answerOnce = () =>
+      sealResponse({
+        resKey: sealed.resKey,
+        nonce: sealed.nonce,
+        signKey: B.signKey,
+        response: answer,
+      });
+    const a = answerOnce();
+    const b = answerOnce();
+    // Same k_res, so the IV is what keeps the keystreams apart.
+    expect(a.subarray(0, 12).equals(b.subarray(0, 12))).toBe(false);
+    expect(a.subarray(0, 12).equals(Buffer.alloc(12))).toBe(false);
+    expect(a.subarray(12, 30).equals(b.subarray(12, 30))).toBe(false);
+    for (const env of [a, b])
+      expect(
+        openResponse({
+          envelope: env,
+          nonce: sealed.nonce,
+          resKey: sealed.resKey,
+          peerSign: signPublic(B.signPub),
+        }).status
+      ).toBe(201);
   });
 
   it("refuses an answer to a different request (response swap)", () => {
