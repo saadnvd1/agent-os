@@ -3,13 +3,14 @@
 import { useState } from "react";
 import { ExternalLink, Link2, Loader2, RefreshCw } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import { Notice } from "@/components/ui/notice";
 import { LinkForm } from "@/components/Welcome/ConnectBlock";
 import {
   useAccountMachines,
   useRefreshAccount,
   useStartLink,
 } from "@/data/peers";
-import { CONNECT_SITE } from "@/lib/connect/view";
+import { UPGRADE_URL } from "@/lib/peer/reasons";
 import type { AccountMachine } from "@/lib/peer/machines";
 import { cn } from "@/lib/utils";
 import { WaitingLinks } from "./IncomingLinkSheet";
@@ -57,7 +58,12 @@ function MachineRow({
           Linked
         </span>
       ) : machine.linkState === "suspended" ? (
-        <span className="text-muted-foreground text-xs">Suspended</span>
+        <span
+          className="text-xs text-amber-700 dark:text-amber-400"
+          title={machine.suspendedReason ?? undefined}
+        >
+          Suspended
+        </span>
       ) : (
         <Button
           variant="outline"
@@ -122,23 +128,31 @@ export function AccountMachines() {
           />
         </Button>
       </div>
+      {data.uncheckedSince && (
+        <Notice tone="warning">
+          Couldn&apos;t check your account since{" "}
+          {new Date(data.uncheckedSince).toLocaleString([], {
+            dateStyle: "medium",
+            timeStyle: "short",
+          })}
+          . Machines already linked keep working; new links wait until it&apos;s
+          back.
+        </Notice>
+      )}
       {data.entitlements && !entitled && (
-        <div className="flex flex-col gap-2 rounded-lg border p-3 sm:flex-row sm:items-center">
-          <p className="flex-1 text-sm">
-            Link your machines with Pro: tasks move between them over any
-            network, end-to-end encrypted.
-          </p>
-          <Button asChild variant="outline" className="min-h-11 sm:min-h-9">
-            <a
-              href={`${CONNECT_SITE}/settings/billing`}
-              target="_blank"
-              rel="noopener noreferrer"
-            >
-              Upgrade
-              <ExternalLink className="h-3.5 w-3.5" />
-            </a>
-          </Button>
-        </div>
+        <Notice
+          action={
+            <Button asChild variant="outline" className="min-h-11 sm:min-h-9">
+              <a href={UPGRADE_URL} target="_blank" rel="noopener noreferrer">
+                Upgrade
+                <ExternalLink className="h-3.5 w-3.5" />
+              </a>
+            </Button>
+          }
+        >
+          Link your machines with Pro: tasks move between them over any network,
+          end-to-end encrypted.
+        </Notice>
       )}
       {entitled && <WaitingLinks />}
       {data.error && (

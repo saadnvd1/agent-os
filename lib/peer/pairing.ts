@@ -159,7 +159,10 @@ export async function receiveHello(
     s.hellos.length >= UNPROVEN
   )
     return no(429, "too many requests");
-  s.hellos.push({ at: now, from: null, source });
+  // Tagged later through this reference: other hellos may have been pushed
+  // by then, while this one waited on the plan and the account list.
+  const entry: Store["hellos"][number] = { at: now, from: null, source };
+  s.hellos.push(entry);
   const allowed = await deps.allowed();
   if (allowed !== true)
     return no(402, "Linking machines needs AgentOS Connect Pro");
@@ -179,7 +182,7 @@ export async function receiveHello(
     proven.filter((h) => h.from === hello.from).length >= PER_SENDER
   )
     return no(429, "too many link requests; wait a few minutes");
-  s.hellos[s.hellos.length - 1].from = hello.from;
+  entry.from = hello.from;
   for (const old of s.requests.values())
     if (old.peer.id === hello.from && open(old)) {
       old.state = "declined";
@@ -309,14 +312,28 @@ export interface PendingView {
   lastSeenAt: string | null;
   expiresAt: number;
   attemptsLeft: number;
+  /** `accepted`: the code matched here; `confirmCode` goes on the other machine. */
+  state: "pending" | "accepted";
+  /** Only for a caller that could have accepted it (withCodes). */
+  confirmCode?: string;
 }
 
-/** Requests waiting for a person here to type the code. */
-export function pendingRequests(now = Date.now()): PendingView[] {
+/**
+ * Requests waiting for a person here to type the code, and accepted ones
+ * still within their 5 minutes, whose second code must survive a reload.
+ */
+export function pendingRequests(
+  now = Date.now(),
+  o: { withCodes?: boolean } = {}
+): PendingView[] {
   const s = store();
   sweep(s, now);
   return [...s.requests.values()]
-    .filter((r) => r.state === "pending")
+    .filter(
+      (r) =>
+        r.state === "pending" ||
+        (r.state === "accepted" && now - r.createdAt <= REQUEST_TTL_MS)
+    )
     .map((r) => ({
       id: r.id,
       machineId: r.peer.id,
@@ -324,6 +341,10 @@ export function pendingRequests(now = Date.now()): PendingView[] {
       lastSeenAt: r.peer.lastSeenAt,
       expiresAt: r.createdAt + REQUEST_TTL_MS,
       attemptsLeft: MAX_WRONG - r.wrong,
+      state: r.state === "accepted" ? "accepted" : "pending",
+      ...(o.withCodes &&
+        r.state === "accepted" &&
+        r.confirm && { confirmCode: r.confirm }),
     }));
 }
 
@@ -378,6 +399,14 @@ export async function acceptRequest(
       ok: false,
       status: 402,
       error: "Linking machines needs AgentOS Connect Pro.",
+    };
+  // It may have been declined, replaced, expired or accepted meanwhile.
+  sweep(s, deps.now());
+  if (r.state !== "pending" || s.requests.get(id) !== r)
+    return {
+      ok: false,
+      status: 404,
+      error: "That request has ended. Start again from the other machine.",
     };
   let hostId: string;
   try {

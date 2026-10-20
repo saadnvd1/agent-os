@@ -3,4 +3,5 @@ export const peerKeys = {
   account: () => [...peerKeys.all, "account"] as const,
   pending: () => [...peerKeys.all, "pending"] as const,
   link: (id: string) => [...peerKeys.all, "link", id] as const,
+  audit: (hostId: string) => [...peerKeys.all, "audit", hostId] as const,
 };

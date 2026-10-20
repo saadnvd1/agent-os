@@ -49,6 +49,7 @@ export function assertDemoSandbox(env: Env = process.env, home = os.homedir()) {
 // "projects/[id]"): Next serves the folder, so an id must never match them.
 // The test walks app/api and fails when one is missing here.
 export const STATIC_SIBLINGS = [
+  "account",
   "archived",
   "arrived",
   "availability",
@@ -65,7 +66,9 @@ export const STATIC_SIBLINGS = [
   "init-script",
   "me",
   "items",
+  "link",
   "network",
+  "pending",
   "pdf",
   "preview",
   "queue",

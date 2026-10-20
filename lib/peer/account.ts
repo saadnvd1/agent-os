@@ -19,6 +19,9 @@ import {
 } from "../connect/control-api";
 import { peerHostAllowed } from "./client";
 import { rawPublic } from "./keys";
+import { cleanMachineName } from "./name";
+import { reconcilePins, type AccountSays } from "./revoke";
+import { getSetting, putSetting } from "../settings-store";
 
 export interface AccountPeer {
   id: string;
@@ -37,9 +40,15 @@ export interface AccountView {
   /** When the list was last fetched, 0 if never. */
   fetchedAt: number;
   error: string | null;
+  /** Set when the service hasn't answered for a day: since when. */
+  uncheckedSince: number | null;
 }
 
 export const LIST_MAX_AGE_MS = 60_000;
+export const UNCHECKED_NOTICE_MS = 24 * 3_600_000;
+const OK_KEY = "peer.account_ok_at";
+// The last answer is written down at most this often (it survives restarts).
+const OK_SAVE_MS = 10 * 60_000;
 // Never more often than this, whoever asks.
 const MIN_GAP_MS = 5_000;
 
@@ -52,6 +61,8 @@ interface State {
   stale: boolean;
   error: string | null;
   inflight: Promise<void> | null;
+  okAt: number;
+  okSavedAt: number;
 }
 
 export type Fetcher = () => Promise<PeerList | null>;
@@ -70,6 +81,8 @@ const fresh = (): State => ({
   stale: false,
   error: null,
   inflight: null,
+  okAt: 0,
+  okSavedAt: 0,
 });
 
 const state = () => (g.__agentosPeerAccount ??= fresh());
@@ -97,6 +110,42 @@ export function rawFromSpki(pem: string): string | null {
   }
 }
 
+/** The service answered: links can be checked against it again. */
+export function noteAccountOk(now = Date.now()) {
+  const s = state();
+  s.okAt = now;
+  if (now - s.okSavedAt < OK_SAVE_MS) return;
+  s.okSavedAt = now;
+  try {
+    putSetting(OK_KEY, String(now));
+  } catch {
+    // Bookkeeping only.
+  }
+}
+
+/** When the service last answered; a first look starts the clock. */
+function lastOk(now: number): number {
+  const s = state();
+  if (s.okAt) return s.okAt;
+  let saved = NaN;
+  try {
+    saved = Number(getSetting(OK_KEY));
+  } catch {
+    // No database: count from now.
+  }
+  if (Number.isFinite(saved) && saved > 0) return (s.okAt = saved);
+  noteAccountOk(now);
+  return now;
+}
+
+function applyToPins(says: AccountSays) {
+  try {
+    reconcilePins(says);
+  } catch (err) {
+    console.error("peer revoke:", err);
+  }
+}
+
 function adopt(list: PeerList) {
   const s = state();
   const peers: AccountPeer[] = [];
@@ -107,7 +156,7 @@ function adopt(list: PeerList) {
     if (!signPub || !peerHostAllowed(m.hostname)) continue;
     peers.push({
       id: m.id,
-      name: m.name,
+      name: cleanMachineName(m.name),
       hostname: m.hostname,
       signPub,
       lastSeenAt: m.lastSeenAt,
@@ -120,6 +169,11 @@ function adopt(list: PeerList) {
   s.fetchedAt = Date.now();
   s.stale = false;
   s.error = null;
+  noteAccountOk(s.fetchedAt);
+  applyToPins({
+    linkMachines: s.entitlements?.linkMachines ?? null,
+    listed: new Map(peers.map((p) => [p.id, p.signPub])),
+  });
 }
 
 async function refresh(): Promise<void> {
@@ -161,15 +215,19 @@ export async function accountView(
       peers: [],
       fetchedAt: 0,
       error: null,
+      uncheckedSince: null,
     };
   const s = state();
   if (s.stale || Date.now() - s.fetchedAt > maxAgeMs) await refresh();
+  const now = Date.now();
+  const ok = lastOk(now);
   return {
     enrolled: true,
     entitlements: s.entitlements,
     peers: s.peers,
     fetchedAt: s.fetchedAt,
     error: s.error,
+    uncheckedSince: now - ok > UNCHECKED_NOTICE_MS ? ok : null,
   };
 }
 
@@ -187,12 +245,26 @@ export async function linkingAllowed(): Promise<boolean | null> {
   return entitlements ? entitlements.linkMachines : null;
 }
 
-/** What a heartbeat says: the plan now, and whether the list changed. */
+/**
+ * What a heartbeat says: the service is there, the plan now, and whether the
+ * list changed, which is fetched again at once so a machine removed from the
+ * account is suspended within a beat or so.
+ */
 export function noteHeartbeat(beat: Beat) {
   const s = state();
+  noteAccountOk();
+  const plan = beat.entitlements?.linkMachines;
+  const planChanged =
+    plan !== undefined && plan !== s.entitlements?.linkMachines;
   if (beat.entitlements) s.entitlements = beat.entitlements;
   if (beat.peersEtag && beat.peersEtag !== s.etag) {
     s.etag = beat.peersEtag;
     s.stale = true;
   }
+  // A downgrade suspends now. An upgrade waits for a fresh list, so a pin
+  // whose machine left the account meanwhile isn't resumed on the way.
+  if (planChanged && plan === false)
+    applyToPins({ linkMachines: false, listed: null });
+  else if (planChanged) s.stale = true;
+  if (s.stale && enrolled()) void refresh();
 }

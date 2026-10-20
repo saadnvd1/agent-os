@@ -5,6 +5,7 @@
  */
 
 import http, { type IncomingMessage, type ServerResponse } from "http";
+import { NextRequest } from "next/server";
 import type { AddressInfo } from "net";
 import type { FakeMachine } from "@/lib/__fixtures__/peer-machine";
 import { tunnelListener } from "@/lib/connect/serve";
@@ -30,8 +31,11 @@ export interface Seen {
   body: string;
 }
 
-/** What Next would be: echoes how the gate saw the call. */
-function fakeNext(seen: Seen[]) {
+/** A real route handler, run behind the gate as Next would run it. */
+export type Route = (req: NextRequest) => Response | Promise<Response>;
+
+/** What Next would be: echoes how the gate saw the call, or runs `routes`. */
+function fakeNext(seen: Seen[], routes: Record<string, Route>) {
   return async (req: IncomingMessage, res: ServerResponse) => {
     let body = "";
     for await (const c of req) body += c;
@@ -41,6 +45,22 @@ function fakeNext(seen: Seen[]) {
       headers: { ...req.headers },
       body,
     });
+    const route = routes[(req.url ?? "").split("?")[0]];
+    if (route) {
+      const headers = new Headers();
+      for (const [k, v] of Object.entries(req.headers))
+        if (typeof v === "string") headers.set(k, v);
+      const out = await route(
+        new NextRequest(`http://127.0.0.1${req.url}`, {
+          method: req.method,
+          headers,
+          body: body || undefined,
+        })
+      );
+      res.statusCode = out.status;
+      res.setHeader("Content-Type", out.headers.get("content-type") ?? "");
+      return res.end(Buffer.from(await out.arrayBuffer()));
+    }
     res.setHeader("Content-Type", "application/json");
     res.setHeader("Set-Cookie", "aos_device=leak");
     if (req.url?.startsWith("/api/tasks/t-9/merge")) {
@@ -77,7 +97,8 @@ const listen = (s: http.Server) =>
 /** One machine's AgentOS: its loopback listener and its tunnel listener. */
 export async function machine(
   me: FakeMachine,
-  pinFor: (machineId: string) => PeerPin | null
+  pinFor: (machineId: string) => PeerPin | null,
+  o: { routes?: Record<string, Route>; unlinked?: RpcDeps["unlinked"] } = {}
 ): Promise<Machine> {
   const seen: Seen[] = [];
   const policy: AuthPolicy = {
@@ -85,12 +106,13 @@ export async function machine(
     lookup: (t) => (t === "aosd_phone" ? { id: "phone" } : null),
     peerSecret,
   };
-  const next = fakeNext(seen);
+  const next = fakeNext(seen, o.routes ?? {});
   let internalPort = 0;
   const deps: RpcDeps = {
     identity: () => me,
     boxKey: () => me.box,
     pinForMachine: pinFor,
+    unlinked: o.unlinked,
     anyActive: () => true,
     replay: createReplayGuard(),
     dispatch: (d: Parameters<ReturnType<typeof loopbackDispatch>>[0]) =>
@@ -135,36 +157,46 @@ export function edge(
     const m = machines.find((x) => x.hostname === url.hostname);
     if (url.protocol !== "https:" || !m) throw new Error("no such host");
     const body = init?.body ? Buffer.from(init.body as Uint8Array) : undefined;
-    const { status, buf } = await new Promise<{ status: number; buf: Buffer }>(
-      (resolve, reject) => {
-        const out = http.request(
-          {
-            host: "127.0.0.1",
-            port: m.tunnelPort,
-            method: init?.method ?? "GET",
-            path: url.pathname + url.search,
-            headers: {
-              ...(init?.headers as Record<string, string>),
-              host: url.hostname,
-              ...(body && { "content-length": String(body.length) }),
-            },
+    const { status, buf, headers } = await new Promise<{
+      status: number;
+      buf: Buffer;
+      headers: Record<string, string>;
+    }>((resolve, reject) => {
+      const out = http.request(
+        {
+          host: "127.0.0.1",
+          port: m.tunnelPort,
+          method: init?.method ?? "GET",
+          path: url.pathname + url.search,
+          headers: {
+            ...(init?.headers as Record<string, string>),
+            host: url.hostname,
+            ...(body && { "content-length": String(body.length) }),
           },
-          (res) => {
-            const chunks: Buffer[] = [];
-            res.on("data", (c) => chunks.push(c));
-            res.on("end", () =>
-              resolve({
-                status: res.statusCode ?? 0,
-                buf: Buffer.concat(chunks),
-              })
-            );
-          }
-        );
-        out.on("error", reject);
-        out.end(body);
-      }
-    );
-    return new Response(new Uint8Array(tamper ? tamper(buf) : buf), { status });
+        },
+        (res) => {
+          const chunks: Buffer[] = [];
+          res.on("data", (c) => chunks.push(c));
+          res.on("end", () =>
+            resolve({
+              status: res.statusCode ?? 0,
+              buf: Buffer.concat(chunks),
+              headers: Object.fromEntries(
+                Object.entries(res.headers).filter(
+                  (e): e is [string, string] => typeof e[1] === "string"
+                )
+              ),
+            })
+          );
+        }
+      );
+      out.on("error", reject);
+      out.end(body);
+    });
+    return new Response(new Uint8Array(tamper ? tamper(buf) : buf), {
+      status,
+      headers,
+    });
   }) as typeof fetch;
 }
 

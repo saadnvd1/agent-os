@@ -100,7 +100,9 @@ async function list(io: CliIo) {
     );
   for (const r of requests)
     io.out(
-      `\n${r.name} wants to link here: agent-os link accept <the code it shows>`
+      r.state === "accepted"
+        ? `\n${r.name} is linked here. To finish, type this code on ${r.name}: ${r.confirmCode ? showCode(r.confirmCode) : "(see the browser)"}`
+        : `\n${r.name} wants to link here: agent-os link accept <the code it shows>`
     );
   if (account.machines.some((m) => !m.linkState))
     io.out("\nLink one with: agent-os link <name>");
@@ -177,7 +179,12 @@ async function answer(io: CliIo, verb: "accept" | "decline", rest: string[]) {
     io,
     "/api/peers/pending"
   );
-  const req = pick(requests, from, (r) => r.machineId, "link request");
+  const req = pick(
+    requests.filter((r) => r.state !== "accepted"),
+    from,
+    (r) => r.machineId,
+    "link request"
+  );
   if (verb === "decline") {
     await call(io, `/api/peers/pending/${req.id}/decline`, { method: "POST" });
     io.out(`Declined ${req.name}.`);
@@ -210,10 +217,18 @@ async function unlink(io: CliIo, ref: string | undefined) {
     (h) => h.id,
     "linked machine"
   );
-  await call(io, `/api/hosts/${host.id}`, { method: "DELETE" });
-  io.out(
-    `Unlinked ${host.name} here. Remove this machine from its Machines too.`
+  const r = await call<{ told: boolean; removed: boolean }>(
+    io,
+    `/api/peers/${host.id}`,
+    { method: "DELETE" }
   );
+  io.out(
+    r.told
+      ? `Unlinked ${host.name}, on both machines.`
+      : `Unlinked ${host.name} here. It couldn't be told now; its next call here is refused and it will show as unlinked.`
+  );
+  if (!r.removed)
+    io.out(`It stays in Machines while it still has projects or sessions.`);
 }
 
 /** Runs one command; returns the exit code. */

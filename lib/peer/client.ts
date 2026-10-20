@@ -15,7 +15,8 @@ import {
   sealRequest,
 } from "./envelope";
 import { boxPublic, currentIdentity, signPublic, type Identity } from "./keys";
-import { notePinResult } from "./links";
+import { notePinResult, unlinkedByPeer } from "./links";
+import { UNLINKED_PROOF_HEADER, verifyUnlinked } from "./unlinked-proof";
 import type { HostLink } from "../hosts/remote-api";
 import { readCappedBytes } from "../hosts/read-capped-bytes";
 
@@ -67,12 +68,15 @@ export interface ClientDeps {
   identity: () => Identity | null;
   audit: (e: AuditEntry) => void;
   noteResult: (hostId: string, error: string | null) => void;
+  /** It proved it unlinked this machine: drop the pin here too. */
+  unlinked: (hostId: string, name: string) => void;
 }
 
 const realDeps: ClientDeps = {
   identity: () => currentIdentity(),
   audit: recordPeerCall,
   noteResult: notePinResult,
+  unlinked: unlinkedByPeer,
 };
 
 export async function peerCall(
@@ -155,6 +159,27 @@ export async function peerCall(
   }
   if (res.status !== 200) {
     const text = raw.subarray(0, 64).toString("utf8").trim();
+    if (
+      res.status === 403 &&
+      text === "unknown peer" &&
+      verifyUnlinked(
+        signPublic(peer.signPub),
+        {
+          from: peer.machineId,
+          to: identity.machineId,
+          nonce: sealed.nonce.toString("base64url"),
+        },
+        res.headers.get(UNLINKED_PROOF_HEADER)
+      )
+    ) {
+      audit("unknown_peer", 403, sealed.envelope.length);
+      deps.unlinked(link.hostId, link.hostName);
+      throw new PeerCallError(
+        `${link.hostName} unlinked this machine. Link it again in Machines.`,
+        true,
+        403
+      );
+    }
     const outcome = REFUSALS[text];
     if (outcome && res.status >= 400 && res.status < 500) {
       audit(outcome, res.status, sealed.envelope.length);

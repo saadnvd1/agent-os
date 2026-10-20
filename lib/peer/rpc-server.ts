@@ -15,7 +15,10 @@
  * Refusals before decryption are plain and fixed (`bad envelope`, `bad
  * signature`, `stale`, `replay`, `busy`). An unknown sender, a suspended one
  * and a bad signature all read `bad signature`, so a stranger can't tell
- * which machines are linked here; the audit keeps the difference. Everything
+ * which machines are linked here; the audit keeps the difference. The one
+ * exception is a machine unlinked here, proven by the key it was pinned
+ * with: it gets 403 `unknown peer`, signed (unlinked-proof.ts), so it can
+ * show that it was unlinked. Everything
  * after is inside the envelope,
  * always HTTP 200, so whoever carries the traffic never learns the route or
  * its status.
@@ -45,7 +48,14 @@ import {
   type BoxKey,
   type Identity,
 } from "./keys";
-import { hasActivePin, pinForMachine, type PeerPin } from "./links";
+import {
+  hasActivePin,
+  hasRecentUnlinked,
+  pinForMachine,
+  unlinkedMachine,
+  type PeerPin,
+} from "./links";
+import { UNLINKED_PROOF_HEADER, signUnlinked } from "./unlinked-proof";
 import { sqliteNonceStore } from "./nonce-store";
 import { createReplayGuard, type ReplayGuard } from "./replay";
 import {
@@ -75,7 +85,11 @@ export interface RpcDeps {
   identity: () => Identity | null;
   boxKey: () => BoxKey;
   pinForMachine: (machineId: string) => PeerPin | null;
-  /** False while no link is active: the route is closed to everyone. */
+  /** A machine unlinked here lately: the key it was pinned with. */
+  unlinked?: (
+    machineId: string
+  ) => { signPub: string; hostId: string | null } | null;
+  /** False while no link is active or recently unlinked: the route is closed to everyone. */
   anyActive: () => boolean;
   replay: ReplayGuard;
   dispatch: (d: Dispatch) => Promise<PeerResponse>;
@@ -125,6 +139,10 @@ export async function handlePeerRpc(
   const self = deps.identity();
   let fromMachine: string | null = null;
   let pin: PeerPin | null = null;
+  // An unlinked sender whose header its old key proved, and its nonce.
+  let unlinkedHost: string | null = null;
+  let viaUnlinked = false;
+  let provenUnlinked: string | null = null;
   const audit = (
     outcome: Outcome,
     status: number,
@@ -133,7 +151,7 @@ export async function handlePeerRpc(
     bytes = 0
   ) =>
     deps.audit({
-      hostId: pin?.hostId ?? null,
+      hostId: pin?.hostId ?? unlinkedHost,
       machineId: fromMachine,
       direction: "in",
       method,
@@ -144,6 +162,19 @@ export async function handlePeerRpc(
       outcome,
     });
   const refuse = (refusal: Refusal): null => {
+    if (refusal === "unknown_peer" && provenUnlinked && self && fromMachine) {
+      audit("unknown_peer", 403);
+      res.setHeader(
+        UNLINKED_PROOF_HEADER,
+        signUnlinked(self.signKey, {
+          from: self.machineId,
+          to: fromMachine,
+          nonce: provenUnlinked,
+        })
+      );
+      plain(res, 403, "unknown peer");
+      return null;
+    }
     const [status, text, outcome] = REFUSED[refusal];
     audit(outcome, status);
     plain(res, status, text);
@@ -161,6 +192,18 @@ export async function handlePeerRpc(
       : found.state !== "active"
         ? "suspended"
         : null;
+    if (!found) {
+      const gone = deps.unlinked?.(machineId);
+      if (gone)
+        try {
+          const key = signPublic(gone.signPub);
+          unlinkedHost = gone.hostId;
+          viaUnlinked = true;
+          return key;
+        } catch {
+          // Unreadable: a decoy, like any stranger.
+        }
+    }
     if (!found || hidden) return DECOY_KEY;
     try {
       return signPublic(found.signPub);
@@ -210,6 +253,10 @@ export async function handlePeerRpc(
             now
           );
           if (fresh !== "ok") return { refusal: fresh };
+          if (viaUnlinked) {
+            provenUnlinked = header.nonce;
+            return { refusal: "unknown_peer" };
+          }
           claimed = `${header.from}:${header.nonce}`;
           return { peer: header.from };
         },
@@ -360,7 +407,8 @@ export function rpcDeps(port: number): RpcDeps {
     identity: () => currentIdentity(),
     boxKey: () => (box ??= loadBoxKey()),
     pinForMachine,
-    anyActive: hasActivePin,
+    unlinked: (machineId) => unlinkedMachine(machineId),
+    anyActive: () => hasActivePin() || hasRecentUnlinked(),
     replay: createReplayGuard({ store: sqliteNonceStore() }),
     dispatch: loopbackDispatch(port),
     audit: recordPeerCall,

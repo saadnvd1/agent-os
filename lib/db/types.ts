@@ -314,4 +314,8 @@ export interface Host {
   kind?: "ssh" | "connect";
   // Paired with that machine's own AgentOS (lib/hosts/link.ts); 0/1 from SQLite.
   linked?: boolean | number;
+  // Connect hosts (lib/peer): the link's state, and why it's suspended or
+  // who unlinked it.
+  peer_state?: "active" | "suspended" | "unlinked" | null;
+  peer_note?: string | null;
 }
