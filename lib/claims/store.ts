@@ -170,7 +170,7 @@ export function upsertRemote(
      VALUES (@id, @origin, @originName, @via, @viaHost, @hops, 'session', NULL, @sessionName,
        @repo, @branch, @base, @goal, @files, @filesMore, @prUrl, @started,
        @expires, @released, @now)
-     ON CONFLICT(id) DO UPDATE SET origin_name = @originName, via_machine = @via, via_host = @viaHost,
+     ON CONFLICT(id) DO UPDATE SET origin_name = @originName, via_machine = @via, via_host = COALESCE(@viaHost, via_host),
        hops = @hops, session_name = @sessionName, repo = @repo, branch = @branch,
        base = @base, goal = @goal, files = @files, files_more = @filesMore,
        pr_url = @prUrl, started_at = MIN(started_at, @started),

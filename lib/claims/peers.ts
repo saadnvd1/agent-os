@@ -48,7 +48,8 @@ export function dropViaInactive(): number {
   return getDb()
     .prepare(
       `DELETE FROM work_claims WHERE via_host IS NOT NULL
-         AND via_host NOT IN (SELECT host_id FROM host_links)
+         AND via_host NOT IN (SELECT host_id FROM host_links
+                                WHERE host_id NOT IN (SELECT id FROM hosts WHERE kind = 'connect'))
          AND via_host NOT IN (SELECT host_id FROM peer_links WHERE state = 'active')`
     )
     .run().changes;

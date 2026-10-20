@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { acceptExchange, answerExchange } from "@/lib/claims/exchange";
+import { claimsShared } from "@/lib/claims/machine";
 import { rememberPeer } from "@/lib/claims/peers";
 import { exchangeBody } from "@/lib/claims/types";
 import { pinForHost } from "@/lib/peer/links";
@@ -35,7 +36,7 @@ export async function POST(request: NextRequest) {
   const body = exchangeBody.safeParse(json);
   if (!body.success)
     return NextResponse.json({ error: "Bad claims" }, { status: 400 });
-  if (viaHost) rememberPeer(viaHost, body.data.machine.id);
+  if (viaHost && claimsShared()) rememberPeer(viaHost, body.data.machine.id);
   acceptExchange(body.data, viaHost);
   return NextResponse.json(answerExchange(body.data));
 }
