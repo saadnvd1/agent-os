@@ -12,6 +12,8 @@ export interface BusMessageView {
   body: string;
   createdAt: string;
   readAt: string | null;
+  // The message this answers, when it is a reply.
+  replyTo?: number | null;
 }
 
 const INLINE_LIMIT = 600;
@@ -26,7 +28,11 @@ export const shortId = (id: string) => id.slice(0, 8);
 // never held the message, so the whole body goes in the line.
 export function wakeLine(
   m: { fromName: string; fromId: string | null; body: string },
-  opts: { inline?: boolean } = {}
+  opts: {
+    inline?: boolean;
+    // The request this answers, from the recipient's own earlier message.
+    replyTo?: { id: number; excerpt: string };
+  } = {}
 ): string {
   const short = m.fromId ? shortId(m.fromId) : null;
   const who = short
@@ -46,7 +52,10 @@ export function wakeLine(
       : ` (${m.body.length} chars). Read it with: aos inbox`;
   // By id: a reply can't break when either side is renamed.
   const reply = short ? ` Reply with: aos send ${short} "<message>"` : "";
-  return `[AgentOS message from ${who}]${text}.${reply}`;
+  const answers = opts.replyTo
+    ? `, replying to your #${opts.replyTo.id} ("${opts.replyTo.excerpt}")`
+    : "";
+  return `[AgentOS message from ${who}${answers}]${text}.${reply}`;
 }
 
 export const RATE_LIMIT = { max: 30, windowMs: 10 * 60 * 1000 };
@@ -63,14 +72,26 @@ export function overRateLimit(
 // "fast-shadow", "dashboards/fast-shadow", or a session id all address one session.
 export function matchesRef(
   ref: string,
-  s: { id: string; name: string; projectName: string | null; tmuxName: string }
+  s: {
+    id: string;
+    name: string;
+    projectName: string | null;
+    tmuxName: string;
+    // The workspace it belongs to, and whether it is that workspace's
+    // orchestrator: "<workspace>/<name>" and "<workspace>/orchestrator".
+    workspaceName?: string | null;
+    orchestrator?: boolean;
+  }
 ): boolean {
   const r = ref.trim().toLowerCase();
   const name = s.name.toLowerCase();
+  const ws = s.workspaceName?.toLowerCase();
   return (
     r === s.id ||
     r === s.tmuxName.toLowerCase() ||
     r === name ||
-    (!!s.projectName && r === `${s.projectName.toLowerCase()}/${name}`)
+    (!!s.projectName && r === `${s.projectName.toLowerCase()}/${name}`) ||
+    (!!ws && r === `${ws}/${name}`) ||
+    (!!ws && !!s.orchestrator && r === `${ws}/orchestrator`)
   );
 }

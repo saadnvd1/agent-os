@@ -97,6 +97,52 @@ describe("resolveRef", () => {
   });
 });
 
+describe("across workspaces", () => {
+  const orch = (id: string, ws: string): Candidate => ({
+    ...c(id, "AgentOS orchestrator", [], "agent-os"),
+    workspaceName: ws,
+    orchestrator: true,
+  });
+
+  it("reaches <workspace>/orchestrator and <workspace>/<name>", () => {
+    const a = orch("aaaa1111-0000", "Alpha");
+    const b = orch("bbbb2222-0000", "Beta");
+    const w: Candidate = { ...worker, workspaceName: "Alpha" };
+    expect(resolveRef("alpha/orchestrator", [a, b, w])).toMatchObject({
+      ok: true,
+      id: a.id,
+    });
+    expect(resolveRef("Beta/Orchestrator", [a, b, w])).toMatchObject({
+      ok: true,
+      id: b.id,
+    });
+    expect(resolveRef("alpha/worker", [a, b, w])).toMatchObject({
+      ok: true,
+      id: w.id,
+    });
+  });
+
+  it("refuses and lists when a workspace and a project share a name", () => {
+    const w: Candidate = { ...worker, workspaceName: "agent-os" };
+    const other: Candidate = {
+      ...c("cccc3333-0000", "worker", [], "agent-os"),
+      workspaceName: "Elsewhere",
+    };
+    const r = resolveRef("agent-os/worker", [w, other]);
+    expect(r).toMatchObject({ ok: false, reason: "ambiguous" });
+    expect(!r.ok && r.error).toContain("cccc3333");
+  });
+
+  it("labels an ambiguous orchestrator with its workspace", () => {
+    const a = orch("aaaa1111-0000", "Alpha");
+    const b = { ...orch("dddd4444-0000", "Beta") };
+    const r = resolveRef("agentos orchestrator", [a, b]);
+    expect(r).toMatchObject({ ok: false, reason: "ambiguous" });
+    expect(!r.ok && r.error).toContain("Alpha/AgentOS orchestrator");
+    expect(!r.ok && r.error).toContain("Beta/AgentOS orchestrator");
+  });
+});
+
 describe("wasNames", () => {
   it("lists every old name, newest first, but not the current one", () => {
     expect(wasNames(orchestrator)).toEqual(["Session 3"]);

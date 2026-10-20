@@ -11,6 +11,8 @@ export interface Candidate {
   tmuxName: string;
   // Newest first.
   previousNames: string[];
+  workspaceName?: string | null;
+  orchestrator?: boolean;
 }
 
 export type Resolution =
@@ -20,7 +22,13 @@ export type Resolution =
 export const MIN_ID_PREFIX = 4;
 
 const label = (c: Candidate) =>
-  `${c.projectName ? `${c.projectName}/` : ""}${c.name} (id ${c.id.slice(0, 8)})`;
+  `${
+    c.orchestrator && c.workspaceName
+      ? `${c.workspaceName}/`
+      : c.projectName
+        ? `${c.projectName}/`
+        : ""
+  }${c.name} (id ${c.id.slice(0, 8)})`;
 
 function ambiguous(ref: string, matches: Candidate[]): Resolution {
   return {
@@ -32,7 +40,13 @@ function ambiguous(ref: string, matches: Candidate[]): Resolution {
 
 const matchesOld = (r: string, c: Candidate) =>
   c.previousNames.some((old) =>
-    matchesRef(r, { ...c, id: "", tmuxName: "", name: old })
+    matchesRef(r, {
+      ...c,
+      id: "",
+      tmuxName: "",
+      name: old,
+      orchestrator: false,
+    })
   );
 
 export function resolveRef(ref: string, candidates: Candidate[]): Resolution {

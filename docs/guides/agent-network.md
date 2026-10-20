@@ -25,6 +25,13 @@ aos peers                         # sessions, their project, what each is doing
                                   # orchestrators are marked, yours as "your orchestrator")
 aos send <session> "message"      # wakes the other session with the message
                                   # (`aos send orchestrator "..."` reaches your workspace's own)
+                                  # also <workspace>/orchestrator and <workspace>/<session>,
+                                  # across workspaces (ambiguous: it refuses and lists)
+aos send <session> --await [--timeout 30m] "message"
+                                  # and wait for the reply: end your turn, you're woken
+aos send <session> --reply <id> "message"   # answer message #id
+aos wait <session> --until idle|merged|reply [--timeout 30m]
+                                  # wait on an event; returns at once
 aos inbox                         # read messages sent to you
 aos history <session>             # your conversation with a session
 aos read <session>                # what a session in your workspace said and did
@@ -59,6 +66,38 @@ never typed into. `aos send` says `delivered`, `queued` (the agent was busy and
 will see it after its turn) or `FAILED: <why>` with exit code 2; a chat session
 counts as delivered once its worker records the message. Either way the
 message waits in the recipient's `aos inbox`.
+
+## Waiting on a peer
+
+`aos send --await` and `aos wait` record a wait (table `bus_waits`) and
+return. The agent ends its turn; AgentOS wakes it with an ordinary message
+when the wait is over, so nothing polls or sleeps. Default timeout 30m
+(1m to 24h).
+
+- **Reply:** the target's next message to the waiter, or `aos send <waiter>
+--reply <id>`, closes the wait and wakes the waiter with a line saying
+  which request it answers (`replying to your #12 ("...")`). One reply
+  settles all of the waiter's reply waits on that sender.
+- **Nudge:** if the target goes idle with the wait still open it gets one
+  line saying who is waiting and the exact `aos send --reply` to answer. It
+  is never nudged twice for one wait.
+- **Timeout:** at the deadline the waiter is woken with a timeout notice and
+  the workspace orchestrator gets one event.
+- **Ended:** if the target ends (done, merged, dropped, archived, deleted or
+  its terminal gone) the waiter is told at once, with the wait closed.
+- **Waiter ends:** a wait whose waiter is dropped, done or archived is
+  cancelled with no message.
+- **`aos wait --until`:** `idle` is the same idle test the orchestrator
+  uses (a session still working, or stopped on a prompt, is not idle),
+  `merged` follows the target's PR, `reply` is any message from it. A
+  target that already satisfies it answers `not waiting` at once.
+- **Limits:** the pair rate limit and the refusal to message yourself still
+  apply. Ten open waits per session. Only sessions on this machine can be
+  waited on; a message to one on a linked machine still goes, with `not
+waiting: <why>`.
+- **Where it shows:** `aos peers` (`waiting on B` / `A waiting on it`), the
+  orchestrator's `sessions` tool, and a chip under both sessions' rows in the
+  sidebar.
 
 `aos read` shows a peer's conversation without waking it: its prompts and
 replies in full, each tool call as one line (tool name and path, command or

@@ -90,6 +90,10 @@ export interface Session {
   pause_id?: number | null;
   // Why a requested resume hasn't happened yet.
   pause_note?: string | null;
+  // Set only by GET /api/sessions: the sessions it waits on, and who waits on
+  // it, as a short line (lib/bus/waits/store).
+  waiting_on?: string | null;
+  waited_by?: string | null;
   placed_note?: string | null;
   // Set by done: hidden from the sidebar and the orchestrator, never deleted.
   archived_at: string | null;

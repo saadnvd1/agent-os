@@ -20,6 +20,7 @@ import { prFor, storedPR } from "../tasks/session";
 import { lastActiveOf } from "../tasks/last-active";
 import * as taskClient from "../tasks/contract/client";
 import { deriveTaskState } from "../tasks";
+import { waitBadges } from "../bus/waits/store";
 import { waitingState } from "./task-state";
 import { commitTime, repoOf } from "./repo";
 import { CHECKLESS_MS, checklessFor, ciSettleIn } from "./task-state";
@@ -44,6 +45,11 @@ export interface SessionFacts {
   compacting?: boolean;
   // Last sign of life, in ms.
   lastActive: number;
+  // Open waits (aos send --await, aos wait): who it waits on, and who waits on it.
+  waits?: {
+    on: { name: string; kind: string; leftMs: number }[];
+    by: string[];
+  } | null;
   // Work that should end in a PR: a task, or a session on its own branch.
   branch: string | null;
   // A quick change the orchestrator makes itself (quick.ts): no agent.
@@ -301,6 +307,7 @@ export async function sessionFacts(
   workspaceId: string
 ): Promise<SessionFacts[]> {
   await statusDetector.refreshCache();
+  const badges = waitBadges();
   return Promise.all(
     workspaceSessions(workspaceId).map(async (s) => {
       const [{ status, activity, needsInput }, task] = await Promise.all([
@@ -315,6 +322,16 @@ export async function sessionFacts(
         status,
         activity,
         needsInput,
+        waits: badges.has(s.id)
+          ? {
+              on: badges.get(s.id)!.on.map((w) => ({
+                name: w.name,
+                kind: w.kind,
+                leftMs: Math.max(0, w.deadline - Date.now()),
+              })),
+              by: badges.get(s.id)!.by.map((w) => w.name),
+            }
+          : null,
         stalled:
           s.view === "chat" && !hostLink(s.host_id) ? chatStall(s.id) : null,
         compacting:

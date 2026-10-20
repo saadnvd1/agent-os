@@ -10,8 +10,21 @@ const usage = `aos: talk to other agent sessions in AgentOS
 
   aos peers                          sessions, their project and what each is doing
   aos send <session> <message...>    message a session (name, old name, project/name,
-                                     id or id prefix; "orchestrator" is yours); says delivered, queued or
-                                     FAILED (exit 2: it waits in their inbox)
+                                     <workspace>/<name>, <workspace>/orchestrator, id or
+                                     id prefix; "orchestrator" is yours); says delivered,
+                                     queued or FAILED (exit 2: it waits in their inbox)
+  aos send <session> --await [--timeout 30m] <message...>
+                                     the same, and record that you wait for the reply:
+                                     end your turn, you're woken with it (it says which
+                                     request it answers) or at the timeout, or when the
+                                     session ends. Don't poll the inbox or sleep
+  aos send <session> --reply <id> <message...>
+                                     answer message #id (replying to the one that woke
+                                     you also settles it without the flag)
+  aos wait <session> --until idle|merged|reply [--timeout 30m]
+                                     record a wait on an event and return: you're woken
+                                     when it goes idle, its PR merges or it messages
+                                     you, or at the timeout. Never blocks the shell
   aos inbox                          read messages sent to you
   aos history <session>              your conversation with a session
   aos read <session> [--turns N | --lines N] [--all] [--grep text] [--json]
@@ -175,6 +188,7 @@ function fail(msg) {
 }
 
 const sim = require("./aos-lib/sim.js")({ me, call, post, fail });
+const waitLib = require("./aos-lib/wait.js")({ post, fail, needMe, me });
 const readCmd = (words) =>
   require("./aos-lib/read.js")({ call, fail, needMe, me })(words);
 
@@ -303,7 +317,7 @@ function parseStackArgs(words) {
 }
 
 const show = (m) =>
-  `${m.createdAt}  ${m.fromName} → ${m.toName}\n  ${m.body.replace(/\n/g, "\n  ")}`;
+  `${m.createdAt}  #${m.id}${m.replyTo ? ` (reply to #${m.replyTo})` : ""}  ${m.fromName} → ${m.toName}\n  ${m.body.replace(/\n/g, "\n  ")}`;
 
 // `schedule add --session <ref> --every 30m [--name N] [--cron "..."] <prompt>`
 async function scheduleAdd(words) {
@@ -390,19 +404,34 @@ async function main() {
             ? `  ·  orchestrator of ${p.orchestratorOf}`
             : "";
         const was = p.was.length ? ` (was ${p.was.join(", ")})` : "";
+        const waits = [
+          p.waitingOn?.length ? `waiting on ${p.waitingOn.join(", ")}` : "",
+          p.waitedBy?.length ? `${p.waitedBy.join(", ")} waiting on it` : "",
+        ].filter(Boolean);
         console.log(
-          `${p.id.slice(0, 8)}  ${where}${p.name}${was}  ·  ${state}${role}`
+          `${p.id.slice(0, 8)}  ${where}${p.name}${was}  ·  ${state}${role}${waits.length ? `  ·  ${waits.join("  ·  ")}` : ""}`
         );
       }
       return;
     }
     case "send": {
       needMe();
-      const [to, ...words] = args;
-      if (!to || !words.length) fail("usage: aos send <session> <message...>");
-      const { message, delivery, note, heldForQueued } = await post(
+      const [to, ...more] = args;
+      const flags = waitLib.parseSendFlags(more);
+      const words = flags.rest;
+      if (!to || !words.length)
+        fail(
+          "usage: aos send <session> [--await [--timeout 30m]] [--reply <id>] <message...>"
+        );
+      const { message, delivery, note, heldForQueued, wait } = await post(
         "/api/bus/send",
-        { from: me, to, body: words.join(" ") }
+        {
+          from: me,
+          to,
+          body: words.join(" "),
+          ...(flags.awaiting && { await: true, timeout: flags.timeout }),
+          ...(flags.replyTo !== undefined && { replyTo: flags.replyTo }),
+        }
       );
       if (heldForQueued) {
         console.log(note);
@@ -416,14 +445,21 @@ async function main() {
         process.exit(2);
       }
       console.log(
-        delivery.state === "queued" && note
+        (delivery.state === "queued" && note
           ? `queued for ${message.toName}`
           : delivery.state === "queued"
             ? `queued for ${message.toName}: it's busy and will see it after this turn`
-            : `delivered to ${message.toName}`
+            : `delivered to ${message.toName}`) + ` (message #${message.id})`
       );
+      if (wait?.notWaiting) console.log(`not waiting: ${wait.notWaiting}`);
+      else if (wait)
+        console.log(
+          `waiting for ${message.toName}'s reply (${waitLib.when(wait.deadline)}): end your turn and you'll be woken with it, or at the timeout`
+        );
       return;
     }
+    case "wait":
+      return waitLib.wait(args);
     case "inbox": {
       needMe();
       const { messages } = await call(

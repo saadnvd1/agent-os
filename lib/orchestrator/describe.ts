@@ -41,6 +41,19 @@ function sessionLine(f: SessionFacts): string {
     parts.push(
       `${f.plan.awaiting ? "plan ready, awaiting your approve_plan" : f.plan.planned ? "planned" : "no plan"}${f.plan.reason ? `: ${untrusted(f.name, f.plan.reason)}` : ""}`
     );
+  if (f.waits?.on.length)
+    parts.push(
+      `waiting on ${f.waits.on
+        .map(
+          (w) =>
+            `${untrusted(f.name, w.name)} (${w.kind === "reply" ? "reply" : w.kind === "idle" ? "to go idle" : "to merge"}, ${Math.max(1, Math.round(w.leftMs / 60_000))}m left)`
+        )
+        .join(", ")}`
+    );
+  if (f.waits?.by.length)
+    parts.push(
+      `${f.waits.by.map((n) => untrusted(f.name, n)).join(", ")} waiting on it`
+    );
   if (f.stack) {
     const card = f.stack.ticket ? ` ${f.stack.ticket}` : "";
     parts.push(

@@ -20,4 +20,10 @@ describe("BUS_BRIEF", () => {
     expect(WAIT_ADVICE).toMatch(/run_in_background and end your turn/);
     expect(WAIT_ADVICE).toMatch(/sleep on each pass/);
   });
+
+  it("tells agents to wait with --await instead of polling", () => {
+    expect(BUS_BRIEF).toContain("aos send <session> --await");
+    expect(BUS_BRIEF).toContain("aos wait <session> --until idle|merged|reply");
+    expect(BUS_BRIEF).toContain("instead of polling");
+  });
 });

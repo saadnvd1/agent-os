@@ -5,16 +5,20 @@
  */
 
 import { db, type Session } from "../db";
-import { getProject } from "../projects";
 import { statusDetector } from "../status-detector";
 import { chatState, sendChatConfirmed } from "../chat/runner";
 import { chatActivityLine } from "../chat/activity";
 import { getWorkspace } from "../workspaces";
 import type { ChatOrigin, PeerMessage } from "../chat/events";
 import { sessionRowInfo } from "../session-meta";
-import { previousNames } from "../session-names";
 import { deliverToPane, type Delivery } from "./delivery";
-import { resolveRef, wasNames, type Candidate } from "./resolve";
+import { wasNames } from "./resolve";
+import {
+  candidates,
+  liveSessions,
+  sessionById,
+  tryResolveTarget,
+} from "./targets";
 import { tmuxPane } from "./tmux-pane";
 import { pauseHoldOf, pausedNote } from "../tasks/pause-hold";
 import { isHeldRemote, relayToHeldTask } from "../tasks/contract/held-calls";
@@ -25,9 +29,22 @@ import {
   type QueuedTarget,
 } from "../tasks/queue-held";
 import { heldOrchestrator, heldTarget } from "./held-reply";
+import {
+  cantWaitOn,
+  claimClose,
+  excerpt,
+  openWait,
+  replyWaitsFor,
+  waitBadges,
+} from "./waits/store";
 import { HUMAN, overRateLimit, wakeLine, type BusMessageView } from "./format";
 
 export * from "./format";
+export {
+  resolveHeldOrchestrator,
+  resolveSession,
+  resolveTarget,
+} from "./targets";
 export type { Delivery } from "./delivery";
 
 export interface Peer {
@@ -44,34 +61,10 @@ export interface Peer {
   orchestratorOf: string | null;
   // The asking session's own workspace orchestrator.
   yours?: boolean;
+  // Names of the sessions it waits on, and of those waiting on it.
+  waitingOn: string[];
+  waitedBy: string[];
 }
-
-function liveSessions(): Session[] {
-  return db
-    .prepare(
-      `SELECT * FROM session_rows WHERE (task_status IS NULL OR task_status = 'running')
-         AND archived_at IS NULL
-       ORDER BY updated_at DESC`
-    )
-    .all() as Session[];
-}
-
-function candidates(sessions: Session[]): Candidate[] {
-  const old = previousNames();
-  return sessions.map((s) => ({
-    id: s.id,
-    name: s.name,
-    projectName: s.project_id ? (getProject(s.project_id)?.name ?? null) : null,
-    tmuxName: s.tmux_name,
-    previousNames: old.get(s.id) ?? [],
-  }));
-}
-
-const sessionById = (id: string | null | undefined) =>
-  id
-    ? (db.prepare(`SELECT * FROM session_rows WHERE id = ?`).get(id) as
-        Session | undefined)
-    : undefined;
 
 // A chat has no pane: its worker is the state, and it can always take a
 // message (queued as its next prompt), so it is never "not running".
@@ -105,6 +98,7 @@ export async function listPeers(callerId?: string): Promise<Peer[]> {
   const named = candidates(sessions);
   const caller = sessionById(callerId);
   const orchestrator = heldOrchestrator(caller);
+  const badges = waitBadges();
   const listed = await Promise.all(
     sessions.map(async (s, i) => {
       const info = await peerState(s);
@@ -118,6 +112,8 @@ export async function listPeers(callerId?: string): Promise<Peer[]> {
         running: info.running,
         doing: info.subtitle,
         orchestratorOf: orchestratorOf(s),
+        waitingOn: badges.get(s.id)?.on.map((w) => w.name) ?? [],
+        waitedBy: badges.get(s.id)?.by.map((w) => w.name) ?? [],
         ...(caller?.workspace_id &&
           s.role === "orchestrator" &&
           s.workspace_id === caller.workspace_id && { yours: true }),
@@ -137,84 +133,15 @@ export async function listPeers(callerId?: string): Promise<Peer[]> {
       running: true,
       doing: `your orchestrator, on ${orchestrator.heldFrom}`,
       orchestratorOf: null,
+      waitingOn: [],
+      waitedBy: [],
       yours: true,
     },
   ];
 }
 
-// The orchestrator a held caller's ref names, if it names it.
-export function resolveHeldOrchestrator(callerId: string, ref: string) {
-  return heldTarget(sessionById(callerId), ref);
-}
-
-// A live session by name, old name, project/name, id or id prefix. The note
-// says when the name meant something other than its current owner.
-export function resolveTarget(
-  ref: string,
-  callerId?: string | null
-): {
-  session: Session;
-  note?: string;
-} {
-  const found = tryResolveTarget(ref, callerId);
-  if (!found.ok) throw new Error(found.error);
-  return found;
-}
-
-// "orchestrator" / "my orchestrator": the caller's own workspace orchestrator.
-function ownOrchestrator(
-  ref: string,
-  sessions: Session[],
-  callerId?: string | null
-): Session | undefined {
-  if (!/^(my )?orchestrator$/i.test(ref.trim())) return undefined;
-  const workspace = sessionById(callerId)?.workspace_id;
-  if (!workspace) return undefined;
-  return sessions.find(
-    (s) => s.role === "orchestrator" && s.workspace_id === workspace
-  );
-}
-
-function tryResolveTarget(
-  ref: string,
-  callerId?: string | null
-):
-  | { ok: true; session: Session; note?: string }
-  | { ok: false; none: boolean; error: string } {
-  const sessions = liveSessions();
-  const own = ownOrchestrator(ref, sessions, callerId);
-  if (own) return { ok: true, session: own };
-  const r = resolveRef(ref, candidates(sessions));
-  if (!r.ok) {
-    const orchestrators = /^(my )?orchestrator$/i.test(ref.trim())
-      ? sessions.filter((s) => s.role === "orchestrator")
-      : [];
-    if (orchestrators.length)
-      return {
-        ok: false,
-        none: true,
-        error: `You are in no workspace, so "${ref}" is ambiguous. Orchestrators: ${orchestrators
-          .map((s) => `${s.name} (id ${s.id.slice(0, 8)})`)
-          .join(", ")}`,
-      };
-    return {
-      ok: false,
-      none: r.reason === "none",
-      error: r.reason === "none" ? `${r.error}. Run: aos peers` : r.error,
-    };
-  }
-  return {
-    ok: true,
-    session: sessions.find((s) => s.id === r.id)!,
-    note: r.note,
-  };
-}
-
-export function resolveSession(ref: string): Session {
-  return resolveTarget(ref).session;
-}
-
 type Row = {
+  reply_to: number | null;
   id: number;
   from_id: string | null;
   from_name: string;
@@ -234,11 +161,12 @@ const toView = (r: Row): BusMessageView => ({
   body: r.body,
   createdAt: r.created_at,
   readAt: r.read_at,
+  replyTo: r.reply_to,
 });
 
 // Messages are kept by id; names shown are the sessions' names now, the
 // stored ones only for a session that's gone.
-const SELECT = `SELECT m.id, m.from_id, m.to_id, m.body, m.created_at, m.read_at,
+const SELECT = `SELECT m.id, m.from_id, m.to_id, m.body, m.created_at, m.read_at, m.reply_to,
     CASE WHEN m.from_id IS NULL THEN m.from_name
          ELSE COALESCE(f.name, m.from_name) END AS from_name,
     COALESCE(t.name, m.to_name) AS to_name
@@ -338,10 +266,17 @@ export async function sendMessage(opts: {
   // A message pulled from a linked machine, by its key there: one already
   // stored is not stored or delivered again.
   relayKey?: string;
+  // Answers this message (one the recipient sent the sender). Without it a
+  // message answers the recipient's oldest open wait on the sender.
+  replyTo?: number;
+  // The sender waits for the recipient's reply; ms until it gives up.
+  awaitMs?: number;
 }): Promise<{
   message: BusMessageView;
   delivery: Delivery;
   note?: string;
+  // The wait recorded for --await, or why none was.
+  wait?: { id: number; deadline: number } | { notWaiting: string };
   // The task it was held for, when that task is still in the start queue.
   heldForQueued?: boolean;
 }> {
@@ -380,10 +315,13 @@ export async function sendMessage(opts: {
       };
   }
 
+  const reply = from ? replyTarget(from, to, opts.replyTo) : null;
+  if (opts.awaitMs && !from) throw new Error("Only a session can wait");
+
   const fromName = from?.name ?? opts.fromLabel ?? HUMAN;
   const { lastInsertRowid } = db
     .prepare(
-      `INSERT INTO bus_messages (from_id, from_name, to_id, to_name, body, relay_key) VALUES (?, ?, ?, ?, ?, ?)`
+      `INSERT INTO bus_messages (from_id, from_name, to_id, to_name, body, relay_key, reply_to) VALUES (?, ?, ?, ?, ?, ?, ?)`
     )
     .run(
       from?.id ?? null,
@@ -391,9 +329,13 @@ export async function sendMessage(opts: {
       to.id,
       to.name,
       body,
-      opts.relayKey ?? null
+      opts.relayKey ?? null,
+      reply?.id ?? null
     );
   const id = Number(lastInsertRowid);
+  // The reply is stored: whatever it answers is settled, whether or not
+  // the wake line gets through.
+  if (from) settleReplyWaits(to.id, from.id, id);
 
   await statusDetector.refreshCache();
   const delivery = await deliver(
@@ -402,7 +344,12 @@ export async function sendMessage(opts: {
       wakeLine(
         { fromName, fromId: from?.id ?? null, body },
         // The linked machine's inbox never held a long body.
-        { inline: isHeldRemote(to) }
+        {
+          inline: isHeldRemote(to),
+          replyTo: reply
+            ? { id: reply.id, excerpt: excerpt(reply.body, 60) }
+            : undefined,
+        }
       ),
     {
       name: fromName,
@@ -427,11 +374,71 @@ export async function sendMessage(opts: {
     ).run(id);
   const message = toView(db.prepare(`${SELECT} WHERE m.id = ?`).get(id) as Row);
   const heldNote = hold ? pausedNote(to.name, hold) : null;
+  const wait =
+    opts.awaitMs && from
+      ? keepWait(from, to, id, body, delivery, opts.awaitMs)
+      : undefined;
   return {
     message,
     delivery,
     note: [note, heldNote].filter(Boolean).join("; ") || undefined,
+    wait,
   };
+}
+
+// The message `replyTo` names, or the oldest request `from` was waited on
+// for by `to`: the one this message answers.
+function replyTarget(
+  from: Session,
+  to: Session,
+  replyTo?: number
+): { id: number; body: string } | null {
+  if (replyTo !== undefined) {
+    const m = db
+      .prepare(
+        `SELECT id, body FROM bus_messages WHERE id = ? AND from_id = ? AND to_id = ?`
+      )
+      .get(replyTo, to.id, from.id) as { id: number; body: string } | undefined;
+    if (!m)
+      throw new Error(`Message #${replyTo} wasn't sent to you by ${to.name}`);
+    return m;
+  }
+  const wait = replyWaitsFor(to.id, from.id).find((w) => w.message_id);
+  if (!wait) return null;
+  return (
+    (db
+      .prepare(`SELECT id, body FROM bus_messages WHERE id = ?`)
+      .get(wait.message_id) as { id: number; body: string } | undefined) ?? null
+  );
+}
+
+// `from` answered `waiter`: every reply wait it had on `from` is settled.
+function settleReplyWaits(waiter: string, from: string, replyId: number) {
+  for (const w of replyWaitsFor(waiter, from))
+    claimClose(w.id, "replied", replyId);
+}
+
+function keepWait(
+  from: Session,
+  to: Session,
+  messageId: number,
+  body: string,
+  delivery: Delivery,
+  ms: number
+): { id: number; deadline: number } | { notWaiting: string } {
+  if (delivery.state === "failed") return { notWaiting: "it wasn't delivered" };
+  const why = cantWaitOn(to);
+  if (why) return { notWaiting: why };
+  const deadline = Date.now() + ms;
+  const id = openWait({
+    waiterId: from.id,
+    targetId: to.id,
+    kind: "reply",
+    messageId,
+    request: excerpt(body),
+    deadline,
+  });
+  return { id, deadline };
 }
 
 function storeForHolder(

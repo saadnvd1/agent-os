@@ -4,6 +4,7 @@ import { isValidAgentType } from "@/lib/providers";
 import { clientSend } from "@/lib/chat/client-send";
 import { CHAT_ACCESS } from "@/lib/chat/events";
 import { launchSession } from "@/lib/sessions/launch";
+import { namesLine, waitBadges } from "@/lib/bus/waits/store";
 import { isProjectRef } from "@/lib/tasks/project-ref";
 
 // GET /api/sessions - List all sessions and groups
@@ -13,7 +14,23 @@ export async function GET() {
     // Merged tasks are listed (the sidebar files them under Done). Dropped
     // tasks live in the Tasks panel, a moved one on the machine it moved to,
     // and archived sessions in the Archived view: none is in the sidebar.
-    const sessions = queries.getSidebarSessions(db).all() as Session[];
+    const badges = waitBadges();
+    const sessions = (queries.getSidebarSessions(db).all() as Session[]).map(
+      (s) => {
+        const b = badges.get(s.id);
+        return b
+          ? {
+              ...s,
+              waiting_on: b.on.length
+                ? namesLine(b.on.map((w) => w.name))
+                : null,
+              waited_by: b.by.length
+                ? namesLine(b.by.map((w) => w.name))
+                : null,
+            }
+          : s;
+      }
+    );
     const groups = queries.getAllGroups(db).all() as Group[];
 
     // Convert expanded from 0/1 to boolean
