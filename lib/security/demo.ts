@@ -54,6 +54,7 @@ export const STATIC_SIBLINGS = [
   "arrived",
   "availability",
   "browse",
+  "check",
   "clone",
   "connect",
   "detect",
