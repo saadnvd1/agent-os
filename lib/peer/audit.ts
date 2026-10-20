@@ -1,8 +1,8 @@
 /**
- * Every peer call, in and out, one row each. Successful reads (the mirror
- * polls every few seconds) fold into one row per route per hour. Refusals
- * from machines that aren't linked are capped per minute, so a flood can't
- * fill the disk. Rows older than 30 days go, checked at most hourly.
+ * Peer calls, in and out. Successful reads (the mirror polls every few
+ * seconds) fold into one row per route per hour. Everything that didn't
+ * succeed shares a per-minute cap, whoever it claims to be from (the sender
+ * of a refused envelope is unverified), so a flood can't fill the disk. Rows older than 30 days go, checked at most hourly.
  * Bookkeeping: a failure here never fails the call.
  */
 
@@ -32,29 +32,29 @@ export interface AuditEntry {
 
 const HOUR = 3_600_000;
 const RETAIN_MS = 30 * 24 * HOUR;
-const UNLINKED_PER_MINUTE = 30;
+const FAILURES_PER_MINUTE = 30;
 
-const state = { prunedAt: 0, minute: 0, unlinked: 0 };
+const state = { prunedAt: 0, minute: 0, failures: 0 };
 
-/** For tests: forget the prune time and the unlinked-refusal budget. */
+/** For tests: forget the prune time and the failure budget. */
 export const resetAuditLimits = () => {
   state.prunedAt = 0;
   state.minute = 0;
-  state.unlinked = 0;
+  state.failures = 0;
 };
 
-function underUnlinkedCap(now: number): boolean {
+function underFailureCap(now: number): boolean {
   const minute = Math.floor(now / 60_000);
   if (minute !== state.minute) {
     state.minute = minute;
-    state.unlinked = 0;
+    state.failures = 0;
   }
-  return ++state.unlinked <= UNLINKED_PER_MINUTE;
+  return ++state.failures <= FAILURES_PER_MINUTE;
 }
 
 export function recordPeerCall(e: AuditEntry, now = Date.now()): void {
   try {
-    if (!e.hostId && !underUnlinkedCap(now)) return;
+    if (e.outcome !== "ok" && !underFailureCap(now)) return;
     const db = getDb();
     if (now - state.prunedAt > HOUR) {
       state.prunedAt = now;

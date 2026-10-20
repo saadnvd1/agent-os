@@ -43,4 +43,13 @@ describe("replay guard", () => {
     expect(g.check("p", "b", NOW + 1000, later)).toBe("replay");
     expect(g.check("p", "c", NOW + 2000, later)).toBe("replay");
   });
+
+  it("refuses anything stamped before it was made, so a restart can't reopen the window", () => {
+    const before = createReplayGuard({ startedAt: NOW - 60_000 });
+    expect(before.check("p", "n", NOW - 30_000, NOW)).toBe("ok");
+    // The server restarts: a fresh guard has forgotten "n".
+    const after = createReplayGuard({ startedAt: NOW });
+    expect(after.check("p", "n", NOW - 30_000, NOW)).toBe("stale");
+    expect(after.check("p", "m", NOW, NOW)).toBe("ok");
+  });
 });

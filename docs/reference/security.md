@@ -94,7 +94,10 @@ Ed25519 machine key and encrypted (X25519, HKDF-SHA256, ChaCha20-Poly1305) to
 the other machine's box key, `~/.agent-os/connect/peer.key`, which never goes
 to the Connect service. The envelope names both machines and carries a
 timestamp (±120 s) and a nonce remembered for that window, so a captured call
-can't be replayed here or on another machine. The answer is sealed and signed
+can't be replayed here or on another machine; anything stamped before the
+server started is refused, so a restart doesn't reopen that window. An unknown
+sender, a suspended link and a bad signature get the same refusal, and at most
+a fixed amount of unverified envelope is held in memory at once. The answer is sealed and signed
 too, and only opens for the request it answers. Cloudflare sees that a POST
 happened, its size and its timing, not the route or the status.
 
@@ -104,7 +107,11 @@ to this machine's own loopback listener with a per-boot secret. The gate turns
 that secret into `peer` trust, refuses it from anywhere else (and outright on
 the tunnel listener), and refuses `peer` on any route off the allowlist and on
 every WebSocket. `peer` never passes the local-only guard and is never an
-approver. Every call is written to `peer_audit` on both sides.
+approver. Calls are recorded in `peer_audit` on both sides: successful reads
+fold into one row per route per hour, and failed or refused calls share a
+per-minute cap, so a flood of forged envelopes can't fill the disk. An unsigned
+refusal of a write is treated as an unknown outcome, since anyone on the path
+could forge one.
 
 ### Shared links
 

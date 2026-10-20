@@ -66,7 +66,12 @@ export function connectLinkedHost(
   name: string,
   inner: Inner,
   baseUrl: string
-): { hostId: string; fetch: typeof fetch } {
+): {
+  hostId: string;
+  fetch: typeof fetch;
+  /** Every request this machine actually sent, before the peer opened it. */
+  sent: { url: string; init: RequestInit }[];
+} {
   const self = fakeMachine("aaaa1111");
   const peer = fakeMachine("bbbb2222");
   process.env.AGENTOS_CONNECT_DIR = writeConnectDir(self);
@@ -78,5 +83,11 @@ export function connectLinkedHost(
     signPub: peer.signPub,
     boxPub: peer.box.publicRaw,
   });
-  return { hostId, fetch: connectFetch(inner, { peer, from: self, baseUrl }) };
+  const sent: { url: string; init: RequestInit }[] = [];
+  const answer = connectFetch(inner, { peer, from: self, baseUrl });
+  const outer = ((input: string | URL | Request, init?: RequestInit) => {
+    sent.push({ url: String(input), init: init ?? {} });
+    return answer(input, init);
+  }) as typeof fetch;
+  return { hostId, fetch: outer, sent };
 }

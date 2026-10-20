@@ -202,6 +202,23 @@ describe("request envelope", () => {
     ).toMatchObject({ refusal: "stale" });
   });
 
+  it("refuses an envelope from before a restart, though its nonce is forgotten", () => {
+    const { envelope } = seal({ now: NOW - 30_000 });
+    expect(
+      openRequest(
+        envelope,
+        deps({ replay: createReplayGuard({ startedAt: NOW - 60_000 }) })
+      ).ok
+    ).toBe(true);
+    // Same envelope, fresh guard after the restart: refused, never run twice.
+    expect(
+      openRequest(
+        envelope,
+        deps({ replay: createReplayGuard({ startedAt: NOW }) })
+      )
+    ).toMatchObject({ ok: false, refusal: "stale" });
+  });
+
   it("doesn't burn a nonce for an envelope that fails its signature", () => {
     const replay = createReplayGuard();
     const { envelope } = seal();

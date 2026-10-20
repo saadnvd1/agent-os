@@ -4,6 +4,11 @@
  * A nonce is only ever forgotten once it's outside that window; a peer that
  * fills its cache inside the window is told it's busy rather than letting an
  * older nonce be replayed.
+ *
+ * The cache lives in memory, so anything stamped before this guard was made
+ * (before the server started) is stale: otherwise a restart would forget the
+ * nonces of envelopes still inside the window, and one could run twice, its
+ * answer sealed again under the same one-time key.
  */
 
 import { SKEW_MS } from "./envelope";
@@ -15,8 +20,9 @@ export interface ReplayGuard {
 }
 
 export function createReplayGuard(
-  opts: { windowMs?: number; maxPerPeer?: number } = {}
+  opts: { windowMs?: number; maxPerPeer?: number; startedAt?: number } = {}
 ): ReplayGuard {
+  const startedAt = opts.startedAt ?? Date.now();
   const windowMs = opts.windowMs ?? SKEW_MS;
   const maxPerPeer = opts.maxPerPeer ?? 50_000;
   // nonce → the time after which its timestamp is stale anyway.
@@ -30,6 +36,7 @@ export function createReplayGuard(
   return {
     check(peer, nonce, ts, now = Date.now()) {
       if (!Number.isFinite(ts) || Math.abs(now - ts) > windowMs) return "stale";
+      if (ts < startedAt) return "stale";
       if (now - sweptAt > windowMs) {
         sweptAt = now;
         for (const nonces of seen.values()) sweep(nonces, now);

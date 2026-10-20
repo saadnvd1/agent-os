@@ -44,6 +44,7 @@ describe.each(["token", "connect"] as const)("over a %s link", (transport) => {
   const fetchMock = vi.fn();
   let f: MoveFixture;
   let hostId: string;
+  let sent: { url: string; init: RequestInit }[] = [];
   const seedTask = (branch: string) => seed(f, WT_ROOT, branch);
   const urls = () => fetchMock.mock.calls.map((c) => String(c[0]));
 
@@ -52,6 +53,7 @@ describe.each(["token", "connect"] as const)("over a %s link", (transport) => {
     if (transport === "connect") {
       const linked = connectLinkedHost("box", fetchMock, "http://box:3011");
       hostId = linked.hostId;
+      sent = linked.sent;
       vi.stubGlobal("fetch", linked.fetch);
     } else {
       hostId = createHost("box", "alice@devbox").id;
@@ -74,6 +76,7 @@ describe.each(["token", "connect"] as const)("over a %s link", (transport) => {
   });
   beforeEach(() => {
     fetchMock.mockReset();
+    sent.length = 0;
     vi.mocked(launchClaude).mockReset();
   });
 
@@ -104,7 +107,22 @@ describe.each(["token", "connect"] as const)("over a %s link", (transport) => {
       expect(url).toBe("http://box:3011/api/tasks/import");
       if (transport === "token")
         expect(init.headers.Authorization).toBe("Bearer tok");
-      else expect(init.headers.Authorization).toBeUndefined();
+      else {
+        // What actually left this machine: one envelope to the peer's rpc,
+        // with no token in its headers and nothing readable in its body.
+        expect(sent).toHaveLength(1);
+        expect(sent[0].url).toMatch(
+          /^https:\/\/m-[0-9a-f]{16}\.[^/]+\/api\/peer\/rpc$/
+        );
+        const headers = new Headers(sent[0].init.headers);
+        expect(headers.get("authorization")).toBeNull();
+        expect([...headers.keys()]).toEqual(["content-type"]);
+        const body = Buffer.from(sent[0].init.body as Uint8Array).toString(
+          "latin1"
+        );
+        expect(body).not.toContain("tasks/import");
+        expect(body).not.toContain("feature/out");
+      }
       expect(JSON.parse(init.body)).toMatchObject({
         moveId: id,
         branch: "feature/out",

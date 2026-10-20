@@ -49,8 +49,6 @@ export function peerHostAllowed(hostname: string, env = process.env): boolean {
 
 // The fixed refusals rpc-server.ts sends before anything is decrypted.
 const REFUSALS: Record<string, Outcome> = {
-  "unknown peer": "unknown_peer",
-  suspended: "suspended",
   "bad signature": "bad_sig",
   "bad envelope": "bad_sig",
   stale: "stale",
@@ -60,8 +58,8 @@ const REFUSALS: Record<string, Outcome> = {
 };
 
 const HINTS: Record<string, string> = {
-  "unknown peer": "it doesn't know this machine (unlinked there?)",
-  suspended: "the link is suspended there",
+  "bad signature":
+    "it doesn't know this machine, the link is suspended there, or the keys don't match",
   stale: "the clocks on the two machines differ by more than 2 minutes",
 };
 
@@ -158,12 +156,13 @@ export async function peerCall(
   if (res.status !== 200) {
     const text = raw.subarray(0, 64).toString("utf8").trim();
     const outcome = REFUSALS[text];
-    // Only rpc-server's own refusal means nothing happened there.
     if (outcome && res.status >= 400 && res.status < 500) {
       audit(outcome, res.status, sealed.envelope.length);
       const message = HINTS[text] ? `${text}: ${HINTS[text]}` : text;
       deps.noteResult(link.hostId, message);
-      throw new PeerCallError(message, true, res.status);
+      // A refusal is unsigned: anyone on the path could forge one. A read
+      // changes nothing either way, but a write may have happened.
+      throw new PeerCallError(message, method === "GET", res.status);
     }
     deps.noteResult(link.hostId, `HTTP ${res.status}`);
     throw new PeerCallError(`HTTP ${res.status}`, false, res.status);

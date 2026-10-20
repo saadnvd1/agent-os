@@ -26,8 +26,10 @@ export function isRemoteHost(hostId: string | null | undefined): boolean {
 export function listRemoteHosts(): Host[] {
   return getDb()
     .prepare(
-      `SELECT h.*, (EXISTS (SELECT 1 FROM host_links l WHERE l.host_id = h.id)
-          OR EXISTS (SELECT 1 FROM peer_links p WHERE p.host_id = h.id)) AS linked
+      `SELECT h.*, CASE WHEN h.kind = 'connect'
+          THEN EXISTS (SELECT 1 FROM peer_links p WHERE p.host_id = h.id)
+          ELSE EXISTS (SELECT 1 FROM host_links l WHERE l.host_id = h.id)
+        END AS linked
          FROM hosts h ORDER BY sort_order, created_at`
     )
     .all() as Host[];

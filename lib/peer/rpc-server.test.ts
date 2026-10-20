@@ -18,7 +18,9 @@ import { tunnelListener } from "@/lib/connect/serve";
 import {
   createConnectHost,
   deleteHost,
+  createHost,
   getHost,
+  listRemoteHosts,
   sshTargetFor,
 } from "@/lib/hosts";
 import {
@@ -41,7 +43,13 @@ import { peerSecret } from "./internal";
 import { boxPublic } from "./keys";
 import { pinForHost, savePin, suspendPin, type PeerPin } from "./links";
 import { createReplayGuard } from "./replay";
-import { handlePeerRpc, isPeerRpc, loopbackDispatch } from "./rpc-server";
+import {
+  createBodyBudget,
+  handlePeerRpc,
+  isPeerRpc,
+  loopbackDispatch,
+  type RpcDeps,
+} from "./rpc-server";
 
 const A = fakeMachine("aaaa1111");
 const B = fakeMachine("bbbb2222");
@@ -90,6 +98,7 @@ interface Machine {
   hostname: string;
   tunnelPort: number;
   seen: Seen[];
+  deps: RpcDeps;
   close: () => Promise<void>;
 }
 
@@ -111,7 +120,7 @@ async function machine(
   };
   const next = fakeNext(seen);
   let internalPort = 0;
-  const deps = {
+  const deps: RpcDeps = {
     identity: () => me,
     boxKey: () => me.box,
     pinForMachine: pinFor,
@@ -119,6 +128,7 @@ async function machine(
     dispatch: (d: Parameters<ReturnType<typeof loopbackDispatch>>[0]) =>
       loopbackDispatch(internalPort)(d),
     audit: recordPeerCall,
+    budget: createBodyBudget(),
   };
   const onRequest = (req: IncomingMessage, res: ServerResponse) => {
     if (!gateRequest(req, res, policy)) return;
@@ -139,6 +149,7 @@ async function machine(
     hostname: me.hostname,
     tunnelPort,
     seen,
+    deps,
     close: async () => {
       await new Promise((r) => internal.close(r));
       await new Promise((r) => tunnel.close(r));
@@ -366,9 +377,11 @@ describe("hostApi over a Connect link", () => {
     try {
       const err = await refusal(hostApi(linkB(), "/api/sessions"));
       expect(err.refused).toBe(true);
-      expect(err.status).toBe(403);
-      expect(err.message).toMatch(/suspended/);
+      // Same answer as a bad signature; only B's audit says why.
+      expect(err.status).toBe(401);
+      expect(err.message).toMatch(/bad signature/);
       expect(mB.seen).toHaveLength(0);
+      expect(peerAudit(hostA)[0]).toMatchObject({ outcome: "suspended" });
     } finally {
       savePin(pinOf(A, hostA));
     }
@@ -399,6 +412,18 @@ describe("hostApi over a Connect link", () => {
     expect(err.refused).toBe(false);
   });
 
+  it("trusts an unsigned refusal only on reads: on a write it may have run", async () => {
+    vi.stubGlobal(
+      "fetch",
+      (async () =>
+        new Response("bad signature", { status: 401 })) as typeof fetch
+    );
+    const read = await refusal(hostApi(linkB(), "/api/sessions/status"));
+    expect(read.refused).toBe(true);
+    const write = await refusal(hostApi(linkB(), "/api/tasks", { body: {} }));
+    expect(write.refused).toBe(false);
+  });
+
   it("audits both sides, folding successful reads into one row per hour", async () => {
     await hostApi(linkB(), "/api/sessions/status");
     await hostApi(linkB(), "/api/sessions/status");
@@ -417,6 +442,31 @@ describe("hostApi over a Connect link", () => {
       count: 1,
       outcome: "ok",
     });
+  });
+
+  it("counts only the link that matches a machine's kind as linked", () => {
+    const ssh = createHost("ssh-box", "dev@box").id;
+    const conn = createConnectHost("conn-box").id;
+    try {
+      // A pin on an ssh machine, a token on a Connect one: neither links it.
+      savePin(pinOf(fakeMachine("ffff6666"), ssh));
+      getDb()
+        .prepare(
+          `INSERT INTO host_links (host_id, url, token) VALUES (?, ?, ?)`
+        )
+        .run(conn, "http://box:3011", "tok");
+      const linked = (id: string) =>
+        !!(listRemoteHosts().find((h) => h.id === id) as { linked?: number })
+          ?.linked;
+      expect(linked(ssh)).toBe(false);
+      expect(linked(conn)).toBe(false);
+      expect(linked(hostB)).toBe(true);
+      expect(linkedHostIds().has(ssh)).toBe(false);
+      expect(linkedHostIds().has(conn)).toBe(false);
+    } finally {
+      deleteHost(ssh);
+      deleteHost(conn);
+    }
   });
 
   it("never lets ssh paths or token-only features use a Connect host", () => {
@@ -481,9 +531,10 @@ describe("the rpc server against hostile envelopes", () => {
         body: Buffer.alloc(0),
       },
     });
+    // Indistinguishable from a bad signature to whoever sent it.
     expect(await post(mB, envelope)).toEqual({
-      status: 403,
-      text: "unknown peer",
+      status: 401,
+      text: "bad signature",
     });
     const row = getDb()
       .prepare(`SELECT * FROM peer_audit WHERE machine_id = 'eeee5555'`)
@@ -602,7 +653,56 @@ describe("the rpc server against hostile envelopes", () => {
       // The header only; the 50 MB it promised never comes.
       out.write(envelope.subarray(0, headerEnd));
     });
-    expect(status).toBe(403);
+    expect(status).toBe(401);
+  });
+
+  it("caps audit rows for forged envelopes claiming a linked sender", async () => {
+    const { envelope } = sealAt({}, { signKey: C.signKey });
+    for (let i = 0; i < 40; i++)
+      expect((await post(mB, envelope)).status).toBe(401);
+    const rows = peerAudit(hostA).filter((r) => r.outcome === "bad_sig");
+    expect(rows).toHaveLength(30);
+  });
+
+  it("holds only so much unverified envelope per sender, then says busy", async () => {
+    const saved = mB.deps.budget;
+    mB.deps.budget = createBodyBudget({ total: 1 << 20, perPeer: 8192 });
+    const sealPost = (bytes: number) =>
+      sealAt({
+        method: "POST",
+        path: "/api/tasks",
+        contentType: "application/json",
+        body: Buffer.from(JSON.stringify({ pad: "x".repeat(bytes) })),
+      }).envelope;
+    try {
+      const slow = sealPost(6000);
+      // A half-sent envelope from A holds ~6 KB of A's 8 KB.
+      const pending = http.request({
+        host: "127.0.0.1",
+        port: mB.tunnelPort,
+        method: "POST",
+        path: "/api/peer/rpc",
+        headers: { host: B.hostname, "content-length": String(slow.length) },
+      });
+      const closed = new Promise((r) => pending.on("close", r));
+      pending.on("error", () => {});
+      await new Promise<void>((r) =>
+        pending.write(slow.subarray(0, slow.length - 10), () => r())
+      );
+      await new Promise((r) => setTimeout(r, 50));
+      expect(await post(mB, sealPost(4000))).toEqual({
+        status: 429,
+        text: "busy",
+      });
+      expect(mB.seen).toHaveLength(0);
+      // Once that one is gone its bytes are given back.
+      pending.destroy();
+      await closed;
+      await new Promise((r) => setTimeout(r, 50));
+      expect((await post(mB, sealPost(4000))).status).toBe(200);
+    } finally {
+      mB.deps.budget = saved;
+    }
   });
 
   it("refuses a header longer than any envelope's", async () => {

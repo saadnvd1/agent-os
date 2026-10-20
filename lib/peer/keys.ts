@@ -37,20 +37,40 @@ export interface BoxKey {
   publicRaw: string;
 }
 
+/**
+ * Makes sure `p` is this user's and nobody else's: repairs group or other
+ * access, refuses one owned by someone else.
+ */
+function ownerOnly(p: string, mode: number) {
+  if (process.platform === "win32") return;
+  const st = fs.lstatSync(p);
+  if (st.isSymbolicLink()) throw new Error(`${p} is a symlink`);
+  if (typeof process.getuid === "function" && st.uid !== process.getuid())
+    throw new Error(`${p} belongs to another user`);
+  if (st.mode & 0o077) fs.chmodSync(p, mode);
+}
+
 /** peer.key, created owner-only if it isn't there yet. */
 export function loadBoxKey(dir = connectDir()): BoxKey {
   const file = path.join(dir, "peer.key");
+  fs.mkdirSync(dir, { recursive: true, mode: 0o700 });
+  ownerOnly(dir, 0o700);
   if (!fs.existsSync(file)) {
     const { privateKey } = crypto.generateKeyPairSync("x25519");
     const pem = privateKey.export({ format: "pem", type: "pkcs8" });
-    fs.mkdirSync(dir, { recursive: true, mode: 0o700 });
+    // Written whole under a temp name, then linked in: a crash never leaves
+    // a half-written key, and two starts racing keep whichever came first.
+    const tmp = `${file}.${process.pid}.${crypto.randomBytes(4).toString("hex")}`;
+    fs.writeFileSync(tmp, pem, { mode: 0o600, flag: "wx" });
     try {
-      // wx: two starts racing keep whichever key was written first.
-      fs.writeFileSync(file, pem, { mode: 0o600, flag: "wx" });
+      fs.linkSync(tmp, file);
     } catch (err) {
       if ((err as NodeJS.ErrnoException).code !== "EEXIST") throw err;
+    } finally {
+      fs.rmSync(tmp, { force: true });
     }
   }
+  ownerOnly(file, 0o600);
   const privateKey = crypto.createPrivateKey(fs.readFileSync(file, "utf8"));
   if (privateKey.asymmetricKeyType !== "x25519")
     throw new Error(`${file} is not an X25519 key`);
