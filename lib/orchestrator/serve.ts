@@ -21,6 +21,10 @@ import {
   resumeTask,
   stop,
 } from "./act";
+import { describeClaims, liveClaims } from "../claims";
+import { repoKey } from "../git-remote";
+import { expandHome } from "../tasks/session";
+import { workspaceProjects } from "./brief";
 import { readCards } from "./cards";
 import { readLogs } from "./logs";
 import { describeSessions } from "./describe";
@@ -86,6 +90,21 @@ const ACTING = new Set<ToolName>([
   "add_project",
 ]);
 
+// What live sessions on other machines claim in this workspace's repos.
+async function claimedElsewhere(w: string): Promise<string> {
+  const keys = await Promise.all(
+    workspaceProjects(w)
+      .filter((p) => !p.host_id || p.host_id === "local")
+      .map((p) => repoKey(expandHome(p.working_directory)))
+  );
+  const repos = new Set(keys.filter((k): k is string => !!k));
+  if (!repos.size) return "";
+  return describeClaims(
+    liveClaims().filter((c) => repos.has(c.repo)),
+    { onlyOthers: true }
+  );
+}
+
 // The orchestrator's tools, each scoped to its workspace and its arguments
 // validated, answered as compact text.
 export async function runTool(
@@ -100,9 +119,10 @@ export async function runTool(
   switch (tool) {
     case "sessions": {
       p(tool, raw);
-      const [facts, external] = await Promise.all([
+      const [facts, external, claimed] = await Promise.all([
         sessionFacts(w),
         externalSessions(w).catch(() => []),
+        claimedElsewhere(w).catch(() => ""),
       ]);
       resolveStaleAsks(w);
       return [
@@ -112,6 +132,7 @@ export async function runTool(
           listGroups(w).map((g) => g.name)
         ),
         describeExternal(external),
+        claimed,
       ]
         .filter(Boolean)
         .join("\n\n");

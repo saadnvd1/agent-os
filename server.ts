@@ -21,6 +21,7 @@ import { realDeps, schedulesEnabled, startScheduler } from "./lib/schedules";
 import { startSettling } from "./lib/recipes";
 import { startAutoArchive } from "./lib/done/auto-archive";
 import { startWorktreeSweep } from "./lib/worktree-sweep/start";
+import { startClaimsLoop } from "./lib/claims";
 import { startUsageRollup, usageRollupEnabled } from "./lib/usage/nightly";
 import { resumePhoneOutbox } from "./lib/notify";
 import { resumePushOutbox } from "./lib/notify/push";
@@ -497,6 +498,8 @@ app.prepare().then(async () => {
   startAutoArchive();
   // Settled worktrees older than the setting are removed; branches stay.
   startWorktreeSweep();
+  // Who is working on what, across linked machines.
+  if (!process.env.AGENTOS_DEMO) startClaimsLoop();
   resumePhoneOutbox();
   resumePushOutbox();
   // The usage ledger's daily rollup and its ratchet alerts.

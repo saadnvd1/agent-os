@@ -1,0 +1,96 @@
+import { execFileSync } from "child_process";
+import fs from "fs";
+import os from "os";
+import path from "path";
+import { afterAll, beforeEach, describe, expect, it } from "vitest";
+import { db, insertSessionRow } from "@/lib/db";
+import { collectLocal } from "./collectLocal";
+import { liveClaims } from "./store";
+
+const root = fs.mkdtempSync(path.join(os.tmpdir(), "claims-"));
+const sh = (cwd: string, ...args: string[]) =>
+  execFileSync("git", args, { cwd, stdio: "pipe" });
+
+function repo(): string {
+  const dir = fs.mkdtempSync(path.join(root, "r-"));
+  sh(dir, "init", "-q", "-b", "main");
+  sh(dir, "config", "user.email", "t@example.test");
+  sh(dir, "config", "user.name", "t");
+  sh(dir, "remote", "add", "origin", "git@git.example.test:team/app.git");
+  fs.writeFileSync(path.join(dir, ".gitignore"), "*.log\n");
+  fs.writeFileSync(path.join(dir, "base.txt"), "x");
+  sh(dir, "add", "-A");
+  sh(dir, "commit", "-q", "-m", "init");
+  return dir;
+}
+
+function session(id: string, dir: string, extra: Record<string, unknown> = {}) {
+  insertSessionRow(db, {
+    id,
+    name: `Task ${id}`,
+    tmux_name: `claude-${id}`,
+    working_directory: dir,
+    ...extra,
+  } as Parameters<typeof insertSessionRow>[1]);
+}
+
+const origin = { id: "self-machine", name: "here" };
+
+beforeEach(() => {
+  db.prepare(`DELETE FROM work_claims`).run();
+  db.prepare(`DELETE FROM sessions`).run();
+});
+afterAll(() => fs.rmSync(root, { recursive: true, force: true }));
+
+describe("collectLocal", () => {
+  it("claims the branch with committed and untracked paths, not ignored ones", async () => {
+    const dir = repo();
+    sh(dir, "checkout", "-q", "-b", "feature/x");
+    fs.mkdirSync(path.join(dir, "lib"));
+    fs.writeFileSync(path.join(dir, "lib", "a.ts"), "1");
+    sh(dir, "add", "-A");
+    sh(dir, "commit", "-q", "-m", "a");
+    fs.writeFileSync(path.join(dir, "b.ts"), "2");
+    fs.writeFileSync(path.join(dir, "debug.log"), "3");
+    session("s1", dir);
+    await collectLocal(origin);
+    const [c] = liveClaims();
+    expect(c).toMatchObject({
+      repo: "git.example.test/team/app",
+      branch: "feature/x",
+      sessionId: "s1",
+    });
+    expect([...c.files].sort()).toEqual(["b.ts", "lib/a.ts"]);
+  });
+
+  it("skips a shell idle on the default branch and a folder with no remote", async () => {
+    const dir = repo();
+    session("idle", dir);
+    const bare = fs.mkdtempSync(path.join(root, "n-"));
+    sh(bare, "init", "-q", "-b", "main");
+    session("noremote", bare);
+    await collectLocal(origin);
+    expect(liveClaims()).toHaveLength(0);
+  });
+
+  it("releases the claim once the session is gone", async () => {
+    const dir = repo();
+    sh(dir, "checkout", "-q", "-b", "feature/y");
+    fs.writeFileSync(path.join(dir, "n.ts"), "1");
+    session("s2", dir);
+    await collectLocal(origin);
+    expect(liveClaims()).toHaveLength(1);
+    db.prepare(`DELETE FROM sessions WHERE id = 's2'`).run();
+    await collectLocal(origin);
+    expect(liveClaims()).toHaveLength(0);
+  });
+
+  it("leaves a linked machine's mirror out", async () => {
+    const dir = repo();
+    sh(dir, "checkout", "-q", "-b", "feature/z");
+    fs.writeFileSync(path.join(dir, "m.ts"), "1");
+    session("mirror", dir, { peer_mirror: 1 });
+    await collectLocal(origin);
+    expect(liveClaims()).toHaveLength(0);
+  });
+});
