@@ -1,0 +1,7 @@
+#!/usr/bin/env bash
+# Point ~/.local/bin/{agent-os,aos} at the checkout the live server runs from.
+set -euo pipefail
+here="$(cd "$(dirname "$0")/.." && pwd)"
+# shellcheck source=lib/cli-links.sh
+source "$here/scripts/lib/cli-links.sh"
+sync_cli_links "$(live_checkout "$here")" "${1:-}"

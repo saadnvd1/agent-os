@@ -1,8 +1,12 @@
+import fs from "fs";
+import path from "path";
 import { describe, expect, it } from "vitest";
+import { tempDir } from "@/lib/test-temp";
 import type { AgentProbe } from "../agents/probe";
 import {
   MIN_NODE_MAJOR,
   checkAgents,
+  checkCliLinks,
   checkNode,
   runDoctor,
   type ExecFn,
@@ -43,6 +47,7 @@ describe("runDoctor", () => {
     const checks = await runDoctor(true, {
       exec: execWith(all),
       probe: probeOf({ claude: ready }),
+      cliLinks: () => null,
       nodeVersion: "22.1.0",
     });
     expect(checks.map((c) => c.id)).toEqual([
@@ -66,6 +71,7 @@ describe("runDoctor", () => {
       await runDoctor(true, {
         exec: execWith(fewer),
         probe: probeOf({}),
+        cliLinks: () => null,
         nodeVersion: "22.1.0",
       })
     );
@@ -82,6 +88,7 @@ describe("runDoctor", () => {
         probe: async () => {
           throw new Error("probe blew up");
         },
+        cliLinks: () => null,
         nodeVersion: "22.0.0",
       })
     );
@@ -97,6 +104,7 @@ describe("runDoctor", () => {
       await runDoctor(true, {
         exec,
         probe: probeOf({ claude: ready }),
+        cliLinks: () => null,
         nodeVersion: "22.0.0",
       })
     );
@@ -113,6 +121,7 @@ describe("runDoctor", () => {
       await runDoctor(true, {
         exec,
         probe: probeOf({ claude: ready }),
+        cliLinks: () => null,
         nodeVersion: "22.0.0",
       })
     );
@@ -132,5 +141,49 @@ describe("checkAgents", () => {
     expect(
       checkAgents({ codex: { installed: false, auth: "unknown" } }).status
     ).toBe("fail");
+  });
+});
+
+describe("checkCliLinks", () => {
+  const fixture = () => {
+    const root = tempDir("aos-clilinks-");
+    const home = path.join(root, "home");
+    const bin = path.join(root, "bin");
+    fs.mkdirSync(home);
+    fs.mkdirSync(bin);
+    const clone = (name: string) => {
+      const dir = path.join(root, name);
+      fs.mkdirSync(path.join(dir, "bin"), { recursive: true });
+      fs.writeFileSync(path.join(dir, "bin/aos"), "");
+      return dir;
+    };
+    const live = clone("live");
+    fs.writeFileSync(
+      path.join(home, "live-server.json"),
+      JSON.stringify({ cwd: live })
+    );
+    return { bin, home, live, old: clone("old") };
+  };
+
+  it("is ok when aos points into the live checkout", () => {
+    const f = fixture();
+    fs.symlinkSync(path.join(f.live, "bin/aos"), path.join(f.bin, "aos"));
+    expect(checkCliLinks(f.bin, f.home)?.status).toBe("ok");
+  });
+
+  it("warns when aos points into another clone", () => {
+    const f = fixture();
+    fs.symlinkSync(path.join(f.old, "bin/aos"), path.join(f.bin, "aos"));
+    const check = checkCliLinks(f.bin, f.home);
+    expect(check?.status).toBe("warn");
+    expect(check?.detail).toContain(f.old);
+    expect(check?.fix).toContain("sync-cli-links");
+  });
+
+  it("says nothing without a live record or a link", () => {
+    const f = fixture();
+    expect(checkCliLinks(f.bin, f.home)).toBeNull();
+    fs.symlinkSync(path.join(f.old, "bin/aos"), path.join(f.bin, "aos"));
+    expect(checkCliLinks(f.bin, path.join(f.bin, "nohome"))).toBeNull();
   });
 });

@@ -100,6 +100,8 @@ if [ "$head" != "$deployed" ]; then
   # The pull takes what landed while it waited, too.
   git rev-parse HEAD > "$state/deployed"
   date +%s > "$state/restarted"
+  # A link into an older clone would run an old aos on this machine.
+  scripts/sync-cli-links || log "CLI link sync failed"
 fi
 
 # Publishing waits minutes for npm to serve a version, so it runs on its own
