@@ -133,9 +133,9 @@ export function queueIfNeeded(req: QueueRequest): QueuedTaskView | null {
   // The row and the piece claim stand or fall together.
   db.transaction(() => {
     db.prepare(
-      `INSERT INTO task_queue (id, project_id, prompt, name, model, model_overrides, plan, plan_reason, plan_only, started_by, parent_session_id, started_by_device, started_via, view, agent_type, base_branch,
+      `INSERT INTO task_queue (id, project_id, prompt, name, model, model_overrides, plan, plan_reason, plan_only, started_by, parent_session_id, started_by_device, started_via, view, session_group_id, agent_type, base_branch,
          host_id, after_task, after_any, origin_workspace_id, priority, machine_needs, position)
-       VALUES (@id, @project_id, @prompt, @name, @model, @model_overrides, @plan, @plan_reason, @plan_only, @started_by, @parent_session_id, @started_by_device, @started_via, @view, @agent_type, @base_branch,
+       VALUES (@id, @project_id, @prompt, @name, @model, @model_overrides, @plan, @plan_reason, @plan_only, @started_by, @parent_session_id, @started_by_device, @started_via, @view, @session_group_id, @agent_type, @base_branch,
          @host_id, @after_task, @after_any, @origin, @priority, @machine_needs,
          (SELECT COALESCE(MAX(position), 0) + 1 FROM task_queue))`
     ).run({
@@ -156,6 +156,7 @@ export function queueIfNeeded(req: QueueRequest): QueuedTaskView | null {
       started_by_device: req.startedByDevice ?? null,
       started_via: req.startedVia,
       view: req.view ?? null,
+      session_group_id: req.groupId ?? null,
       agent_type: req.agent ?? null,
       base_branch: req.baseBranch || null,
       host_id: req.hostId || null,

@@ -20,6 +20,7 @@ export const TOOL_NAMES = {
   start_task: name("start_task"),
   set_task_model: name("set_task_model"),
   start_session: name("start_session"),
+  set_group: name("set_group"),
   quick_change: name("quick_change"),
   quick_pr: name("quick_pr"),
   stack: name("stack"),

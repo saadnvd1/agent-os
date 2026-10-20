@@ -45,6 +45,7 @@ import { braked } from "./brakes";
 import { getOrchestrator } from "./home";
 import { addNote } from "./notes";
 import { findWorkspaceSession } from "./read";
+import { assignSessions, resolveGroup } from "../session-groups";
 import {
   assertTakesMessages,
   findQueuedTarget,
@@ -163,6 +164,7 @@ export async function startTask(
     now?: boolean;
     nowReason?: string;
     piece?: string;
+    group?: string;
   } = {}
 ): Promise<string> {
   if (opts.planOnly && opts.plan === false)
@@ -170,6 +172,7 @@ export async function startTask(
   if (opts.now && !opts.nowReason)
     throw new Error("now needs now_reason: say why it can't wait for a slot");
   const project = workspaceProject(workspaceId, projectRef);
+  const groupId = groupIdOf(workspaceId, opts.group);
   const model = parseOverride(opts.model) ?? undefined;
   const startedBy = orchestratorId(workspaceId);
   const pieceId = opts.piece
@@ -204,6 +207,7 @@ export async function startTask(
       priority: opts.priority,
       machine: opts.machine,
       now: opts.now,
+      groupId,
     },
     () =>
       braked(
@@ -224,6 +228,7 @@ export async function startTask(
             parentSessionId: startedBy,
             startedVia: "orchestrator",
             pieceId,
+            groupId,
           }),
         (s) => s.id
       )
@@ -299,9 +304,15 @@ export async function startSession(
   workspaceId: string,
   projectRef: string,
   prompt: string,
-  opts: { name?: string; view?: StartView; model?: string } = {}
+  opts: {
+    name?: string;
+    view?: StartView;
+    model?: string;
+    group?: string;
+  } = {}
 ): Promise<string> {
   const project = workspaceProject(workspaceId, projectRef);
+  const groupId = groupIdOf(workspaceId, opts.group);
   const startedBy = orchestratorId(workspaceId);
   const model = parseOverride(opts.model);
   if (model && typeof model !== "string")
@@ -326,6 +337,7 @@ export async function startSession(
               startedBy,
               parentSessionId: startedBy,
               startedVia: "orchestrator",
+              groupId,
             })
           ).session
         : spawnSession({
@@ -335,6 +347,7 @@ export async function startSession(
             model,
             startedBy,
             parentSessionId: startedBy,
+            groupId,
           }),
     (s) => s.id
   );
@@ -406,6 +419,26 @@ export async function drop(
   await dropTask(task.id);
   addNote(workspaceId, `Dropped task ${task.name}: ${reason.trim()}`);
   return `Dropped ${task.name}: its PR is closed and its worktree removed.`;
+}
+
+// One of Saad's groups in the workspace by name; the error lists the ones
+// there are. The orchestrator files into groups, it never creates them.
+function groupIdOf(workspaceId: string, name?: string): string | undefined {
+  return name ? resolveGroup(workspaceId, name).id : undefined;
+}
+
+// Files a session of this workspace in a group, or out of its group (null).
+export async function setGroup(
+  workspaceId: string,
+  ref: string,
+  group: string | null
+): Promise<string> {
+  const s = findWorkspaceSession(workspaceId, ref);
+  const target = group === null ? null : resolveGroup(workspaceId, group);
+  assignSessions([s.id], target?.id ?? null);
+  return target
+    ? `Filed ${s.name} in "${target.name}".`
+    : `Took ${s.name} out of its group.`;
 }
 
 // Finished work: merged through the gates if its PR is open, then

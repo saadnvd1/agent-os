@@ -8,6 +8,7 @@ import { parseOverride, resolveRole, setSessionModel } from "../models/resolve";
 import { ANTHROPIC } from "../models/roles";
 import { launchClaude } from "./launch";
 import { nameFor } from "../session-titles";
+import { fileInGroup } from "../session-groups/assignSessions";
 
 // "dashboards" or a project id; case-insensitive on name.
 export function findProject(ref: string) {
@@ -37,6 +38,8 @@ export async function spawnSession(opts: {
   // model unless `model` is given.
   startedBy?: string | null;
   parentSessionId?: string | null;
+  // The user's group it starts in (lib/session-groups).
+  groupId?: string;
 }): Promise<Session> {
   const prompt = opts.prompt.trim();
   if (!prompt) throw new Error("Give the new session a prompt");
@@ -91,6 +94,7 @@ export async function spawnSession(opts: {
         ? "session"
         : "person",
   });
+  if (opts.groupId) fileInGroup(id, opts.groupId);
   if (routed) setSessionModel(id, routed);
   void naming.refine?.(id);
   await launchClaude({ sessionId: id, tmuxName, cwd, model, prompt });

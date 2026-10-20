@@ -26,6 +26,8 @@ export interface QueueRow {
   started_by_device: string | null;
   started_via: string | null;
   view: "chat" | "terminal" | null;
+  // The user's group it joins when it starts (lib/session-groups).
+  session_group_id: string | null;
   agent_type: string | null;
   base_branch: string | null;
   host_id: string | null;
@@ -102,6 +104,8 @@ export interface QueueRequest {
   // The waiting plan piece it builds, claimed for its queue id.
   pieceId?: number;
   view?: "chat" | "terminal";
+  // The user's group it joins when it starts: a live group of its workspace.
+  groupId?: string;
   agent?: AgentType;
   baseBranch?: string;
   hostId?: string;

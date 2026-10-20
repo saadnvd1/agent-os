@@ -3,9 +3,11 @@
 import { useCallback, useMemo } from "react";
 import { useSnapshot } from "valtio";
 import type { Session } from "@/lib/db";
+import type { SessionGroup } from "@/lib/sidebar/shelves";
 import {
   buildShelves,
   inWorkspace,
+  orderGroups,
   projectsInWorkspace,
 } from "@/lib/sidebar/shelves";
 import type { TaskState } from "@/lib/tasks/state";
@@ -25,6 +27,7 @@ import type { SessionStatus } from "./SessionList.types";
 
 // One empty list for queries still loading, so memos below hold.
 const NONE: never[] = [];
+const NONE_GROUPS: SessionGroup[] = [];
 
 // Everything the flat list needs: the current workspace's sessions, sorted
 // onto shelves by the remembered filters.
@@ -55,6 +58,7 @@ export function useSidebarData(
     () => sessionsQuery.data?.sessions ?? [],
     [sessionsQuery.data]
   );
+  const allGroups = sessionsQuery.data?.sessionGroups ?? NONE_GROUPS;
   // Keyed by its contents: the hosts query hands back a new object each time.
   const linkedKey = JSON.stringify(useLinkedHostNames());
   const linked = useMemo(
@@ -102,6 +106,10 @@ export function useSidebarData(
       ),
       projectId: project?.id ?? null,
       currentOrchestrators,
+      groups: orderGroups(
+        allGroups.filter((g) => !workspace || g.workspace_id === workspace.id),
+        workspaces.map((w) => w.id)
+      ),
     };
     // The rollups count the whole list; the filter only narrows what shows.
     const all = buildShelves(input);
@@ -120,6 +128,7 @@ export function useSidebarData(
     now,
     linked,
     sessions,
+    allGroups,
     projects,
     workspaces,
     tasks,
@@ -235,6 +244,7 @@ export function useSidebarData(
   return {
     ui,
     shelves,
+    groups: allGroups,
     queued,
     toStart,
     machines,

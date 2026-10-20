@@ -38,6 +38,11 @@ aos read <session>                # what a session in your workspace said and di
                                   # (--turns N | --lines N, --all, --grep text, --json)
 aos spawn <project> "prompt"      # start a new agent session in a project
 aos task <project> "prompt"       # start a background task that ends in a PR
+                                  # (both take --group <name>: file it in a group)
+aos group                         # your workspace's groups and their sizes
+aos group new "<name>" | rename "<group>" "<name>"
+aos group add "<group>" <session...>   # file sessions (`me` is you)
+aos group rm <session...>         # take sessions out of their group
                                   # (both take --name "..." before the prompt;
                                   # task takes --after <task|any> to queue it;
                                   # a task opens as a chat, --terminal for tmux;

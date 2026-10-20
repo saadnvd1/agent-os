@@ -1,6 +1,6 @@
 // The sidebar's one flat list, sorted onto shelves: the workspace's pinned
-// orchestrator, Pinned, Needs you, Working, In review, Ongoing, Snoozed, then
-// Done. Client-safe: no database.
+// orchestrator, Pinned, the user's groups, Needs you, Working, In review,
+// Ongoing, Snoozed, then Done. Client-safe: no database.
 import type { Session } from "@/lib/db/types";
 import { fromSqliteTime } from "@/lib/session-meta";
 import type { PrStage } from "@/lib/tasks/pr-stage";
@@ -42,6 +42,25 @@ export interface RowStatus {
   detail?: string | null;
 }
 
+// A named shelf the user files sessions into (lib/session-groups). Native
+// reads the same shape from GET /api/sessions.
+export interface SessionGroup {
+  id: string;
+  workspace_id: string | null;
+  name: string;
+  sort_order: number;
+  collapsed: boolean;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface GroupShelf {
+  group: SessionGroup;
+  rows: SidebarRow[];
+  // What a folded header still has to say.
+  rollup: { needsYou: number };
+}
+
 export interface SidebarRow {
   session: Session;
   status: RowStatus | undefined;
@@ -60,8 +79,11 @@ export interface SidebarRow {
   activeAt: number;
   // While snoozed: when it wakes (ms).
   wakesAt?: number;
-  // A plain session in Done: marked by hand, or settled by itself.
+  // A plain session in Done: marked by hand, or settled by itself. In a
+  // group, "auto" only mutes the row: it stays where it was put.
   settled?: "manual" | "auto";
+  // The group it belongs to, even while Done holds it (Reopen goes back).
+  groupName?: string;
   // Its agent is being stopped, is stopped, or is starting again
   // (lib/tasks/pause): until is when it resumes by itself (ms), null: when
   // someone resumes it.
@@ -76,6 +98,8 @@ export interface Shelves {
   // Each shown workspace's current orchestrator, while it's pinned.
   orchestrators: SidebarRow[];
   pinned: SidebarRow[];
+  // The shown groups in order, empty ones too.
+  groups: GroupShelf[];
   needsYou: SidebarRow[];
   working: SidebarRow[];
   inReview: SidebarRow[];
@@ -145,6 +169,9 @@ export interface ShelfInput {
   currentOrchestrators?: ReadonlySet<string>;
   // Only the sessions this orchestrator session started.
   startedBy?: string | null;
+  // The live groups to show, in the order to draw them. A session in any
+  // other group id is filed by status as if it had none.
+  groups?: readonly SessionGroup[];
   // The clock (ms): wakes and 3-day settles are read from it.
   now?: number;
 }
@@ -274,6 +301,24 @@ function toRow(input: ShelfInput, session: Session, now: number): SidebarRow {
   };
 }
 
+// Where a row goes when nothing the user did holds it: what it needs, what
+// it's doing, then how finished it is. Sets settled on a plain session in Done.
+function statusShelf(
+  row: SidebarRow,
+  now: number
+): "needsYou" | "working" | "inReview" | "ongoing" | "snoozed" | "done" {
+  if (row.need) return "needsYou";
+  // A stopped agent is not working, whatever its last status said.
+  if (row.paused?.state === "paused") return "snoozed";
+  if (row.working) return "working";
+  if (row.wakesAt) return "snoozed";
+  if (row.task || row.session.task_status) return quietShelf(row.task);
+  const settled = settledHow(row.session, now);
+  if (!settled) return "ongoing";
+  row.settled = settled;
+  return "done";
+}
+
 export function buildShelves(input: ShelfInput): Shelves {
   const now = input.now ?? Date.now();
   const rows = input.sessions
@@ -314,6 +359,7 @@ export function buildShelves(input: ShelfInput): Shelves {
   const shelves: Shelves = {
     orchestrators: [],
     pinned: [],
+    groups: [],
     needsYou: [],
     working: [],
     inReview: [],
@@ -321,25 +367,35 @@ export function buildShelves(input: ShelfInput): Shelves {
     snoozed: [],
     done: [],
   };
+  const filtered = !!input.query?.trim() || !!input.projectId;
+  const grouped = new Map<string, GroupShelf>(
+    (input.groups ?? []).map((group) => [
+      group.id,
+      { group, rows: [], rollup: { needsYou: 0 } },
+    ])
+  );
   for (const row of top) {
     const { pinned, role, id } = row.session;
     const current = !!input.currentOrchestrators?.has(id);
+    const mine = grouped.get(row.session.session_group_id ?? "");
+    // Named on a row outside its group (Pinned, Done); inside, the header says it.
+    if (mine) row.groupName = mine.group.name;
     if (pinned && current) shelves.orchestrators.push(row);
     else if (pinned && role !== "orchestrator") shelves.pinned.push(row);
-    else if (row.need) shelves.needsYou.push(row);
-    // A stopped agent is not working, whatever its last status said.
-    else if (row.paused?.state === "paused") shelves.snoozed.push(row);
-    else if (row.working) shelves.working.push(row);
-    else if (row.wakesAt) shelves.snoozed.push(row);
-    else if (row.task || row.session.task_status)
-      shelves[quietShelf(row.task)].push(row);
     else {
-      const settled = settledHow(row.session, now);
-      if (settled) {
-        row.settled = settled;
-        shelves.done.push(row);
-      } else shelves.ongoing.push(row);
+      const shelf = statusShelf(row, now);
+      // Membership beats status. Only finished work goes on to Done (it keeps
+      // its group); a session that merely went quiet stays, muted.
+      if (mine && (shelf !== "done" || row.settled === "auto")) {
+        delete row.groupName;
+        mine.rows.push(row);
+        if (row.need) mine.rollup.needsYou++;
+      } else shelves[shelf].push(row);
     }
+  }
+  for (const shelf of grouped.values()) {
+    shelf.rows.sort((a, b) => b.activeAt - a.activeAt);
+    if (!filtered || shelf.rows.length > 0) shelves.groups.push(shelf);
   }
   shelves.orchestrators.sort(oldestFirst);
   shelves.pinned.sort(oldestFirst);
@@ -355,6 +411,24 @@ export function buildShelves(input: ShelfInput): Shelves {
   shelves.snoozed.sort((a, b) => comesBack(a) - comesBack(b));
   shelves.done.sort((a, b) => doneAtMs(b) - doneAtMs(a));
   return shelves;
+}
+
+// The groups to draw, in the order to draw them: by workspace (in the order
+// given; groups of no workspace last), then by their own order.
+export function orderGroups(
+  groups: readonly SessionGroup[],
+  workspaceOrder: readonly string[]
+): SessionGroup[] {
+  const rank = (g: SessionGroup) => {
+    const at = g.workspace_id ? workspaceOrder.indexOf(g.workspace_id) : -1;
+    return at < 0 ? workspaceOrder.length : at;
+  };
+  return [...groups].sort(
+    (a, b) =>
+      rank(a) - rank(b) ||
+      a.sort_order - b.sort_order ||
+      a.created_at.localeCompare(b.created_at)
+  );
 }
 
 // Done shows 10 at first, then 25 more per "Show more".
@@ -424,6 +498,7 @@ export function sameRow(a: SidebarRow, b: SidebarRow): boolean {
     a.paused?.until === b.paused?.until &&
     a.paused?.note === b.paused?.note &&
     a.settled === b.settled &&
+    a.groupName === b.groupName &&
     a.workers.length === b.workers.length &&
     a.workers.every((w, i) => sameRow(w, b.workers[i])) &&
     (a.quick?.length ?? 0) === (b.quick?.length ?? 0) &&

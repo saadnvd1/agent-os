@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
-import { getDb, queries, type Session, type Group } from "@/lib/db";
+import { getDb, queries, type Session } from "@/lib/db";
+import { listGroups } from "@/lib/session-groups";
 import { isValidAgentType } from "@/lib/providers";
 import { clientSend } from "@/lib/chat/client-send";
 import { CHAT_ACCESS } from "@/lib/chat/events";
@@ -7,7 +8,7 @@ import { launchSession } from "@/lib/sessions/launch";
 import { namesLine, waitBadges } from "@/lib/bus/waits/store";
 import { isProjectRef } from "@/lib/tasks/project-ref";
 
-// GET /api/sessions - List all sessions and groups
+// GET /api/sessions - List the sidebar's sessions and the user's groups
 export async function GET() {
   try {
     const db = getDb();
@@ -31,15 +32,7 @@ export async function GET() {
           : s;
       }
     );
-    const groups = queries.getAllGroups(db).all() as Group[];
-
-    // Convert expanded from 0/1 to boolean
-    const formattedGroups = groups.map((g) => ({
-      ...g,
-      expanded: Boolean(g.expanded),
-    }));
-
-    return NextResponse.json({ sessions, groups: formattedGroups });
+    return NextResponse.json({ sessions, sessionGroups: listGroups() });
   } catch (error) {
     console.error("Error fetching sessions:", error);
     return NextResponse.json(
@@ -95,7 +88,6 @@ export async function POST(request: NextRequest) {
       name: str(body.name),
       view: body.view === "terminal" ? "terminal" : undefined,
       parentSessionId: str(body.parentSessionId),
-      groupPath: str(body.groupPath) ?? undefined,
       systemPrompt: str(body.systemPrompt),
     });
     const db = getDb();

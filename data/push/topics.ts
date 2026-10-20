@@ -41,6 +41,7 @@ function keysFor(topic: string): QueryKey[] {
     case "projects":
       return [projectKeys.all, sessionKeys.all];
     case "groups":
+    case "session_groups":
       return [sessionKeys.all];
     case "workspaces":
       return [workspaceKeys.all, orchestratorKeys.all];

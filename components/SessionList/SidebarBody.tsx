@@ -63,6 +63,7 @@ export function SidebarBody({
   const count =
     shelves.orchestrators.length +
     shelves.pinned.length +
+    shelves.groups.length +
     shelves.needsYou.length +
     shelves.working.length +
     shelves.inReview.length +
@@ -125,6 +126,11 @@ export function SidebarBody({
         doneCollapsed={ui.doneCollapsed}
         snoozedCollapsed={ui.snoozedCollapsed}
         donePages={ui.donePages}
+        workspaceNames={
+          data.workspace
+            ? undefined
+            : new Map(data.workspaces.map((w) => [w.id, w.name]))
+        }
       />
       <MachineShelves groups={data.machines} />
       <SidebarExtras

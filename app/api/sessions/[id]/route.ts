@@ -19,6 +19,7 @@ import { statusDetector } from "@/lib/status-detector";
 import { deleteItems } from "@/lib/chat/store";
 import { clearQueue } from "@/lib/chat/queued";
 import { recordPreviousName } from "@/lib/session-names";
+import { getProject, moveSessionToProject } from "@/lib/projects";
 import { generateBranchName, getCurrentBranch, renameBranch } from "@/lib/git";
 import { runInBackground } from "@/lib/async-operations";
 import {
@@ -206,9 +207,15 @@ export async function PATCH(request: NextRequest, { params }: RouteParams) {
       updates.push("system_prompt = ?");
       values.push(body.systemPrompt);
     }
-    if (body.groupPath !== undefined) {
-      updates.push("group_path = ?");
-      values.push(body.groupPath);
+
+    let clearedGroup: string | null = null;
+    if (typeof body.projectId === "string" && !existing.role) {
+      if (!getProject(body.projectId))
+        return NextResponse.json(
+          { error: "Project not found" },
+          { status: 404 }
+        );
+      clearedGroup = moveSessionToProject(id, body.projectId).clearedGroup;
     }
 
     if (updates.length > 0) {
@@ -221,7 +228,10 @@ export async function PATCH(request: NextRequest, { params }: RouteParams) {
     }
 
     const session = queries.getSession(db).get(id) as Session;
-    return NextResponse.json({ session });
+    return NextResponse.json({
+      session,
+      ...(clearedGroup && { clearedGroup }),
+    });
   } catch (error) {
     console.error("Error updating session:", error);
     return NextResponse.json(

@@ -1,11 +1,7 @@
 import { useMutation, useQueryClient } from "@tanstack/react-query";
-import type { Session, Group } from "@/lib/db";
+import type { Session } from "@/lib/db";
 import { sessionKeys } from "./keys";
-
-interface SessionsResponse {
-  sessions: Session[];
-  groups: Group[];
-}
+import type { SessionsResponse } from "./queries";
 
 export function usePinSession() {
   const queryClient = useQueryClient();

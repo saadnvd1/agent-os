@@ -139,6 +139,7 @@ export const SessionRow = memo(function SessionRow({
         <RowSubtitle
           session={session}
           hideHost={inMachineShelf}
+          groupName={row.groupName}
           detail={row.status?.detail}
           live={
             row.need

@@ -38,6 +38,7 @@ import {
   waitBadges,
 } from "./waits/store";
 import { HUMAN, overRateLimit, wakeLine, type BusMessageView } from "./format";
+import { groupNames } from "../session-groups/store";
 
 export * from "./format";
 export {
@@ -64,6 +65,8 @@ export interface Peer {
   // Names of the sessions it waits on, and of those waiting on it.
   waitingOn: string[];
   waitedBy: string[];
+  // The user's group it sits in, when it is in one.
+  group?: string;
 }
 
 // A chat has no pane: its worker is the state, and it can always take a
@@ -99,6 +102,7 @@ export async function listPeers(callerId?: string): Promise<Peer[]> {
   const caller = sessionById(callerId);
   const orchestrator = heldOrchestrator(caller);
   const badges = waitBadges();
+  const groups = groupNames();
   const listed = await Promise.all(
     sessions.map(async (s, i) => {
       const info = await peerState(s);
@@ -114,6 +118,10 @@ export async function listPeers(callerId?: string): Promise<Peer[]> {
         orchestratorOf: orchestratorOf(s),
         waitingOn: badges.get(s.id)?.on.map((w) => w.name) ?? [],
         waitedBy: badges.get(s.id)?.by.map((w) => w.name) ?? [],
+        ...(s.session_group_id &&
+          groups.has(s.session_group_id) && {
+            group: groups.get(s.session_group_id),
+          }),
         ...(caller?.workspace_id &&
           s.role === "orchestrator" &&
           s.workspace_id === caller.workspace_id && { yours: true }),

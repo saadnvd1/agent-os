@@ -41,7 +41,7 @@ describe("rowMenu", () => {
         "open-tab",
         { group: "share", items: ["copy-link", "share"] },
         { group: "restart", items: ["fork", "fresh-start"] },
-        "move-project",
+        { group: "move", items: ["move-project", "move-group"] },
         { group: "automate", items: ["check-ins", "save-recipe"] },
       ],
       ["snooze", "pause", "settle"],
@@ -115,8 +115,18 @@ describe("rowMenu", () => {
     const flat = menu({ machineTargets: 1 }).sections[1];
     expect(flat).toContainEqual({
       group: "move",
-      items: ["move-machine", "move-project"],
+      items: ["move-machine", "move-project", "move-group"],
     });
+  });
+
+  it("offers Move to group on an agent session, even on a linked machine", () => {
+    expect(JSON.stringify(menu().sections)).toContain("move-group");
+    expect(JSON.stringify(menu({ remote: true }).sections)).toContain(
+      "move-group"
+    );
+    expect(
+      JSON.stringify(menu({ s: { role: "orchestrator" } }).sections)
+    ).not.toContain("move-group");
   });
 
   it("shows a recipe run's items instead of Save as recipe", () => {

@@ -21,6 +21,7 @@ export type RowMenuItem =
   | "new-conversation"
   | "move-machine"
   | "move-project"
+  | "move-group"
   | "check-ins"
   | "save-recipe"
   | "run-again"
@@ -133,6 +134,7 @@ export function rowMenu(input: RowMenuInput): RowMenuPlan {
     ...group("move", [
       input.machineTargets > 0 && "move-machine",
       agentRow && input.otherProjects > 0 && live && "move-project",
+      agentRow && "move-group",
     ]),
     ...group("automate", [
       input.hasWorkspace &&

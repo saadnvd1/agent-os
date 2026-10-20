@@ -22,11 +22,14 @@ export function RowSubtitle({
   detail,
   live,
   hideHost = false,
+  groupName,
 }: {
   session: Session;
   detail?: string | null;
   live?: LiveInput;
   hideHost?: boolean;
+  // Set on a finished session that keeps its group: Done shows where it goes back to.
+  groupName?: string;
 }) {
   const ctx = useRowContext();
   // What its processes use, on a busy session: "3.1 cores · 4.2 GB".
@@ -102,13 +105,14 @@ export function RowSubtitle({
           </span>
         </span>
       )}
-      {(project || detail || usage || session.placed_note) && (
+      {(project || detail || usage || session.placed_note || groupName) && (
         <span className="text-muted-foreground/70 min-w-0 truncate text-xs">
           {[
             usage && usageLabel(usage),
             detail?.slice(0, 200),
             session.placed_note,
             project,
+            groupName,
           ]
             .filter(Boolean)
             .join(" · ")}

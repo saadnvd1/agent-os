@@ -8,6 +8,7 @@ import {
   ChevronDown,
   CircleCheck,
   Clock,
+  Folder,
   FolderPlus,
   Gauge,
   LayoutGrid,
@@ -32,6 +33,7 @@ import { orchestratorOpenActions } from "@/stores/orchestratorOpen";
 import { sidebarUiActions } from "@/stores/sidebarUi";
 import { schedulesUiActions } from "@/stores/schedulesUi";
 import { recipesUiActions } from "@/stores/recipesUi";
+import { useCreateGroup } from "@/data/session-groups";
 import { useAddExistingProject } from "@/components/Projects/AddProject/useAddExistingProject";
 
 const icon = "mr-2 h-3.5 w-3.5";
@@ -49,7 +51,8 @@ export function WorkspaceSwitcher({
   const update = useUpdateWorkspace();
   const remove = useDeleteWorkspace();
   const addExisting = useAddExistingProject();
-  const [dialog, setDialog] = useState<"new" | "rename" | null>(null);
+  const createGroup = useCreateGroup();
+  const [dialog, setDialog] = useState<"new" | "rename" | "group" | null>(null);
   const name = current?.name ?? "All workspaces";
 
   return (
@@ -89,6 +92,12 @@ export function WorkspaceSwitcher({
             <Plus className={icon} />
             New workspace
           </DM.DropdownMenuItem>
+          {current && (
+            <DM.DropdownMenuItem onClick={() => setDialog("group")}>
+              <Folder className={icon} />
+              New group
+            </DM.DropdownMenuItem>
+          )}
           {!current && (
             <>
               <DM.DropdownMenuItem onClick={() => recipesUiActions.open(null)}>
@@ -175,14 +184,22 @@ export function WorkspaceSwitcher({
         </DM.DropdownMenuContent>
       </DM.DropdownMenu>
       <WorkspaceNameDialog
-        open={dialog === "new" || dialog === "rename"}
-        title={dialog === "rename" ? "Rename workspace" : "New workspace"}
+        open={dialog !== null}
+        title={
+          dialog === "rename"
+            ? "Rename workspace"
+            : dialog === "group"
+              ? "New group"
+              : "New workspace"
+        }
         initialName={dialog === "rename" ? current?.name : ""}
         submitLabel={dialog === "rename" ? "Rename" : "Create"}
         onSubmit={(name) =>
-          dialog === "rename" && current
-            ? update.mutate({ id: current.id, name })
-            : create.mutate(name)
+          dialog === "group"
+            ? createGroup.mutate({ name, workspaceId: current?.id ?? null })
+            : dialog === "rename" && current
+              ? update.mutate({ id: current.id, name })
+              : create.mutate(name)
         }
         onClose={() => setDialog(null)}
       />

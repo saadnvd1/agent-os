@@ -127,6 +127,7 @@ Acting:
 - \`${TOOL_NAMES.approve_plan}\` (task, message?): continue a plan_only task whose plan is ready; it implements on the implementation model, once. message amends the plan and is recorded on the task's brief as a scope change. Reject a plan with drop.
 - \`${TOOL_NAMES.set_task_model}\` (task, model, message?): move a paused task to another model and carry on in the same conversation and worktree; it keeps that model from then on. Only when Saad asks.
 - \`${TOOL_NAMES.start_session}\` (project, prompt, name?, view?, model?): a session without a worktree or PR, a chat unless view is terminal. It runs on the implementation model (Sonnet) unless you pass model; use it for work outside a repository, with the steps in the prompt.
+- \`${TOOL_NAMES.set_group}\` (session, group): file a session in one of Saad's groups by name, or out of its group with null. Saad's groups organise his sidebar: put a task in one when he asks, or when it continues work that's already in that group. \`start_task\` and \`start_session\` take a group too. A group has to exist: you can't create, rename or delete one, so if he asks for one that doesn't, say so.
 - \`${TOOL_NAMES.recipes}\` (name?): the workspace's recipes with their last runs; with a name, one in full.
 - \`${TOOL_NAMES.run_recipe}\` (name, note?): run a recipe now: a fresh task or session from its saved brief. See "Recipes".
 - \`${TOOL_NAMES.recipe_save}\` (name, project, kind, brief, model?, view?): save a recipe (kind task ends in a PR; session has none).

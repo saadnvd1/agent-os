@@ -131,6 +131,8 @@ const DESCRIPTIONS: Record<ToolName, string> = {
     'Resume a paused task on another model ("provider/model", or a map of role to one), keeping its conversation and worktree; it\'s told to carry on (or message). Refused mid-turn.',
   start_session:
     'Start an agent session in a project with a prompt, for work that isn\'t a PR task. It runs on the implementation model unless you give model (one "provider/model"; Opus only when the work needs deep reasoning), as a chat unless view is terminal (only for a job that needs a TUI). Refused while a brake holds.',
+  set_group:
+    "File a session of this workspace in one of Saad's groups (by name), or out of its group with null. Groups only organise his sidebar; they change nothing about the session. You can use groups that exist but can't create, rename or delete them.",
   quick_change:
     "Make a change yourself (without full access, a small low-risk one: a typo, a config value, a one-file fix): cuts a worktree and branch from the project's default branch and returns its path. Its dependencies install in the background (a note says when). You may write there (Write, Edit) and, with Orchestrator full access, run any git there; without it, only `git -C <path> ...` status, diff, add, rm, mv, restore, reset, log, show, and nowhere else in a project. Without full access, anything needing real work, tests or an investigation is a task (start_task).",
   quick_pr:

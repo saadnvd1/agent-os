@@ -47,6 +47,7 @@ import {
   type TaskState,
 } from "./state";
 import { expandHome, prFor, storedPR, taskSessions } from "./session";
+import { fileInGroup } from "../session-groups/assignSessions";
 import { InProgressError, type OrchestratedBundle } from "./move-bundle";
 import { holdFor, mayHold } from "./held";
 import { orchestratorOf, recordStart, type StartVia } from "./starter";
@@ -169,6 +170,8 @@ export async function createTask(opts: {
   // How its agent runs: as a chat (the default, DEFAULT_START_VIEW) or in
   // a terminal.
   view?: StartView;
+  // The user's group it joins as it starts (lib/session-groups).
+  groupId?: string;
   // Started by another machine's orchestrator, which this one holds it for
   // (held.ts): that machine's paired device and its description of the task.
   held?: { device: string; orchestrated: OrchestratedBundle };
@@ -292,6 +295,7 @@ async function startTask(
       startedByDevice: opts.held?.device ?? opts.startedByDevice,
     });
     if (opts.pieceId) claimPiece(opts.pieceId, session.id);
+    if (opts.groupId) fileInGroup(session.id, opts.groupId);
     opts.onCreated?.(session.id);
     return session;
   }
@@ -416,6 +420,7 @@ async function startTask(
     throw error;
   }
   if (opts.held) holdFor(id, opts.held.device, opts.held.orchestrated);
+  if (opts.groupId) fileInGroup(id, opts.groupId);
   opts.onCreated?.(id);
   void naming.refine?.(id);
 

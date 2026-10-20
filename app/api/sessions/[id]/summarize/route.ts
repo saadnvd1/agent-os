@@ -1,3 +1,4 @@
+import { inheritGroup } from "@/lib/session-groups/assignSessions";
 import { effectiveAutoApprove } from "@/lib/approvals/no-approvals";
 import { routedRun } from "@/lib/models/launch";
 import { NextRequest, NextResponse } from "next/server";
@@ -305,6 +306,7 @@ export async function POST(
         session.host_id
       );
 
+      inheritGroup(session.id, newId);
       newSession = queries.getSession(db).get(newId) as Session;
       const newTmuxSession = tmuxName;
 

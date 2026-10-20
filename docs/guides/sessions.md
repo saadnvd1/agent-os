@@ -86,7 +86,7 @@ project underneath. The workspace's orchestrator comes first, as a compact row
 with its state and how many of its asks wait on you; it starts pinned there,
 and unpinning it from its ⋯ menu (remembered per workspace) drops it among the
 other sessions. Sessions sit on shelves: **Pinned** (pin from a row's ⋯
-menu), **Needs you** (an approval, a question, a terminal waiting for input, a
+menu), your **groups** (below), **Needs you** (an approval, a question, a terminal waiting for input, a
 message typed and never sent, a failed task, or the orchestrator's open asks,
 each with a badge), **Working** (running, or a task idle between turns),
 **In review** (a task with an open pull request, or a plan waiting for
@@ -241,3 +241,27 @@ lists its artifacts from that machine.
 ![The slash-command menu open in a chat](https://raw.githubusercontent.com/saadnvd1/agent-os/main/screenshots/commands.png)
 
 ![A session in terminal view, with the agent asking before it runs a command](https://raw.githubusercontent.com/saadnvd1/agent-os/main/screenshots/terminal.png)
+
+### Groups
+
+A group is a named shelf you file sessions into, inside one workspace, under
+Pinned and above the status shelves. Make one from the workspace switcher
+(**New group**) or from a row's ⋯ menu (**Move to group → New group…**); the same
+menu moves a session in or out, and **Select** has **Move to group** for many at
+once. A group's header shows its name, count and, in amber, how many of its
+sessions need you; fold it with the header or its ⋯ menu (Rename, Move up, Move
+down, Fold, Delete group). Fold state and order are stored on the server, so
+every device sees the same.
+
+- A session is in at most one group, and only one of its own workspace. Moving
+  it to a project of another workspace removes it from its group.
+- Membership wins over status: a grouped session that needs you stays in its
+  group (amber row, amber count). Finished work (merged, dropped, marked done)
+  goes to Done and keeps its group, shown as `Project · Group`; Reopen or Restore
+  returns it. A session that merely went quiet stays in the group, muted.
+- Pinned wins over a group: a pinned session shows under Pinned, still in its group.
+- Deleting a group is soft: its sessions go back to the shelves and the toast's
+  Undo (10 s) brings it all back.
+- From the CLI: `aos group` (new, add, rm, rename), `--group <name>` on
+  `aos spawn` and `aos task`. The orchestrator can file sessions into existing
+  groups (`group` on its start tools, `set_group`) but never creates one.
