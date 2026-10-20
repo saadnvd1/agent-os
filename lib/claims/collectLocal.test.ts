@@ -1,18 +1,17 @@
 import { execFileSync } from "child_process";
 import fs from "fs";
-import os from "os";
 import path from "path";
-import { afterAll, beforeEach, describe, expect, it } from "vitest";
+import { beforeEach, describe, expect, it } from "vitest";
 import { db, insertSessionRow } from "@/lib/db";
 import { collectLocal } from "./collectLocal";
 import { liveClaims } from "./store";
+import { tempDir } from "@/lib/test-temp";
 
-const root = fs.mkdtempSync(path.join(os.tmpdir(), "claims-"));
 const sh = (cwd: string, ...args: string[]) =>
   execFileSync("git", args, { cwd, stdio: "pipe" });
 
 function repo(): string {
-  const dir = fs.mkdtempSync(path.join(root, "r-"));
+  const dir = tempDir("r-");
   sh(dir, "init", "-q", "-b", "main");
   sh(dir, "config", "user.email", "t@example.test");
   sh(dir, "config", "user.name", "t");
@@ -40,7 +39,6 @@ beforeEach(() => {
   db.prepare(`DELETE FROM work_claims`).run();
   db.prepare(`DELETE FROM sessions`).run();
 });
-afterAll(() => fs.rmSync(root, { recursive: true, force: true }));
 
 describe("collectLocal", () => {
   it("claims the branch with committed and untracked paths, not ignored ones", async () => {
@@ -66,7 +64,7 @@ describe("collectLocal", () => {
   it("skips a shell idle on the default branch and a folder with no remote", async () => {
     const dir = repo();
     session("idle", dir);
-    const bare = fs.mkdtempSync(path.join(root, "n-"));
+    const bare = tempDir("n-");
     sh(bare, "init", "-q", "-b", "main");
     session("noremote", bare);
     await collectLocal(origin);
