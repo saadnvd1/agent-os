@@ -33,6 +33,7 @@ export const isPriority = (v: unknown): v is Priority =>
 export type WaitCode =
   | "after"
   | "after_any"
+  | "after_claim"
   | "orch_paused"
   | "window"
   | "load_red"

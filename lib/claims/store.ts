@@ -219,6 +219,15 @@ export function liveClaims(
   return rows.map(fromRow);
 }
 
+// One claim by id while it is alive: not released, not expired. A wait on a
+// claim is over when this is null.
+export function liveClaim(id: string, now = Date.now()): Claim | null {
+  const r = getDb()
+    .prepare(`${SELECT} WHERE id = ? AND released IS NULL AND expires_at > ?`)
+    .get(id, now) as Row | undefined;
+  return r ? fromRow(r) : null;
+}
+
 // Local claims whose session is no longer worth claiming for.
 export function localLiveSessionIds(): string[] {
   return (

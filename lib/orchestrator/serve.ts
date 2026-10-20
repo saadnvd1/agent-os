@@ -175,6 +175,7 @@ export async function runTool(
         machine: a.machine,
         now: a.now,
         nowReason: a.now_reason,
+        ignoreClaims: a.ignore_claims,
         piece: a.piece,
         group: a.group,
       });
