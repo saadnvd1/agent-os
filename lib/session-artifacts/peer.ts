@@ -8,7 +8,12 @@
 import { ARTIFACT_HEADERS } from "../artifacts/serve";
 import { IMAGE_TYPES } from "../artifacts/image-paths";
 import { IMAGE_CSP } from "../artifacts/serve";
-import { cleanRemoteText, hostApi, type HostLink } from "../hosts/remote-api";
+import {
+  cleanRemoteText,
+  hostApi,
+  isConnectLink,
+  type HostLink,
+} from "../hosts/remote-api";
 import type {
   ArtifactKind,
   ArtifactPreview,
@@ -148,6 +153,12 @@ export async function peerContent(
 ): Promise<Content> {
   if (!ID.test(artifactId))
     return { ok: false, status: 404, error: "Not found" };
+  if (isConnectLink(link))
+    return {
+      ok: false,
+      status: 409,
+      error: `${link.hostName} is linked through Connect: artifacts need a Tailscale/ssh link for now`,
+    };
   let res: Response;
   try {
     res = await fetch(

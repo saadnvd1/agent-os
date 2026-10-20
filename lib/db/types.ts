@@ -306,6 +306,8 @@ export interface Host {
   ssh_target: string;
   sort_order: number;
   created_at: string;
+  // 'connect': reached only through Connect (lib/peer), ssh_target is ''.
+  kind?: "ssh" | "connect";
   // Paired with that machine's own AgentOS (lib/hosts/link.ts); 0/1 from SQLite.
   linked?: boolean | number;
 }

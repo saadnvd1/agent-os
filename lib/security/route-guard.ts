@@ -1,6 +1,8 @@
 /**
  * For actions a stolen device token must not be able to take (adding
- * devices, opening up the network): only this machine or the tailnet.
+ * devices, opening up the network): only this machine or the tailnet. A
+ * linked machine's call (`peer`) never passes, even though it arrives on
+ * loopback.
  */
 
 import { NextResponse, type NextRequest } from "next/server";

@@ -3,7 +3,15 @@ import type { IncomingMessage, ServerResponse } from "http";
 import { EventEmitter } from "events";
 import type { Duplex } from "stream";
 import { gateRequest, gateUpgrade, sourceLabel } from "./gate";
-import { TRUST_HEADER, type AuthPolicy } from "./auth";
+import {
+  DEVICE_HEADER,
+  PEER_HEADER,
+  PEER_INTERNAL_HEADER,
+  REMOTE_HEADER,
+  TRUST_HEADER,
+  markTunnelSocket,
+  type AuthPolicy,
+} from "./auth";
 
 const policy: AuthPolicy = { tailnet: ["100.64.0.1"], lookup: () => null };
 
@@ -151,5 +159,221 @@ describe("an unpaired browser opening a session's address", () => {
     expect(page("//evil.example/").headers.Location).toBe("/pair");
     expect(page("/\t/evil.example").headers.Location).toBe("/pair");
     expect(page("/.//evil.example?session=a").headers.Location).toBe("/pair");
+  });
+});
+
+describe("a linked machine's call (peer trust)", () => {
+  const SECRET = "s".repeat(64);
+  const peerPolicy: AuthPolicy = {
+    ...policy,
+    lookup: (t) => (t === "aosd_phone" ? { id: "phone" } : null),
+    peerSecret: () => SECRET,
+  };
+
+  function peerCall(
+    url: string,
+    opts: {
+      method?: string;
+      remote?: string;
+      headers?: Record<string, string>;
+      tunnel?: boolean;
+    } = {}
+  ) {
+    const socket = {
+      remoteAddress: opts.remote ?? "127.0.0.1",
+      localAddress: "127.0.0.1",
+    };
+    if (opts.tunnel) markTunnelSocket(socket);
+    const req = {
+      url,
+      method: opts.method ?? "GET",
+      headers: {
+        host: "127.0.0.1:3011",
+        [PEER_INTERNAL_HEADER]: SECRET,
+        [PEER_HEADER]: "host-b",
+        ...opts.headers,
+      },
+      socket,
+    } as unknown as IncomingMessage;
+    const res = {
+      statusCode: 200,
+      setHeader() {},
+      end() {},
+    } as unknown as ServerResponse;
+    return { allowed: gateRequest(req, res, peerPolicy), req, res };
+  }
+
+  it("stamps peer trust and the synthetic device on an allowlisted route", () => {
+    const { allowed, req } = peerCall("/api/sessions/status");
+    expect(allowed).toBe(true);
+    expect(req.headers[TRUST_HEADER]).toBe("peer");
+    expect(req.headers[DEVICE_HEADER]).toBe("peer:host-b");
+    expect(req.headers[PEER_HEADER]).toBe("host-b");
+    expect(req.headers[REMOTE_HEADER]).toBe("peer");
+  });
+
+  it("never lets a route see the secret", () => {
+    const { req } = peerCall("/api/sessions/status");
+    expect(req.headers[PEER_INTERNAL_HEADER]).toBeUndefined();
+    const refused = peerCall("/api/devices");
+    expect(refused.req.headers[PEER_INTERNAL_HEADER]).toBeUndefined();
+  });
+
+  it("refuses a route outside the allowlist, even with the secret", () => {
+    for (const [method, url] of [
+      ["GET", "/api/devices"],
+      ["POST", "/api/pair/start"],
+      ["POST", "/api/hosts/h/link"],
+      ["GET", "/api/sessions/status?all=1"],
+      ["POST", "/api/sessions/status"],
+    ]) {
+      const { allowed, res, req } = peerCall(url, { method });
+      expect(allowed, url).toBe(false);
+      expect(res.statusCode).toBe(401);
+      expect(req.headers[TRUST_HEADER]).toBeUndefined();
+    }
+  });
+
+  it("refuses a wrong secret outright, never as loopback", () => {
+    for (const bad of ["", "x", "s".repeat(63), "S".repeat(64), `${SECRET}x`]) {
+      const { allowed, req } = peerCall("/api/sessions", {
+        headers: { [PEER_INTERNAL_HEADER]: bad },
+      });
+      expect(allowed).toBe(false);
+      expect(req.headers[TRUST_HEADER]).toBeUndefined();
+    }
+  });
+
+  it("refuses the header even on a path that is otherwise public", () => {
+    const { allowed, res } = peerCall("/api/pair/claim", {
+      method: "POST",
+      headers: { [PEER_INTERNAL_HEADER]: "wrong" },
+    });
+    expect(allowed).toBe(false);
+    expect(res.statusCode).toBe(401);
+  });
+
+  it("refuses the internal header on a tunnel socket, right secret or not", () => {
+    for (const url of ["/api/sessions/status", "/api/pair/claim", "/pair"]) {
+      const { allowed, req } = peerCall(url, { tunnel: true });
+      expect(allowed, url).toBe(false);
+      expect(req.headers[TRUST_HEADER]).toBeUndefined();
+    }
+  });
+
+  it("refuses it from anywhere but loopback, or through a proxy", () => {
+    expect(peerCall("/api/sessions", { remote: "100.64.0.9" }).allowed).toBe(
+      false
+    );
+    expect(peerCall("/api/sessions", { remote: "192.168.1.20" }).allowed).toBe(
+      false
+    );
+    expect(
+      peerCall("/api/sessions", {
+        headers: { "x-forwarded-for": "203.0.113.9" },
+      }).allowed
+    ).toBe(false);
+  });
+
+  it("refuses a host id that isn't plain", () => {
+    for (const host of ["", "a b", "../x", "a".repeat(129)])
+      expect(
+        peerCall("/api/sessions", { headers: { [PEER_HEADER]: host } }).allowed
+      ).toBe(false);
+  });
+
+  it("is never peer without the secret configured", () => {
+    const req = {
+      url: "/api/sessions",
+      method: "GET",
+      headers: {
+        host: "127.0.0.1:3011",
+        [PEER_INTERNAL_HEADER]: SECRET,
+        [PEER_HEADER]: "host-b",
+      },
+      socket: { remoteAddress: "127.0.0.1", localAddress: "127.0.0.1" },
+    } as unknown as IncomingMessage;
+    const res = { statusCode: 200, setHeader() {}, end() {} };
+    expect(gateRequest(req, res as unknown as ServerResponse, policy)).toBe(
+      false
+    );
+  });
+
+  it("drops a peer header sent without the secret", () => {
+    const { allowed, req } = call("/api/sessions", "127.0.0.1", {
+      [PEER_HEADER]: "host-b",
+    });
+    expect(allowed).toBe(true);
+    expect(req.headers[TRUST_HEADER]).toBe("loopback");
+    expect(req.headers[PEER_HEADER]).toBeUndefined();
+  });
+
+  it("never opens a socket for a peer", () => {
+    const req = {
+      url: "/api/sessions/status",
+      method: "GET",
+      headers: {
+        host: "127.0.0.1:3011",
+        [PEER_INTERNAL_HEADER]: SECRET,
+        [PEER_HEADER]: "host-b",
+      },
+      socket: { remoteAddress: "127.0.0.1", localAddress: "127.0.0.1" },
+    } as unknown as IncomingMessage;
+    const written: string[] = [];
+    const socket = Object.assign(new EventEmitter(), {
+      write: (s: string) => written.push(s),
+      destroy() {},
+    }) as unknown as Duplex;
+    expect(gateUpgrade(req, socket, peerPolicy)).toBe(false);
+    expect(written[0]).toContain("401");
+  });
+
+  it("leaves a phone's device token exactly as before", () => {
+    const req = {
+      url: "/api/sessions",
+      method: "GET",
+      headers: {
+        host: "m-0123456789abcdef.runagentos.com",
+        authorization: "Bearer aosd_phone",
+      },
+      socket: { remoteAddress: "127.0.0.1", localAddress: "127.0.0.1" },
+    } as unknown as IncomingMessage;
+    markTunnelSocket(req.socket);
+    const res = { statusCode: 200, setHeader() {}, end() {} };
+    expect(gateRequest(req, res as unknown as ServerResponse, peerPolicy)).toBe(
+      true
+    );
+    expect(req.headers[TRUST_HEADER]).toBe("device");
+    expect(req.headers[DEVICE_HEADER]).toBe("phone");
+  });
+
+  it("still refuses a tunnel request with no envelope or token", () => {
+    const req = {
+      url: "/api/sessions",
+      method: "GET",
+      headers: { host: "m-0123456789abcdef.runagentos.com" },
+      socket: { remoteAddress: "127.0.0.1", localAddress: "127.0.0.1" },
+    } as unknown as IncomingMessage;
+    markTunnelSocket(req.socket);
+    const res = { statusCode: 200, setHeader() {}, end() {} };
+    expect(gateRequest(req, res as unknown as ServerResponse, peerPolicy)).toBe(
+      false
+    );
+    expect(res.statusCode).toBe(401);
+  });
+
+  it("lets the rpc path itself through to its handler without a token", () => {
+    const req = {
+      url: "/api/peer/rpc",
+      method: "POST",
+      headers: { host: "m-0123456789abcdef.runagentos.com" },
+      socket: { remoteAddress: "127.0.0.1", localAddress: "127.0.0.1" },
+    } as unknown as IncomingMessage;
+    markTunnelSocket(req.socket);
+    const res = { statusCode: 200, setHeader() {}, end() {} };
+    expect(gateRequest(req, res as unknown as ServerResponse, peerPolicy)).toBe(
+      true
+    );
+    expect(req.headers[TRUST_HEADER]).toBeUndefined();
   });
 });

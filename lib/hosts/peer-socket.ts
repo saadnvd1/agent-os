@@ -7,7 +7,7 @@
  */
 
 import { WebSocket } from "ws";
-import type { HostLink } from "./remote-api";
+import { requireTokenLink, type HostLink } from "./remote-api";
 
 export const PEER_HANDSHAKE_MS = 10_000;
 // A long chat's (paged) snapshot is one message.
@@ -30,6 +30,8 @@ export function openPeerSocket(
   query: Record<string, string> = {},
   maxPayload = PEER_MAX_PAYLOAD
 ): WebSocket {
+  // A Connect link has no token, and sockets don't ride the envelope yet.
+  requireTokenLink(link);
   return new WebSocket(peerSocketUrl(link, path, query), {
     headers: { Authorization: `Bearer ${link.token}` },
     handshakeTimeout: PEER_HANDSHAKE_MS,

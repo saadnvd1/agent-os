@@ -9,6 +9,10 @@
  *    (which sends no device) is never refused on them.
  *  - plan: open, and a plan another machine placed here is read and approved
  *    by that machine only.
+ *
+ * The caller is the gate's device id. A machine linked through Connect is
+ * `peer:<host id>` (lib/security/gate.ts), with no Can approve: the same
+ * standing a linked machine's device token has.
  */
 
 import { NextRequest, NextResponse } from "next/server";

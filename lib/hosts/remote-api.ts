@@ -4,38 +4,112 @@
  */
 
 import { getDb } from "../db";
+import { PeerCallError, peerCall } from "../peer/client";
+import type { PinState } from "../peer/links";
 import { getHost, isRemoteHost } from "./index";
+import { readCappedBytes } from "./read-capped-bytes";
 
+/** A machine linked through Connect: its pinned keys (lib/peer). */
+export interface ConnectPeer {
+  machineId: string;
+  hostname: string;
+  signPub: string;
+  boxPub: string;
+  state: PinState;
+  suspendedReason: string | null;
+}
+
+/**
+ * `token` (the default): a device token over Tailscale or ssh-reached URLs.
+ * `connect`: signed, encrypted envelopes to the pinned keys; url and token
+ * are unused (token is always empty).
+ */
 export interface HostLink {
   hostId: string;
   hostName: string;
   url: string;
   token: string;
+  transport?: "token" | "connect";
+  connect?: ConnectPeer;
+}
+
+interface LinkRow {
+  host_id: string;
+  name: string;
+  kind: string;
+  url: string | null;
+  token: string | null;
+  machine_id: string | null;
+  hostname: string | null;
+  sign_pub: string | null;
+  box_pub: string | null;
+  state: string | null;
+  suspended_reason: string | null;
 }
 
 export function hostLink(hostId: string | null | undefined): HostLink | null {
   if (!isRemoteHost(hostId)) return null;
   const row = getDb()
     .prepare(
-      `SELECT l.host_id, l.url, l.token, h.name FROM host_links l
-         JOIN hosts h ON h.id = l.host_id WHERE l.host_id = ?`
+      `SELECT h.id AS host_id, h.name, h.kind, l.url, l.token, p.machine_id,
+              p.hostname, p.sign_pub, p.box_pub, p.state, p.suspended_reason
+         FROM hosts h
+         LEFT JOIN host_links l ON l.host_id = h.id
+         LEFT JOIN peer_links p ON p.host_id = h.id
+        WHERE h.id = ?`
     )
-    .get(hostId) as
-    { host_id: string; url: string; token: string; name: string } | undefined;
-  return row
+    .get(hostId) as LinkRow | undefined;
+  if (!row) return null;
+  if (row.kind === "connect") {
+    if (!row.machine_id || !row.hostname || !row.sign_pub || !row.box_pub)
+      return null;
+    return {
+      hostId: row.host_id,
+      hostName: row.name,
+      url: `https://${row.hostname}`,
+      token: "",
+      transport: "connect",
+      connect: {
+        machineId: row.machine_id,
+        hostname: row.hostname,
+        signPub: row.sign_pub,
+        boxPub: row.box_pub,
+        state: row.state === "active" ? "active" : "suspended",
+        suspendedReason: row.suspended_reason,
+      },
+    };
+  }
+  return row.url && row.token
     ? {
         hostId: row.host_id,
         hostName: row.name,
         url: row.url,
         token: row.token,
+        transport: "token",
       }
     : null;
 }
 
+export const isConnectLink = (link: HostLink) => link.transport === "connect";
+
+/** For the calls that only work with a token link (sockets, raw fetches). */
+export function requireTokenLink(link: HostLink): HostLink {
+  if (isConnectLink(link))
+    throw new Error(
+      `${link.hostName} is linked through Connect: this needs a Tailscale/ssh link for now`
+    );
+  return link;
+}
+
 export function linkedHostIds(): Set<string> {
-  const rows = getDb().prepare(`SELECT host_id FROM host_links`).all() as {
-    host_id: string;
-  }[];
+  const rows = getDb()
+    .prepare(
+      `SELECT host_id FROM host_links
+         WHERE host_id NOT IN (SELECT id FROM hosts WHERE kind = 'connect')
+       UNION SELECT p.host_id FROM peer_links p JOIN hosts h ON h.id = p.host_id
+         WHERE h.kind = 'connect'`
+    )
+    .all() as { host_id: string }[];
   return new Set(rows.map((r) => r.host_id));
 }
 
@@ -103,23 +177,7 @@ export async function readCapped(
   res: Response,
   max = MAX_RESPONSE_BYTES
 ): Promise<string> {
-  if (Number(res.headers.get("content-length")) > max)
-    throw new Error("its answer is too large");
-  const reader = res.body?.getReader();
-  if (!reader) return "";
-  const chunks: Uint8Array[] = [];
-  let total = 0;
-  for (;;) {
-    const { done, value } = await reader.read();
-    if (done) break;
-    total += value.byteLength;
-    if (total > max) {
-      await reader.cancel().catch(() => undefined);
-      throw new Error("its answer is too large");
-    }
-    chunks.push(value);
-  }
-  return Buffer.concat(chunks).toString("utf8");
+  return (await readCappedBytes(res, max)).toString("utf8");
 }
 
 /** A JSON call to the other machine's AgentOS; its error text on failure. */
@@ -133,21 +191,34 @@ export async function hostApi<T>(
       `Can't reach AgentOS on ${link.hostName}: ${cleanRemoteText(err instanceof Error ? err.message : err)}`,
       false
     );
-  let res: Response;
+  let status: number;
   let text: string;
   try {
-    res = await fetch(`${link.url}${path}`, {
-      method: opts.method ?? (opts.body === undefined ? "GET" : "POST"),
-      headers: {
-        Authorization: `Bearer ${link.token}`,
-        ...(opts.body !== undefined && { "Content-Type": "application/json" }),
-      },
-      body: opts.body === undefined ? undefined : JSON.stringify(opts.body),
-      signal: AbortSignal.timeout(opts.timeout ?? 15000),
-      redirect: "error",
-    });
-    text = await readCapped(res);
+    if (isConnectLink(link)) {
+      ({ status, text } = await peerCall(link, path, opts));
+    } else {
+      const res = await fetch(`${link.url}${path}`, {
+        method: opts.method ?? (opts.body === undefined ? "GET" : "POST"),
+        headers: {
+          Authorization: `Bearer ${link.token}`,
+          ...(opts.body !== undefined && {
+            "Content-Type": "application/json",
+          }),
+        },
+        body: opts.body === undefined ? undefined : JSON.stringify(opts.body),
+        signal: AbortSignal.timeout(opts.timeout ?? 15000),
+        redirect: "error",
+      });
+      status = res.status;
+      text = await readCapped(res);
+    }
   } catch (err) {
+    if (err instanceof PeerCallError && err.refused)
+      throw new HostApiError(
+        `${link.hostName}: ${cleanRemoteText(err.message)}`,
+        true,
+        err.status
+      );
     throw unknown(err);
   }
   let data: { error?: unknown } | null = null;
@@ -156,13 +227,13 @@ export async function hostApi<T>(
   } catch {
     data = null;
   }
-  if (!res.ok) {
+  if (status < 200 || status > 299) {
     // Only AgentOS's own refusal (a 4xx with its error) means nothing happened.
-    const refused = res.status >= 400 && res.status < 500 && !!data?.error;
+    const refused = status >= 400 && status < 500 && !!data?.error;
     throw new HostApiError(
-      `${link.hostName}: ${cleanRemoteText(data?.error) || `HTTP ${res.status}`}`,
+      `${link.hostName}: ${cleanRemoteText(data?.error) || `HTTP ${status}`}`,
       refused,
-      res.status
+      status
     );
   }
   if (!data) throw unknown(new Error("its answer wasn't JSON"));

@@ -318,3 +318,11 @@
 ## Dependencies
 
 - `npm i -g @saadnvd1/agent-os` users still resolve ranges fresh. Ship an `npm-shrinkwrap.json` made at publish, or point them at the git install.
+
+## Linked machines over Connect
+
+- Scope or expire device tokens used through Connect (a stolen phone token has full access today).
+- Move Tailscale/ssh links onto the signed envelopes and retire the plaintext `host_links.token`.
+- Key rotation for machine and box keys: the old key signs the new ones to each peer.
+- Before S2 creates real pins: audit the ~30 `hostLink()` callers that assume a token link (sweep arming, the terminal's PeerPty and others). They fail safely on a Connect link today, but each needs a Connect path or an explicit refusal.
+- S2 client: a 403 from Connect's `/peers` (machine disabled or over its limit) means "no peers"; don't retry it on every etag change.

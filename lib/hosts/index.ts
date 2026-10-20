@@ -14,6 +14,7 @@ export const LOCAL_HOST: Host = {
   id: LOCAL_HOST_ID,
   name: "This machine",
   ssh_target: "",
+  kind: "ssh",
   sort_order: -1,
   created_at: "",
 };
@@ -25,7 +26,10 @@ export function isRemoteHost(hostId: string | null | undefined): boolean {
 export function listRemoteHosts(): Host[] {
   return getDb()
     .prepare(
-      `SELECT h.*, EXISTS (SELECT 1 FROM host_links l WHERE l.host_id = h.id) AS linked
+      `SELECT h.*, CASE WHEN h.kind = 'connect'
+          THEN EXISTS (SELECT 1 FROM peer_links p WHERE p.host_id = h.id)
+          ELSE EXISTS (SELECT 1 FROM host_links l WHERE l.host_id = h.id)
+        END AS linked
          FROM hosts h ORDER BY sort_order, created_at`
     )
     .all() as Host[];
@@ -54,21 +58,33 @@ export function hostIdNamed(ref: string): string {
   return host.id;
 }
 
-export function createHost(name: string, sshTarget: string): Host {
+function insertHost(
+  name: string,
+  sshTarget: string,
+  kind: "ssh" | "connect"
+): Host {
   if (!name.trim()) throw new Error("Name is required");
-  if (!isValidSshTarget(sshTarget)) {
-    throw new Error("ssh target must look like user@host or an ssh alias");
-  }
   const db = getDb();
   const id = randomUUID();
   const { max } = db
     .prepare(`SELECT COALESCE(MAX(sort_order), 0) AS max FROM hosts`)
     .get() as { max: number };
   db.prepare(
-    `INSERT INTO hosts (id, name, ssh_target, sort_order) VALUES (?, ?, ?, ?)`
-  ).run(id, name.trim(), sshTarget, max + 1);
+    `INSERT INTO hosts (id, name, ssh_target, sort_order, kind) VALUES (?, ?, ?, ?, ?)`
+  ).run(id, name.trim(), sshTarget, max + 1, kind);
   return getHost(id)!;
 }
+
+export function createHost(name: string, sshTarget: string): Host {
+  if (!isValidSshTarget(sshTarget)) {
+    throw new Error("ssh target must look like user@host or an ssh alias");
+  }
+  return insertHost(name, sshTarget, "ssh");
+}
+
+/** A machine reached only through Connect; its keys are pinned separately. */
+export const createConnectHost = (name: string): Host =>
+  insertHost(name, "", "connect");
 
 export function deleteHost(hostId: string): void {
   if (!isRemoteHost(hostId)) throw new Error("Cannot remove this machine");
@@ -83,6 +99,7 @@ export function deleteHost(hostId: string): void {
     throw new Error("Move or delete its projects and sessions first");
   }
   db.prepare(`DELETE FROM host_links WHERE host_id = ?`).run(hostId);
+  db.prepare(`DELETE FROM peer_links WHERE host_id = ?`).run(hostId);
   db.prepare(`DELETE FROM hosts WHERE id = ?`).run(hostId);
 }
 
@@ -90,6 +107,10 @@ export function sshTargetFor(hostId: string | null | undefined): string | null {
   if (!isRemoteHost(hostId)) return null;
   const host = getHost(hostId);
   if (!host) throw new Error(`Unknown host: ${hostId}`);
+  if (host.kind === "connect")
+    throw new Error(
+      `${host.name} is linked through Connect: this needs a Tailscale/ssh link`
+    );
   return host.ssh_target;
 }
 

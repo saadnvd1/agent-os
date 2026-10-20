@@ -14,6 +14,8 @@ import {
   DEVICE_HEADER,
   TRUST_HEADER,
   REMOTE_HEADER,
+  PEER_HEADER,
+  PEER_INTERNAL_HEADER,
   type AuthPolicy,
   type AuthResult,
 } from "./auth";
@@ -22,6 +24,7 @@ import { deviceForToken, touchDevice, trackDeviceSocket } from "./devices";
 import { tailscaleAddresses } from "./net";
 import { networkSetting } from "./network-settings";
 import { pairLocation } from "../session-url";
+import { peerSecret } from "../peer/internal";
 
 // Interface addresses change rarely; don't re-read them on every request.
 let tailnetCache = { at: 0, ips: [] as string[] };
@@ -42,6 +45,7 @@ export function authPolicy(env = process.env): AuthPolicy {
     },
     off: env.AGENTOS_AUTH === "off",
     lookup: deviceForToken,
+    peerSecret,
   };
 }
 
@@ -54,21 +58,36 @@ function decide(req: IncomingMessage, policy: AuthPolicy): AuthResult {
   // Never trust a client-supplied verdict.
   delete req.headers[DEVICE_HEADER];
   delete req.headers[TRUST_HEADER];
+  // A peer's identity only ever comes with the internal secret.
+  if (req.headers[PEER_INTERNAL_HEADER] === undefined)
+    delete req.headers[PEER_HEADER];
   const tunnel = isTunnelSocket(req.socket);
   req.headers[REMOTE_HEADER] = sourceLabel(req.socket.remoteAddress, tunnel);
-  const result = authorize(
-    {
-      url: req.url,
-      headers: req.headers,
-      remoteAddress: req.socket.remoteAddress,
-      localAddress: req.socket.localAddress,
-      tunnel,
-    },
-    policy
-  );
+  let result: AuthResult;
+  try {
+    result = authorize(
+      {
+        url: req.url,
+        method: req.method,
+        headers: req.headers,
+        remoteAddress: req.socket.remoteAddress,
+        localAddress: req.socket.localAddress,
+        tunnel,
+      },
+      policy
+    );
+  } finally {
+    // No route ever sees the secret.
+    delete req.headers[PEER_INTERNAL_HEADER];
+  }
+  delete req.headers[PEER_HEADER];
   if (result.ok) {
     req.headers[TRUST_HEADER] = result.via;
     if (result.deviceId) req.headers[DEVICE_HEADER] = result.deviceId;
+    if (result.peerHost) {
+      req.headers[PEER_HEADER] = result.peerHost;
+      req.headers[REMOTE_HEADER] = "peer";
+    }
   }
   return result;
 }
@@ -81,6 +100,8 @@ function check(req: IncomingMessage, policy: AuthPolicy): AuthResult {
     console.error("access check failed:", err);
     delete req.headers[TRUST_HEADER];
     delete req.headers[DEVICE_HEADER];
+    delete req.headers[PEER_HEADER];
+    delete req.headers[PEER_INTERNAL_HEADER];
     return { ok: false };
   }
 }
@@ -102,6 +123,7 @@ export function gateRequest(
 ): boolean {
   const result = check(req, policy);
   if (result.ok) {
+    if (result.via === "peer") return true;
     // Slide the cookie's expiry forward, at most once a minute per device.
     const cookie = result.deviceId ? cookieToken(req.headers) : null;
     if (result.deviceId && touch(req, result.deviceId) && cookie) {
@@ -114,7 +136,7 @@ export function gateRequest(
     }
     return true;
   }
-  if (isPublicPath(req.url)) return true;
+  if (!result.hard && isPublicPath(req.url)) return true;
   const path = (req.url ?? "/").split("?")[0];
   const wantsPage =
     !path.startsWith("/api/") &&
@@ -139,7 +161,8 @@ export function gateUpgrade(
   policy: AuthPolicy
 ): boolean {
   const result = check(req, policy);
-  if (!result.ok) {
+  // A peer reaches its allowlisted routes and never a socket.
+  if (!result.ok || result.via === "peer") {
     socket.write("HTTP/1.1 401 Unauthorized\r\n\r\n");
     socket.destroy();
     return false;
