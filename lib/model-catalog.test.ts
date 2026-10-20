@@ -46,3 +46,12 @@ describe("modelDisplayName", () => {
     expect(modelDisplayName("gpt-9")).toBe("gpt-9");
   });
 });
+
+describe("discoversModels", () => {
+  it("is true for chat agents without a fixed list only", async () => {
+    const { discoversModels } = await import("./model-catalog");
+    expect(discoversModels("opencode")).toBe(true);
+    expect(discoversModels("claude")).toBe(false);
+    expect(discoversModels("aider")).toBe(false);
+  });
+});

@@ -22,6 +22,12 @@ vi.mock("../chat/runner", () => ({
   },
 }));
 
+const reported = vi.hoisted(() => [{ value: "ollama/qwen3", label: "Qwen 3" }]);
+vi.mock("../chat/discovered-models", () => ({
+  isDiscoveredModel: async (_agent: string, _folder: string, m: string) =>
+    reported.some((r) => r.value === m),
+}));
+
 import { db, insertSessionRow, type Session } from "../db";
 import { createProject } from "../projects";
 import { listQueue } from "../chat/queued";
@@ -87,6 +93,15 @@ describe("launchSession (a draft's first send)", () => {
     expect(queued.text).toBe("What's the tallest mountain?");
     await until(() => sent.length === 1);
     expect(sent[0]).toEqual({ sessionId: session.id, id: queued.id });
+  });
+
+  it("keeps a model OpenCode reports on the first turn, and drops one it doesn't", async () => {
+    const start = (model: string) =>
+      launchSession({ agentType: "opencode", model, prompt: "hi" });
+    expect(row((await start("ollama/qwen3")).session.id).model).toBe(
+      "ollama/qwen3"
+    );
+    expect(row((await start("ollama/nope")).session.id).model).toBe("default");
   });
 
   it("runs a session an orchestrator started on the implementation model, and Saad's on the interactive one", async () => {
