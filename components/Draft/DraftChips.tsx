@@ -98,11 +98,16 @@ export function DraftChips({
   }, [hostGone, onChange]);
 
   const pickProject = (id: string | null) => {
-    const next = newDraft(draft.id, real.find((p) => p.id === id) ?? null, {
-      agentType: draft.agentType,
-      model: draft.model,
-      access: draft.access,
-    });
+    const next = newDraft(
+      draft.id,
+      real.find((p) => p.id === id) ?? null,
+      {
+        agentType: draft.agentType,
+        model: draft.model,
+        access: draft.access,
+      },
+      { workspaceId: draft.workspaceId }
+    );
     onChange({
       ...next,
       openPr: !!id && draft.openPr,

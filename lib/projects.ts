@@ -278,11 +278,12 @@ export function deleteProject(id: string): boolean {
   const project = getProject(id);
   if (!project || project.is_uncategorized) return false;
 
-  // Move all sessions to Uncategorized
-  const sessions = queries.getSessionsByProject(db).all(id) as Session[];
-  for (const session of sessions) {
-    queries.updateSessionProject(db).run("uncategorized", session.id);
-  }
+  // Its sessions go to Uncategorized, staying in the project's workspace.
+  db.prepare(
+    `UPDATE sessions SET project_id = 'uncategorized', updated_at = datetime('now'),
+       workspace_id = CASE WHEN role IS NULL THEN ? ELSE workspace_id END
+     WHERE project_id = ?`
+  ).run(project.workspace_id ?? null, id);
 
   // Delete dev server instances
   queries.deleteDevServersByProject(db).run(id);
@@ -312,7 +313,27 @@ export function moveSessionToProject(
   sessionId: string,
   projectId: string
 ): void {
-  queries.updateSessionProject(db).run(projectId, sessionId);
+  const to = getProject(projectId);
+  const from = db
+    .prepare(
+      `SELECT p.workspace_id AS workspace_id, s.workspace_id AS own
+       FROM sessions s LEFT JOIN projects p ON p.id = s.project_id WHERE s.id = ?`
+    )
+    .get(sessionId) as
+    { workspace_id: string | null; own: string | null } | undefined;
+  db.transaction(() => {
+    queries.updateSessionProject(db).run(projectId, sessionId);
+    // A project's session follows the project; one left in none keeps the
+    // workspace it was in.
+    db.prepare(
+      `UPDATE sessions SET workspace_id = ? WHERE id = ? AND role IS NULL`
+    ).run(
+      to && !to.is_uncategorized
+        ? null
+        : (from?.workspace_id ?? from?.own ?? null),
+      sessionId
+    );
+  })();
 }
 
 /**

@@ -12,6 +12,7 @@ import { discoversModels } from "@/lib/model-catalog";
 import { useDiscoveredModels } from "@/data/agents";
 import { useHostsQuery } from "@/data/hosts";
 import { useGitCheck } from "@/data/git/queries";
+import { useSelectedWorkspace } from "@/hooks/useSelectedWorkspace";
 import { useLaunchSession } from "@/data/sessions";
 import { useCreateTask } from "@/data/tasks";
 import { usePanes } from "@/contexts/PaneContext";
@@ -50,6 +51,7 @@ export function DraftPanel({
     discovers
   );
   const launch = useLaunchSession();
+  const { workspace } = useSelectedWorkspace();
   const createTask = useCreateTask();
   const [prefill, setPrefill] = useState<{ text: string; at: number }>();
   const pending = launch.isPending || createTask.isPending;
@@ -93,6 +95,7 @@ export function DraftPanel({
       }
       const { session, initialPrompt, repeat } = await launch.mutateAsync({
         projectId: project?.id ?? null,
+        workspaceId: draft.workspaceId ?? workspace?.id ?? null,
         id: draft.id,
         hostId:
           !project || draft.hostId !== project.host_id

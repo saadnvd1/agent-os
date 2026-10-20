@@ -316,6 +316,27 @@ describe("inWorkspace", () => {
     expect(inWorkspace(orch, workspaceOf, "w1")).toBe(true);
     expect(inWorkspace(orch, workspaceOf, "w2")).toBe(false);
   });
+  it("files a session in no project under the workspace it was started in", () => {
+    const scratch = (workspace_id: string | null) =>
+      session("s", { project_id: "uncategorized", workspace_id });
+    expect(inWorkspace(scratch("w9"), workspaceOf, "w9")).toBe(true);
+    expect(inWorkspace(scratch("w9"), workspaceOf, "w1")).toBe(false);
+    expect(inWorkspace(scratch("w9"), workspaceOf, null)).toBe(true);
+    // Older ones recorded none: shown under All only.
+    expect(inWorkspace(scratch(null), workspaceOf, "w9")).toBe(false);
+    expect(
+      inWorkspace(
+        session("m", { project_id: null, workspace_id: "w9" }),
+        workspaceOf,
+        "w9"
+      )
+    ).toBe(true);
+  });
+  it("lets a project win over the session's own workspace", () => {
+    const moved = session("a", { workspace_id: "w9" });
+    expect(inWorkspace(moved, workspaceOf, "w1")).toBe(true);
+    expect(inWorkspace(moved, workspaceOf, "w9")).toBe(false);
+  });
 });
 
 describe("sameRow", () => {

@@ -1,6 +1,10 @@
 import { describe, it, expect } from "vitest";
-import { db } from "@/lib/db";
-import { createProject } from "@/lib/projects";
+import { db, insertSessionRow } from "@/lib/db";
+import {
+  createProject,
+  deleteProject,
+  moveSessionToProject,
+} from "@/lib/projects";
 import {
   createWorkspace,
   deleteWorkspace,
@@ -64,6 +68,62 @@ describe("workspaces", () => {
     deleteWorkspace(w.id);
     expect(workspaceOf(project.id)).toBeNull();
     expect(listWorkspaces().some((x) => x.id === w.id)).toBe(false);
+  });
+
+  it("sends sessions filed in a deleted workspace back to All, keeping the orchestrator's removal", () => {
+    const w = createWorkspace("Gone");
+    const keep = createWorkspace("Stays");
+    const put = (id: string, role: string | null, ws: string) =>
+      insertSessionRow(db, {
+        id,
+        name: id,
+        tmux_name: id,
+        role,
+        workspace_id: ws,
+      });
+    put("scratch-in-gone", null, w.id);
+    put("scratch-in-kept", null, keep.id);
+    put("orch-of-gone", "orchestrator", w.id);
+    deleteWorkspace(w.id);
+    const ws = (id: string) =>
+      db.prepare(`SELECT workspace_id FROM sessions WHERE id = ?`).get(id) as
+        { workspace_id: string | null } | undefined;
+    expect(ws("scratch-in-gone")?.workspace_id).toBeNull();
+    expect(ws("scratch-in-kept")?.workspace_id).toBe(keep.id);
+    expect(ws("orch-of-gone")).toBeUndefined();
+  });
+
+  it("keeps a session's workspace consistent as it moves between projects", () => {
+    const w = createWorkspace("Home");
+    const project = createProject({ name: "mv", workingDirectory: "/tmp" });
+    setProjectWorkspace(project.id, w.id);
+    const own = (id: string) =>
+      (
+        db
+          .prepare(`SELECT workspace_id FROM sessions WHERE id = ?`)
+          .get(id) as {
+          workspace_id: string | null;
+        }
+      ).workspace_id;
+    const put = (id: string, projectId: string, ws: string | null) =>
+      insertSessionRow(db, {
+        id,
+        name: id,
+        tmux_name: id,
+        project_id: projectId,
+        workspace_id: ws,
+      });
+    // Scratch -> a project: it follows the project.
+    put("s1", "uncategorized", w.id);
+    moveSessionToProject("s1", project.id);
+    expect(own("s1")).toBeNull();
+    // Project -> Uncategorized: it stays where the project was.
+    moveSessionToProject("s1", "uncategorized");
+    expect(own("s1")).toBe(w.id);
+    // Deleting a project leaves its sessions in its workspace.
+    put("s2", project.id, null);
+    deleteProject(project.id);
+    expect(own("s2")).toBe(w.id);
   });
 
   it("refuses an unknown workspace", () => {

@@ -13,6 +13,8 @@ export interface Draft {
   id: string;
   // null: a scratch chat, in no project.
   projectId: string | null;
+  // The workspace selected when it was made: where a scratch chat is filed.
+  workspaceId?: string | null;
   hostId: string;
   agentType: AgentType;
   model: string;
@@ -55,13 +57,14 @@ export function newDraft(
   id: string,
   project: DraftProject | null,
   carry: Carry,
-  opts: { openPr?: boolean; now?: number } = {}
+  opts: { openPr?: boolean; now?: number; workspaceId?: string | null } = {}
 ): Draft {
   const real = project && !project.is_uncategorized ? project : null;
   const agentType = real?.agent_type ?? carry.agentType ?? "claude";
   return {
     id,
     projectId: real?.id ?? null,
+    workspaceId: real ? null : (opts.workspaceId ?? null),
     hostId: real?.host_id || "local",
     agentType,
     model: resolveModelForAgent(
@@ -82,11 +85,18 @@ export function reusableDraft(
   drafts: Draft[],
   projectId: string | null,
   hasText: (draftId: string) => boolean,
-  openPr = false
+  openPr = false,
+  workspaceId: string | null = null
 ): Draft | null {
+  // An empty scratch chat from another workspace would file this one's
+  // session there.
   return (
     drafts.find(
-      (d) => d.projectId === projectId && d.openPr === openPr && !hasText(d.id)
+      (d) =>
+        d.projectId === projectId &&
+        d.openPr === openPr &&
+        (projectId !== null || (d.workspaceId ?? null) === workspaceId) &&
+        !hasText(d.id)
     ) ?? null
   );
 }

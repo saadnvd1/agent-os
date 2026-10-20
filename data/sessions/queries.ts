@@ -182,6 +182,8 @@ export interface LaunchSessionInput {
   // The draft's id: the session's, and a resend's key to the same one.
   id: string;
   projectId: string | null;
+  // The workspace selected: where a session in no project is filed.
+  workspaceId?: string | null;
   // A scratch chat's machine; a project's sessions run where it lives, or
   // on a linked machine.
   hostId?: string;
