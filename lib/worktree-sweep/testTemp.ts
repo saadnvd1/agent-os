@@ -37,6 +37,7 @@ export const TEST_TEMP_PREFIXES: readonly string[] = [
   "aos-kind-",
   "aos-launch-plain-",
   "aos-launch-repo-",
+  "aos-machine-",
   "aos-limits-",
   "aos-mcp-",
   "aos-merge-policy-",

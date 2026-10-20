@@ -138,6 +138,10 @@ jobs:
     timeout-minutes: 45
     steps:
       - uses: actions/checkout@v7
+      # The runner image ships nvm without .nvmrc's version and a different node.
+      - uses: actions/setup-node@v7
+        with:
+          node-version: 22
       - name: Install
         run: scripts/agent-os install --local
       - name: Start, node-pty, cloudflared arm64, linked-machine path

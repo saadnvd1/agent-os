@@ -13,7 +13,12 @@ source scripts/lib/pnpm.sh
 if [ -s "$HOME/.nvm/nvm.sh" ]; then
   # shellcheck disable=SC1091
   source "$HOME/.nvm/nvm.sh" >/dev/null
-  nvm use >/dev/null
+  # A box with nvm but without .nvmrc's version (a CI runner) keeps the node on PATH.
+  nvm use >/dev/null 2>&1 || true
+fi
+if [ "$(node -p 'process.versions.node.split(".")[0]')" -lt 22 ]; then
+  echo "Node 22 or newer is required (found $(node -v)); run: nvm install" >&2
+  exit 1
 fi
 use_pnpm
 
