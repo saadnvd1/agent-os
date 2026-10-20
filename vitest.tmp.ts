@@ -7,32 +7,17 @@ import {
   rmSync,
 } from "node:fs";
 import { join } from "node:path";
+import {
+  LEGACY_TEST_TEMP_PREFIXES,
+  RUN_PREFIX,
+} from "./lib/worktree-sweep/testTemp";
 
 // Where the suite's temp dirs live. Kept short: a Unix socket path is capped
 // at 104 bytes on macOS and its $TMPDIR is already about 50 of them.
-export const RUN_PREFIX = "aos-t-";
+export { RUN_PREFIX };
 export const FILE_PREFIX = "f-";
 
-// Names only the test suite creates, left behind by runs from before every
-// test got its own root. The sweep may remove these. Names that server code
-// also creates (agentos-db-, agentos-img-...) are not here: a live server
-// could own them.
-export const LEGACY_PREFIXES = [
-  "agent-os-test-",
-  "agent-os-home-",
-  "agent-os-limits-",
-  "agent-os-git-",
-  "agent-os-session-logs-",
-  "agent-os-kept-",
-  "aos-done-repo-",
-  "aos-orch-repo-",
-  "aos-armed-repo-",
-  "aos-orch-ext-repo-",
-  "aos-orch-external-",
-  "aos-quick-repo-",
-  "aos-config-",
-  "agentos-link-",
-];
+export const LEGACY_PREFIXES = LEGACY_TEST_TEMP_PREFIXES;
 
 const DAY_MS = 24 * 60 * 60 * 1000;
 
