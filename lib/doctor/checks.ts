@@ -5,7 +5,11 @@
  */
 
 import { execFile } from "child_process";
+import fs from "fs";
+import os from "os";
+import path from "path";
 import { promisify } from "util";
+import { agentOsHome, liveCheckout } from "../dev-instance/liveServer";
 import { probeAgents, type AgentProbe } from "../agents/probe";
 import { getAllProviderDefinitions } from "../providers/registry";
 
@@ -37,12 +41,14 @@ export interface DoctorDeps {
   exec: ExecFn;
   probe: (fresh: boolean) => Promise<Record<string, AgentProbe>>;
   nodeVersion: string;
+  cliLinks: () => DoctorCheck | null;
 }
 
 const defaultDeps: DoctorDeps = {
   exec: promisify(execFile) as ExecFn,
   probe: probeAgents,
   nodeVersion: process.versions.node,
+  cliLinks: () => checkCliLinks(),
 };
 
 const INSTALL = {
@@ -190,6 +196,62 @@ export function checkAgents(probes: Record<string, AgentProbe>): DoctorCheck {
   };
 }
 
+const CLI_LINKS: Array<[string, string]> = [
+  ["agent-os", "scripts/agent-os"],
+  ["aos", "bin/aos"],
+];
+
+const real = (p: string) => {
+  try {
+    return fs.realpathSync(p);
+  } catch {
+    return null;
+  }
+};
+
+/**
+ * Do the CLI links in ~/.local/bin run the checkout the live server runs from?
+ * A link into an older clone runs an old `aos`. Null when there is no live
+ * server record or no link to judge.
+ */
+export function checkCliLinks(
+  binDir = process.env.AOS_BIN_DIR || path.join(os.homedir(), ".local/bin"),
+  home = agentOsHome()
+): DoctorCheck | null {
+  const live = liveCheckout(home);
+  if (!live) return null;
+  const stale: string[] = [];
+  let seen = 0;
+  for (const [name, rel] of CLI_LINKS) {
+    const link = path.join(binDir, name);
+    let target: string;
+    try {
+      target = fs.readlinkSync(link);
+    } catch {
+      continue;
+    }
+    seen++;
+    const want = real(path.join(live, rel));
+    if (!want || real(path.resolve(binDir, target)) !== want)
+      stale.push(`${name} -> ${target}`);
+  }
+  if (seen === 0) return null;
+  if (stale.length === 0)
+    return {
+      id: "cli-links",
+      label: "CLI links",
+      status: "ok",
+      detail: `Point at ${live}`,
+    };
+  return {
+    id: "cli-links",
+    label: "CLI links",
+    status: "warn",
+    detail: `${stale.join(", ")}; the live server runs from ${live}`,
+    fix: `${live}/scripts/sync-cli-links`,
+  };
+}
+
 let cache: { at: number; checks: Promise<DoctorCheck[]> } | null = null;
 
 /** Every check, in parallel, cached for a minute. `fresh` runs them again. */
@@ -214,7 +276,8 @@ export function runDoctor(
         detail: "Couldn't check the agent CLIs",
         fix: "Check again",
       })),
-  ]);
+    Promise.resolve(d.cliLinks()),
+  ]).then((all) => all.filter((c): c is DoctorCheck => c !== null));
   if (!custom) cache = { at: Date.now(), checks };
   return checks;
 }

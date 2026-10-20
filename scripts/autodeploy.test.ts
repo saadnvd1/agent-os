@@ -21,6 +21,12 @@ function setup() {
   sh(root, "clone", "-q", origin, work);
   fs.mkdirSync(path.join(work, "scripts"));
   fs.copyFileSync(script, path.join(work, "scripts/autodeploy"));
+  fs.mkdirSync(path.join(work, "scripts/lib"));
+  for (const f of ["sync-cli-links", "lib/cli-links.sh"])
+    fs.copyFileSync(path.join(__dirname, f), path.join(work, "scripts", f));
+  fs.chmodSync(path.join(work, "scripts/sync-cli-links"), 0o755);
+  fs.mkdirSync(path.join(work, "bin"));
+  fs.writeFileSync(path.join(work, "bin/aos"), "");
   fs.writeFileSync(path.join(work, "scripts/wait-quiet"), "#!/bin/sh\n");
   fs.writeFileSync(
     path.join(work, "scripts/redeploy"),
@@ -49,6 +55,8 @@ function setup() {
         AGENTOS_PUBLISH: "0",
         AGENTOS_SETTLE: "0",
         AGENTOS_RESTART: "true",
+        AOS_BIN_DIR: path.join(root, "linkbin"),
+        AGENT_OS_HOME: path.join(home, ".agent-os"),
       },
     });
   const restarts = () => {
@@ -63,7 +71,7 @@ function setup() {
   };
   const deployed = () =>
     fs.readFileSync(path.join(state, "deployed"), "utf-8").trim();
-  return { commit, run, restarts, deployed, state };
+  return { root, clone, commit, run, restarts, deployed, state };
 }
 
 describe("autodeploy restart gap", () => {
@@ -102,5 +110,27 @@ describe("autodeploy restart gap", () => {
     expect(t.run()).toContain("[deploy-now]");
     expect(t.deployed()).toBe(urgent);
     expect(t.restarts()).toBe(2);
+  });
+});
+
+describe("autodeploy CLI links", () => {
+  it("repoints a link into another clone at the live checkout after a deploy", () => {
+    const t = setup();
+    const stale = path.join(t.root, "old/bin/aos");
+    fs.mkdirSync(path.dirname(stale), { recursive: true });
+    fs.writeFileSync(stale, "");
+    const linkbin = path.join(t.root, "linkbin");
+    fs.mkdirSync(linkbin);
+    fs.symlinkSync(stale, path.join(linkbin, "aos"));
+    fs.mkdirSync(path.join(t.root, "home/.agent-os"), { recursive: true });
+    fs.writeFileSync(
+      path.join(t.root, "home/.agent-os/live-server.json"),
+      JSON.stringify({ cwd: t.clone })
+    );
+    t.commit("a");
+    expect(t.run()).toContain("repointed");
+    expect(fs.readlinkSync(path.join(linkbin, "aos"))).toBe(
+      path.join(t.clone, "bin/aos")
+    );
   });
 });

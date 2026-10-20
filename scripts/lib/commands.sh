@@ -56,6 +56,7 @@ cmd_install() {
 
     mkdir -p "$bin_dir"
     ln -sf "$REPO_DIR/scripts/agent-os" "$bin_dir/agent-os"
+    "$REPO_DIR/scripts/sync-cli-links" create
 
     # Check if ~/.local/bin is in PATH
     if [[ ":$PATH:" != *":$bin_dir:"* ]]; then
@@ -303,6 +304,8 @@ cmd_update() {
 
         log_success "Update complete!"
     fi
+
+    scripts/sync-cli-links || log_warn "Could not sync the CLI links"
 
     if [[ "$was_running" == true ]]; then
         cmd_start
