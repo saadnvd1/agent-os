@@ -220,6 +220,16 @@ describe("demo gate: allowed", () => {
     expect(allows("POST", "/api/workspaces/w1/orchestrator")).toBe(false);
   });
 
+  it("refuses every session-group write, reordering included", () => {
+    expect(allows("POST", "/api/session-groups")).toBe(false);
+    expect(allows("POST", "/api/session-groups/order")).toBe(false);
+    expect(allows("PATCH", "/api/session-groups/g1")).toBe(false);
+    expect(allows("DELETE", "/api/session-groups/g1")).toBe(false);
+    expect(allows("POST", "/api/session-groups/g1/restore")).toBe(false);
+    expect(allows("POST", "/api/sessions/group")).toBe(false);
+    expect(allows("PUT", "/api/sessions/s1/group")).toBe(false);
+  });
+
   it("pages and their assets", () => {
     expect(allows("GET", "/")).toBe(true);
     expect(allows("GET", "/_next/static/chunks/main.js")).toBe(true);
