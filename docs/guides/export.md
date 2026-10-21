@@ -1,3 +1,9 @@
+---
+title: Export
+description: Export a whole chat or a range of turns as Markdown, JSON or HTML for another AI to read, compact or full, with secrets masked.
+order: 10
+---
+
 # Export a session for AI
 
 **Export for AI…** turns a chat into a file you can paste or upload into another model. It is in the pane's ⋯ menu, a session's row menu, the phone's session menu, and on each of your messages (**Export from here**). Nothing leaves your machine: the server builds the file and your browser saves, copies or shares it.
