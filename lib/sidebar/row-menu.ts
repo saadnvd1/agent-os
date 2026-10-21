@@ -16,6 +16,7 @@ export type RowMenuItem =
   | "open-recipe"
   | "copy-link"
   | "share"
+  | "export"
   | "fork"
   | "fresh-start"
   | "new-conversation"
@@ -121,7 +122,11 @@ export function rowMenu(input: RowMenuInput): RowMenuPlan {
       input.hasCard && "card",
       input.recipeRun && "open-recipe",
     ]),
-    ...group("share", ["copy-link", s.view === "chat" && "share"]),
+    ...group("share", [
+      "copy-link",
+      s.view === "chat" && "share",
+      s.view === "chat" && "export",
+    ]),
     ...group("restart", [
       s.agent_type === "claude" && agentRow && live && "fork",
       agentRow && live && "fresh-start",

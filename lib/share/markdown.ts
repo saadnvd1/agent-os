@@ -83,13 +83,13 @@ export function htmlToMarkdown(html: string, demote = 0): string {
 }
 
 /** A fenced block whose fence is longer than any backtick run inside. */
-function fenced(text: string): string {
+export function fenced(text: string, lang = ""): string {
   const longest = Math.max(
     2,
     ...(text.match(/`+/g) ?? []).map((m) => m.length)
   );
   const fence = "`".repeat(longest + 1);
-  return `${fence}\n${text}\n${fence}`;
+  return `${fence}${lang}\n${text}\n${fence}`;
 }
 
 function itemToMarkdown(item: SnapshotItem): string {

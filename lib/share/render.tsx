@@ -60,7 +60,7 @@ const components: Components = {
   img: ({ alt }) => <span>[image{alt ? `: ${alt}` : ""}]</span>,
 };
 
-function Markdown({ text }: { text: string }) {
+export function Markdown({ text }: { text: string }) {
   return (
     <ReactMarkdown remarkPlugins={[remarkGfm]} components={components}>
       {text}
