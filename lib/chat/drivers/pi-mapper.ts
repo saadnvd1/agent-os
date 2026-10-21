@@ -2,6 +2,7 @@ import { randomUUID } from "crypto";
 import type { DriverEvent, UsageTotals } from "../events";
 import { toolDiff, toolTitle } from "../tools";
 import { TurnItems, type ToolStart } from "./turn-items";
+import { logTurnEnd, turnOutcome } from "./turn-outcome";
 
 type P = Record<string, unknown>;
 const str = (v: unknown) => (typeof v === "string" ? v : "");
@@ -50,6 +51,9 @@ export class PiMapper {
   private message = 0;
   private stopReason = "";
   private error = "";
+  // The last answer's text, its tool calls and who gave it, for the notice
+  // when a turn ends without doing anything.
+  private last = { text: "", calls: 0, provider: "", model: "", api: "" };
   totals: UsageTotals = {
     costUsd: 0,
     inputTokens: 0,
@@ -71,6 +75,7 @@ export class PiMapper {
     switch (e.type) {
       case "agent_start":
         this.stopReason = this.error = "";
+        this.last = { text: "", calls: 0, provider: "", model: "", api: "" };
         return this.items.startTurn();
       case "message_start":
         if ((e.message as P)?.role === "assistant") this.message++;
@@ -136,6 +141,22 @@ export class PiMapper {
     this.stopReason = str(m.stopReason);
     if (this.stopReason === "error")
       this.error = str(m.errorMessage) || "Pi failed";
+    const content = Array.isArray(m.content) ? (m.content as P[]) : [];
+    this.last = {
+      text: content
+        .filter((c) => c.type === "text")
+        .map((c) => str(c.text))
+        .join("\n"),
+      calls: content.filter((c) => c.type === "toolCall").length,
+      provider: str(m.provider),
+      model: str(m.model),
+      api: str(m.api),
+    };
+    // Calls the text-tools extension made out of the reply's markup: the
+    // text that streamed still has it.
+    const fixed = m.aosRecovered as P | undefined;
+    if (fixed)
+      this.items.retext(`${this.message}:${fixed.index}`, str(fixed.text));
     const u = (m.usage ?? {}) as P;
     const n = (k: string) => Number(u[k]) || 0;
     this.totals = {
@@ -151,9 +172,26 @@ export class PiMapper {
   endTurn(): void {
     if (!this.items.inTurn) return;
     this.emit({ type: "usage", totals: { ...this.totals } });
+    const ended = this.aborted
+      ? undefined
+      : turnOutcome({
+          finishReason: this.stopReason,
+          text: this.last.text,
+          toolCalls: this.last.calls,
+          error: this.error || undefined,
+        });
+    if (ended)
+      logTurnEnd({
+        driver: "pi",
+        ...this.last,
+        finishReason: this.stopReason,
+        reason: ended.reason,
+      });
     this.items.endTurn({
       interrupted: this.aborted,
       error: this.error || undefined,
+      finishReason: this.stopReason || undefined,
+      ended,
     });
   }
 }

@@ -13,7 +13,7 @@ import { peerStatus } from "../hosts/peer-sessions";
 import { chatCompacting, chatState } from "../chat/runner";
 import { chatActivityLine, chatStall, type Stall } from "../chat/activity";
 import { lastUserTask } from "../chat/store";
-import { needsYou } from "../needs-you";
+import { latestChatItem, needsYou } from "../needs-you";
 import { programSummary } from "../program-status/store";
 import { sessionRowInfo } from "../session-meta";
 import { taskView, type TaskPR, type TaskState } from "../tasks";
@@ -170,9 +170,14 @@ export async function statusOf(s: Session): Promise<{
     const state = chatState(s.id);
     const status: FactStatus =
       state === "running" ? "running" : needsYou(s, state) ? "waiting" : "idle";
+    const latest = status === "running" ? null : latestChatItem(s.id);
+    const early =
+      latest?.kind === "turn_end" && !latest.interrupted ? latest.ended : null;
     return {
       status,
-      activity: chatActivityLine(s.id) ?? lastUserTask(s.id),
+      activity: early
+        ? `ended its turn early (${early.reason}): the task is not finished`
+        : (chatActivityLine(s.id) ?? lastUserTask(s.id)),
       needsInput: state === "waiting",
     };
   }

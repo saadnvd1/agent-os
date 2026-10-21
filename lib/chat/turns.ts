@@ -107,6 +107,7 @@ export function eventTurnAt(
     (i) =>
       i.kind === "plan" ||
       i.kind === "error" ||
+      (i.kind === "turn_end" && !!i.ended) ||
       isQuestionTool(i) ||
       isAskTool(i) ||
       (i.kind === "approval" && i.status === "pending")

@@ -102,7 +102,11 @@ function lineOf(i: ChatItem): string | null {
     case "compacted":
       return "[conversation compacted]";
     case "turn_end":
-      return i.interrupted ? "[turn stopped]" : null;
+      return i.interrupted
+        ? "[turn stopped]"
+        : i.ended
+          ? `[turn ended early: ${i.ended.reason}]`
+          : null;
     default:
       return null;
   }

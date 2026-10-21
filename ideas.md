@@ -340,3 +340,4 @@
 - A PC with no AgentOS at all needs a claims-only token; a git-ref fallback could reach it.
 - Connect could serve as a directory so an account's machines find each other to link; never as the store (its privacy page promises it sees no files).
 - Per-project `claims.share: false` in `.agent-os.json`.
+- Text tool-call recovery for OpenCode (it has no hook to rewrite a reply; a small local proxy could do it).

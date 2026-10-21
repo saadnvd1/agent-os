@@ -13,7 +13,7 @@ paste or drag them in) and a Stop button, all readable on a phone. Chat drives t
 agent as the terminal, with your own logins: Claude Code through the Agent
 SDK, Codex through `codex app-server`, OpenCode through its own `opencode
 serve` (loopback only, behind a per-conversation password) and Pi through its
-RPC mode. Pi never asks before a tool, so AgentOS loads a small Pi extension
+RPC mode (models you host yourself: see [Local models](local-models.md)). Pi never asks before a tool, so AgentOS loads a small Pi extension
 that asks the chat as the access setting says. GitHub Copilot runs through
 `copilot --acp` (the Agent Client Protocol): its permission prompts become
 approval cards under the same access setting, and a conversation resumes with

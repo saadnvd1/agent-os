@@ -150,6 +150,9 @@ interface Base {
   createdAt: number;
 }
 
+export type TurnEndReason =
+  "no_tool_call" | "length" | "parse_failure" | "empty" | "error";
+
 export type ChatItem =
   | (Base & {
       kind: "user";
@@ -205,6 +208,11 @@ export type ChatItem =
       durationMs?: number;
       costUsd?: number;
       interrupted?: boolean;
+      // The model's last finish reason, as its agent reported it.
+      finishReason?: string;
+      // Set when the turn stopped short of finished work: the reader sees
+      // why instead of a plain "Done".
+      ended?: { reason: TurnEndReason; notice: string };
     })
   | (Base & { kind: "command_output"; text: string })
   // The conversation's MCP servers, as /mcp reports them.

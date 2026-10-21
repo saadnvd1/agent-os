@@ -74,11 +74,14 @@ function ensureDir(): void {
   fs.chmodSync(DIR, 0o700);
 }
 
-export function writeExtension(): string {
+export function writeExtension(
+  name = "agentos-approvals.mjs",
+  source = EXTENSION
+): string {
   ensureDir();
-  const file = path.join(DIR, "agentos-approvals.mjs");
-  if (!fs.existsSync(file) || fs.readFileSync(file, "utf8") !== EXTENSION)
-    fs.writeFileSync(file, EXTENSION);
+  const file = path.join(DIR, name);
+  if (!fs.existsSync(file) || fs.readFileSync(file, "utf8") !== source)
+    fs.writeFileSync(file, source);
   return file;
 }
 

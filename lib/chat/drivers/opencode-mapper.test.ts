@@ -1,6 +1,6 @@
 import { readFileSync } from "node:fs";
 import { join } from "node:path";
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 import type { ChatItem, DriverEvent } from "../events";
 import { OpenCodeMapper } from "./opencode-mapper";
 import { openCodeRules, permissionCard } from "./opencode-rules";
@@ -207,5 +207,51 @@ describe("opencode arguments", () => {
         url: "data:image/png;base64,QQ==",
       },
     ]);
+  });
+});
+
+describe("OpenCodeMapper turns that end early", () => {
+  it("flags a message that finished for length, and logs it", () => {
+    const warn = vi.spyOn(console, "warn").mockImplementation(() => {});
+    const out: DriverEvent[] = [];
+    const mapper = new OpenCodeMapper(
+      () => "s1",
+      (e) => out.push(e)
+    );
+    mapper.prompted();
+    const e = (type: string, properties: Record<string, unknown>) =>
+      mapper.map({ type, properties: { sessionID: "s1", ...properties } });
+    e("session.status", { status: { type: "busy" } });
+    e("message.updated", {
+      info: {
+        id: "m1",
+        role: "assistant",
+        finish: "length",
+        providerID: "stub",
+        modelID: "qwen",
+      },
+    });
+    e("message.part.updated", {
+      part: { id: "p1", messageID: "m1", type: "text", text: "The plan is to" },
+    });
+    e("session.status", { status: { type: "idle" } });
+    const end = out.find(
+      (x) => x.type === "item" && x.item.kind === "turn_end"
+    );
+    expect(end).toMatchObject({
+      item: { finishReason: "length", ended: { reason: "length" } },
+    });
+    expect(JSON.parse(warn.mock.calls[0][1] as string)).toMatchObject({
+      driver: "opencode",
+      provider: "stub",
+      reason: "length",
+    });
+    warn.mockRestore();
+  });
+
+  it("leaves the recorded turns without a notice", () => {
+    for (const name of ["text", "tool"])
+      for (const i of replay(name).items)
+        if (i.kind === "turn_end") expect(i.ended).toBeUndefined();
   });
 });
