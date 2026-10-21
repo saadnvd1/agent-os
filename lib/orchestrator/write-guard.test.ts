@@ -367,6 +367,38 @@ describe("an orchestrator's writes", () => {
     );
   });
 
+  it("falls back to a recent good answer when git can't be read, but not an old one", async () => {
+    const { hooksPaths } = await import("./write-guard");
+    const repo = at("dev/fallback");
+    const hooks = path.join(repo, ".git", "hooks");
+    fs.mkdirSync(repo, { recursive: true });
+    execFileSync("git", ["init", "-q", repo]);
+    const warn = vi.spyOn(console, "warn").mockImplementation(() => {});
+    vi.useFakeTimers({ toFake: ["Date"] });
+    try {
+      const good = await hooksPaths([repo]);
+      expect(good).toContain(fs.realpathSync(hooks));
+      // Break the read: git can't run in a file.
+      fs.rmSync(repo, { recursive: true });
+      fs.writeFileSync(repo, "");
+      // Past the 60 s cache, inside ten minutes: the last answer, warned.
+      vi.advanceTimersByTime(2 * 60_000);
+      expect(await hooksPaths([repo])).toEqual(good);
+      expect(warn).toHaveBeenCalledTimes(1);
+      // The fallback didn't extend the cache: git is tried again.
+      expect(await hooksPaths([repo])).toEqual(good);
+      expect(warn).toHaveBeenCalledTimes(2);
+      // Too old: refused.
+      vi.advanceTimersByTime(9 * 60_000);
+      await expect(hooksPaths([repo])).rejects.toThrow(
+        /couldn't read git's hooks folder/
+      );
+    } finally {
+      vi.useRealTimers();
+      warn.mockRestore();
+    }
+  });
+
   it("runs as a PreToolUse hook on every tool call", async () => {
     const guard = vi.fn(async () => "no");
     const approvals = () =>
