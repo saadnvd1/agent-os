@@ -27,6 +27,7 @@ export const REKEYED = [
   ["check_runs", "session_id", "id"],
   ["away_actions", "subject", "task"],
   ["task_queue", "after_task", "id"],
+  ["task_loops", "session_id", "id"],
 ] as const;
 
 // Session-keyed columns that stay on the old id, and why.

@@ -97,6 +97,9 @@ describe("carryTaskState", () => {
     db.prepare(
       `INSERT INTO task_queue (id, project_id, prompt, position, after_task) VALUES (?, 'p', 'q', 1, ?)`
     ).run(randomUUID(), from);
+    db.prepare(
+      `INSERT INTO task_loops (id, session_id, workspace_id, max_cycles, max_cost_usd, max_minutes, grace_seconds, stall_cycles, repeat_cycles, started_at) VALUES (?, ?, ?, 5, 5, 60, 30, 3, 3, 1)`
+    ).run(randomUUID(), from, w);
     updateSessionRow(db, from, {
       model_overrides: "x/y",
       merge_armed_at: "t",
@@ -123,6 +126,7 @@ describe("carryTaskState", () => {
       `SELECT COUNT(*) n FROM brief_amendments WHERE session_id = ?`,
       `SELECT COUNT(*) n FROM task_pr_wakes WHERE session_id = ?`,
       `SELECT COUNT(*) n FROM task_queue WHERE after_task = ?`,
+      `SELECT COUNT(*) n FROM task_loops WHERE session_id = ?`,
     ]) {
       expect(count(sql, to), sql).toBe(1);
       expect(count(sql, from), sql).toBe(0);
