@@ -26,6 +26,7 @@ import { RowShell, type RowMenuKind } from "./RowShell";
 import { CardBadge, NestRail, RowDot, RowRename, UnreadDot } from "./RowParts";
 import { RowSubtitle } from "./RowSubtitle";
 import { OrchestratorAsks } from "./OrchestratorAsks";
+import { useRowDrag } from "./useGroupDrag";
 
 // One session: status dot, title over its project, and on the right what
 // needs you or when it last moved. Workers sit under their conductor. Drawn
@@ -64,6 +65,16 @@ export const SessionRow = memo(function SessionRow({
     ctx.onSelect(session.id);
   };
 
+  // The server files by the project's workspace first.
+  const workspaceId =
+    ctx.projects.find((p) => p.id === session.project_id)?.workspace_id ??
+    session.workspace_id ??
+    null;
+  const drag = useRowDrag(
+    { id: session.id, groupId: session.session_group_id ?? null, workspaceId },
+    !renaming
+  );
+
   const badge = rowStatusBadge(row);
   const cardCount = usePendingCardSessions().get(session.id) ?? 0;
 
@@ -77,7 +88,7 @@ export const SessionRow = memo(function SessionRow({
   );
 
   return (
-    <div data-session-row={session.id}>
+    <div data-session-row={session.id} {...drag}>
       <RowShell
         title={session.name}
         tipKey={`session:${session.id}`}

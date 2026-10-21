@@ -21,6 +21,7 @@ import { SidebarSearch } from "./SidebarSearch";
 import { ProjectFilter } from "./ProjectFilter";
 import { SelectionToolbar } from "./SelectionToolbar";
 import { SidebarBody } from "./SidebarBody";
+import { useDropZone } from "./useGroupDrag";
 import { SidebarContextMenu } from "./SidebarContextMenu";
 import { SidebarDialogs, type SidebarDialog } from "./SidebarDialogs";
 import type { SessionListProps } from "./SessionList.types";
@@ -43,6 +44,8 @@ export function SessionList({
   pinControls,
 }: SessionListProps) {
   const data = useSidebarData(sessionStatuses);
+  // Dropping outside every group takes a session out of its group.
+  const outside = useDropZone(null);
   useSessionTips(data);
   const { shelves, ui, project } = data;
   const mutations = useSessionListMutations({ onSelectSession: onSelect });
@@ -194,8 +197,14 @@ export function SessionList({
       )}
 
       <ScrollArea className="w-full flex-1">
-        <SidebarContextMenu workspaceId={data.workspace?.id ?? null}>
-          <div className="min-h-[60vh] max-w-full px-1.5 pb-6">
+        <SidebarContextMenu
+          workspaceId={data.workspace?.id ?? null}
+          workspaces={data.workspaces}
+        >
+          <div
+            className="min-h-[60vh] max-w-full px-1.5 pb-6"
+            {...outside.props}
+          >
             <RowProvider value={rowContext}>
               <SidebarBody
                 data={data}

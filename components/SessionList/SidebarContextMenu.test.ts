@@ -34,7 +34,11 @@ vi.mock("@/components/ui/dialog", async () => {
   };
 });
 
-import { SidebarContextMenu, isEditableTarget } from "./SidebarContextMenu";
+import {
+  SidebarContextMenu,
+  groupTargets,
+  isEditableTarget,
+} from "./SidebarContextMenu";
 
 (
   globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }
@@ -100,5 +104,21 @@ describe("SidebarContextMenu", () => {
     const div = document.createElement("div");
     expect(isEditableTarget(input)).toBe(true);
     expect(isEditableTarget(div)).toBe(false);
+  });
+});
+
+describe("groupTargets", () => {
+  const ws = [
+    { id: "w1", name: "Work" },
+    { id: "w2", name: "Home" },
+  ];
+  it("uses the selected workspace", () => {
+    expect(groupTargets("w2", ws)).toEqual([{ id: "w2", label: "New group" }]);
+  });
+  it("never offers a group of no workspace when workspaces exist", () => {
+    expect(groupTargets(null, [ws[0]])).toEqual([
+      { id: "w1", label: "New group" },
+    ]);
+    expect(groupTargets(null, ws).map((t) => t.id)).toEqual(["w1", "w2"]);
   });
 });
