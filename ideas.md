@@ -349,3 +349,4 @@
 - Terminal coders (read the transcript JSONL), coders on a linked machine, and one analyst over several coders.
 - `aos analyst start|send|dismiss` for agents and scripts; a swipe between the two sides on a phone; native app screens on the same routes.
 - Nest an analyst's row under its coder in the sidebar.
+- Analyst loop: carry a running loop across a task move to a linked machine (today the Loop button is hidden for tasks that run elsewhere), and a loop for terminal tasks that reads the coder's reply for blockers.

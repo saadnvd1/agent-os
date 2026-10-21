@@ -27,6 +27,9 @@ export const TASK_CAPABILITIES = [
   // compat: the shims marked "task-contract-1" in contract/ go once every
   // linked machine reports this.
   "task-contract-1",
+  // A task's developer-analyst loop: /api/tasks/:id/loop and its leaves
+  // (lib/loops). A task started on a linked machine is looped from there.
+  "task-loop-1",
 ] as const;
 
 export interface HostTasks {

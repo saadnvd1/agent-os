@@ -15,6 +15,9 @@ const usage = `aos: talk to other agent sessions in AgentOS
                                      from a session AgentOS didn't start: claim the
                                      repo's work so other agents see it; "check" exits 1
                                      on a strong overlap. Sends paths, never contents
+  aos loop <task> start|status|stop|run
+                                     the developer-analyst loop: --criteria "..." (repeat),
+                                     --cycles N --cost USD --minutes N --grace S
   aos send <session> <message...>    message a session (name, old name, project/name,
                                      <workspace>/<name>, <workspace>/orchestrator, id or
                                      id prefix; "orchestrator" is yours); says delivered,
@@ -147,7 +150,7 @@ const dropped = (err) =>
 // GETs that change nothing, so a lost response can be fetched again. Other GETs
 // (the inbox marks what it returns as read) are retried only on a refusal.
 const PURE_READS =
-  /^\/api\/(bus\/(peers|messages|docs|read)|claims|tasks\/queue|stacks|schedules)(\/|\?|$)/;
+  /^\/api\/(bus\/(peers|messages|docs|read)|claims|tasks\/queue|tasks\/[^/]+\/loop|stacks|schedules)(\/|\?|$)/;
 
 async function call(path, init = {}) {
   const reads =
@@ -211,6 +214,8 @@ const claimCmd = (words) =>
   require("./aos-lib/claim.js")({ url, token, fail })(words);
 const claimsCmd = (words) =>
   require("./aos-lib/claims.js")({ call, me })(words);
+const loopCmd = (words) =>
+  require("./aos-lib/loop.js")({ call, post, fail, me })(words);
 
 function needMe() {
   if (!me) fail("not inside an AgentOS session (AGENTOS_SESSION_ID is unset)");
@@ -357,6 +362,8 @@ async function main() {
       return heavy(args);
     case "claims":
       return claimsCmd(args);
+    case "loop":
+      return loopCmd(args);
     case "claim":
       return claimCmd(args);
     case "peers": {
