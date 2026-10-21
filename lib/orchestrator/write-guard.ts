@@ -365,6 +365,13 @@ export async function hooksPaths(repos: string[]): Promise<string[]> {
       repos.map(async (r) => {
         // A project whose folder is gone has no hooks to run.
         if (!fs.existsSync(r)) return "";
+        // A task worktree always has .git at its root; a folder there without
+        // one is what a removal left behind (a cache dir), not a repository.
+        if (
+          path.dirname(path.resolve(r)) === path.resolve(WORKTREES_DIR) &&
+          !fs.existsSync(path.join(r, ".git"))
+        )
+          return "";
         const dir = await run(r, [
           "rev-parse",
           "--path-format=absolute",
