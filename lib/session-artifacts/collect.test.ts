@@ -188,10 +188,10 @@ describe("session artifacts", () => {
     const shots = path.join(dir, ".agentos", "screenshots");
     fs.mkdirSync(shots, { recursive: true });
     fs.writeFileSync(path.join(shots, "home-390.png"), "png");
-    fs.writeFileSync(path.join(shots, "notes.txt"), "not an image");
+    fs.writeFileSync(path.join(shots, "notes.txt"), "a note");
     await keepSessionFiles(s.id);
     const kept = path.join(sessionKeptDir(s.id), ".agentos", "screenshots");
-    expect(fs.readdirSync(kept)).toEqual(["home-390.png"]);
+    expect(fs.readdirSync(kept)).toEqual(["home-390.png", "notes.txt"]);
   });
 
   it("keeps uncommitted files when the worktree goes, and says where the rest are", async () => {
@@ -215,6 +215,47 @@ describe("session artifacts", () => {
     const plan = await one(s.id, byName(all, "Plan").id);
     expect(await plan.text()).toBe("# Kept plan\n");
     expect((await one(s.id, byName(all, "a.ts").id)).status).toBe(404);
+  });
+
+  it("lists mockups and screenshots a shell wrote under the ignored .agentos folder", async () => {
+    const dir = repo();
+    const s = session(dir, false);
+    const mock = path.join(dir, ".agentos/mockups/v1");
+    fs.mkdirSync(mock, { recursive: true });
+    fs.mkdirSync(path.join(dir, ".agentos/screenshots"), { recursive: true });
+    fs.writeFileSync(path.join(dir, ".agentos/mockups/a.html"), "<h1>a</h1>");
+    fs.writeFileSync(path.join(mock, "b.html"), "<h1>b</h1>");
+    fs.writeFileSync(path.join(mock, ".env"), "TOKEN=1\n");
+    fs.writeFileSync(path.join(dir, ".agentos/screenshots/a.png"), PNG);
+    fs.writeFileSync(path.join(dir, "ignored.log"), "x");
+    fs.writeFileSync(path.join(dir, ".git/info/exclude"), "ignored.log\n");
+
+    const all = await list(s.id);
+    expect(byName(all, "a.html")).toMatchObject({
+      by: "shell",
+      preview: "html",
+      state: "live",
+      folder: ".agentos/mockups",
+    });
+    expect(byName(all, "b.html").folder).toBe(".agentos/mockups/v1");
+    expect(byName(all, "a.png").kind).toBe("image");
+    expect(all.map((a) => a.name)).not.toContain(".env");
+    expect(all.map((a) => a.name)).not.toContain("ignored.log");
+
+    fs.writeFileSync(path.join(dir, ".agentos/mockups/c.html"), "<h1>c</h1>");
+    expect(await list(s.id)).toHaveLength(all.length + 1);
+  });
+
+  it("still shows kept mockups after the worktree is removed", async () => {
+    const dir = repo();
+    const s = session(dir, false);
+    fs.mkdirSync(path.join(dir, ".agentos/mockups"), { recursive: true });
+    fs.writeFileSync(path.join(dir, ".agentos/mockups/a.html"), "<h1>a</h1>");
+    await keepSessionFiles(s.id);
+    fs.rmSync(dir, { recursive: true, force: true });
+    const a = byName(await list(s.id), "a.html");
+    expect(a.state).toBe("kept");
+    expect(await (await one(s.id, a.id)).text()).toContain("<h1>a</h1>");
   });
 
   it("keeps nothing for a session without a worktree, and never throws", async () => {
