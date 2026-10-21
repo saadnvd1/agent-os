@@ -313,14 +313,20 @@ export async function orchestratorWriteBounds(
 // Read at most once a minute, not on every write.
 const HOOKS_TTL_MS = 60_000;
 let hooksCache: { key: string; at: number; dirs: string[] } | null = null;
+// The last answer git gave, kept apart from the cache above: a read that
+// times out under load may fall back to one this recent, since a hooks folder
+// rarely moves in minutes. It is never refreshed from a fallback.
+const HOOKS_STALE_OK_MS = 10 * 60_000;
+const lastGoodHooks = new Map<string, { at: number; dirs: string[] }>();
 
 export async function hooksPaths(repos: string[]): Promise<string[]> {
   const key = repos.join("\0");
   if (hooksCache?.key === key && Date.now() - hooksCache.at < HOOKS_TTL_MS)
     return hooksCache.dirs;
   // Only "not set" and "not a repository" mean there's nothing to protect;
-  // any other failure (a timeout under load) throws, so the write is
-  // refused and nothing is cached.
+  // any other failure (a timeout under load) uses the last good answer if
+  // it's under ten minutes old, else throws, so the write is refused and
+  // nothing is cached.
   const run = (cwd: string, args: string[]) =>
     git(cwd, args, { timeout: 5000 })
       .then((out) => out.trim())
@@ -336,33 +342,47 @@ export async function hooksPaths(repos: string[]): Promise<string[]> {
   // The user's, expanded by git (~ and ~user). A relative one is taken from
   // each repo's top, so it names no one folder: each project's answer
   // below covers it there. Each project's comes as git itself resolves it.
-  const global = await run(os.homedir(), [
-    "config",
-    "--global",
-    "--type=path",
-    "--get",
-    "core.hooksPath",
-  ]);
-  const found = await Promise.all(
-    repos.map(async (r) => {
-      // A project whose folder is gone has no hooks to run.
-      if (!fs.existsSync(r)) return "";
-      const dir = await run(r, [
-        "rev-parse",
-        "--path-format=absolute",
-        "--git-path",
-        "hooks",
-      ]);
-      if (dir !== "" && !dir.startsWith("/"))
-        throw new Error(`git named no folder for ${r}'s hooks`);
-      return dir;
-    })
-  );
-  const dirs = [
-    ...new Set([global, ...found].filter((d) => d.startsWith("/"))),
-  ];
-  hooksCache = { key, at: Date.now(), dirs };
-  return dirs;
+  try {
+    return await read();
+  } catch (e) {
+    const good = lastGoodHooks.get(key);
+    if (!good || Date.now() - good.at >= HOOKS_STALE_OK_MS) throw e;
+    console.warn(
+      `[write-guard] ${e instanceof Error ? e.message : e}; using the answer from ${Math.round((Date.now() - good.at) / 1000)}s ago`
+    );
+    return good.dirs;
+  }
+
+  async function read(): Promise<string[]> {
+    const global = await run(os.homedir(), [
+      "config",
+      "--global",
+      "--type=path",
+      "--get",
+      "core.hooksPath",
+    ]);
+    const found = await Promise.all(
+      repos.map(async (r) => {
+        // A project whose folder is gone has no hooks to run.
+        if (!fs.existsSync(r)) return "";
+        const dir = await run(r, [
+          "rev-parse",
+          "--path-format=absolute",
+          "--git-path",
+          "hooks",
+        ]);
+        if (dir !== "" && !dir.startsWith("/"))
+          throw new Error(`git named no folder for ${r}'s hooks`);
+        return dir;
+      })
+    );
+    const dirs = [
+      ...new Set([global, ...found].filter((d) => d.startsWith("/"))),
+    ];
+    hooksCache = { key, at: Date.now(), dirs };
+    lastGoodHooks.set(key, { at: Date.now(), dirs });
+    return dirs;
+  }
 }
 
 // The check a PreToolUse hook makes: why this tool call is refused, or null.
