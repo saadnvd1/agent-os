@@ -168,10 +168,14 @@ describe("startUpdate", () => {
     });
   });
 
-  it("without a restart command it still builds, and says so at the end", async () => {
+  it("without a restart command it refuses and spawns nothing", async () => {
     restart = null;
-    await run.startUpdate({ when: "now" }, deps());
-    expect(spawned[0].env.AGENTOS_RESTART).toBeUndefined();
+    const r = await run.startUpdate({ when: "now" }, deps());
+    expect(r).toMatchObject({ ok: false, code: "no_restart" });
+    expect(r.ok === false && r.error).toContain("AGENTOS_RESTART");
+    expect(spawned).toHaveLength(0);
+    expect(settings.size).toBe(0);
+    expect(fs.existsSync(path.join(dir, "state.json"))).toBe(false);
   });
 
   it("'idle' only records the request", async () => {

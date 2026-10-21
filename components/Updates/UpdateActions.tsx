@@ -50,6 +50,12 @@ export function UpdateActions({ view }: { view: UpdateView }) {
         Cancel
       </Button>
     );
+  if (view.canUpdate.code === "no_restart")
+    return (
+      <Button size="sm" className="min-h-11 md:min-h-0" disabled>
+        Update now
+      </Button>
+    );
   if (!view.canUpdate.ok) return null;
 
   const start = (when: "now" | "idle") => {

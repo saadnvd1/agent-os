@@ -277,7 +277,7 @@ Update now pulls, installs and builds beside the running server, then restarts i
 
 It refuses, and says why, when the checkout has local changes, isn't on the default branch, has commits the remote doesn't, or is a dev server. The progress and any error show in the banner, and the full output is in `agent-os-update.log` next to the database. Only this machine, your tailnet, or a paired device with **Can approve** can start an update.
 
-The restart uses `AGENTOS_RESTART` if you set it (for a service manager, for example), or `agent-os restart` when `agent-os start` started the server. Otherwise the update stops after building and tells you to restart. `AGENTOS_UPDATE_CHECK=off` turns the background checks off, and `AGENTOS_UPDATE_BANNER=off` pins the banner off.
+The restart uses `AGENTOS_RESTART` if you set it (for a service manager, for example), or `agent-os restart` when `agent-os start` started the server. Otherwise the Update button is disabled and says why: an update needs a restart command. `AGENTOS_UPDATE_CHECK=off` turns the background checks off, and `AGENTOS_UPDATE_BANNER=off` pins the banner off.
 
 ## Reach it from other devices
 
