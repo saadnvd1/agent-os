@@ -19,6 +19,7 @@ import {
   FlaskConical,
   RefreshCw,
   Smartphone,
+  Users,
   X,
   type LucideIcon,
 } from "lucide-react";
@@ -34,6 +35,7 @@ import { AuditsPanel } from "@/components/Audits/AuditsPanel";
 import { HealthPanel } from "@/components/Health/HealthPanel";
 import { DevicesPanel } from "@/components/Devices";
 import { GlobalMergeSection } from "@/components/Merge/GlobalMergeSection";
+import { AgentRolesSection } from "@/components/Models/AgentRolesSection";
 import { ModelsSection } from "@/components/Models/ModelsSection";
 import { SharedLinksPanel } from "@/components/Shares/SharedLinksPanel";
 import { SchedulesPanel } from "@/components/Schedules";
@@ -86,6 +88,11 @@ export const SECTION_INFO: Record<
     label: "Models",
     hint: "Which model each kind of work runs on, and providers",
     icon: Cpu,
+  },
+  "agent-roles": {
+    label: "Agent roles",
+    hint: "Developer, Analyst, Reviewer and Supervisor: a model each, local or cloud",
+    icon: Users,
   },
   notifications: {
     label: "Notifications",
@@ -145,6 +152,8 @@ function SectionBody({
       return <WorkspaceSettings />;
     case "models":
       return <ModelsSection />;
+    case "agent-roles":
+      return <AgentRolesSection />;
     case "devices":
       return <DevicesPanel />;
     case "shares":

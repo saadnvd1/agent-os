@@ -9,6 +9,9 @@ import type { ProviderTest } from "@/lib/models/test-provider";
 import type { ResumeResult } from "@/lib/models/resume";
 import type { ModelOverride } from "@/lib/models/resolve";
 import type { Comparison } from "@/lib/usage/compare";
+import type { ModelChoice } from "@/lib/models/catalog";
+import type { RoleMap } from "@/lib/models/config";
+import type { RoleScope, agentRolesView } from "@/lib/models/agent-roles-view";
 
 // Model routing (lib/models): role models, providers, prices.
 export const modelKeys = {
@@ -16,6 +19,29 @@ export const modelKeys = {
   workspace: (id: string) => [...modelKeys.all, "workspace", id] as const,
   compare: (days: number) => [...modelKeys.all, "compare", days] as const,
 };
+
+export const agentRoleKeys = {
+  roles: (scope: RoleScope, id?: string | null) =>
+    [...modelKeys.all, "agent-roles", scope, id ?? null] as const,
+  choices: [...modelKeys.all, "choices"] as const,
+  crew: (sessionId: string) => ["sessions", sessionId, "crew"] as const,
+};
+
+export type AgentRolesResponse = ReturnType<typeof agentRolesView>;
+
+export interface CrewResponse {
+  agentRole: string | null;
+  crewId: string | null;
+  members: {
+    id: string;
+    name: string;
+    agentRole: string | null;
+    model: string | null;
+    ref: string | null;
+    locality: "local" | "cloud";
+    availability: "up" | "down" | "unknown";
+  }[];
+}
 
 export interface ModelsResponse {
   saved: ModelSettings;
@@ -113,3 +139,75 @@ export function useCompareQuery(days: number, enabled = true) {
 
 // Every model a role can be set to: each usable provider's, as references.
 export { modelChoices } from "@/lib/models/choices";
+
+// The agent roles (Developer, Analyst, Reviewer, Supervisor) at a scope:
+// Settings, a workspace or a project.
+export function useAgentRolesQuery(scope: RoleScope, id?: string | null) {
+  return useQuery({
+    queryKey: agentRoleKeys.roles(scope, id),
+    queryFn: async () =>
+      json<AgentRolesResponse>(
+        await fetch(
+          `/api/agent-roles?scope=${scope}${id ? `&id=${encodeURIComponent(id)}` : ""}`
+        )
+      ),
+    staleTime: 20_000,
+    refetchInterval: 30_000,
+    enabled: scope === "settings" || !!id,
+  });
+}
+
+export function useSaveAgentRoles(scope: RoleScope, id?: string | null) {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: async (input: { roles: RoleMap; fallbacks?: RoleMap }) =>
+      json<AgentRolesResponse>(
+        await send("/api/agent-roles", "PUT", { scope, id, ...input })
+      ),
+    onSuccess: (data) => {
+      queryClient.invalidateQueries({ queryKey: modelKeys.all });
+      queryClient.setQueryData(agentRoleKeys.roles(scope, id), data);
+    },
+  });
+}
+
+// Every model a picker offers, with locality and availability.
+export function useModelChoices(enabled = true) {
+  return useQuery({
+    queryKey: agentRoleKeys.choices,
+    queryFn: async () =>
+      (
+        await json<{ choices: ModelChoice[] }>(
+          await fetch("/api/models/choices")
+        )
+      ).choices,
+    staleTime: 20_000,
+    refetchInterval: 30_000,
+    enabled,
+  });
+}
+
+export function useCrewQuery(sessionId: string | undefined, enabled = true) {
+  return useQuery({
+    queryKey: agentRoleKeys.crew(sessionId ?? ""),
+    queryFn: async () =>
+      json<CrewResponse>(await fetch(`/api/sessions/${sessionId}/crew`)),
+    staleTime: 15_000,
+    refetchInterval: 30_000,
+    enabled: !!sessionId && enabled,
+  });
+}
+
+export function useSwitchSessionModel(sessionId: string) {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: async (ref: string) =>
+      json<{ ok: true }>(
+        await send(`/api/sessions/${sessionId}/model`, "POST", { ref })
+      ),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["sessions"] });
+      queryClient.invalidateQueries({ queryKey: modelKeys.all });
+    },
+  });
+}

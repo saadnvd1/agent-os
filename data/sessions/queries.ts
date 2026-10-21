@@ -176,6 +176,25 @@ export interface LaunchSessionInput {
   prompt: string;
   images?: ChatImage[];
   files?: ChatFile[];
+  // Start in an agent role (lib/models/agent-roles): its binding picks the
+  // model, and `model` (when not blank) overrides it for this session.
+  agentRole?: string;
+  // The crew it joins: the session that began it.
+  crewId?: string;
+  // When the role's model is down, run on the role's fallback.
+  onUnavailable?: "fallback";
+}
+
+// The role's model server isn't answering (HTTP 409): nothing was started.
+export class ModelUnavailableError extends Error {
+  constructor(
+    message: string,
+    readonly role: string,
+    readonly ref: string,
+    readonly fallback: string | null
+  ) {
+    super(message);
+  }
 }
 
 interface LaunchSessionResponse {
@@ -199,6 +218,13 @@ export function useLaunchSession() {
         body: JSON.stringify(input),
       });
       const data = await res.json();
+      if (res.status === 409 && data.code === "model_unavailable")
+        throw new ModelUnavailableError(
+          data.error,
+          data.role,
+          data.ref,
+          data.fallback ?? null
+        );
       if (!res.ok || data.error)
         throw new Error(data.error ?? "Couldn't start");
       return data;

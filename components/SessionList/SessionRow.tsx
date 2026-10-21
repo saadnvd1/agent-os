@@ -1,5 +1,6 @@
 "use client";
 
+import { AGENT_ROLE_DEFS, isAgentRole } from "@/lib/models/agent-roles";
 import { isFork } from "@/lib/sessions/fork";
 import { memo, useState } from "react";
 import { useSnapshot } from "valtio";
@@ -126,14 +127,24 @@ export const SessionRow = memo(function SessionRow({
             }}
           />
         ) : (
-          <span
-            className={cn(
-              "truncate text-sm",
-              muted && !active ? "text-muted-foreground" : "text-foreground",
-              active && "font-medium"
+          <span className="flex min-w-0 items-center gap-1.5">
+            {isAgentRole(session.agent_role) && (
+              <span
+                title={AGENT_ROLE_DEFS[session.agent_role].label}
+                className="bg-accent text-primary grid h-4 w-4 shrink-0 place-items-center rounded text-[10px] font-semibold"
+              >
+                {AGENT_ROLE_DEFS[session.agent_role].label[0]}
+              </span>
             )}
-          >
-            {session.name}
+            <span
+              className={cn(
+                "truncate text-sm",
+                muted && !active ? "text-muted-foreground" : "text-foreground",
+                active && "font-medium"
+              )}
+            >
+              {session.name}
+            </span>
           </span>
         )}
         <RowSubtitle

@@ -5,7 +5,11 @@ import {
   seedSession,
   seedWorkspace,
 } from "../orchestrator/testing";
-import { setModelSettings, setWorkspaceModels } from "./config";
+import {
+  setModelSettings,
+  setProjectModels,
+  setWorkspaceModels,
+} from "./config";
 import { PROVIDER_PRESETS } from "./providers";
 import { parseOverride, providerShellEnv, resolveRole } from "./resolve";
 import { DEFAULT_ROLE_MODELS, parseModelRef } from "./roles";
@@ -28,7 +32,8 @@ describe("role resolution", () => {
       const r = resolveRole(role as keyof typeof DEFAULT_ROLE_MODELS);
       expect(r.ref).toBe(ref);
       expect(r.provider.id).toBe("anthropic");
-      expect(r.source).toBe("default");
+      // The reviewer's advice follows the gate until it's set.
+      expect(r.source).toBe(role === "advise" ? "inherited" : "default");
     }
     expect(resolveRole("plan").model).toBe("claude-opus-5-5");
     expect(resolveRole("implement").model).toBe("claude-sonnet-5-5");
@@ -233,5 +238,57 @@ describe("model settings", () => {
         ],
       })
     ).toThrow(/Claude login/);
+  });
+});
+
+describe("agent role bindings", () => {
+  it("takes a project's model over the workspace's and under the task's", () => {
+    const { workspace } = seedWorkspace();
+    setModelSettings({ providers: [deepseek] });
+    setWorkspaceModels(workspace.id, {
+      roles: { analyze: "anthropic/claude-sonnet-5-5" },
+    });
+    setProjectModels("proj-1", {
+      roles: { analyze: "deepseek/deepseek-v4-pro" },
+    });
+    expect(
+      resolveRole("analyze", { workspaceId: workspace.id, projectId: "proj-1" })
+    ).toMatchObject({ model: "deepseek-v4-pro", source: "project" });
+    expect(
+      resolveRole("analyze", { workspaceId: workspace.id, projectId: "other" })
+    ).toMatchObject({ model: "claude-sonnet-5-5", source: "workspace" });
+    expect(
+      resolveRole("analyze", {
+        workspaceId: workspace.id,
+        projectId: "proj-1",
+        override: "anthropic/claude-opus-5-5",
+      }).source
+    ).toBe("task");
+  });
+
+  it("has the reviewer follow the gate's model until it is set", () => {
+    setModelSettings({ roles: { review: "anthropic/claude-sonnet-5-5" } });
+    expect(resolveRole("advise")).toMatchObject({
+      model: "claude-sonnet-5-5",
+      source: "inherited",
+    });
+    setModelSettings({
+      roles: {
+        review: "anthropic/claude-sonnet-5-5",
+        advise: "anthropic/claude-opus-5-5",
+      },
+    });
+    expect(resolveRole("advise")).toMatchObject({
+      model: "claude-opus-5-5",
+      source: "settings",
+    });
+  });
+
+  it("runs a Pi model only for a role session, never a task or a gate", () => {
+    setModelSettings({ roles: { implement: "pi/local/qwen3-27b" } });
+    expect(() => resolveRole("implement")).toThrow(/role/);
+    const r = resolveRole("implement", { allowPi: true });
+    expect(r).toMatchObject({ ref: "pi/local/qwen3-27b", source: "settings" });
+    expect(r.provider.id).toBe("pi");
   });
 });

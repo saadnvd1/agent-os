@@ -67,6 +67,7 @@ import { saidSinceLastMessage } from "../chat/store";
 
 import { lastActiveOf } from "./last-active";
 import { setPlan, setTask } from "../db/session-parts";
+import { joinCrew } from "../sessions/crew";
 export * from "./state";
 export { codeReviewGate, codeReviewRefusal } from "./code-review";
 export { signOffTask, dropTask, signingOff, mergeSettled } from "./finish";
@@ -413,6 +414,11 @@ async function startTask(
       parentSessionId: opts.parentSessionId ?? null,
       startedVia: opts.startedVia,
       startedByDevice: opts.held?.device ?? opts.startedByDevice,
+    });
+    // A task is the Developer of its crew.
+    joinCrew(id, "developer", {
+      startedBy: opts.startedBy,
+      parent: opts.parentSessionId,
     });
   } catch (error) {
     // The claim was made for a session that never existed.

@@ -146,8 +146,9 @@ export function resolveRole(
       ? envModel(role)
       : undefined;
   // The reviewer's advice follows the gate's model until it's set.
+  const named = !!savedModelSettings().roles?.[role];
   const inherited =
-    role === "advise" && !env
+    role === "advise" && !env && !named
       ? resolveRole("review", { ...opts, override: null }, models)
       : null;
   const [ref, source]: [string, RoleSource] = task
@@ -156,7 +157,7 @@ export function resolveRole(
       ? [proj, "project"]
       : ws
         ? [ws, "workspace"]
-        : saved !== DEFAULT_ROLE_MODELS[role]
+        : saved !== DEFAULT_ROLE_MODELS[role] || (role === "advise" && named)
           ? [saved, "settings"]
           : env
             ? [env, "env"]

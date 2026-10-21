@@ -14,6 +14,8 @@ import { useHostsQuery } from "@/data/hosts";
 import { useGitCheck } from "@/data/git/queries";
 import { useSelectedWorkspace } from "@/hooks/useSelectedWorkspace";
 import { useLaunchSession } from "@/data/sessions";
+import { ModelUnavailableError } from "@/data/sessions/queries";
+import { isAgentRole } from "@/lib/models/agent-roles";
 import { useCreateTask } from "@/data/tasks";
 import { useCheckStart } from "@/data/claims";
 import { StartClaimsNotice } from "@/components/Claims";
@@ -23,6 +25,7 @@ import { setPendingPrompt } from "@/stores/initialPrompt";
 import { draftsActions, draftsStore, newDraft } from "@/stores/drafts";
 import { DraftChips } from "./DraftChips";
 import { DraftHeading } from "./DraftHeading";
+import { ModelUnavailableDialog } from "./ModelUnavailableDialog";
 import { draftModels } from "./draftModels";
 
 // A new session before its first send: choices on top, a composer below.
@@ -63,6 +66,13 @@ export function DraftPanel({
     text: string;
     warnings: StartWarning[];
   } | null>(null);
+  // A role's model server that didn't answer, with what was being sent.
+  const [down, setDown] = useState<{
+    error: ModelUnavailableError;
+    text: string;
+    images: ChatImage[];
+    files: ChatFile[];
+  } | null>(null);
   const pending =
     launch.isPending || createTask.isPending || checkStart.isPending;
 
@@ -81,7 +91,7 @@ export function DraftPanel({
     text: string,
     images: ChatImage[],
     files: ChatFile[],
-    claim?: { after?: string }
+    claim?: { after?: string; onUnavailable?: "fallback" }
   ) => {
     try {
       if (draft.openPr) {
@@ -129,7 +139,17 @@ export function DraftPanel({
             ? draft.hostId
             : undefined,
         agentType: draft.agentType,
-        model: draft.model,
+        model: isAgentRole(draft.agentRole)
+          ? (draft.roleModel ?? "")
+          : draft.model,
+        ...(isAgentRole(draft.agentRole)
+          ? {
+              agentRole: draft.agentRole,
+              ...(claim?.onUnavailable && {
+                onUnavailable: claim.onUnavailable,
+              }),
+            }
+          : {}),
         access: draft.access,
         useWorktree: draft.useWorktree && !!git?.isGitRepo,
         baseBranch: draft.baseBranch,
@@ -153,6 +173,10 @@ export function DraftPanel({
         session.host_id
       );
     } catch (error) {
+      if (error instanceof ModelUnavailableError) {
+        setDown({ error, text, images, files });
+        return;
+      }
       setPrefill({ text, at: Date.now() });
       toast.error(error instanceof Error ? error.message : String(error));
     }
@@ -171,6 +195,31 @@ export function DraftPanel({
           hostsLoaded={hostsLoaded}
           git={git}
           onChange={(patch) => draftsActions.update(draft.id, patch)}
+        />
+        <ModelUnavailableDialog
+          error={down?.error ?? null}
+          busy={pending}
+          onClose={() => {
+            if (down) setPrefill({ text: down.text, at: Date.now() });
+            setDown(null);
+          }}
+          onRetry={() => {
+            const d = down;
+            setDown(null);
+            if (d) void send(d.text, d.images, d.files);
+          }}
+          onFallback={() => {
+            const d = down;
+            setDown(null);
+            if (d)
+              void send(d.text, d.images, d.files, {
+                onUnavailable: "fallback",
+              });
+          }}
+          onPick={() => {
+            if (down) setPrefill({ text: down.text, at: Date.now() });
+            setDown(null);
+          }}
         />
         {held && (
           <StartClaimsNotice

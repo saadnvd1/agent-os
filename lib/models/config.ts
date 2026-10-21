@@ -138,6 +138,9 @@ const subagentMap = z
         });
   });
 
+// A role may name a model to start on when its own can't be reached.
+const fallbackMap = z.partialRecord(z.enum(MODEL_ROLES), roleRef);
+
 export const modelSettingsSchema = z.strictObject({
   roles: roleMap.optional(),
   subagents: subagentMap.optional(),
@@ -150,9 +153,6 @@ export const modelSettingsSchema = z.strictObject({
 export const workspaceModelsSchema = z.strictObject({
   roles: roleMap.optional(),
 });
-
-// A role may name a model to start on when its own can't be reached.
-const fallbackMap = z.partialRecord(z.enum(MODEL_ROLES), roleRef);
 
 export const projectModelsSchema = z.strictObject({
   roles: roleMap.optional(),
