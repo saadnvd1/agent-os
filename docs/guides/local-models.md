@@ -1,3 +1,9 @@
+---
+title: Local models
+description: Run a model you host yourself (llama.cpp, vLLM, Ollama, LM Studio) in an AgentOS chat through Pi or OpenCode, with tool calling turned on.
+order: 9
+---
+
 # Local models
 
 A model you host yourself (Qwen, Llama, Mistral, through llama.cpp, vLLM, Ollama or LM Studio) runs in an AgentOS chat through **Pi** or **OpenCode**, not through Settings > Models. Those providers only feed Claude Code and need an Anthropic-compatible endpoint. Add the model to the agent's own config and pick it in the new-chat model list.
