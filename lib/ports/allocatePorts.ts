@@ -6,8 +6,8 @@
 
 import { execFile } from "child_process";
 import { promisify } from "util";
-import { db } from "./db";
-import { windowsListeningPorts } from "./windows-ports";
+import { db } from "@/lib/db";
+import { windowsListeningPorts } from "@/lib/windows-ports";
 
 const execFileAsync = promisify(execFile);
 
@@ -38,7 +38,7 @@ export const portsFor = (
     Object.entries(bases).map(([name, base]) => [name, base + slot])
   );
 
-const parsePorts = (json: string | null | undefined) => {
+export const parsePorts = (json: string | null | undefined) => {
   if (!json) return null;
   try {
     return JSON.parse(json) as Record<string, number>;
@@ -91,13 +91,17 @@ async function reclaimEnded(
   }
 }
 
-// Every port another session holds: its slot's ports, and the single port
-// sessions from before slots were given.
-function portsTaken(exceptId: string): Set<number> {
+// Every port another session on this machine holds: its slot's ports, the
+// single port sessions from before slots were given, and the Dev Servers
+// panel's running servers. A linked machine's session is another network
+// namespace, so its ports never block ours. Slots stay counted across every
+// row: the unique index is on the slot alone.
+export function portsTaken(exceptId: string | null): Set<number> {
   const rows = db
     .prepare(
       `SELECT ports, dev_server_port FROM sessions
-       WHERE id != ? AND (ports IS NOT NULL OR dev_server_port IS NOT NULL)`
+       WHERE id IS NOT ? AND (host_id IS NULL OR host_id = 'local')
+         AND (ports IS NOT NULL OR dev_server_port IS NOT NULL)`
     )
     .all(exceptId) as {
     ports: string | null;
@@ -108,7 +112,26 @@ function portsTaken(exceptId: string): Set<number> {
     for (const p of Object.values(parsePorts(r.ports) ?? {})) taken.add(p);
     if (r.dev_server_port) taken.add(r.dev_server_port);
   }
+  for (const p of devServerPorts()) taken.add(p);
   return taken;
+}
+
+function devServerPorts(): number[] {
+  const rows = db
+    .prepare(
+      `SELECT ports FROM dev_servers WHERE status IN ('running', 'starting')`
+    )
+    .all() as { ports: string }[];
+  return rows.flatMap((r) => {
+    try {
+      const ports = JSON.parse(r.ports) as unknown;
+      return Array.isArray(ports)
+        ? ports.filter((p): p is number => Number.isInteger(p))
+        : [];
+    } catch {
+      return [];
+    }
+  });
 }
 
 const slotsTaken = () =>

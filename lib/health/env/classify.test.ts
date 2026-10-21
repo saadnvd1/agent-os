@@ -18,6 +18,38 @@ const TRACE = (tail: string) =>
 
 const positives: [string, ToolResult, string][] = [
   [
+    "port-in-use",
+    bash(
+      "npm run dev",
+      "Error: listen EADDRINUSE: address already in use :::3000\n    at Server.setupListenHandle"
+    ),
+    "EADDRINUSE",
+  ],
+  [
+    "port-in-use",
+    bash(
+      "npx vite --strictPort",
+      "error when starting dev server:\nError: Port 3000 is already in use"
+    ),
+    "Port 3000",
+  ],
+  [
+    "port-in-use",
+    bash(
+      "python3 -m http.server 3000",
+      "OSError: [Errno 98] Address already in use"
+    ),
+    "Address",
+  ],
+  [
+    "port-in-use",
+    bash(
+      "docker run -p 3000:3000 app",
+      "docker: Error response from daemon: driver failed programming external connectivity: Bind for 0.0.0.0:3000 failed: port is already allocated."
+    ),
+    "allocated",
+  ],
+  [
     "python-missing-module",
     bash(
       "python3 apps/x/run.py",
@@ -166,6 +198,22 @@ describe("what is not a failure", () => {
       bash(
         "cat lib/orchestrator/shell-guard.ts",
         "return `Refused: git pull would change`",
+        "done"
+      ),
+    ],
+    [
+      "a server that moved itself to a free port",
+      bash(
+        "npm run dev",
+        " ⚠ Port 3000 is in use, using available port 3001 instead.",
+        "done"
+      ),
+    ],
+    [
+      "listing a folder, then printing the class table's own source",
+      bash(
+        "ls lib/health/env; head -40 lib/health/env/classes.ts",
+        "classes.ts\n    requires:\n      /tomllib|requires a different Python|Python 3\\.\\d+ or /i,\n      /\\bEADDRINUSE\\b/,",
         "done"
       ),
     ],

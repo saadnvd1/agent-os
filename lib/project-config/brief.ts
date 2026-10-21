@@ -19,15 +19,17 @@ export function runningBrief(
   config: ProjectConfig,
   ports: Record<string, number>,
   database: SessionDatabase | null = null,
-  warning: string | null = null
+  warning: string | null = null,
+  hardcoded: string[] = []
 ): string {
   const lines: string[] = [];
   if (warning) lines.push(`- ${warning}`);
   const names = Object.entries(ports);
   if (names.length)
     lines.push(
-      `- Your ports, exported in your shell and no other session's: ${names.map(([n, p]) => `${n}=${p}`).join(", ")}. Start servers on these; never stop a process you didn't start (kill by your port: \`lsof -ti tcp:<port> -sTCP:LISTEN | xargs kill\`).`
+      `- Your ports, exported in your shell and no other session's: ${names.map(([n, p]) => `${n}=${p}`).join(", ")}. Start servers on these; never stop a process you didn't start (kill by your port: \`lsof -ti tcp:<port> -sTCP:LISTEN | xargs kill\`). If one is taken, never wait for it: \`aos port\` names the holder and gives you a free one.`
     );
+  for (const note of hardcoded) lines.push(`- ${note}`);
   if (config.dev)
     lines.push(`- Dev server: \`${withPorts(config.dev, ports)}\``);
   const ready = readyCommand(config, ports);

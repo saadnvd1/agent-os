@@ -11,6 +11,7 @@ import { healthConfig, type HealthConfig } from "./config";
 import { runDetectors } from "./detectors";
 import { gatherFacts, liveBackgroundJobs } from "./facts";
 import { envTick, realEnv, type EnvDeps } from "./env/envTick";
+import { portWaitTick } from "./port-wait-tick";
 import { spinTick } from "./spin-tick";
 import { addNote } from "./notes";
 import { closeResolvedPieces } from "./pieces";
@@ -45,9 +46,9 @@ export const MAX_WAKES = 2;
 export const WAKE_GIVE_UP_MS = 3 * MIN;
 
 // The checks the tick evaluates: piece-dup is raised where a piece starts,
-// bg-spin by the process step (spin-tick.ts).
+// bg-spin and port-wait by the process steps (spin-tick.ts, port-wait-tick.ts).
 export const TICK_CHECKS: readonly CheckId[] = CHECKS.filter(
-  (c) => c !== "piece-dup" && c !== "bg-spin"
+  (c) => c !== "piece-dup" && c !== "bg-spin" && c !== "port-wait"
 );
 
 export interface TickDeps {
@@ -58,6 +59,8 @@ export interface TickDeps {
   env: EnvDeps;
   // Stops background jobs that spin (spin-tick.ts).
   spin: (now: number) => Promise<void>;
+  // Tells agents that wait on a port someone else holds (port-wait-tick.ts).
+  portWait: (now: number, c: HealthConfig) => Promise<void>;
   wake: typeof wake;
 }
 
@@ -68,6 +71,7 @@ export const realTick: TickDeps = {
   route: realRoute,
   env: realEnv,
   spin: spinTick,
+  portWait: portWaitTick,
   wake,
 };
 
@@ -153,6 +157,9 @@ export function healthTick(
   void deps
     .spin(now)
     .catch((error) => console.error("[health] spin check:", error));
+  void deps
+    .portWait(now, c)
+    .catch((error) => console.error("[health] port-wait check:", error));
   void envTick(now, c, deps.env).catch((error) =>
     console.error("[health] environment failures:", error)
   );

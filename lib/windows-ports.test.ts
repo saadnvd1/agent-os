@@ -1,6 +1,7 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import {
   parseNetstatListeners,
+  parseNetstatOwners,
   resetWindowsPortsCache,
   windowsListeningPorts,
 } from "./windows-ports";
@@ -24,6 +25,13 @@ describe("parseNetstatListeners", () => {
     expect([...parseNetstatListeners(NETSTAT)].sort((a, b) => a - b)).toEqual([
       135, 3000, 5173, 8080,
     ]);
+  });
+
+  it("keeps the pid that holds each port", () => {
+    const owners = parseNetstatOwners(NETSTAT);
+    expect(owners.get(3000)).toBe(4242);
+    expect(owners.get(5173)).toBe(7);
+    expect(owners.has(50123)).toBe(false);
   });
 
   it("is empty for garbage", () => {

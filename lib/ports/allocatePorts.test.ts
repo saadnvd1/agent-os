@@ -1,12 +1,12 @@
 import { beforeEach, describe, expect, it } from "vitest";
 import * as fs from "fs";
 import * as path from "path";
-import { db, updateSessionRow } from "./db";
-import { createProject } from "./projects";
-import { seedSession } from "./orchestrator/testing";
-import { allocatePorts, releasePorts, sessionPorts } from "./ports";
-import { agentEnv } from "./agents/launch";
-import { sessionRunningBrief } from "./project-config/session";
+import { db, updateSessionRow } from "@/lib/db";
+import { createProject } from "@/lib/projects";
+import { seedSession } from "@/lib/orchestrator/testing";
+import { allocatePorts, releasePorts, sessionPorts } from ".";
+import { agentEnv } from "@/lib/agents/launch";
+import { sessionRunningBrief } from "@/lib/project-config/session";
 import { tempDir } from "@/lib/test-temp";
 
 const free = async () => false;
@@ -159,6 +159,24 @@ describe("allocatePorts", () => {
     expect(sessionPorts(remote)).toEqual({ RAILS_PORT: 3001, VITE_PORT: 3101 });
   });
 
+  it("judges ports per machine: a linked machine's session doesn't block ours", async () => {
+    const remote = session();
+    db.prepare(
+      `UPDATE sessions SET host_id = 'other-machine', ports = ? WHERE id = ?`
+    ).run(JSON.stringify({ RAILS_PORT: 3001, VITE_PORT: 3101 }), remote);
+    const got = await allocatePorts(session(), bases, free, gone);
+    expect(got.slot).toBe(1);
+  });
+
+  it("skips a port the Dev Servers panel runs a server on", async () => {
+    db.prepare(
+      `INSERT INTO dev_servers (id, project_id, name, status, ports) VALUES (?, ?, 'web', 'running', '[3001]')`
+    ).run(`ds-${Date.now()}`, projectId);
+    const got = await allocatePorts(session(), bases, free, gone);
+    expect(got.slot).toBe(2);
+    db.prepare(`DELETE FROM dev_servers`).run();
+  });
+
   it("takes back a done task's slot even if a tmux session has its name", async () => {
     const id = session();
     await allocatePorts(id, bases, free, gone);
@@ -229,6 +247,31 @@ describe("sessionRunningBrief", () => {
     expect(brief).toContain("RAILS_PORT=3001, VITE_PORT=3101");
     expect(brief).toContain("http://localhost:3001/login");
     fs.rmSync(path.join(projectDir, "agentos.json"), { force: true });
+    const bare = sessionRunningBrief(id);
+    expect(bare).toContain("RAILS_PORT=3001, VITE_PORT=3101");
+    expect(bare).toContain("aos port");
+    expect(bare).not.toContain("localhost:3001/login");
+  });
+
+  it("is still the ports without an agentos.json, and nothing without ports", async () => {
+    const id = session();
     expect(sessionRunningBrief(id)).toBe("");
+    await allocatePorts(id, { PORT: 3100 }, free, gone);
+    expect(sessionRunningBrief(id)).toMatch(
+      /^## Running this project\n\n- Your ports, exported in your shell and no other session's: PORT=3101\./
+    );
+  });
+
+  it("warns when the project's dev script hardcodes a port", async () => {
+    fs.writeFileSync(
+      path.join(projectDir, "package.json"),
+      JSON.stringify({ scripts: { dev: "next dev -p 3000" } })
+    );
+    const id = session();
+    await allocatePorts(id, { PORT: 3100 }, free, gone);
+    expect(sessionRunningBrief(id)).toContain(
+      "`npm run dev` hardcodes port 3000: run `npx next dev -p 3101` instead."
+    );
+    fs.rmSync(path.join(projectDir, "package.json"), { force: true });
   });
 });

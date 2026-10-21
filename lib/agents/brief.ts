@@ -1,7 +1,7 @@
 // What every agent AgentOS starts is told about waiting; the note sent after
 // AgentOS stops a spinning background job repeats it (lib/health/spin.ts).
 export const WAIT_ADVICE =
-  "To wait for a long command, run it with run_in_background and end your turn; you're woken when it exits. Don't start a second job to poll for the first. Any wait loop must sleep on each pass and test a condition that can actually become true (pgrep for the exact process, a log line), never a fixed sleep.";
+  "To wait for a long command, run it with run_in_background and end your turn; you're woken when it exits. Don't start a second job to poll for the first. Any wait loop must sleep on each pass and test a condition that can actually become true (pgrep for the exact process, a log line), never a fixed sleep. Never wait for a port another process holds: `aos port` gives you a free one.";
 
 // What every agent AgentOS starts is told about the network it's on.
 export const BUS_BRIEF = `You are one of several coding agents running in AgentOS. Other sessions may be working on related projects at the same time, and you can talk to them with the \`aos\` command:

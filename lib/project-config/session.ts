@@ -9,7 +9,8 @@ import os from "os";
 import { sessionTmpDir } from "../sessions/leftovers";
 import { db } from "../db";
 import { getProject } from "../projects";
-import { sessionPorts } from "../ports";
+import { sessionPorts } from "../ports/allocatePorts";
+import { findHardcodedPorts, hardcodedNote } from "../ports/findHardcodedPorts";
 import {
   loadProjectConfig,
   NONE,
@@ -71,12 +72,27 @@ export function sessionProjectEnv(sessionId: string): Record<string, string> {
   }
 }
 
+// With no config file the section is only the session's ports, so an agent
+// in a project without agentos.json still knows it has them.
 export function sessionRunningBrief(sessionId: string): string {
   try {
     const { config, source, warning, ports } = sessionConfig(sessionId);
+    if (!source && !ports) return "";
+    const dir = projectPathOf(sessionId);
+    const primary = ports ? Object.values(ports)[0] : undefined;
+    const hardcoded =
+      dir && primary !== undefined
+        ? findHardcodedPorts(dir, config.dev, primary).map(hardcodedNote)
+        : [];
     return source
-      ? runningBrief(config, ports ?? {}, sessionDatabase(sessionId), warning)
-      : "";
+      ? runningBrief(
+          config,
+          ports ?? {},
+          sessionDatabase(sessionId),
+          warning,
+          hardcoded
+        )
+      : runningBrief({}, ports ?? {}, null, null, hardcoded);
   } catch (error) {
     console.error(`[project-config] brief for ${sessionId}:`, error);
     return "";

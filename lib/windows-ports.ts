@@ -16,22 +16,28 @@ const execFileAsync = promisify(execFile);
 const TTL_MS = 3000;
 
 /**
- * Listening ports in `netstat.exe -ano -p TCP` output. A listener has a
- * wildcard peer (0.0.0.0:0 or [::]:0), which holds in every Windows locale;
- * the state column ("LISTENING") is translated.
+ * Listening ports in `netstat.exe -ano -p TCP` output, each with the pid
+ * that holds it. A listener has a wildcard peer (0.0.0.0:0 or [::]:0), which
+ * holds in every Windows locale; the state column ("LISTENING") is
+ * translated.
  */
-export function parseNetstatListeners(out: string): Set<number> {
-  const ports = new Set<number>();
+export function parseNetstatOwners(out: string): Map<number, number | null> {
+  const owners = new Map<number, number | null>();
   for (const line of out.split(/\r?\n/)) {
     const cols = line.trim().split(/\s+/);
     if (cols.length < 4 || cols[0].toUpperCase() !== "TCP") continue;
     const [, local, peer] = cols;
     if (!/^(0\.0\.0\.0|\[::\]):0$/.test(peer)) continue;
     const port = Number(local.slice(local.lastIndexOf(":") + 1));
-    if (Number.isInteger(port) && port > 0) ports.add(port);
+    const pid = Number(cols[cols.length - 1]);
+    if (Number.isInteger(port) && port > 0 && !owners.has(port))
+      owners.set(port, Number.isInteger(pid) && pid > 0 ? pid : null);
   }
-  return ports;
+  return owners;
 }
+
+export const parseNetstatListeners = (out: string): Set<number> =>
+  new Set(parseNetstatOwners(out).keys());
 
 type Run = (file: string, args: string[]) => Promise<string>;
 
@@ -39,27 +45,39 @@ const defaultRun: Run = async (file, args) =>
   (await execFileAsync(file, args, { timeout: 4000, maxBuffer: 8 << 20 }))
     .stdout;
 
-let cache: { at: number; ports: Set<number> | null } | undefined;
-let inflight: Promise<Set<number> | null> | undefined;
+type Owners = Map<number, number | null>;
 
-/** The ports Windows listens on, or null when unknown (not WSL 2, or it failed). */
-export async function windowsListeningPorts(
-  opts: { wsl?: number; run?: Run; now?: number } = {}
-): Promise<Set<number> | null> {
+let cache: { at: number; owners: Owners | null } | undefined;
+let inflight: Promise<Owners | null> | undefined;
+
+type Opts = { wsl?: number; run?: Run; now?: number };
+
+/** Windows' listening ports and their pids, or null when unknown (not WSL 2, or it failed). */
+export async function windowsListeners(
+  opts: Opts = {}
+): Promise<Owners | null> {
   if ((opts.wsl ?? wslVersion()) !== 2) return null;
   const now = opts.now ?? Date.now();
-  if (cache && now - cache.at < TTL_MS) return cache.ports;
+  if (cache && now - cache.at < TTL_MS) return cache.owners;
   inflight ??= (opts.run ?? defaultRun)("netstat.exe", ["-ano", "-p", "TCP"])
-    .then((out) => parseNetstatListeners(out))
+    .then((out) => parseNetstatOwners(out))
     .catch(() => null)
-    .then((ports) => {
-      cache = { at: now, ports };
-      return ports;
+    .then((owners) => {
+      cache = { at: now, owners };
+      return owners;
     })
     .finally(() => {
       inflight = undefined;
     });
   return inflight;
+}
+
+/** The ports Windows listens on, or null when unknown (not WSL 2, or it failed). */
+export async function windowsListeningPorts(
+  opts: Opts = {}
+): Promise<Set<number> | null> {
+  const owners = await windowsListeners(opts);
+  return owners ? new Set(owners.keys()) : null;
 }
 
 export function resetWindowsPortsCache() {
