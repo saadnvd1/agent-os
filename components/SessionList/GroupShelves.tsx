@@ -18,6 +18,7 @@ import {
 } from "@/components/ui/dropdown-menu";
 import { cn } from "@/lib/utils";
 import { SessionRow } from "./SessionRow";
+import { useDropZone } from "./useGroupDrag";
 
 function GroupHeader({
   shelf,
@@ -154,6 +155,51 @@ function GroupHeader({
   );
 }
 
+function GroupSection({
+  shelf,
+  siblings,
+  workspaceName,
+}: {
+  shelf: GroupShelf;
+  siblings: GroupShelf[];
+  workspaceName?: string;
+}) {
+  const { group } = shelf;
+  const update = useUpdateGroup();
+  const drop = useDropZone(
+    { groupId: group.id, workspaceId: group.workspace_id },
+    group.collapsed
+      ? () => update.mutate({ id: group.id, collapsed: false })
+      : undefined
+  );
+  const empty = !group.collapsed && shelf.rows.length === 0;
+  return (
+    <section
+      aria-label={group.name}
+      data-drop-over={drop.over || undefined}
+      className={cn(
+        "rounded-lg transition-colors",
+        drop.over && "bg-primary/10 ring-primary/50 ring-1"
+      )}
+      {...drop.props}
+    >
+      <GroupHeader
+        shelf={shelf}
+        siblings={siblings}
+        workspaceName={workspaceName}
+      />
+      {empty && (
+        <p className="text-muted-foreground/70 px-2.5 pb-2 text-xs">
+          Nothing here yet · drag a session in, or use its ⋯ menu
+        </p>
+      )}
+      {(group.collapsed ? [] : shelf.rows).map((r) => (
+        <SessionRow key={r.session.id} row={r} muted={r.settled === "auto"} />
+      ))}
+    </section>
+  );
+}
+
 // The user's groups, in order, between Pinned and the status shelves. A
 // folded group keeps its header and counts; an auto-settled member is muted.
 export function GroupShelves({
@@ -166,30 +212,19 @@ export function GroupShelves({
 }) {
   return groups.map((shelf) => {
     const { group } = shelf;
-    const siblings = groups.filter(
-      (g) => g.group.workspace_id === group.workspace_id
-    );
-    const empty = !group.collapsed && shelf.rows.length === 0;
     return (
-      <section key={group.id} aria-label={group.name}>
-        <GroupHeader
-          shelf={shelf}
-          siblings={siblings}
-          workspaceName={
-            workspaceNames && group.workspace_id
-              ? workspaceNames.get(group.workspace_id)
-              : undefined
-          }
-        />
-        {empty && (
-          <p className="text-muted-foreground/70 px-2.5 pb-2 text-xs">
-            Nothing here yet · move a session in from its ⋯ menu
-          </p>
+      <GroupSection
+        key={group.id}
+        shelf={shelf}
+        siblings={groups.filter(
+          (g) => g.group.workspace_id === group.workspace_id
         )}
-        {(group.collapsed ? [] : shelf.rows).map((r) => (
-          <SessionRow key={r.session.id} row={r} muted={r.settled === "auto"} />
-        ))}
-      </section>
+        workspaceName={
+          workspaceNames && group.workspace_id
+            ? workspaceNames.get(group.workspace_id)
+            : undefined
+        }
+      />
     );
   });
 }
