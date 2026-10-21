@@ -25,7 +25,10 @@ const quote = (s: string) =>
     .map((l) => (l ? `> ${l}` : ">"))
     .join("\n");
 
-function itemMd(i: ExportItem): string {
+export const UNAVAILABLE = "[output unavailable]";
+export const UNAVAILABLE_RUNNING = "[output unavailable: tool still running]";
+
+export function itemMd(i: ExportItem): string {
   const t = clock(i.at);
   switch (i.kind) {
     case "user": {
@@ -59,6 +62,9 @@ function itemMd(i: ExportItem): string {
         );
       if (i.diff?.patch) parts.push(fenced(i.diff.patch, "diff"));
       if (i.output) parts.push(`Output:\n\n${fenced(i.output)}`);
+      else if (i.status === "running") parts.push(UNAVAILABLE_RUNNING);
+      else if (i.status === "stopped" || i.status === "error")
+        parts.push(UNAVAILABLE);
       return parts.join("\n\n");
     }
     case "command_output":
