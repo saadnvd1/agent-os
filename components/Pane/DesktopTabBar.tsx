@@ -38,6 +38,7 @@ interface DesktopTabBarProps {
   isFocused: boolean;
   isConductor: boolean;
   hasLog?: boolean;
+  hasReport?: boolean;
   workerCount: number;
   canSplit: boolean;
   canClose: boolean;
@@ -69,6 +70,7 @@ export function DesktopTabBar({
   isFocused,
   isConductor,
   hasLog,
+  hasReport,
   workerCount,
   canSplit,
   canClose,
@@ -184,6 +186,7 @@ export function DesktopTabBar({
             isLocalSession={isLocalSession}
             isConductor={isConductor}
             hasLog={hasLog}
+            hasReport={hasReport}
             workerCount={workerCount}
             showGit={showGit}
             gitDrawerOpen={gitDrawerOpen}

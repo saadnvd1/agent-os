@@ -9,6 +9,7 @@ import { McpServersForm } from "./McpServersForm";
 import { HqFolderForm } from "./HqFolderForm";
 import { ProjectTiersForm } from "./ProjectTiersForm";
 import { StallForm } from "./StallForm";
+import { WorkspaceModeForm } from "./WorkspaceModeForm";
 import { WorkspaceModelsForm } from "./WorkspaceModelsForm";
 import { AwayWindowForm } from "@/components/Away/AwayWindowForm";
 
@@ -46,6 +47,7 @@ export function WorkspaceSettings() {
             key={`${w.id}:${w.max_running_tasks ?? "off"}`}
             workspace={w}
           />
+          <WorkspaceModeForm workspaceId={w.id} />
           <RulesForm workspaceId={w.id} />
           <WorkspaceModelsForm workspaceId={w.id} />
           <McpServersForm workspace={w} />

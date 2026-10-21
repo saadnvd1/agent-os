@@ -7,6 +7,7 @@ import {
   GitBranch,
   Package,
   ScrollText,
+  ClipboardList,
   Terminal as TerminalIcon,
   Users,
   type LucideIcon,
@@ -31,6 +32,7 @@ export interface MobileViewAvailability {
   // Local, and the folder is not known to be outside a git repository.
   showGit: boolean;
   hasLog?: boolean;
+  hasReport?: boolean;
   isConductor: boolean;
   workerCount: number;
 }
@@ -40,6 +42,7 @@ export function mobileViews({
   isLocalSession,
   showGit,
   hasLog,
+  hasReport,
   isConductor,
   workerCount,
 }: MobileViewAvailability): MobileView[] {
@@ -48,6 +51,7 @@ export function mobileViews({
     isLocalSession && { mode: "files", label: "Files", icon: FolderOpen },
     showGit && { mode: "git", label: "Git", icon: GitBranch },
     { mode: "artifacts", label: "Artifacts", icon: Package },
+    !!hasReport && { mode: "report", label: "Report", icon: ClipboardList },
     !!hasLog && { mode: "log", label: "Log", icon: ScrollText },
     isConductor && {
       mode: "workers",

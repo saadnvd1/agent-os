@@ -33,6 +33,7 @@ import { doneOnPeer, peerSessionLink } from "../hosts/peer-actions";
 import { hostLink } from "../hosts/remote-api";
 import { doneHeldTask, isHeldRemote } from "../tasks/contract/held-calls";
 import { captureMergedTask } from "../session-logs";
+import { taskEnded } from "../reports/end-hook";
 import { sessionEnded } from "../experiments/hooks";
 import { pushMerged } from "../notify/push/events";
 import { setPr, setTask } from "../db/session-parts";
@@ -119,6 +120,7 @@ function mark(s: Session, status: "merged" | "done", pr: TaskPR | null) {
   if (status === "merged") {
     pushMerged(s.id);
     void captureMergedTask(s.id, { head: pr?.head });
+    taskEnded(s.id);
   }
 }
 

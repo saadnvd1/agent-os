@@ -47,6 +47,10 @@ const ArtifactsPanel = dynamic(
     ),
   { ssr: false }
 );
+const ReportView = dynamic(
+  () => import("@/components/Report/ReportView").then((mod) => mod.ReportView),
+  { ssr: false }
+);
 const LogDocument = dynamic(
   () =>
     import("@/components/SessionLogs/LogDocument").then(
@@ -216,6 +220,7 @@ export const Pane = memo(function Pane({
     !!session?.task_prompt &&
     (session.task_status === "merged" || session.pr_status === "merged");
   const hasLog = !!useTaskLogQuery(session?.id, merged).data;
+  const hasReport = !!session?.task_prompt;
 
   // Get current project and its repositories
   const currentProject = useMemo(() => {
@@ -472,6 +477,7 @@ export const Pane = memo(function Pane({
           viewMode={viewMode}
           isConductor={isConductor}
           hasLog={hasLog}
+          hasReport={hasReport}
           workerCount={workerCount}
           showGit={showGit}
           onMenuClick={onMenuClick}
@@ -495,6 +501,7 @@ export const Pane = memo(function Pane({
           isFocused={isFocused}
           isConductor={isConductor}
           hasLog={hasLog}
+          hasReport={hasReport}
           workerCount={workerCount}
           canSplit={canSplit}
           canClose={canClose}
@@ -558,6 +565,11 @@ export const Pane = memo(function Pane({
                 repositories={projectRepositories}
               />
             </div>
+          )}
+
+          {/* Report */}
+          {viewMode === "report" && session && (
+            <ReportView sessionId={session.id} name={session.name} />
           )}
 
           {/* Log */}
@@ -629,6 +641,11 @@ export const Pane = memo(function Pane({
                         projectId={session.project_id}
                       />
                     </div>
+                  )}
+
+                  {/* Report */}
+                  {viewMode === "report" && session && (
+                    <ReportView sessionId={session.id} name={session.name} />
                   )}
 
                   {/* Log */}

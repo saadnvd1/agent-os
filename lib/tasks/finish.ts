@@ -36,6 +36,7 @@ import {
 } from "./session";
 import { releaseSessionLeftovers } from "../sessions/leftovers";
 import { captureMergedTask } from "../session-logs";
+import { taskEnded } from "../reports/end-hook";
 import { sessionEnded } from "../experiments/hooks";
 import { snapshotWorktree } from "../resurrect/snapshot";
 import { keepSessionFiles } from "../session-artifacts/collect";
@@ -202,6 +203,7 @@ export async function signOffTask(
   pushMerged(id);
   // Reads the plan file now: cleanup below removes the worktree.
   void captureMergedTask(id, { head: opts.head ?? pr!.head ?? null });
+  taskEnded(id);
   void sessionEnded(id, "merged");
   const head = opts.head ?? pr!.head;
   resolveMergedTaskAsks(
