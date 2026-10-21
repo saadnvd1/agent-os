@@ -4,6 +4,9 @@ import { cn } from "@/lib/utils";
 const TONES = {
   amber: "bg-amber-500/15 text-amber-700 dark:text-amber-400",
   muted: "bg-muted text-muted-foreground",
+  green: "bg-green-500/15 text-green-700 dark:text-green-400",
+  primary: "bg-primary/15 text-primary",
+  red: "bg-red-500/15 text-red-700 dark:text-red-400",
 } as const;
 
 /** A small coloured pill for a status. A button when it has an onClick. */

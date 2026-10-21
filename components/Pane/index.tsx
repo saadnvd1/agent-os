@@ -16,6 +16,7 @@ import { cn } from "@/lib/utils";
 import { ConductorPanel } from "@/components/ConductorPanel";
 import { useFileEditor } from "@/hooks/useFileEditor";
 import { MobileTabBar } from "./MobileTabBar";
+import { PairSwitch } from "@/components/Analyst/PairSwitch";
 import { openFind } from "@/components/Chat/useFind";
 import { DesktopTabBar } from "./DesktopTabBar";
 import {
@@ -514,6 +515,7 @@ export const Pane = memo(function Pane({
           bookmarksSessionId={bookmarksSessionId}
         />
       )}
+      {isMobile && <PairSwitch session={session} paneId={paneId} />}
 
       {/* Content Area - Mobile: simple flex, Desktop: resizable panels */}
       {isMobile ? (

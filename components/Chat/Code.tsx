@@ -12,6 +12,8 @@ import oneDark from "react-syntax-highlighter/dist/esm/styles/prism/one-dark";
 import oneLight from "react-syntax-highlighter/dist/esm/styles/prism/one-light";
 import { CopyButton } from "./CopyButton";
 import { Mermaid } from "./Mermaid";
+import { ReviewCard } from "@/components/Analyst/ReviewCard";
+import { REVIEW_FENCE } from "@/lib/analyst/parseReview";
 
 const ALIASES: Record<string, string> = {
   sh: "bash",
@@ -117,6 +119,7 @@ export function CodeBlock({
   language?: string;
 }) {
   if (language === "mermaid") return <Mermaid code={code} />;
+  if (language === REVIEW_FENCE) return <ReviewCard code={code} />;
   return (
     <div className="bg-foreground/[0.04] not-prose my-3 overflow-hidden rounded-xl">
       <div

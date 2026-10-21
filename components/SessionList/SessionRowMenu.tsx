@@ -27,6 +27,7 @@ import {
   RotateCcw,
   Sparkles,
   Trash2,
+  Eye,
 } from "lucide-react";
 import type { Session } from "@/lib/db";
 import { selectionActions } from "@/stores/sessionSelection";
@@ -51,6 +52,7 @@ import { useRowContext } from "./RowContext";
 import { MoveMenuItems } from "@/components/Tasks/MoveMenuItems";
 import { shareUiActions } from "@/stores/shareUi";
 import { exportUiActions } from "@/stores/exportUi";
+import { analystUiActions } from "@/stores/analystUi";
 import { copySessionLink } from "@/hooks/useCopyToClipboard";
 import { useLinkedHostNames } from "@/data/hosts";
 import { remoteBlocks, remoteNote } from "@/lib/hosts/remote-menu";
@@ -201,6 +203,10 @@ export function SessionRowMenu({
       case "export":
         return item("Export for AI…", Download, () =>
           exportUiActions.open(session.id, session.name)
+        );
+      case "add-analyst":
+        return item("Add analyst…", Eye, () =>
+          analystUiActions.open(session.id, session.name)
         );
       case "fork":
         return item("Fork session", Copy, () => ctx.onFork(session.id));

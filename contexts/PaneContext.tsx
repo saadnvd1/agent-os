@@ -23,6 +23,8 @@ import {
   loadPaneState,
   showDraft,
   MAX_PANES,
+  openBeside as openBesideIn,
+  type OpenSession,
 } from "@/lib/panes";
 import { useViewport } from "@/hooks/useViewport";
 
@@ -59,6 +61,8 @@ interface PaneContextValue {
     hostId?: string
   ) => void;
   detachSession: (paneId: string) => void;
+  // Shows a session beside a pane: its pane if open, else a split or a tab.
+  openBeside: (paneId: string, open: OpenSession) => void;
   openDraft: (paneId: string, draftId: string) => void;
   getPaneData: (paneId: string) => PaneData;
   getActiveTab: (paneId: string) => TabData | null;
@@ -270,6 +274,21 @@ export function PaneProvider({ children }: { children: ReactNode }) {
     []
   );
 
+  // A phone shows one pane: the session takes this one's place.
+  const openBeside = useCallback(
+    (paneId: string, open: OpenSession) => {
+      if (isMobile)
+        attachSession(
+          paneId,
+          open.sessionId,
+          open.tmux,
+          open.hostId ?? undefined
+        );
+      else setState((prev) => openBesideIn(prev, paneId, open));
+    },
+    [isMobile, attachSession]
+  );
+
   // Detach session from active tab
   const detachSession = useCallback((paneId: string) => {
     setState((prev) => {
@@ -393,6 +412,7 @@ export function PaneProvider({ children }: { children: ReactNode }) {
         switchTab,
         attachSession,
         detachSession,
+        openBeside,
         openDraft,
         getPaneData,
         getActiveTab,

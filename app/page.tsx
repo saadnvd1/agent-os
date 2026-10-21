@@ -142,6 +142,13 @@ const ExportSheet = dynamic(
   () => import("@/components/Export/ExportSheet").then((m) => m.ExportSheet),
   { ssr: false }
 );
+const StartAnalystSheet = dynamic(
+  () =>
+    import("@/components/Analyst/StartAnalystSheet").then(
+      (m) => m.StartAnalystSheet
+    ),
+  { ssr: false }
+);
 const CommandPalette = dynamic(
   () =>
     import("@/components/CommandPalette/CommandPalette").then(
@@ -171,6 +178,7 @@ const AppDialogs = memo(function AppDialogs({
       <MoveDialog />
       <ShareDialog />
       <ExportSheet />
+      <StartAnalystSheet />
       <AwayReport />
       <IncomingLinks />
       <CommandPalette />

@@ -33,6 +33,8 @@ export interface Draft {
   // binding picks the model; roleModel overrides it for this session.
   agentRole?: string | null;
   roleModel?: string | null;
+  // Pair it with an analyst that reviews each turn (a local chat only).
+  withAnalyst?: boolean;
   // A task's priority in the queue; unset: normal.
   taskPriority?: Priority;
   createdAt: number;

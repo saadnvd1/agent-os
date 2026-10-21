@@ -208,6 +208,58 @@ export function closePane(state: PaneState, paneId: string): PaneState | null {
   };
 }
 
+export interface OpenSession {
+  sessionId: string;
+  tmux: string;
+  hostId?: string | null;
+}
+
+// Shows a session beside a pane (an analyst beside its coder): where a pane
+// already shows it, that one; else in a new pane to its right; with no room
+// for another pane, in a new tab of this one.
+export function openBeside(
+  state: PaneState,
+  paneId: string,
+  open: OpenSession
+): PaneState {
+  for (const id of getAllPaneIds(state.layout)) {
+    const pane = state.panes[id];
+    const tab = pane?.tabs.find((t) => t.sessionId === open.sessionId);
+    if (tab)
+      return {
+        ...state,
+        focusedPaneId: id,
+        panes: { ...state.panes, [id]: { ...pane, activeTabId: tab.id } },
+      };
+  }
+  const tab: TabData = {
+    ...createTab(),
+    sessionId: open.sessionId,
+    attachedTmux: open.tmux,
+    attachedHost: open.hostId ?? null,
+  };
+  const split = state.panes[paneId] && splitPane(state, paneId, "horizontal");
+  if (split)
+    return {
+      ...split,
+      panes: {
+        ...split.panes,
+        [split.focusedPaneId]: { tabs: [tab], activeTabId: tab.id },
+      },
+    };
+  const pane = state.panes[paneId] ?? state.panes[state.focusedPaneId];
+  if (!pane) return state;
+  const target = state.panes[paneId] ? paneId : state.focusedPaneId;
+  return {
+    ...state,
+    focusedPaneId: target,
+    panes: {
+      ...state.panes,
+      [target]: { tabs: [...pane.tabs, tab], activeTabId: tab.id },
+    },
+  };
+}
+
 // Get all pane IDs from layout
 export function getAllPaneIds(layout: PaneLayout): string[] {
   if (layout.type === "leaf") {

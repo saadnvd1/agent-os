@@ -342,3 +342,10 @@
 - Per-project `claims.share: false` in `.agent-os.json`.
 - Text tool-call recovery for OpenCode (it has no hook to rewrite a reply; a small local proxy could do it).
 - Export: terminal Claude sessions (adapt the transcript JSONL into chat items behind the same builder); build the share's Markdown twin with the export renderer so there is one Markdown writer; tint a whole turn, not just its message, while picking turns; an "Export session" palette command once the palette has a current-session scope.
+
+## Analyst sessions (follow-ups)
+
+- The automatic loop: send the analyst's prompt without a click until it says done or blocked, with a turn and cost cap and a loop guard (the supervisor role from agent roles is the natural owner).
+- Terminal coders (read the transcript JSONL), coders on a linked machine, and one analyst over several coders.
+- `aos analyst start|send|dismiss` for agents and scripts; a swipe between the two sides on a phone; native app screens on the same routes.
+- Nest an analyst's row under its coder in the sidebar.

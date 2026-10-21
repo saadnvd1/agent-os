@@ -26,6 +26,7 @@ import {
   Share2,
   Download,
   TextSearch,
+  Eye,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { useAwayQuery } from "@/data/away";
@@ -36,6 +37,8 @@ import { RolePill } from "@/components/Sessions/RolePill";
 import { bookmarksUiActions } from "@/stores/bookmarksUi";
 import { shareUiActions } from "@/stores/shareUi";
 import { exportUiActions } from "@/stores/exportUi";
+import { analystUiActions } from "@/stores/analystUi";
+import { useCanAddAnalyst } from "@/components/Analyst/pair";
 import { MoveMenuItems } from "@/components/Tasks/MoveMenuItems";
 import { ChatBookmarksButton } from "@/components/Bookmarks/ChatBookmarksButton";
 import type { ViewMode } from "@/contexts/PaneContext";
@@ -128,6 +131,7 @@ export function MobileTabBar({
   };
 
   const isLocalSession = !session?.host_id || session.host_id === "local";
+  const canAddAnalyst = useCanAddAnalyst(session);
 
   return (
     <div
@@ -230,6 +234,16 @@ export function MobileTabBar({
                   <Download className="h-4 w-4" />
                   Export for AI…
                 </DropdownMenuItem>
+                {canAddAnalyst && (
+                  <DropdownMenuItem
+                    onSelect={() =>
+                      analystUiActions.open(session.id, session.name)
+                    }
+                  >
+                    <Eye className="h-4 w-4" />
+                    Add analyst…
+                  </DropdownMenuItem>
+                )}
                 <DropdownMenuSeparator />
               </>
             )}
