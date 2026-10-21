@@ -21,7 +21,7 @@ import { promisify } from "util";
 import { gitResult, isGitError } from "../git-exec";
 import { findNodeModules } from "./clone";
 import { fastCopyMode } from "./fastcopy";
-import { inside, realExisting } from "./paths";
+import { STAGING_SUFFIX, ignoreStaging, inside, realExisting } from "./paths";
 import { copyTree } from "./spare";
 import type { CopyMode } from "./spare";
 
@@ -234,7 +234,8 @@ export async function seedBuildCaches(opts: {
       skip(rel, "its folder in the worktree resolves outside it");
       continue;
     }
-    const partial = `${dest}.aos-partial`;
+    const partial = `${dest}${STAGING_SUFFIX}`;
+    await ignoreStaging(dir);
     await fs.promises.rm(partial, { recursive: true, force: true });
     const ok =
       (await copyTree(real, partial, mode)) &&

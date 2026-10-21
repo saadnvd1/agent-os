@@ -46,7 +46,9 @@ export async function changedFiles(
       : git(dir, ["diff", "--name-only", "-z", "HEAD"], OPTS).catch(() => ""),
     git(dir, ["ls-files", "--others", "--exclude-standard", "-z"], OPTS),
   ]);
-  return [...new Set([...paths(committed), ...paths(untracked)])];
+  return [...new Set([...paths(committed), ...paths(untracked)])].filter(
+    (p) => !p.split("/").some((seg) => seg.endsWith(".aos-partial"))
+  );
 }
 
 // Sessions that can hold a claim: local, not a mirror of another machine's.
