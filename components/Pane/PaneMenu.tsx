@@ -8,6 +8,7 @@ import {
   Link,
   MoreHorizontal,
   Share2,
+  Download,
   SplitSquareHorizontal,
   SplitSquareVertical,
   Star,
@@ -27,6 +28,7 @@ import {
 import { copySessionLink, writeClipboard } from "@/hooks/useCopyToClipboard";
 import type { Session } from "@/lib/db";
 import { shareUiActions } from "@/stores/shareUi";
+import { exportUiActions } from "@/stores/exportUi";
 import { useSessionBookmarks } from "@/data/bookmarks";
 import { useDocsWorkspace } from "@/data/lumifyhub/docs";
 import { bookmarksUiActions } from "@/stores/bookmarksUi";
@@ -115,6 +117,14 @@ export function PaneMenu({
               >
                 <Share2 className="h-4 w-4" />
                 Share…
+              </DropdownMenuItem>
+            )}
+            {session.view === "chat" && (
+              <DropdownMenuItem
+                onSelect={() => exportUiActions.open(session.id, session.name)}
+              >
+                <Download className="h-4 w-4" />
+                Export for AI…
               </DropdownMenuItem>
             )}
             <DropdownMenuSeparator />

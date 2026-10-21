@@ -39,7 +39,7 @@ describe("rowMenu", () => {
       ["rename", "pin", "select"],
       [
         "open-tab",
-        { group: "share", items: ["copy-link", "share"] },
+        { group: "share", items: ["copy-link", "share", "export"] },
         { group: "restart", items: ["fork", "fresh-start"] },
         { group: "move", items: ["move-project", "move-group"] },
         { group: "automate", items: ["check-ins", "save-recipe"] },
@@ -89,6 +89,13 @@ describe("rowMenu", () => {
     ).toEqual([["open-pr"], ["done"], ["archive", "delete"]]);
   });
 
+  it("offers export only for chat sessions", () => {
+    const flat = (view: "chat" | "terminal") =>
+      JSON.stringify(menu({ s: { view } }).sections);
+    expect(flat("chat")).toContain('"export"');
+    expect(flat("terminal")).not.toContain('"export"');
+  });
+
   it("gives an orchestrator no snooze, pause, finish or delete", () => {
     expect(
       menu({ s: { role: "orchestrator", has_brief: 1 } }).sections
@@ -96,7 +103,7 @@ describe("rowMenu", () => {
       ["rename", "pin", "select"],
       [
         "open-tab",
-        { group: "share", items: ["copy-link", "share"] },
+        { group: "share", items: ["copy-link", "share", "export"] },
         "new-conversation",
       ],
     ]);

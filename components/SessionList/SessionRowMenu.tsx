@@ -15,6 +15,7 @@ import {
   KanbanSquare,
   Link,
   Share2,
+  Download,
   Loader2,
   Pencil,
   Pin,
@@ -49,6 +50,7 @@ import type { SidebarRow } from "@/lib/sidebar/shelves";
 import { useRowContext } from "./RowContext";
 import { MoveMenuItems } from "@/components/Tasks/MoveMenuItems";
 import { shareUiActions } from "@/stores/shareUi";
+import { exportUiActions } from "@/stores/exportUi";
 import { copySessionLink } from "@/hooks/useCopyToClipboard";
 import { useLinkedHostNames } from "@/data/hosts";
 import { remoteBlocks, remoteNote } from "@/lib/hosts/remote-menu";
@@ -195,6 +197,10 @@ export function SessionRowMenu({
             sessionId: session.id,
             title: session.name,
           })
+        );
+      case "export":
+        return item("Export for AI…", Download, () =>
+          exportUiActions.open(session.id, session.name)
         );
       case "fork":
         return item("Fork session", Copy, () => ctx.onFork(session.id));

@@ -44,7 +44,7 @@ export interface Snapshot {
 
 export const MAX_TOOL_INPUT = 4_000;
 export const MAX_TOOL_OUTPUT = 20_000;
-const HIDDEN_FILE = "[contents of a secret file hidden]";
+export const HIDDEN_FILE = "[contents of a secret file hidden]";
 const NO_IMAGE = "[image not shared]";
 
 const clip = (s: string, max: number) =>
@@ -55,7 +55,7 @@ const clip = (s: string, max: number) =>
 const excerptOf = (s: string) => s.replace(/\s+/g, " ").trim().slice(0, 120);
 
 // Every string in a tool's input, to see whether it names a secret file.
-function strings(v: unknown, out: string[] = []): string[] {
+export function strings(v: unknown, out: string[] = []): string[] {
   if (typeof v === "string") out.push(v);
   else if (Array.isArray(v)) v.forEach((x) => strings(x, out));
   else if (v && typeof v === "object")

@@ -153,3 +153,23 @@ describe("shape", () => {
     expect(run(`API_KEY=${rand(20, ALNUM)}`).hits.secret).toBe(1);
   });
 });
+
+describe("only: secrets", () => {
+  const text = `${ctx.home}/app on fakebox, mail a@b.co from 10.1.2.3, API_KEY=${rand(20, ALNUM)}`;
+  const only = redactForShare(text, ctx, { only: ["secret"] });
+
+  it("masks credentials but keeps paths, hosts, addresses and emails", () => {
+    expect(only.text).toContain(`${ctx.home}/app`);
+    expect(only.text).toContain("fakebox");
+    expect(only.text).toContain("a@b.co");
+    expect(only.text).toContain("10.1.2.3");
+    expect(only.text).toContain("API_KEY=[secret]");
+    expect(only.hits).toEqual({ secret: 1, path: 0, ip: 0, host: 0, email: 0 });
+  });
+
+  it("is the full redaction when not asked", () => {
+    const all = run(text);
+    expect(all.text).not.toContain("fakebox");
+    expect(all.hits.secret).toBe(only.hits.secret);
+  });
+});

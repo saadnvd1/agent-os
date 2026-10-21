@@ -97,10 +97,12 @@ function sub(
 
 export function redactForShare(
   input: string,
-  ctx: ShareContext = NO_CONTEXT
+  ctx: ShareContext = NO_CONTEXT,
+  opts: { only?: Kind[] } = {}
 ): { text: string; hits: Hits } {
   const hits = noHits();
   let t = input;
+  const on = (k: Kind) => !opts.only || opts.only.includes(k);
 
   // 1. Credentials by shape.
   t = sub(t, PRIVATE_KEY_BLOCK, SECRET, hits, "secret");
@@ -143,7 +145,7 @@ export function redactForShare(
   }
 
   // 3. Home paths, and the account name before an @.
-  if (ctx.home.length > 1)
+  if (on("path") && ctx.home.length > 1)
     t = sub(
       t,
       new RegExp(escape(ctx.home) + "(?![\\w.-])", "g"),
@@ -151,8 +153,8 @@ export function redactForShare(
       hits,
       "path"
     );
-  t = sub(t, new RegExp(HOME.source, "g"), "~", hits, "path");
-  if (ctx.user.length > 2)
+  if (on("path")) t = sub(t, new RegExp(HOME.source, "g"), "~", hits, "path");
+  if (on("path") && ctx.user.length > 2)
     t = sub(
       t,
       new RegExp(`\\b${escape(ctx.user)}(?=@)`, "g"),
@@ -162,14 +164,16 @@ export function redactForShare(
     );
 
   // 4. Addresses.
-  t = sub(t, IPV4, "[ip]", hits, "ip", (m) => KEEP_IPV4.has(m));
-  t = sub(t, IPV6, "[ip]", hits, "ip", (m) => KEEP_IPV6.has(m));
+  if (on("ip")) {
+    t = sub(t, IPV4, "[ip]", hits, "ip", (m) => KEEP_IPV4.has(m));
+    t = sub(t, IPV6, "[ip]", hits, "ip", (m) => KEEP_IPV6.has(m));
+  }
 
   // 5. This machine's names, and private-network suffixes.
   const names = [...new Set(ctx.hosts.filter((h) => h.length > 2))].sort(
     (a, b) => b.length - a.length
   );
-  if (names.length)
+  if (on("host") && names.length)
     t = sub(
       t,
       new RegExp(
@@ -180,11 +184,13 @@ export function redactForShare(
       hits,
       "host"
     );
-  t = sub(t, CONNECT_HOST, "[host]", hits, "host");
-  t = sub(t, LOCAL_HOST, "[host]", hits, "host");
+  if (on("host")) {
+    t = sub(t, CONNECT_HOST, "[host]", hits, "host");
+    t = sub(t, LOCAL_HOST, "[host]", hits, "host");
+  }
 
   // 6. Email addresses.
-  t = sub(t, EMAIL, "[email]", hits, "email");
+  if (on("email")) t = sub(t, EMAIL, "[email]", hits, "email");
 
   return { text: t, hits };
 }
