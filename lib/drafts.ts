@@ -29,6 +29,10 @@ export interface Draft {
   // A task's own model, "provider/model"; unset, its roles' models
   // (lib/models).
   taskModel?: string | null;
+  // Start in an agent role (Developer, Analyst, Reviewer, Supervisor): its
+  // binding picks the model; roleModel overrides it for this session.
+  agentRole?: string | null;
+  roleModel?: string | null;
   // A task's priority in the queue; unset: normal.
   taskPriority?: Priority;
   createdAt: number;

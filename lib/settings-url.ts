@@ -9,6 +9,7 @@ export const SETTINGS_SECTIONS = [
   "approvals",
   "workspaces",
   "models",
+  "agent-roles",
   "devices",
   "shares",
   "notifications",

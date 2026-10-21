@@ -16,6 +16,9 @@ import { discoversModels, resolveModelForAgent } from "../model-catalog";
 import { isDiscoveredModel } from "../chat/discovered-models";
 import { parseOverride, resolveRole, setSessionModel } from "../models/resolve";
 import { ANTHROPIC } from "../models/roles";
+import { joinCrew } from "./crew";
+import { prepareRoleStart } from "../models/agent-binding";
+import { isAgentRole, roleBrief, type AgentRole } from "../models/agent-roles";
 import { getProject } from "../projects";
 import { getWorkspace } from "../workspaces";
 import { getHost, isRemoteHost } from "../hosts";
@@ -84,6 +87,13 @@ export interface LaunchInput {
   // follows the project; one in none keeps this (see inWorkspace).
   workspaceId?: string | null;
   systemPrompt?: string | null;
+  // Start it in a role: the model comes from the role's binding (or
+  // `model`), and its brief joins the instructions.
+  agentRole?: AgentRole | null;
+  // The crew it joins: the id of the session that began it.
+  crewId?: string | null;
+  // When the role's model is down, start on the role's fallback instead.
+  useFallback?: boolean;
   // The user's group it starts in (lib/session-groups).
   groupId?: string;
 }
@@ -261,7 +271,17 @@ async function launch(input: LaunchInput, id: string): Promise<Launched> {
   if (scratch && projectPath === SCRATCH_DIR)
     await fs.promises.mkdir(SCRATCH_DIR, { recursive: true });
 
-  const agentType = input.agentType;
+  if (input.agentRole && (remote || !isAgentRole(input.agentRole)))
+    throw new Error("A role session runs on this machine");
+  const roleStart = input.agentRole
+    ? await prepareRoleStart(input.agentRole, {
+        workspaceId: project?.workspace_id ?? home,
+        projectId: project && !project.is_uncategorized ? project.id : null,
+        override: input.model?.trim() || null,
+        useFallback: input.useFallback,
+      })
+    : null;
+  const agentType: AgentType = roleStart?.agentType ?? input.agentType;
   const view =
     input.view === "terminal" || !supportsChat(agentType) || remote
       ? "terminal"
@@ -273,20 +293,30 @@ async function launch(input: LaunchInput, id: string): Promise<Launched> {
   const picked = input.startedBy ? parseOverride(input.model) : null;
   if (picked && typeof picked !== "string")
     throw new Error(`model: a session takes one "provider/model"`);
-  const routed =
-    agentType === "claude" && (picked || !input.model?.trim()) && !remote
+  const routed = roleStart
+    ? roleStart.agentType === "claude"
+      ? roleStart.routed
+      : null
+    : agentType === "claude" && (picked || !input.model?.trim()) && !remote
       ? resolveRole(role, {
           workspaceId: project?.workspace_id ?? home,
           override: picked,
         })
       : null;
-  if (picked && routed && routed.provider.id !== ANTHROPIC && view !== "chat")
+  if (
+    (picked || roleStart) &&
+    routed &&
+    routed.provider.id !== ANTHROPIC &&
+    view !== "chat"
+  )
     throw new Error("Another provider's models run only as a chat");
   const interactive =
     routed && (routed.provider.id === ANTHROPIC || view === "chat")
       ? routed
       : null;
-  const wanted = input.model?.trim() || project?.default_model;
+  const wanted = roleStart
+    ? roleStart.model
+    : input.model?.trim() || project?.default_model;
   // An agent without a static list runs what it reports for this folder.
   const discovered =
     !interactive &&
@@ -295,9 +325,11 @@ async function launch(input: LaunchInput, id: string): Promise<Launched> {
     (await isDiscoveredModel(agentType, projectPath, wanted));
   const model = interactive
     ? interactive.model
-    : discovered && wanted
-      ? wanted
-      : resolveModelForAgent(agentType, wanted);
+    : roleStart
+      ? roleStart.model
+      : discovered && wanted
+        ? wanted
+        : resolveModelForAgent(agentType, wanted);
   const text = input.prompt?.trim() ?? "";
   const naming: Naming = text
     ? await nameFor(text, projectPath, input.name)
@@ -318,7 +350,9 @@ async function launch(input: LaunchInput, id: string): Promise<Launched> {
       cwd,
       input.parentSessionId ?? null,
       model,
-      input.systemPrompt ?? null,
+      [input.systemPrompt, roleBrief(input.agentRole)]
+        .filter(Boolean)
+        .join("\n\n") || null,
       "sessions",
       agentType,
       input.autoApprove || input.access === "full" ? 1 : 0,
@@ -337,6 +371,12 @@ async function launch(input: LaunchInput, id: string): Promise<Launched> {
     id
   );
   setHome(id, home);
+  if (input.agentRole)
+    joinCrew(id, input.agentRole, {
+      crewId: input.crewId,
+      startedBy: input.startedBy,
+      parent: input.parentSessionId,
+    });
   if (input.groupId) fileInGroup(id, input.groupId);
   if (interactive) setSessionModel(id, interactive);
   if (input.access)

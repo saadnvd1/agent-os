@@ -111,6 +111,9 @@ export interface Session {
   pinned: boolean;
   // The user's group it sits in (session_groups), or null.
   session_group_id?: string | null;
+  // The agent role it was started in (lib/models/agent-roles) and its crew.
+  agent_role?: string | null;
+  crew_id?: string | null;
   // A workspace's standing orchestrator chat (and that workspace), or null.
   role: "orchestrator" | null;
   // An orchestrator's tool-call secret.

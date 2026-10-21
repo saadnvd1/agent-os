@@ -9,6 +9,7 @@ import { previousNames } from "../session-names";
 import { sessionWorkspace } from "../schedules/store";
 import { heldTarget } from "./held-reply";
 import { resolveRef, type Candidate } from "./resolve";
+import { resolveRoleAlias, roleAliasOf } from "./role-alias";
 
 export function liveSessions(): Session[] {
   return db
@@ -86,6 +87,8 @@ export function tryResolveTarget(
   | { ok: true; session: Session; note?: string }
   | { ok: false; none: boolean; error: string } {
   const sessions = liveSessions();
+  const alias = roleAliasOf(ref);
+  if (alias) return resolveRoleAlias(alias, sessions, sessionById(callerId));
   const own = ownOrchestrator(ref, sessions, callerId);
   if (own) return { ok: true, session: own };
   const r = resolveRef(ref, candidates(sessions));

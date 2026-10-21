@@ -4,6 +4,7 @@ import { getProject } from "../projects";
 import { getWorkspace } from "../workspaces";
 import { previousNames } from "../session-names";
 import { resolveRef, type Candidate } from "./resolve";
+import { resolveRoleAlias, roleAliasOf } from "./role-alias";
 
 export type ReadableSession = Session & { project_name: string | null };
 
@@ -79,6 +80,17 @@ export function resolveReadable(callerId: string, ref: string): Readable {
     a.updated_at < b.updated_at ? 1 : -1
   );
   const mine = all.filter((s) => inScope(s, scope));
+  const alias = roleAliasOf(ref);
+  if (alias) {
+    const found = resolveRoleAlias(
+      alias,
+      mine.filter(isLive),
+      all.find((s) => s.id === callerId)
+    );
+    return found.ok
+      ? { ok: true, session: found.session }
+      : { ok: false, external: found.none, error: found.error };
+  }
   let none = "";
   for (const group of [mine.filter(isLive), mine.filter((s) => !isLive(s))]) {
     const r = resolveRef(ref, candidates(group));

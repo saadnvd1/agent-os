@@ -11,6 +11,7 @@ import {
   type ModelProvider,
 } from "@/lib/models/providers";
 import { SubagentModels } from "./SubagentModels";
+import { INTERNAL_MODEL_ROLES } from "@/lib/models/agent-roles";
 import { MODEL_ROLES, ROLE_LABELS } from "@/lib/models/roles";
 import { ModelSelect } from "./ModelSelect";
 import { ProviderCard } from "./ProviderCard";
@@ -58,11 +59,12 @@ export function ModelsSection() {
     <div className="space-y-6">
       <section className="space-y-2">
         <p className="text-muted-foreground text-sm">
-          Which model each kind of work runs on. A workspace can set its own
+          Which model each kind of work runs on. Developer, Analyst, Reviewer
+          and Supervisor are in Agent roles. A workspace can set its own
           (Settings › Workspaces), and a task its own when it starts or resumes.
         </p>
         <ul className="space-y-2">
-          {MODEL_ROLES.map((role) => (
+          {INTERNAL_MODEL_ROLES(MODEL_ROLES).map((role) => (
             <li
               key={role}
               className="bg-muted/40 space-y-1.5 rounded-lg px-3 py-2.5"

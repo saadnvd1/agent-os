@@ -32,6 +32,7 @@ import { useAwayQuery } from "@/data/away";
 import { awayUntil } from "@/components/Away/time";
 import type { Session, Project } from "@/lib/db";
 import { HostBadge } from "@/components/Hosts/HostBadge";
+import { RolePill } from "@/components/Sessions/RolePill";
 import { bookmarksUiActions } from "@/stores/bookmarksUi";
 import { shareUiActions } from "@/stores/shareUi";
 import { exportUiActions } from "@/stores/exportUi";
@@ -280,6 +281,7 @@ export function MobileTabBar({
         </button>
       </div>
 
+      <RolePill session={session} compact />
       {bookmarksSessionId && (
         <ChatBookmarksButton
           sessionId={bookmarksSessionId}

@@ -202,6 +202,7 @@ function fail(msg) {
 }
 
 const sim = require("./aos-lib/sim.js")({ me, call, post, fail });
+const parseSpawnArgs = require("./aos-lib/spawn-args.js");
 const waitLib = require("./aos-lib/wait.js")({ post, fail, needMe, me });
 const readCmd = (words) =>
   require("./aos-lib/read.js")({ call, fail, needMe, me })(words);
@@ -220,67 +221,6 @@ async function stdin() {
   const chunks = [];
   for await (const chunk of process.stdin) chunks.push(chunk);
   return Buffer.concat(chunks).toString("utf8");
-}
-
-// `[--name "x"] <project> [--name "x"] <prompt...>`: the flag counts only
-// before the prompt starts, so a prompt may mention --name.
-function parseSpawnArgs(words) {
-  let name;
-  let on;
-  let after;
-  let terminal = false;
-  let planOnly = false;
-  let piece;
-  let priority;
-  let onMac = false;
-  let group;
-  let project;
-  let i = 0;
-  for (; i < words.length; i++) {
-    const w = words[i];
-    if (w === "--name") {
-      name = words[++i];
-      if (name === undefined) fail("--name needs a value");
-    } else if (w.startsWith("--name=")) name = w.slice(7);
-    else if (w === "--on") {
-      on = words[++i];
-      if (on === undefined) fail("--on needs a machine");
-    } else if (w.startsWith("--on=")) on = w.slice(5);
-    else if (w === "--after") {
-      after = words[++i];
-      if (after === undefined) fail('--after needs a task or "any"');
-    } else if (w.startsWith("--after=")) after = w.slice(8);
-    else if (w === "--terminal") terminal = true;
-    else if (w === "--plan-only") planOnly = true;
-    else if (w === "--on-mac") onMac = true;
-    else if (w === "--piece") {
-      piece = words[++i];
-      if (piece === undefined) fail("--piece needs a piece name");
-    } else if (w.startsWith("--piece=")) piece = w.slice(8);
-    else if (w === "--priority") {
-      priority = words[++i];
-      if (priority === undefined) fail("--priority needs a value");
-    } else if (w.startsWith("--priority=")) priority = w.slice(11);
-    else if (w === "--group") {
-      group = words[++i];
-      if (group === undefined) fail("--group needs a group name");
-    } else if (w.startsWith("--group=")) group = w.slice(8);
-    else if (project === undefined) project = w;
-    else break;
-  }
-  return {
-    name: name?.trim() || undefined,
-    on: on?.trim() || undefined,
-    after: after?.trim() || undefined,
-    terminal,
-    planOnly,
-    piece: piece?.trim() || undefined,
-    priority: priority?.trim().toLowerCase() || undefined,
-    onMac,
-    group: group?.trim() || undefined,
-    project,
-    prompt: words.slice(i),
-  };
 }
 
 // `doc new "<title>" [--file path]`: the title is every word but the flag.
@@ -432,6 +372,9 @@ async function main() {
           : p.orchestratorOf
             ? `  ·  orchestrator of ${p.orchestratorOf}`
             : "";
+        const crew = p.agentRole
+          ? `  ·  @${p.agentRole}${p.model ? ` (${p.model})` : ""}`
+          : "";
         const filed = p.group ? ` [${p.group}]` : "";
         const was = p.was.length ? ` (was ${p.was.join(", ")})` : "";
         const waits = [
@@ -439,7 +382,7 @@ async function main() {
           p.waitedBy?.length ? `${p.waitedBy.join(", ")} waiting on it` : "",
         ].filter(Boolean);
         console.log(
-          `${p.id.slice(0, 8)}  ${where}${p.name}${filed}${was}  ·  ${state}${role}${waits.length ? `  ·  ${waits.join("  ·  ")}` : ""}`
+          `${p.id.slice(0, 8)}  ${where}${p.name}${filed}${was}  ·  ${state}${role}${crew}${waits.length ? `  ·  ${waits.join("  ·  ")}` : ""}`
         );
       }
       return;
@@ -532,12 +475,13 @@ async function main() {
         priority,
         onMac,
         group,
+        role,
         project,
         prompt: words,
-      } = parseSpawnArgs(args);
+      } = parseSpawnArgs(args, fail);
       if (!project || !words.length)
         fail(
-          `usage: aos ${cmd} <project> [--name "<name>"]${cmd === "task" ? " [--on <machine>] [--after <task|any>] [--terminal] [--plan-only] [--piece <name>] [--priority urgent|blocking|normal|background] [--on-mac]" : ""} [--group "<name>"] <prompt...>`
+          `usage: aos ${cmd} <project> [--name "<name>"]${cmd === "task" ? " [--on <machine>] [--after <task|any>] [--terminal] [--plan-only] [--piece <name>] [--priority urgent|blocking|normal|background] [--on-mac]" : ""} [--group "<name>"]${cmd === "spawn" ? " [--role developer|analyst|reviewer|supervisor]" : ""} <prompt...>`
         );
       if ((priority || onMac) && cmd !== "task")
         fail("--priority and --on-mac work for tasks only");
@@ -546,6 +490,7 @@ async function main() {
       if (terminal && cmd !== "task") fail("--terminal works for tasks only");
       if (planOnly && cmd !== "task") fail("--plan-only works for tasks only");
       if (piece && cmd !== "task") fail("--piece works for tasks only");
+      if (role && cmd !== "spawn") fail("--role works for spawn only");
       if (planOnly && terminal)
         fail("--plan-only needs a chat task, not --terminal");
       const { session, queued, builds } = await post("/api/bus/spawn", {
@@ -563,6 +508,7 @@ async function main() {
         ...(priority && { priority }),
         ...(onMac && { machine: "mac" }),
         ...(group && { group }),
+        ...(role && { agentRole: role }),
       });
       if (queued) {
         console.log(

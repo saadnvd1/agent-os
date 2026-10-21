@@ -67,6 +67,9 @@ export interface Peer {
   waitedBy: string[];
   // The user's group it sits in, when it is in one.
   group?: string;
+  // The agent role it was started in (lib/models/agent-roles), and its model.
+  agentRole?: string;
+  model?: string;
 }
 
 // A chat has no pane: its worker is the state, and it can always take a
@@ -118,6 +121,8 @@ export async function listPeers(callerId?: string): Promise<Peer[]> {
         orchestratorOf: orchestratorOf(s),
         waitingOn: badges.get(s.id)?.on.map((w) => w.name) ?? [],
         waitedBy: badges.get(s.id)?.by.map((w) => w.name) ?? [],
+        ...(s.agent_role && { agentRole: s.agent_role }),
+        ...(s.agent_role && s.model && { model: s.model }),
         ...(s.session_group_id &&
           groups.has(s.session_group_id) && {
             group: groups.get(s.session_group_id),

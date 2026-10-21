@@ -5,7 +5,8 @@ import { startOrQueue, stampPriority } from "@/lib/tasks/queue";
 import { isPriority } from "@/lib/tasks/schedule-types";
 import { hostIdNamed } from "@/lib/hosts";
 import { resolveGroup } from "@/lib/session-groups";
-import { startView } from "@/lib/sessions/launch";
+import { launchSession, startView } from "@/lib/sessions/launch";
+import { isAgentRole } from "@/lib/models/agent-roles";
 import { callerSession, starterOf } from "@/lib/tasks/starter";
 import { callingDevice } from "@/lib/security/device-me";
 import {
@@ -35,6 +36,7 @@ export async function POST(request: NextRequest) {
       cwd,
       piece,
       group,
+      agentRole,
     } = await request.json();
     // Whoever called: a session (by `from`, else the worktree it runs in) or a person.
     const starter = starterOf(
@@ -102,6 +104,25 @@ export async function POST(request: NextRequest) {
       return "queued" in out
         ? NextResponse.json({ queued: out.queued, builds }, { status: 202 })
         : NextResponse.json({ session: out.started, builds }, { status: 201 });
+    }
+    if (agentRole !== undefined) {
+      if (mode !== "session") throw new Error("--role works for spawn only");
+      if (!isAgentRole(agentRole))
+        throw new Error("--role is developer, analyst, reviewer or supervisor");
+      const { session } = await launchSession({
+        projectId: target.id,
+        agentType: "claude",
+        prompt,
+        name: given,
+        model: typeof model === "string" ? model : null,
+        autoApprove: true,
+        startedBy,
+        startedVia: starter.startedVia,
+        parentSessionId: starter.parentSessionId,
+        groupId,
+        agentRole,
+      });
+      return NextResponse.json({ session }, { status: 201 });
     }
     const session = await spawnSession({
       project: String(project ?? ""),

@@ -21,6 +21,7 @@ import { useAgentStatusQuery } from "@/data/agents";
 import { useProjectMachinesQuery } from "@/data/projects";
 import { modelChoices, useModelsQuery } from "@/data/models";
 import type { AgentProbe } from "@/lib/agents/probe";
+import { RoleChips } from "./RoleChips";
 import { ChipHeading, ChipItem, ChipMenu, ChipToggle } from "./Chip";
 import {
   DEFAULT_PRIORITY,
@@ -168,7 +169,7 @@ export function DraftChips({
         </ChipMenu>
       )}
 
-      {!draft.openPr && (
+      {!draft.openPr && !draft.agentRole && (
         <ChipMenu icon={Bot} name="Agent" label={agentLabel(draft.agentType)}>
           {AGENT_OPTIONS.map((o) => (
             <ChipItem
@@ -187,6 +188,10 @@ export function DraftChips({
             </ChipItem>
           ))}
         </ChipMenu>
+      )}
+
+      {!draft.openPr && local && (
+        <RoleChips draft={draft} onChange={onChange} />
       )}
 
       {project && local && git?.isGitRepo && (

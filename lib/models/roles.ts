@@ -9,6 +9,8 @@
 export const MODEL_ROLES = [
   "plan",
   "implement",
+  "analyze",
+  "advise",
   "orchestrator",
   "review",
   "scope",
@@ -27,6 +29,14 @@ export const ROLE_LABELS: Record<ModelRole, { label: string; hint: string }> = {
   implement: {
     label: "Task implementation",
     hint: "A task's agent, following the plan in its worktree",
+  },
+  analyze: {
+    label: "Analyst",
+    hint: "Reads code, logs and a developer's work; explains and proposes",
+  },
+  advise: {
+    label: "Reviewer",
+    hint: "Advises on another role's diff. Not the merge gate",
   },
   orchestrator: { label: "Orchestrator", hint: "A workspace's orchestrator" },
   review: {
@@ -58,6 +68,8 @@ export const DEFAULT_ROLE_MODELS: Record<ModelRole, string> = {
   plan: OPUS,
   review: OPUS,
   implement: SONNET,
+  analyze: OPUS,
+  advise: OPUS,
   orchestrator: OPUS,
   scope: SONNET,
   interactive: OPUS,

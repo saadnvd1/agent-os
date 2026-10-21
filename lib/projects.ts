@@ -294,6 +294,7 @@ export function deleteProject(id: string): boolean {
 
   // Its merge settings override (lib/tasks/merge-policy.ts)
   db.prepare(`DELETE FROM settings WHERE key = ?`).run(`merge.project.${id}`);
+  db.prepare(`DELETE FROM settings WHERE key = ?`).run(`models.project.${id}`);
 
   // Delete project
   queries.deleteProject(db).run(id);

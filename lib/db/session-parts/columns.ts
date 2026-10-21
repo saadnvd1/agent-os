@@ -184,4 +184,6 @@ export const SESSION_ROW_COLUMNS: readonly string[] = [
   "plan_waits_for_caller",
   "plan_handoff_message",
   "session_group_id",
+  "agent_role",
+  "crew_id",
 ];

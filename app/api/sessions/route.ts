@@ -5,6 +5,8 @@ import { isValidAgentType } from "@/lib/providers";
 import { clientSend } from "@/lib/chat/client-send";
 import { CHAT_ACCESS } from "@/lib/chat/events";
 import { launchSession } from "@/lib/sessions/launch";
+import { isAgentRole } from "@/lib/models/agent-roles";
+import { ModelUnavailableError } from "@/lib/models/agent-binding";
 import { namesLine, waitBadges } from "@/lib/bus/waits/store";
 import { claimsSnapshot } from "@/lib/claims";
 import { isProjectRef } from "@/lib/tasks/project-ref";
@@ -98,6 +100,9 @@ export async function POST(request: NextRequest) {
       view: body.view === "terminal" ? "terminal" : undefined,
       parentSessionId: str(body.parentSessionId),
       systemPrompt: str(body.systemPrompt),
+      agentRole: isAgentRole(body.agentRole) ? body.agentRole : null,
+      crewId: str(body.crewId),
+      useFallback: body.onUnavailable === "fallback",
     });
     const db = getDb();
     const claudeSessionId = repeat ? null : str(body.claudeSessionId);
@@ -130,6 +135,17 @@ export async function POST(request: NextRequest) {
       { status: 201 }
     );
   } catch (error) {
+    if (error instanceof ModelUnavailableError)
+      return NextResponse.json(
+        {
+          code: error.code,
+          role: error.role,
+          ref: error.ref,
+          fallback: error.fallback ?? null,
+          error: error.message,
+        },
+        { status: 409 }
+      );
     const message = error instanceof Error ? error.message : String(error);
     console.error("Error creating session:", message);
     return NextResponse.json({ error: message }, { status: 400 });

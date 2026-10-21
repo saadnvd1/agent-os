@@ -63,6 +63,17 @@ export const ANTHROPIC_PROVIDER: ModelProvider = {
   enabled: true,
 };
 
+// Pi's own models ("pi/<its provider>/<model>"): local servers Pi reaches,
+// run by the Pi agent rather than through Claude Code's endpoint variables.
+export const PI = "pi";
+export const PI_PROVIDER: ModelProvider = {
+  id: PI,
+  label: "Pi",
+  api: "openai",
+  models: [],
+  enabled: true,
+};
+
 // Checked against each provider's docs on 2026-10-11: DeepSeek
 // (api-docs.deepseek.com/guides/anthropic_api) and Z.ai
 // (docs.z.ai/devpack/tool/claude). Off until a key reference is set.
