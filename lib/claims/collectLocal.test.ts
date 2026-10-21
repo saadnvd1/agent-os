@@ -61,6 +61,23 @@ describe("collectLocal", () => {
     expect([...c.files].sort()).toEqual(["b.ts", "lib/a.ts"]);
   });
 
+  it("ignores dependency staging folders", async () => {
+    const dir = repo();
+    sh(dir, "checkout", "-q", "-b", "feature/z");
+    fs.mkdirSync(path.join(dir, "node_modules.aos-partial", ".pnpm"), {
+      recursive: true,
+    });
+    fs.writeFileSync(path.join(dir, "node_modules.aos-partial", "x"), "1");
+    fs.writeFileSync(
+      path.join(dir, "node_modules.aos-partial", ".pnpm", "lock.yaml"),
+      "1"
+    );
+    fs.writeFileSync(path.join(dir, "real.ts"), "2");
+    session("s3", dir);
+    await collectLocal(origin);
+    expect([...liveClaims()[0].files]).toEqual(["real.ts"]);
+  });
+
   it("skips a shell idle on the default branch and a folder with no remote", async () => {
     const dir = repo();
     session("idle", dir);

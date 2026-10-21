@@ -10,6 +10,7 @@ import { createHash } from "crypto";
 import * as fs from "fs";
 import * as path from "path";
 import { LOCKFILES } from "./install";
+import { STAGING_SUFFIX, ignoreStaging } from "./paths";
 import { STORE_ROOT, fastCopyMode, unlinkMutable } from "./fastcopy";
 import type { FastMode } from "./fastcopy";
 import {
@@ -79,7 +80,8 @@ async function cloneWhole(
   target: string,
   mode: FastMode
 ): Promise<boolean> {
-  const partial = `${target}.aos-partial`;
+  const partial = `${target}${STAGING_SUFFIX}`;
+  await ignoreStaging(path.dirname(target));
   await fs.promises.rm(partial, { recursive: true, force: true });
   const ok =
     (await copyTree(from, partial, mode)) && (await takeSpare(partial, target));
