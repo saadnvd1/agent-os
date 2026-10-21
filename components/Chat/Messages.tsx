@@ -1,9 +1,11 @@
 "use client";
 
 import { memo } from "react";
+import { useSnapshot } from "valtio";
 import {
   Check,
   ChevronRight,
+  Download,
   Circle,
   CircleDot,
   Quote,
@@ -24,6 +26,8 @@ import { Markdown } from "./Markdown";
 import { openSessionLink } from "./session-link";
 import { UndoButton } from "./Undo";
 import { useRowState } from "./rowState";
+import { useBookmarkChat } from "@/components/Bookmarks/context";
+import { exportUi, exportUiActions, pickedRange } from "@/stores/exportUi";
 import {
   BookmarkButton,
   TurnBookmark,
@@ -153,6 +157,71 @@ function SendStatus({ pending }: { pending: PendingStatus }) {
   );
 }
 
+// The turn this message begins, while turns are being picked for an export.
+function useExportTurn(itemId: string): number | null {
+  const ui = useSnapshot(exportUi);
+  if (!ui.selecting) return null;
+  return ui.turns.find((t) => t.id === itemId)?.n ?? null;
+}
+
+// A tick in the gutter and a tinted row: tap anywhere on it to pick the turn.
+function TurnTick({
+  turn,
+  children,
+}: {
+  turn: number;
+  children: React.ReactNode;
+}) {
+  const { pick } = useSnapshot(exportUi);
+  const range = pickedRange(pick);
+  const on = !!range && turn >= range.from && turn <= range.to;
+  return (
+    <div
+      className={cn(
+        "-mx-2 flex items-start gap-2 rounded-xl px-2",
+        on && "bg-primary/10"
+      )}
+    >
+      <button
+        type="button"
+        role="checkbox"
+        aria-checked={on}
+        aria-label={`Turn ${turn}`}
+        onClick={() => exportUiActions.tap(turn)}
+        className={cn(
+          "mt-1 flex h-11 min-w-11 shrink-0 flex-col items-center justify-center rounded-md border text-[11px]",
+          on
+            ? "border-primary bg-primary text-primary-foreground"
+            : "text-muted-foreground"
+        )}
+      >
+        {on ? <Check className="h-4 w-4" /> : turn}
+      </button>
+      <div className="min-w-0 flex-1">{children}</div>
+    </div>
+  );
+}
+
+// Export this message's turn and everything after it.
+function ExportFromHere({ itemId }: { itemId: string }) {
+  const chat = useBookmarkChat();
+  if (!chat) return null;
+  return (
+    <button
+      type="button"
+      aria-label="Export from here"
+      title="Export from here"
+      onClick={(e) => {
+        e.stopPropagation();
+        exportUiActions.open(chat.sessionId, "", itemId);
+      }}
+      className="text-muted-foreground hover:text-foreground hover:bg-foreground/[0.06] flex h-11 w-11 shrink-0 items-center justify-center rounded-md opacity-40 group-hover:opacity-100 focus-visible:opacity-100 md:h-7 md:w-7 md:opacity-0"
+    >
+      <Download className="h-3.5 w-3.5" />
+    </button>
+  );
+}
+
 export function UserMessage({
   item,
   onUndo,
@@ -162,6 +231,7 @@ export function UserMessage({
   onUndo?: () => void;
   pending?: PendingStatus;
 }) {
+  const turn = useExportTurn(item.id);
   const message = (
     <div className="group flex flex-col items-end gap-1">
       {item.from && (
@@ -204,6 +274,7 @@ export function UserMessage({
       ) : (
         <div className="-mr-1.5 flex items-center">
           {onUndo && <UndoButton onClick={onUndo} />}
+          <ExportFromHere itemId={item.id} />
           <BookmarkButton itemId={item.id} />
         </div>
       )}
@@ -211,7 +282,8 @@ export function UserMessage({
   );
   // Not in the chat yet: nothing to star.
   if (pending) return message;
-  return <BookmarkPress itemId={item.id}>{message}</BookmarkPress>;
+  const row = <BookmarkPress itemId={item.id}>{message}</BookmarkPress>;
+  return turn ? <TurnTick turn={turn}>{row}</TurnTick> : row;
 }
 
 export function AssistantMessage({

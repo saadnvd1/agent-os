@@ -67,6 +67,9 @@ and honours the same options and left-out messages. The shared page has a
 **Copy for agent** button and a `.md` link to hand to an agent. Links made
 before this existed have neither.
 
+To hand a chat to a model as a file instead, with a range of turns and a compact
+mode, use [Export for AI](export.md).
+
 ## For other clients (the API)
 
 `POST /api/shares/preview` takes `{kind, sessionId | artifactId, includeTools,

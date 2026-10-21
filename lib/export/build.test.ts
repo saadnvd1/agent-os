@@ -206,7 +206,7 @@ describe("buildDoc", () => {
     });
     for (const t of build().turns)
       for (const i of t.items)
-        for (const tr of i.truncated ?? [])
+        if (i.truncated?.length)
           expect(`${i.input}${i.output}${i.text}`).toContain("[truncated:");
   });
 

@@ -22,6 +22,7 @@ export function turnInfos(doc: ExportDoc): ExportTurnInfo[] {
   return doc.turns.map((t) => ({
     n: t.n,
     at: t.startedAt,
+    id: t.userId,
     excerpt: t.excerpt,
     items: t.items.length,
     tokens: estTokens(JSON.stringify(t.items).length),

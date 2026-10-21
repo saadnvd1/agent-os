@@ -28,6 +28,7 @@ import {
   type SharePreview,
 } from "@/data/shares";
 import { shareUi, shareUiActions } from "@/stores/shareUi";
+import { exportUiActions } from "@/stores/exportUi";
 import {
   DEFAULT_EXPIRY,
   EXPIRIES,
@@ -270,6 +271,18 @@ function ShareBody({
           )}
           {error && preview && (
             <p className="text-destructive text-sm">{error}</p>
+          )}
+          {kind === "chat" && sessionId && (
+            <button
+              type="button"
+              onClick={() => {
+                shareUiActions.close();
+                exportUiActions.open(sessionId, target.title);
+              }}
+              className="text-muted-foreground hover:text-foreground min-h-11 self-start text-xs underline underline-offset-2"
+            >
+              Export for AI instead…
+            </button>
           )}
         </div>
       </div>

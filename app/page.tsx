@@ -138,6 +138,10 @@ const ShareDialog = dynamic(
   () => import("@/components/Share/ShareDialog").then((m) => m.ShareDialog),
   { ssr: false }
 );
+const ExportSheet = dynamic(
+  () => import("@/components/Export/ExportSheet").then((m) => m.ExportSheet),
+  { ssr: false }
+);
 const CommandPalette = dynamic(
   () =>
     import("@/components/CommandPalette/CommandPalette").then(
@@ -166,6 +170,7 @@ const AppDialogs = memo(function AppDialogs({
       <ClaimsSheet />
       <MoveDialog />
       <ShareDialog />
+      <ExportSheet />
       <AwayReport />
       <IncomingLinks />
       <CommandPalette />

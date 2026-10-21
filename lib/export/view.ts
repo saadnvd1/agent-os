@@ -71,6 +71,8 @@ export interface ExportTurnInfo {
   /** 0 is the part before the first message. */
   n: number;
   at: string;
+  /** The message that began the turn. */
+  id?: string;
   excerpt: string;
   items: number;
   tokens: number;

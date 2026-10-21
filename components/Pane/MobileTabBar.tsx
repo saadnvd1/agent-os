@@ -24,6 +24,7 @@ import {
   Search,
   Star,
   Share2,
+  Download,
   TextSearch,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
@@ -33,6 +34,7 @@ import type { Session, Project } from "@/lib/db";
 import { HostBadge } from "@/components/Hosts/HostBadge";
 import { bookmarksUiActions } from "@/stores/bookmarksUi";
 import { shareUiActions } from "@/stores/shareUi";
+import { exportUiActions } from "@/stores/exportUi";
 import { MoveMenuItems } from "@/components/Tasks/MoveMenuItems";
 import { ChatBookmarksButton } from "@/components/Bookmarks/ChatBookmarksButton";
 import type { ViewMode } from "@/contexts/PaneContext";
@@ -218,6 +220,14 @@ export function MobileTabBar({
                 >
                   <Share2 className="h-4 w-4" />
                   Share…
+                </DropdownMenuItem>
+                <DropdownMenuItem
+                  onSelect={() =>
+                    exportUiActions.open(session.id, session.name)
+                  }
+                >
+                  <Download className="h-4 w-4" />
+                  Export for AI…
                 </DropdownMenuItem>
                 <DropdownMenuSeparator />
               </>

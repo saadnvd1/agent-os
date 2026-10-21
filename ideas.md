@@ -341,3 +341,4 @@
 - Connect could serve as a directory so an account's machines find each other to link; never as the store (its privacy page promises it sees no files).
 - Per-project `claims.share: false` in `.agent-os.json`.
 - Text tool-call recovery for OpenCode (it has no hook to rewrite a reply; a small local proxy could do it).
+- Export: terminal Claude sessions (adapt the transcript JSONL into chat items behind the same builder); build the share's Markdown twin with the export renderer so there is one Markdown writer; tint a whole turn, not just its message, while picking turns; an "Export session" palette command once the palette has a current-session scope.

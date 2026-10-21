@@ -28,6 +28,7 @@ and check on all of it from your phone.
 - **Project config.** `agentos.json` gives each session its own ports, environment, files and a private Postgres copy. [More](docs/reference/project-config.md)
 - **Schedules and recipes.** Start work on a timer, or save a job that comes up again. [More](docs/guides/schedules.md)
 - **Plans in pieces and stacks.** A plan splits into several PRs only for a real reason; a board can run as stacked PRs. [More](docs/guides/tasks.md#plans-in-pieces)
+- **Export a session for AI.** A whole chat or a range of its turns as Markdown, JSON or HTML, with a compact mode, the same masking as Share, a size and token estimate, and every cut labelled. [More](docs/guides/export.md)
 - **Machine load and status.** A load gauge, each session's share of CPU and memory, and Needs you, Working, In review and Done as it changes. [More](docs/guides/sessions.md)
 - **A health watcher.** Zero-token checks on the orchestrator's tick catch a red machine load, a held queue, a quiet background job, a restart loop, slow CI, a PR armed for hours and a piece started twice. Each trip wakes one short, tool-less Sonnet call that judges it and posts one line to the orchestrator; only a thing you alone can clear reaches your phone. Settings → Health lists what is open, the history, the notes on what normal looks like and the thresholds. Report only: it never acts. [More](docs/reference/health.md)
 - **Workspaces.** Group projects, finish work with Done, and get a log of every merged task. [More](docs/reference/workspaces.md)

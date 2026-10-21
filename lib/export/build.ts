@@ -67,6 +67,8 @@ export interface ExportTurn {
   interrupted?: boolean;
   /** Why the turn stopped short, when it did. */
   ended?: string;
+  /** The message that began it, to find the turn from a row in the chat. */
+  userId?: string;
   excerpt: string;
   items: ExportItem[];
   hits: Hits;
@@ -213,6 +215,7 @@ export function buildDoc(inp: BuildInput): ExportDoc {
     let interrupted: boolean | undefined;
     let ended: string | undefined;
     let excerpt = "Session start";
+    let userId: string | undefined;
 
     turn.items.forEach((item, k) => {
       const at = isoLocal(item.createdAt);
@@ -225,11 +228,13 @@ export function buildDoc(inp: BuildInput): ExportDoc {
             ),
             ...(item.images ?? []).map(() => "[image not exported]"),
           ];
-          if (turn.n > 0 && !item.midTurn)
+          if (turn.n > 0 && !item.midTurn) {
+            userId = item.id;
             excerpt = redactForShare(item.text, ctx, only)
               .text.replace(/\s+/g, " ")
               .trim()
               .slice(0, 80);
+          }
           const from = item.origin?.label ?? item.from;
           items.push({
             kind: "user",
@@ -326,9 +331,10 @@ export function buildDoc(inp: BuildInput): ExportDoc {
             status: item.status,
             input: input.text,
             output: output.text || undefined,
-            durationMs: item.endedAt
-              ? item.endedAt - item.createdAt
-              : undefined,
+            durationMs:
+              item.endedAt && item.endedAt >= item.createdAt
+                ? item.endedAt - item.createdAt
+                : undefined,
             diff,
             truncated: truncs.length ? truncs : undefined,
           });
@@ -451,6 +457,7 @@ export function buildDoc(inp: BuildInput): ExportDoc {
       costUsd,
       interrupted,
       ended,
+      userId,
       excerpt,
       items,
       hits,
