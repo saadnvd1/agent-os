@@ -11,6 +11,7 @@ const view = (over: Partial<UpdateView> = {}): UpdateView => ({
   checkError: null,
   bannerEnabled: true,
   bannerLocked: false,
+  canRestart: true,
   canUpdate: { ok: true },
   run: null,
   pending: null,

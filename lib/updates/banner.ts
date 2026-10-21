@@ -44,6 +44,7 @@ export type UpdateRefusal =
   | "diverged"
   | "up_to_date"
   | "unknown"
+  | "no_restart"
   | "forbidden";
 
 export interface UpdateView {
@@ -61,6 +62,8 @@ export interface UpdateView {
   checkError: string | null;
   bannerEnabled: boolean;
   bannerLocked: boolean;
+  /** False when the server has no command to restart itself with. */
+  canRestart: boolean;
   canUpdate: { ok: boolean; code?: UpdateRefusal; reason?: string };
   run: UpdateRun | null;
   pending: { requestedAt: number } | null;

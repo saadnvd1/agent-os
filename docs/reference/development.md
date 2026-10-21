@@ -8,7 +8,7 @@ npm run dev:stop     # stops only that server (never pkill by pattern: it can ma
 npm test             # vitest
 npm run lint         # eslint
 npm run check        # typecheck, lint, format and tests: what CI runs
-scripts/redeploy     # pull, install (pnpm, beside the live node_modules, checked first), build; restarts via $AGENTOS_RESTART only if all of it worked
+scripts/redeploy     # pull, install (pnpm, beside the live node_modules, checked first), build; swaps in and restarts via $AGENTOS_RESTART only if all of it worked (without it, it builds and swaps nothing)
 scripts/redeploy --rollback  # put the previous build back and restart
 ```
 

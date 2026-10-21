@@ -53,6 +53,7 @@ export async function updateView(
   const pending = readPending(deps);
   const active = isActivePhase(run?.phase);
   const refusal = mayUpdate ? await preflight(check, deps) : null;
+  const canRestart = !!(await deps.restartCommand());
   const wantsWorking = !active && !!(check?.available || pending);
   return {
     current: check?.current ?? null,
@@ -64,6 +65,7 @@ export async function updateView(
     checkError: check?.error ?? null,
     bannerEnabled: bannerEnabled(deps.env),
     bannerLocked: bannerLocked(deps.env),
+    canRestart,
     canUpdate: !mayUpdate
       ? { ok: false, code: "forbidden", reason: NOT_ALLOWED }
       : refusal

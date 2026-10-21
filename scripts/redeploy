@@ -2,6 +2,7 @@
 # Update a running checkout to origin's branch: pull, install, build beside
 # the live server, swap the build in and restart, so neither a build in
 # progress nor a failed one takes the running server down.
+# Without AGENTOS_RESTART it builds and checks but swaps nothing in.
 # Restart with: AGENTOS_RESTART="<command>" scripts/redeploy
 # Put the previous build back: AGENTOS_RESTART="<command>" scripts/redeploy --rollback
 set -euo pipefail
@@ -49,6 +50,14 @@ else
   echo "::phase building"
   # A build that fails on the new dependencies puts the old ones back.
   build_beside || { [ "$swapped" = 1 ] && restore_deps; exit 1; }
+  if [ -z "${AGENTOS_RESTART:-}" ]; then
+    # Nothing can restart the server, and a new build or node_modules under
+    # the old process breaks its pages: leave the live tree as it was.
+    [ "$swapped" = 1 ] && restore_deps
+    echo "Built and verified in $NEXT_BUILD, but not swapped in: nothing here can restart the server."
+    echo "Set AGENTOS_RESTART to its restart command and run scripts/redeploy again to swap and restart."
+    exit 0
+  fi
   swap_build
 fi
 
@@ -68,4 +77,4 @@ if [ -n "${AGENTOS_RESTART:-}" ]; then
   echo "AgentOS did not come back on $port within ${AGENTOS_UP_WAIT:-600}s; scripts/redeploy --rollback puts the last build back" >&2
   exit 1
 fi
-echo "Built. Restart your AgentOS server to run it."
+echo "Rolled back. Restart your AgentOS server to run it."

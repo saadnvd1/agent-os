@@ -197,6 +197,9 @@ export function readLog(deps: Pick<RunDeps, "logFile">, lines = 30): string[] {
 export type Refusal = { code: UpdateRefusal; error: string };
 
 /** Why this checkout can't be updated now; null when it can. No network. */
+export const NO_RESTART =
+  "This server can't restart itself, so an update would leave the old build running on new files. Set AGENTOS_RESTART to its restart command, or start it with agent-os start.";
+
 export async function preflight(
   check: CheckResult | null,
   deps: RunDeps
@@ -258,6 +261,8 @@ export async function preflight(
     };
   if (!check.available)
     return { code: "up_to_date", error: "AgentOS is up to date." };
+  if (!(await deps.restartCommand()))
+    return { code: "no_restart", error: NO_RESTART };
   return null;
 }
 
@@ -339,14 +344,14 @@ async function begin(
     toVersion: result.latest!.version,
     startedAt: deps.now(),
   });
-  const restart = await deps.restartCommand();
+  const restart = (await deps.restartCommand())!;
   const env = { ...deps.env } as NodeJS.ProcessEnv;
   // The restarted server must work out its own build, not inherit this one.
   delete env.AGENTOS_BUILD;
   delete env.AGENTOS_RESTART;
   env.AGENTOS_UPDATE_STATE = deps.stateFile;
   env.AGENTOS_UPDATE_ID = id;
-  if (restart) env.AGENTOS_RESTART = restart;
+  env.AGENTOS_RESTART = restart;
   if (deps.env.PORT) env.PORT = deps.env.PORT;
   deps.spawnRunner(env, deps.logFile);
   return { ok: true, pending: false };
