@@ -124,6 +124,29 @@ describe("overlapBetween", () => {
   });
 });
 
+describe("generated files", () => {
+  const pyc = "scripts/__pycache__/x.cpython-312.pyc";
+  it("are no overlap on their own", () => {
+    expect(
+      overlapBetween(claim({ files: [pyc] }), claim({ files: [pyc] }))
+    ).toBeNull();
+  });
+  it("leave a real shared source file as an overlap", () => {
+    const o = overlapBetween(
+      claim({ files: [pyc, "src/a.py"] }),
+      claim({ files: [pyc, "src/a.py"] })
+    );
+    expect(o?.shared).toEqual(["src/a.py"]);
+  });
+  it("only match directory segments, not names", () => {
+    const files = ["build.ts", "dist.md", "src/build/x.ts"];
+    expect(overlapBetween(claim({ files }), claim({ files }))?.shared).toEqual([
+      "build.ts",
+      "dist.md",
+    ]);
+  });
+});
+
 describe("goalsAlike", () => {
   it("needs real shared words, not task-title filler", () => {
     expect(goalsAlike("Fix the login bug", "Fix the sidebar bug")).toBe(false);

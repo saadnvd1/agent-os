@@ -78,6 +78,22 @@ describe("collectLocal", () => {
     expect([...liveClaims()[0].files]).toEqual(["real.ts"]);
   });
 
+  it("drops generated files, tracked or untracked", async () => {
+    const dir = repo();
+    fs.mkdirSync(path.join(dir, "scripts", "__pycache__"), { recursive: true });
+    const pyc = path.join(dir, "scripts", "__pycache__", "x.cpython-312.pyc");
+    fs.writeFileSync(pyc, "1");
+    sh(dir, "add", "-A");
+    sh(dir, "commit", "-q", "-m", "pyc");
+    sh(dir, "checkout", "-q", "-b", "feature/py");
+    fs.writeFileSync(pyc, "2");
+    fs.writeFileSync(path.join(dir, "scripts", "__pycache__", "y.pyc"), "3");
+    fs.writeFileSync(path.join(dir, "real.py"), "4");
+    session("s4", dir);
+    await collectLocal(origin);
+    expect([...liveClaims()[0].files]).toEqual(["real.py"]);
+  });
+
   it("skips a shell idle on the default branch and a folder with no remote", async () => {
     const dir = repo();
     session("idle", dir);

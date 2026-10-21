@@ -7,6 +7,7 @@ import { git } from "../git-exec";
 import { repoKey } from "../git-remote";
 import { IN_FLIGHT } from "../tasks/queue-rows";
 import { expandHome } from "../tasks/session";
+import { isNoise } from "./overlap";
 import { MAX_FILES } from "./types";
 import {
   localLiveSessionIds,
@@ -47,7 +48,8 @@ export async function changedFiles(
     git(dir, ["ls-files", "--others", "--exclude-standard", "-z"], OPTS),
   ]);
   return [...new Set([...paths(committed), ...paths(untracked)])].filter(
-    (p) => !p.split("/").some((seg) => seg.endsWith(".aos-partial"))
+    (p) =>
+      !p.split("/").some((seg) => seg.endsWith(".aos-partial")) && !isNoise(p)
   );
 }
 
