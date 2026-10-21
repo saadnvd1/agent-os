@@ -13,6 +13,7 @@ const base: RowMenuInput = {
     has_brief: 0,
     archived_at: null,
     pause_state: null,
+    agent_role: null,
   } as RowMenuInput["session"],
   row: { task: undefined, wakesAt: undefined, settled: undefined },
   remote: false,
@@ -42,7 +43,10 @@ describe("rowMenu", () => {
         { group: "share", items: ["copy-link", "share", "export"] },
         { group: "restart", items: ["fork", "fresh-start"] },
         { group: "move", items: ["move-project", "move-group"] },
-        { group: "automate", items: ["check-ins", "save-recipe"] },
+        {
+          group: "automate",
+          items: ["add-analyst", "check-ins", "save-recipe"],
+        },
       ],
       ["snooze", "pause", "settle"],
       ["archive", "delete"],
@@ -94,6 +98,16 @@ describe("rowMenu", () => {
       JSON.stringify(menu({ s: { view } }).sections);
     expect(flat("chat")).toContain('"export"');
     expect(flat("terminal")).not.toContain('"export"');
+  });
+
+  it("offers an analyst only to a local chat that isn't one", () => {
+    const has = (over: Parameters<typeof menu>[0]) =>
+      JSON.stringify(menu(over).sections).includes('"add-analyst"');
+    expect(has({})).toBe(true);
+    expect(has({ s: { view: "terminal" } })).toBe(false);
+    expect(has({ s: { agent_role: "analyst" } })).toBe(false);
+    expect(has({ remote: true })).toBe(false);
+    expect(has({ s: { archived_at: "2026-10-21" } })).toBe(false);
   });
 
   it("gives an orchestrator no snooze, pause, finish or delete", () => {

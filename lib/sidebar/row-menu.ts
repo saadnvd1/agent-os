@@ -23,6 +23,7 @@ export type RowMenuItem =
   | "move-machine"
   | "move-project"
   | "move-group"
+  | "add-analyst"
   | "check-ins"
   | "save-recipe"
   | "run-again"
@@ -55,6 +56,7 @@ export interface RowMenuInput {
     | "has_brief"
     | "archived_at"
     | "pause_state"
+    | "agent_role"
   >;
   row?: Pick<SidebarRow, "task" | "wakesAt" | "settled">;
   // A linked machine runs it: what can't reach it yet is left out.
@@ -142,6 +144,13 @@ export function rowMenu(input: RowMenuInput): RowMenuPlan {
       agentRow && "move-group",
     ]),
     ...group("automate", [
+      // A local chat can have an analyst review its turns; not an analyst.
+      s.view === "chat" &&
+        agentRow &&
+        live &&
+        !s.archived_at &&
+        s.agent_role !== "analyst" &&
+        "add-analyst",
       input.hasWorkspace &&
         !orchestrator &&
         (!s.task_status || s.task_status === "running") &&

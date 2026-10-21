@@ -23,6 +23,7 @@ import type { StartWarning } from "@/lib/claims/startWarning";
 import { usePanes } from "@/contexts/PaneContext";
 import { setPendingPrompt } from "@/stores/initialPrompt";
 import { draftsActions, draftsStore, newDraft } from "@/stores/drafts";
+import { useStartAnalystBeside } from "@/components/Analyst/pair";
 import { DraftChips } from "./DraftChips";
 import { DraftHeading } from "./DraftHeading";
 import { ModelUnavailableDialog } from "./ModelUnavailableDialog";
@@ -57,6 +58,7 @@ export function DraftPanel({
     discovers
   );
   const launch = useLaunchSession();
+  const startAnalyst = useStartAnalystBeside();
   const { workspace } = useSelectedWorkspace();
   const createTask = useCreateTask();
   const checkStart = useCheckStart();
@@ -172,6 +174,11 @@ export function DraftPanel({
         session.tmux_name ?? "",
         session.host_id
       );
+      if (draft.withAnalyst && project && draft.hostId === "local") {
+        if (session.view === "chat")
+          void startAnalyst.run({ coderSessionId: session.id }, paneId);
+        else toast("An analyst reviews chats: this session runs in a terminal");
+      }
     } catch (error) {
       if (error instanceof ModelUnavailableError) {
         setDown({ error, text, images, files });

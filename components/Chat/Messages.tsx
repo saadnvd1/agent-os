@@ -27,6 +27,7 @@ import { openSessionLink } from "./session-link";
 import { UndoButton } from "./Undo";
 import { useRowState } from "./rowState";
 import { useBookmarkChat } from "@/components/Bookmarks/context";
+import { ChatItemContext } from "./itemContext";
 import { exportUi, exportUiActions, pickedRange } from "@/stores/exportUi";
 import {
   BookmarkButton,
@@ -299,7 +300,11 @@ export function AssistantMessage({
     <BookmarkPress itemId={item.id}>
       <div className="group">
         <div data-quotable className={cn(item.streaming && "streaming-cursor")}>
-          <Markdown text={item.text} streaming={item.streaming} />
+          <ChatItemContext.Provider
+            value={{ itemId: item.id, streaming: !!item.streaming }}
+          >
+            <Markdown text={item.text} streaming={item.streaming} />
+          </ChatItemContext.Provider>
         </div>
         {!item.streaming && (
           <div className="-ml-1.5 flex items-center">

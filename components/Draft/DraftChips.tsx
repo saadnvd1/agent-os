@@ -4,6 +4,7 @@ import { useEffect } from "react";
 import {
   Bot,
   Cpu,
+  Eye,
   FolderGit2,
   GitBranch,
   Flag,
@@ -250,6 +251,15 @@ export function DraftChips({
           on={draft.openPr}
           title="Works alone in a worktree and opens a pull request"
           onChange={(openPr) => onChange({ openPr })}
+        />
+      )}
+      {project && !draft.openPr && local && draft.agentRole !== "analyst" && (
+        <ChipToggle
+          icon={Eye}
+          label="With analyst"
+          on={!!draft.withAnalyst}
+          title="A second chat reviews each turn and drafts the next prompt for you to send"
+          onChange={(withAnalyst) => onChange({ withAnalyst })}
         />
       )}
       {project && draft.openPr && local && (

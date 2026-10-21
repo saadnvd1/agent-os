@@ -12,6 +12,7 @@ import {
   SplitSquareHorizontal,
   SplitSquareVertical,
   Star,
+  Eye,
   Unplug,
   X,
 } from "lucide-react";
@@ -29,6 +30,8 @@ import { copySessionLink, writeClipboard } from "@/hooks/useCopyToClipboard";
 import type { Session } from "@/lib/db";
 import { shareUiActions } from "@/stores/shareUi";
 import { exportUiActions } from "@/stores/exportUi";
+import { analystUiActions } from "@/stores/analystUi";
+import { useCanAddAnalyst } from "@/components/Analyst/pair";
 import { useSessionBookmarks } from "@/data/bookmarks";
 import { useDocsWorkspace } from "@/data/lumifyhub/docs";
 import { bookmarksUiActions } from "@/stores/bookmarksUi";
@@ -38,6 +41,7 @@ import { MoveMenuItems } from "@/components/Tasks/MoveMenuItems";
 
 interface PaneMenuProps {
   session: Session | null | undefined;
+  paneId?: string;
   // The chat on show, for its bookmarks; null for a terminal or another view.
   bookmarksSessionId?: string | null;
   canSplit: boolean;
@@ -53,6 +57,7 @@ interface PaneMenuProps {
 // the bar.
 export function PaneMenu({
   session,
+  paneId,
   bookmarksSessionId,
   canSplit,
   canClose,
@@ -64,6 +69,7 @@ export function PaneMenu({
 }: PaneMenuProps) {
   const { data: bookmarks = [] } = useSessionBookmarks(bookmarksSessionId);
   const docs = useDocsWorkspace(session?.project_id);
+  const canAddAnalyst = useCanAddAnalyst(session);
   const copyId = async (id: string) => {
     try {
       await writeClipboard(id);
@@ -125,6 +131,16 @@ export function PaneMenu({
               >
                 <Download className="h-4 w-4" />
                 Export for AI…
+              </DropdownMenuItem>
+            )}
+            {canAddAnalyst && session && (
+              <DropdownMenuItem
+                onSelect={() =>
+                  analystUiActions.open(session.id, session.name, paneId)
+                }
+              >
+                <Eye className="h-4 w-4" />
+                Add analyst…
               </DropdownMenuItem>
             )}
             <DropdownMenuSeparator />

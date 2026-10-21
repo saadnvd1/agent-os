@@ -16,6 +16,7 @@ import { PaneViewToggle } from "./PaneViewToggle";
 import { PaneMenu } from "./PaneMenu";
 import { HostBadge } from "@/components/Hosts/HostBadge";
 import { RolePill } from "@/components/Sessions/RolePill";
+import { PairChip } from "@/components/Analyst/PairChip";
 import { usePaneBarSlots } from "./PaneBarSlots";
 import { ChatBookmarksButton } from "@/components/Bookmarks/ChatBookmarksButton";
 import type { ViewMode } from "@/contexts/PaneContext";
@@ -163,6 +164,7 @@ export function DesktopTabBar({
 
       <div className="flex shrink-0 items-center gap-1.5">
         <RolePill session={session} paneId={paneId} />
+        <PairChip session={session} paneId={paneId} />
         <HostBadge hostId={session?.host_id} />
         <ContextMeter sessionId={session?.id} />
         <SessionPrStage sessionId={session?.id} />
@@ -194,6 +196,7 @@ export function DesktopTabBar({
         <div className="flex items-center">
           <PaneMenu
             session={session}
+            paneId={paneId}
             bookmarksSessionId={bookmarksSessionId}
             canSplit={canSplit}
             canClose={canClose}

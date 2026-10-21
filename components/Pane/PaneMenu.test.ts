@@ -6,16 +6,21 @@ import type { Session } from "@/lib/db/types";
 import { bookmarksUi } from "@/stores/bookmarksUi";
 import { docsUi } from "@/stores/docsUi";
 import { paletteUi } from "@/stores/palette";
+import { analystUi } from "@/stores/analystUi";
 
 const data = vi.hoisted(() => ({
   bookmarks: [] as unknown[],
   docs: null as { id: string } | null,
+  canAddAnalyst: false,
 }));
 vi.mock("@/data/bookmarks", () => ({
   useSessionBookmarks: () => ({ data: data.bookmarks }),
 }));
 vi.mock("@/data/lumifyhub/docs", () => ({
   useDocsWorkspace: () => data.docs,
+}));
+vi.mock("@/components/Analyst/pair", () => ({
+  useCanAddAnalyst: () => data.canAddAnalyst,
 }));
 vi.mock("@/components/Tasks/MoveMenuItems", () => ({
   MoveMenuItems: () => null,
@@ -60,6 +65,8 @@ describe("PaneMenu", () => {
     root = createRoot(host);
     data.bookmarks = [];
     data.docs = null;
+    data.canAddAnalyst = false;
+    analystUi.open = false;
     paletteUi.open = false;
     bookmarksUi.chatSessionId = null;
     docsUi.workspaceId = null;
@@ -73,6 +80,7 @@ describe("PaneMenu", () => {
       root.render(
         createElement(PaneMenu, {
           session,
+          paneId: "pane-1",
           bookmarksSessionId,
           canSplit: true,
           canClose: true,
@@ -114,5 +122,18 @@ describe("PaneMenu", () => {
     render();
     act(() => item("Docs")?.click());
     expect(docsUi.workspaceId).toBe("w1");
+  });
+
+  it("offers Add analyst only when the chat can have one, beside this pane", () => {
+    render();
+    expect(item("Add analyst")).toBeUndefined();
+    data.canAddAnalyst = true;
+    render();
+    act(() => item("Add analyst")?.click());
+    expect(analystUi).toMatchObject({
+      open: true,
+      sessionId: "s1",
+      paneId: "pane-1",
+    });
   });
 });

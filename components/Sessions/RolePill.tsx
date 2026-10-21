@@ -18,6 +18,7 @@ import { RoleModelSelect } from "@/components/Models/RoleModelSelect";
 import { useCrewQuery, useSwitchSessionModel } from "@/data/models";
 import { useLaunchSession } from "@/data/sessions";
 import { usePanes } from "@/contexts/PaneContext";
+import { analystUiActions } from "@/stores/analystUi";
 import type { Session } from "@/lib/db";
 import {
   AGENT_ROLES,
@@ -55,6 +56,12 @@ export function RolePill({
   const others = crew.data?.members.filter((m) => m.id !== session.id) ?? [];
 
   const add = async (next: (typeof AGENT_ROLES)[number]) => {
+    // A chat's analyst is paired with it, to review each turn.
+    if (next === "analyst" && session.view === "chat") {
+      setOpen(false);
+      analystUiActions.open(session.id, session.name, paneId ?? null);
+      return;
+    }
     try {
       const { session: made } = await launch.mutateAsync({
         id: uuid(),
