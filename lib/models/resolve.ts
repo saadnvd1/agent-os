@@ -12,11 +12,17 @@ import {
   effectiveModels,
   roleMapSchema,
   savedModelSettings,
+  projectModels,
   workspaceModels,
   type EffectiveModels,
   type RoleMap,
 } from "./config";
-import { ANTHROPIC_PROVIDER, type ModelProvider } from "./providers";
+import {
+  ANTHROPIC_PROVIDER,
+  PI,
+  PI_PROVIDER,
+  type ModelProvider,
+} from "./providers";
 import {
   ANTHROPIC,
   DEFAULT_ROLE_MODELS,
@@ -33,7 +39,14 @@ import {
   type SecretCommand,
 } from "./secrets";
 
-export type RoleSource = "task" | "workspace" | "settings" | "env" | "default";
+export type RoleSource =
+  | "task"
+  | "project"
+  | "workspace"
+  | "settings"
+  | "env"
+  | "inherited"
+  | "default";
 
 // The server's own environment can still stand in for a role's default:
 // what AgentOS read before model routing existed.
@@ -87,9 +100,15 @@ const overrideFor = (o: ModelOverride | null | undefined, role: ModelRole) =>
 // The provider by id, or throws why it can't be used.
 export function providerFor(
   id: string,
-  models: EffectiveModels = effectiveModels()
+  models: EffectiveModels = effectiveModels(),
+  allowPi = false
 ): ModelProvider {
   if (id === ANTHROPIC) return ANTHROPIC_PROVIDER;
+  if (id === PI) {
+    if (!allowPi)
+      throw new Error("Pi models run only in a session started in a role");
+    return PI_PROVIDER;
+  }
   const p = models.providers.find((x) => x.id === id);
   if (!p) throw new Error(`No model provider "${id}" (Settings > Models)`);
   if (!p.enabled) throw new Error(`The ${p.label} provider is turned off`);
@@ -104,10 +123,19 @@ export function providerFor(
 
 export function resolveRole(
   role: ModelRole,
-  opts: { workspaceId?: string | null; override?: ModelOverride | null } = {},
+  opts: {
+    workspaceId?: string | null;
+    projectId?: string | null;
+    override?: ModelOverride | null;
+    // A role session runs Pi models; a task or gate can't.
+    allowPi?: boolean;
+  } = {},
   models: EffectiveModels = effectiveModels()
 ): RoutedModel {
   const task = overrideFor(opts.override, role);
+  const proj = opts.projectId
+    ? projectModels(opts.projectId).roles?.[role]
+    : undefined;
   const ws = opts.workspaceId
     ? workspaceModels(opts.workspaceId).roles?.[role]
     : undefined;
@@ -117,20 +145,29 @@ export function resolveRole(
     saved === DEFAULT_ROLE_MODELS[role] && !savedModelSettings().roles?.[role]
       ? envModel(role)
       : undefined;
+  // The reviewer's advice follows the gate's model until it's set.
+  const inherited =
+    role === "advise" && !env
+      ? resolveRole("review", { ...opts, override: null }, models)
+      : null;
   const [ref, source]: [string, RoleSource] = task
     ? [task, "task"]
-    : ws
-      ? [ws, "workspace"]
-      : saved !== DEFAULT_ROLE_MODELS[role]
-        ? [saved, "settings"]
-        : env
-          ? [env, "env"]
-          : [saved, "default"];
+    : proj
+      ? [proj, "project"]
+      : ws
+        ? [ws, "workspace"]
+        : saved !== DEFAULT_ROLE_MODELS[role]
+          ? [saved, "settings"]
+          : env
+            ? [env, "env"]
+            : inherited
+              ? [inherited.ref, "inherited"]
+              : [saved, "default"];
   const parsed = parseModelRef(ref);
   return {
     role,
     ref: formatModelRef(parsed),
-    provider: providerFor(parsed.provider, models),
+    provider: providerFor(parsed.provider, models, opts.allowPi),
     model: parsed.model,
     source,
   };

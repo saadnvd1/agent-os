@@ -144,19 +144,29 @@ export const modelSettingsSchema = z.strictObject({
   providers: z.array(providerSchema).optional(),
   prices: z.record(z.string().regex(REF_PATTERN), price).optional(),
   planStep: z.boolean().optional(),
+  fallbacks: fallbackMap.optional(),
 });
 
 export const workspaceModelsSchema = z.strictObject({
   roles: roleMap.optional(),
 });
 
+// A role may name a model to start on when its own can't be reached.
+const fallbackMap = z.partialRecord(z.enum(MODEL_ROLES), roleRef);
+
+export const projectModelsSchema = z.strictObject({
+  roles: roleMap.optional(),
+});
+
 export type ModelSettings = z.infer<typeof modelSettingsSchema>;
 export type WorkspaceModels = z.infer<typeof workspaceModelsSchema>;
+export type ProjectModels = z.infer<typeof projectModelsSchema>;
 export type RoleMap = Partial<Record<ModelRole, string>>;
 export const roleMapSchema = roleMap;
 
 const GLOBAL_KEY = "models";
 const workspaceKey = (id: string) => `models.workspace.${id}`;
+const projectKey = (id: string) => `models.project.${id}`;
 
 function read<T>(key: string, schema: z.ZodType<T>): T | null {
   const row = db
@@ -220,6 +230,23 @@ export function setWorkspaceModels(
     );
   return saved;
 }
+
+// Set in Settings, never in the repo, so work can't choose its own models.
+export const projectModels = (projectId: string): ProjectModels =>
+  read(projectKey(projectId), projectModelsSchema) ?? {};
+
+export function setProjectModels(
+  projectId: string,
+  value: unknown
+): ProjectModels {
+  const saved = write(projectKey(projectId), projectModelsSchema, value);
+  if (!Object.keys(saved.roles ?? {}).length) clearProjectModels(projectId);
+  return saved;
+}
+
+export const clearProjectModels = (projectId: string): void => {
+  db.prepare(`DELETE FROM settings WHERE key = ?`).run(projectKey(projectId));
+};
 
 // The settings in force: the presets with any saved edits laid over them
 // (by id), saved providers that aren't presets, and every role filled.
