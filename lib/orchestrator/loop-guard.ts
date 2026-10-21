@@ -76,9 +76,10 @@ const ERROR_LINE =
   /##\[error\]|\berror\b|\bfail(ed|ure|s)?\b|AssertionError|panic:/i;
 const RUNNER_EXIT = /Process completed with exit code/;
 
-// A CI failure: the job, then its failing tests, or its first error line.
+// A failure's log (CI, or a local test run): the job or command, then its
+// failing tests, or its first error line.
 // Null when there's nothing to tell one failure from another.
-export function ciSignature(
+export function failureSignature(
   check: string | null | undefined,
   log: string | null
 ): string | null {
@@ -99,6 +100,8 @@ export function ciSignature(
   );
   return error ? cap(`${check}: ${normalize(error)}`) : null;
 }
+
+export const ciSignature = failureSignature;
 
 // A review's blocking findings, by where they are: the reviewer words the
 // same finding differently each time, but not its file and line. A finding

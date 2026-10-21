@@ -14,7 +14,7 @@ import { AnalystError, type AnalystLink, type Recommendation } from "./types";
 // so a repeat is a no-op. It waits in the queue while a turn runs.
 export async function forwardToCoder(
   coderSessionId: string,
-  input: { text: string; id: string; label: string; fromSessionId: string }
+  input: { text: string; id: string; label: string; fromSessionId?: string }
 ): Promise<void> {
   await sendChat(coderSessionId, {
     text: input.text,

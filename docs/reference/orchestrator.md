@@ -344,6 +344,12 @@ reset` yourself in a terminal on the machine: it refuses inside an
   whichever device is open until you dismiss it, a short summary goes to
   your phone, and the report stays in Settings → Audits (`away/`).
 
+## Analyst loop
+
+A running task can be put on a loop (Loop button on its row, or `aos loop <task> start`). After the coding agent finishes a turn and goes quiet, the watcher runs one cycle: AgentOS snapshots the worktree (a commit-tree of the working files, so the coder's index is untouched), runs the base branch's typecheck and test commands on it, and gives a read-only analyst the diff, the compacted results and the acceptance checklist. The analyst marks each criterion with a citation (a test name, a changed file and line, the typecheck, or a CI check); AgentOS checks the citation against the real run before it counts, and nothing is met while the run is red. The analyst's next instruction waits a short countdown (Edit, Send now, Hold or Skip) and goes to the coder as a chat prompt, or typed into a terminal.
+
+Stops: all criteria met, a blocker, the same failure three cycles running, no progress over three cycles, eight cycles, a cost cap or a time limit, or you. Every stop short of done raises one ask and a note for the orchestrator; hitting a limit offers Continue (needs Can approve). The loop never merges, publishes or signs off, and an instruction that tells the coder to is held back and raised as an ask. While a loop is live, CI-failure wakes for that task are folded into its cycles. State is in `task_loops`, `task_loop_criteria` and `task_loop_cycles`; cycle logs are under the AgentOS home in `loops/`. Routes: `/api/tasks/:id/loop` (GET, POST, PATCH) with `stop`, `run`, `next`, `draft-criteria` and `cycles/:n/log`, and `/api/loops` for the row pills. Another feature plugs in through `setLoopHooks` (`onStart`, `onStop`, `onCycleSettled`).
+
 ## No approvals mode
 
 One app-wide switch in Settings → No approvals, off by default. Turning it on

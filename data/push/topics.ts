@@ -20,6 +20,7 @@ import { bookmarkKeys } from "../bookmarks/keys";
 import { learningCardsKeys } from "../learning-cards";
 import { claimKeys } from "../claims/keys";
 import { analystKeys } from "../analyst/keys";
+import { loopKeys } from "../loops/keys";
 
 // What each pushed topic (a table that changed, lib/db/changes.ts, or a
 // pushed view) means the browser should refetch. Only queries on screen
@@ -85,6 +86,11 @@ function keysFor(topic: string): QueryKey[] {
       return [analystKeys.all, sessionKeys.all];
     case "analyst_recommendations":
       return [analystKeys.all];
+    case "task_loops":
+      return [loopKeys.all, sessionKeys.all];
+    case "task_loop_criteria":
+    case "task_loop_cycles":
+      return [loopKeys.all];
     case "chat_bookmarks":
       return [bookmarkKeys.all];
     default:

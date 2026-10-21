@@ -7,6 +7,7 @@
  * is by id, so the same database gives the same text.
  */
 
+import { loopDigestNote } from "../loops/summary";
 import { db } from "../db";
 import { openAsks } from "./asks";
 import { listRules } from "./rules";
@@ -185,7 +186,7 @@ function tasksSection(
         ? ` | ${t.pause_state}${t.paused_until ? ` until ${t.paused_until} UTC` : t.pause_state === "paused" ? " until resumed" : ""}${t.pause_note ? ` (${t.pause_note})` : ""}`
         : "";
       const placed = t.placed_note ? ` | ${t.placed_note}` : "";
-      return `- ${clip(t.name, 80)} (${t.project ?? "?"}, ${t.view}, id ${shortId(t.id)}): ${pr}${arm}${paused}${placed}${gates ? ` | ${gates}` : ""}`;
+      return `- ${clip(t.name, 80)} (${t.project ?? "?"}, ${t.view}, id ${shortId(t.id)}): ${pr}${arm}${paused}${placed}${loopDigestNote(t.id)}${gates ? ` | ${gates}` : ""}`;
     }),
     empty: "- None.",
     more: "the sessions tool",

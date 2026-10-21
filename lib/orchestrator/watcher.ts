@@ -26,6 +26,7 @@ import { followAskVerdicts } from "./ask-verdict";
 import { raiseHeldAsks } from "./held-asks";
 import { rebaseConflicting } from "./rebase";
 import { wakeTasks } from "./pr-wake";
+import { tickLoops } from "../loops/tickLoops";
 import { awayTick } from "../away/run";
 import { healthTick } from "../health/tick";
 import { observeCi } from "../health/ci";
@@ -93,7 +94,8 @@ export async function diffWorkspace(
   return nextDiffAt(now, facts, working);
 }
 
-// Wakes tasks whose PRs failed CI or got reviews, rebases what conflicts
+// Wakes tasks whose PRs failed CI or got reviews, advances developer-analyst
+// loops, rebases what conflicts
 // with its base, then merges what's armed and passes. In the background, one run per workspace at a time, so a git
 // fetch or a merge never holds up event delivery.
 const piping = new Set<string>();
@@ -104,6 +106,9 @@ function mergePipeline(workspaceId: string, facts: SessionFacts[]): void {
   void (async () => {
     await wakeTasks(workspaceId, facts).catch((error) =>
       console.error(`Waking tasks in ${workspaceId}:`, error)
+    );
+    await tickLoops(workspaceId, facts).catch((error) =>
+      console.error(`Ticking loops in ${workspaceId}:`, error)
     );
     await followAskHeads(workspaceId, facts).catch((error) =>
       console.error(`Following ask heads in ${workspaceId}:`, error)

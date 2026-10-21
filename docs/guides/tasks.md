@@ -280,6 +280,10 @@ worktree the command runs in. Every plan approval, a plain Approve included,
 is written to the task's brief, so its review judges the PR as the
 implementation of the plan.
 
+## Analyst loop
+
+Press **Loop** on a task to have an analyst check the coding agent's work after every turn. Set the acceptance criteria (drafted from the task's checklist when it has one) and the limits, and start. Each cycle shows the checks that ran, what the analyst found, and the instruction it sent. The next instruction waits a few seconds so you can edit it, send it now, hold it or skip it. The loop stops when every criterion is met, when it is blocked, stuck or out of cycles, cost or time, or when you stop it. It never merges or publishes: that stays with you.
+
 ## Worktree clean-up by age
 
 A server job runs every 6 hours on each machine and removes the worktree of a

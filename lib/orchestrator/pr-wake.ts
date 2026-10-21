@@ -42,6 +42,7 @@ import { isPaused } from "./pause";
 import { repoOf } from "./repo";
 import { untrusted, UNTRUSTED_RULE } from "./untrusted";
 import { setPr } from "../db/session-parts";
+import { liveLoopFor } from "../loops/store";
 
 export const COMMENT_WAKE_CAP = 10;
 // A first look at a PR this young takes its whole history as new.
@@ -170,6 +171,9 @@ export async function wakeTasks(
   for (const w of watched) {
     if (isPaused(workspaceId)) return;
     if (w.pr.checks !== "fail" || !w.pr.failing) continue;
+    // A running loop reads CI as part of its evidence and tells the coder
+    // in its next instruction: a task never has two steerers.
+    if (liveLoopFor(w.task.id)) continue;
     await wakeOnCheck(workspaceId, w, deps).catch((error) =>
       console.error(`Waking ${w.task.name} on CI:`, error)
     );

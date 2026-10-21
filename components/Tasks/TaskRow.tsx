@@ -21,6 +21,7 @@ import { cn } from "@/lib/utils";
 import { SimulatorIndicator } from "@/components/Simulator";
 import { PlanReview } from "./PlanReview";
 import { MoveTaskButton } from "./MoveTaskButton";
+import { LoopButton } from "./Loop/LoopButton";
 import { ResumeOnModel } from "./ResumeOnModel";
 import { TASK_STATE as STATE } from "./task-state-labels";
 import { formatTokens } from "@/components/Usage/format";
@@ -119,6 +120,7 @@ export function TaskRow({ task }: { task: TaskView }) {
           )}
           {!task.hostId && <SimulatorIndicator sessionId={task.id} />}
           <MoveTaskButton task={task} onError={setMoveError} />
+          {!task.hostId && <LoopButton taskId={task.id} name={task.name} />}
           {!task.hostId && <ResumeOnModel task={task} />}
           <span className="flex-1" />
           {confirmDrop ? (
