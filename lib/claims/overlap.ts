@@ -7,8 +7,28 @@ import type { Claim, Overlap } from "./types";
 const NOISE =
   /(^|\/)(package-lock\.json|pnpm-lock\.yaml|yarn\.lock|Gemfile\.lock|Cargo\.lock|go\.sum|poetry\.lock|uv\.lock|composer\.lock|CHANGELOG[^/]*|__snapshots__\/.*|migrations\.generated\.ts)$/i;
 
-export const isNoise = (path: string) =>
-  NOISE.test(path) || /(^|\/)__snapshots__\//.test(path);
+// Build output, caches and OS files: directory segments (never name substrings).
+const NOISE_DIRS = new Set([
+  "__pycache__",
+  "node_modules",
+  ".next",
+  "dist",
+  "build",
+  "coverage",
+  ".pytest_cache",
+  ".mypy_cache",
+  ".ruff_cache",
+]);
+const NOISE_FILE = /(\.(pyc|pyo|tsbuildinfo)|^\.DS_Store)$/;
+
+export const isNoise = (path: string) => {
+  if (NOISE.test(path) || /(^|\/)__snapshots__\//.test(path)) return true;
+  const segs = path.split("/");
+  return (
+    segs.slice(0, -1).some((s) => NOISE_DIRS.has(s)) ||
+    NOISE_FILE.test(segs[segs.length - 1])
+  );
+};
 
 // A path this many claims touch is a shared index or router, not a signal.
 export const HUB_CLAIMS = 4;
