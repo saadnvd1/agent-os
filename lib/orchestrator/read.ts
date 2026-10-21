@@ -91,7 +91,11 @@ function itemText(i: ChatItem): string | null {
     case "error":
       return `[error] ${i.message}`;
     case "turn_end":
-      return i.interrupted ? "[turn stopped]" : "[turn ended]";
+      return i.interrupted
+        ? "[turn stopped]"
+        : i.ended
+          ? `[turn ended early: ${i.ended.reason}] ${i.ended.notice}`
+          : "[turn ended]";
     case "command_output":
       return i.text;
     case "note":

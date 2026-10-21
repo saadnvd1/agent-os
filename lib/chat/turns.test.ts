@@ -86,6 +86,14 @@ describe("eventTurnAt", () => {
     expect(found.turn.live).toBe(false);
   });
 
+  it("is left to the reader when the turn ended early", () => {
+    const early: ChatItem = {
+      ...end("t1"),
+      ended: { reason: "no_tool_call", notice: "n" },
+    } as ChatItem;
+    expect(eventTurnAt([event("e1"), reply("a1"), early], 0)).toBeNull();
+  });
+
   it("stops before a message sent while it was working", () => {
     const items = [event("e1"), reply("a1"), user("u2")];
     expect(eventTurnAt(items, 0)!.end).toBe(2);

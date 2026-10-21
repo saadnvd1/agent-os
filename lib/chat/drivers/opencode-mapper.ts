@@ -2,6 +2,7 @@ import { randomUUID } from "crypto";
 import type { DriverEvent, UsageTotals } from "../events";
 import { openCodeTool } from "./opencode-rules";
 import { TurnItems } from "./turn-items";
+import { logTurnEnd, turnOutcome } from "./turn-outcome";
 
 type P = Record<string, unknown>;
 const str = (v: unknown) => (typeof v === "string" ? v : "");
@@ -26,6 +27,15 @@ export class OpenCodeMapper {
   private current = new Set<string>();
   private past = new Set<string>();
   private error: string | null = null;
+  // The turn's last assistant message: its finish reason, text and calls.
+  private last = {
+    id: "",
+    finish: "",
+    provider: "",
+    model: "",
+    text: new Map<string, string>(),
+    calls: new Set<string>(),
+  };
   private aborted = false;
   // Idle from before the prompt is stale until the session goes busy.
   private admitted = false;
@@ -98,6 +108,18 @@ export class OpenCodeMapper {
     this.current.add(id);
     this.roles.set(id, str(info.role));
     if (info.role !== "assistant") return;
+    if (this.last.id !== id)
+      this.last = {
+        id,
+        finish: "",
+        provider: "",
+        model: "",
+        text: new Map(),
+        calls: new Set(),
+      };
+    this.last.finish = str(info.finish) || this.last.finish;
+    this.last.provider = str(info.providerID) || this.last.provider;
+    this.last.model = str(info.modelID) || this.last.model;
     if (info.error) this.failed(info.error as P);
     if (!(info.time as P)?.completed || this.counted.has(id)) return;
     this.counted.add(id);
@@ -125,6 +147,8 @@ export class OpenCodeMapper {
       const seen = this.parts.get(id) ?? { kind, shown: 0 };
       this.parts.set(id, seen);
       const text = str(part.text);
+      if (kind === "assistant" && this.last.id === str(part.messageID))
+        this.last.text.set(id, text);
       if (text.length > seen.shown) {
         this.items.delta(id, kind, text.slice(seen.shown));
         seen.shown = text.length;
@@ -132,7 +156,10 @@ export class OpenCodeMapper {
       if ((part.time as P)?.end) this.items.finishText(id, kind, text);
       return;
     }
-    if (part.type === "tool") this.tool(id, part);
+    if (part.type === "tool") {
+      if (this.last.id === str(part.messageID)) this.last.calls.add(id);
+      this.tool(id, part);
+    }
   }
 
   private delta(p: P): void {
@@ -140,6 +167,11 @@ export class OpenCodeMapper {
     const seen = this.parts.get(str(p.partID));
     if (!seen || p.field !== "text") return;
     const text = str(p.delta);
+    if (seen.kind === "assistant" && this.last.text.has(str(p.partID)))
+      this.last.text.set(
+        str(p.partID),
+        this.last.text.get(str(p.partID)) + text
+      );
     seen.shown += text.length;
     this.items.delta(str(p.partID), seen.kind, text);
   }
@@ -168,11 +200,33 @@ export class OpenCodeMapper {
   private idle(): void {
     if (!this.admitted || !this.items.inTurn) return;
     this.emit({ type: "usage", totals: { ...this.totals } });
+    const text = [...this.last.text.values()].join("\n");
+    const ended =
+      this.aborted || !this.last.id
+        ? undefined
+        : turnOutcome({
+            finishReason: this.last.finish,
+            text,
+            toolCalls: this.last.calls.size,
+            error: this.error ?? undefined,
+          });
+    if (ended)
+      logTurnEnd({
+        driver: "opencode",
+        provider: this.last.provider,
+        model: this.last.model,
+        finishReason: this.last.finish,
+        reason: ended.reason,
+        text,
+      });
     this.items.endTurn({
       interrupted: this.aborted,
       error: this.error ?? undefined,
+      finishReason: this.last.finish || undefined,
+      ended,
     });
     this.error = null;
+    this.last.id = "";
     this.aborted = false;
     this.admitted = false;
     for (const id of this.current) this.past.add(id);

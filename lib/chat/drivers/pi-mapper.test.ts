@@ -1,6 +1,6 @@
 import { readFileSync } from "node:fs";
 import { join } from "node:path";
-import { describe, expect, it } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import type { ChatItem, DriverEvent } from "../events";
 import { piTool, PiMapper } from "./pi-mapper";
 import { piArgs, piImages } from "./pi";
@@ -153,11 +153,14 @@ describe("pi arguments", () => {
           resumeId: "/s/1.jsonl",
           systemAppend: "brief",
         },
-        "/ext.mjs"
+        "/ext.mjs",
+        "/more.mjs"
       )
     ).toEqual([
       "-e",
       "/ext.mjs",
+      "-e",
+      "/more.mjs",
       "--session",
       "/s/1.jsonl",
       "--append-system-prompt",
@@ -166,5 +169,123 @@ describe("pi arguments", () => {
     expect(piImages([{ mediaType: "image/png", data: "QQ==" }])).toEqual([
       { type: "image", data: "QQ==", mimeType: "image/png" },
     ]);
+  });
+});
+
+describe("PiMapper turns that end early", () => {
+  const run = (...events: Record<string, unknown>[]) => {
+    const out: DriverEvent[] = [];
+    const mapper = new PiMapper((e) => out.push(e));
+    for (const e of events) mapper.map(e);
+    mapper.endTurn();
+    const items = new Map<string, ChatItem>();
+    for (const e of out) if (e.type === "item") items.set(e.item.id, e.item);
+    const end = [...items.values()].find((i) => i.kind === "turn_end");
+    return { out, items: [...items.values()], end };
+  };
+  const answer = (
+    text: string,
+    stopReason: string,
+    extra: Record<string, unknown> = {}
+  ) => [
+    { type: "agent_start" },
+    { type: "message_start", message: { role: "assistant" } },
+    {
+      type: "message_update",
+      assistantMessageEvent: {
+        type: "text_delta",
+        contentIndex: 0,
+        delta: text,
+      },
+    },
+    {
+      type: "message_update",
+      assistantMessageEvent: {
+        type: "text_end",
+        contentIndex: 0,
+        content: text,
+      },
+    },
+    {
+      type: "message_end",
+      message: {
+        role: "assistant",
+        stopReason,
+        provider: "stub",
+        model: "qwen-stub",
+        api: "openai-completions",
+        content: [{ type: "text", text }],
+        ...extra,
+      },
+    },
+  ];
+  let warn: ReturnType<typeof vi.spyOn>;
+  beforeEach(() => {
+    warn = vi.spyOn(console, "warn").mockImplementation(() => {});
+  });
+  afterEach(() => warn.mockRestore());
+
+  it("flags a reply that announces an action and calls nothing", () => {
+    const { end } = run(...answer("First, let me run typecheck.", "stop"));
+    expect(end).toMatchObject({
+      finishReason: "stop",
+      ended: { reason: "no_tool_call" },
+    });
+    const [, json] = warn.mock.calls[0] as [string, string];
+    expect(JSON.parse(json)).toMatchObject({
+      driver: "pi",
+      provider: "stub",
+      model: "qwen-stub",
+      finishReason: "stop",
+      reason: "no_tool_call",
+    });
+  });
+
+  it("flags a reply cut off by the output limit", () => {
+    const { end } = run(...answer("The plan is to", "length"));
+    expect(end).toMatchObject({
+      finishReason: "length",
+      ended: { reason: "length" },
+    });
+    expect(warn).toHaveBeenCalledOnce();
+  });
+
+  it("flags tool-call markup nothing ran, and an empty reply", () => {
+    expect(
+      run(...answer('<tool_call>{"name":"bash"', "stop")).end
+    ).toMatchObject({ ended: { reason: "parse_failure" } });
+    expect(run(...answer("", "stop")).end).toMatchObject({
+      ended: { reason: "empty" },
+    });
+  });
+
+  it("cleans the text of a call the text-tools extension made", () => {
+    const { items, end } = run(
+      ...answer("Running it.\n<tool_call>x</tool_call>", "toolUse", {
+        content: [
+          { type: "text", text: "Running it." },
+          { type: "toolCall", id: "aostext_1_a", name: "bash", arguments: {} },
+        ],
+        aosRecovered: { index: 0, text: "Running it." },
+      })
+    );
+    const texts = items.filter((i) => i.kind === "assistant");
+    expect(texts).toHaveLength(1);
+    expect(texts[0]).toMatchObject({ text: "Running it." });
+    expect(end?.kind === "turn_end" && end.ended).toBeUndefined();
+  });
+
+  it("stays quiet for finished work, an abort and the recorded turns", () => {
+    expect(run(...answer("All done.", "stop")).end).not.toHaveProperty(
+      "ended.reason"
+    );
+    expect(
+      run(...answer("First, let me run it.", "aborted")).end
+    ).toMatchObject({ interrupted: true });
+    expect(warn).not.toHaveBeenCalled();
+    const { events } = replay();
+    for (const e of events)
+      if (e.type === "item" && e.item.kind === "turn_end")
+        expect(e.item.ended).toBeUndefined();
   });
 });

@@ -221,6 +221,8 @@ export function AssistantMessage({
   item: Of<"assistant">;
   onQuote?: (text: string) => void;
 }) {
+  // A reply whose only content was a tool call AgentOS ran for it.
+  if (!item.streaming && !item.text.trim()) return null;
   return (
     <BookmarkPress itemId={item.id}>
       <div className="group">
@@ -300,18 +302,38 @@ export function Todos({ item }: { item: Of<"todos"> }) {
 
 export function TurnEnd({ item }: { item: Of<"turn_end"> }) {
   const secs = item.durationMs ? Math.round(item.durationMs / 1000) : null;
+  const early = !item.interrupted && item.ended;
   const label = item.interrupted
     ? "Stopped"
-    : secs !== null
-      ? `Done in ${secs}s`
-      : "Done";
+    : early
+      ? secs !== null
+        ? `Ended early in ${secs}s`
+        : "Ended early"
+      : secs !== null
+        ? `Done in ${secs}s`
+        : "Done";
   return (
-    <div className="group text-muted-foreground/60 flex items-center gap-3 font-mono text-[11px]">
-      <span className="bg-foreground/[0.06] h-px flex-1" />
-      {label}
-      <TurnBookmark turnEndId={item.id} />
-      <span className="bg-foreground/[0.06] h-px flex-1" />
-    </div>
+    <>
+      {early && (
+        <div
+          role="status"
+          className="rounded-xl bg-amber-500/10 px-3.5 py-2.5 text-sm text-amber-700 dark:text-amber-300"
+        >
+          {early.notice}
+          {item.finishReason && (
+            <span className="mt-1 block font-mono text-[11px] opacity-80">
+              finish reason: {item.finishReason}
+            </span>
+          )}
+        </div>
+      )}
+      <div className="group text-muted-foreground/60 flex items-center gap-3 font-mono text-[11px]">
+        <span className="bg-foreground/[0.06] h-px flex-1" />
+        {label}
+        <TurnBookmark turnEndId={item.id} />
+        <span className="bg-foreground/[0.06] h-px flex-1" />
+      </div>
+    </>
   );
 }
 

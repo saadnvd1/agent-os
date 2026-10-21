@@ -17,7 +17,7 @@ export function markSeen(sessionId: string): void {
   notifyStatusChanged();
 }
 
-function latestChatItem(sessionId: string): ChatItem | null {
+export function latestChatItem(sessionId: string): ChatItem | null {
   const row = getDb()
     .prepare(
       `SELECT data FROM chat_items WHERE session_id = ? ORDER BY seq DESC LIMIT 1`

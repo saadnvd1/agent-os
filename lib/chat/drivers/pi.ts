@@ -4,6 +4,7 @@ import type { ChatImage, DriverEvent } from "../events";
 import { InputQueue } from "../queue";
 import { AGENT_DEFAULT_MODEL } from "../../providers/registry";
 import { PiAccess, PiDialogs, writeExtension } from "./pi-approvals";
+import { TEXT_TOOLS_EXTENSION } from "./pi-text-tools";
 import { PiMapper } from "./pi-mapper";
 import { PiRpc } from "./pi-rpc";
 
@@ -11,8 +12,8 @@ type P = Record<string, unknown>;
 
 const SETTLE_TRIES = 5;
 
-export function piArgs(o: ChatStartOptions, extension: string): string[] {
-  const args = ["-e", extension];
+export function piArgs(o: ChatStartOptions, ...extensions: string[]): string[] {
+  const args = extensions.flatMap((e) => ["-e", e]);
   // A path, so a conversation started elsewhere never makes Pi ask about it.
   if (o.resumeId) args.push("--session", o.resumeId);
   if (o.model && o.model !== AGENT_DEFAULT_MODEL) args.push("--model", o.model);
@@ -79,7 +80,11 @@ export const piDriver: ChatDriver = {
     // Sent now: goes once the stopped run has ended.
     const held: { text: string; images?: ChatImage[] }[] = [];
     const rpc: PiRpc = new PiRpc(
-      piArgs(options, writeExtension()),
+      piArgs(
+        options,
+        writeExtension(),
+        writeExtension("agentos-text-tools.mjs", TEXT_TOOLS_EXTENSION)
+      ),
       {
         cwd: options.cwd,
         env: {

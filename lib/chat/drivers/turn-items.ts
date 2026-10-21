@@ -1,5 +1,11 @@
 import { randomUUID } from "crypto";
-import type { ChatItem, DriverEvent, FileDiff, ToolStatus } from "../events";
+import type {
+  ChatItem,
+  DriverEvent,
+  FileDiff,
+  ToolStatus,
+  TurnEndReason,
+} from "../events";
 import { clipOutput } from "../tools";
 
 type Tool = Extract<ChatItem, { kind: "tool" }>;
@@ -41,6 +47,8 @@ export function readableError(text: string): string {
 export class TurnItems {
   private texts = new Map<string, Text>();
   private tools = new Map<string, Tool>();
+  // Texts that finished in this turn, so one can be corrected afterwards.
+  private done = new Map<string, Text>();
   private startedAt = 0;
   inTurn = false;
 
@@ -81,15 +89,23 @@ export class TurnItems {
     this.texts.delete(key);
     const text = full ?? current?.text ?? "";
     if (!text.trim()) return;
-    this.emit({
-      type: "item",
-      item: {
-        id: current?.id ?? randomUUID(),
-        kind,
-        text,
-        createdAt: current?.createdAt ?? Date.now(),
-      },
-    });
+    const item: Text = {
+      id: current?.id ?? randomUUID(),
+      kind,
+      text,
+      createdAt: current?.createdAt ?? Date.now(),
+    };
+    this.done.set(key, item);
+    this.emit({ type: "item", item });
+  }
+
+  // A finished text replaced by `text` (blank hides it): the agent's final
+  // message differs from what streamed.
+  retext(key: string, text: string): void {
+    const item = this.done.get(key);
+    if (!item) return;
+    this.done.set(key, { ...item, text });
+    this.emit({ type: "item", item: { ...item, text } });
   }
 
   tool(id: string, start: ToolStart): void {
@@ -158,7 +174,13 @@ export class TurnItems {
 
   // Closes the turn: text still streaming settles, tools still running
   // were cut off.
-  endTurn(end: { interrupted?: boolean; error?: string; costUsd?: number }) {
+  endTurn(end: {
+    interrupted?: boolean;
+    error?: string;
+    costUsd?: number;
+    finishReason?: string;
+    ended?: { reason: TurnEndReason; notice: string };
+  }) {
     if (!this.inTurn) return;
     this.inTurn = false;
     for (const [key, text] of [...this.texts]) this.finishText(key, text.kind);
@@ -172,9 +194,12 @@ export class TurnItems {
         durationMs: Date.now() - this.startedAt,
         costUsd: end.costUsd,
         interrupted: end.interrupted,
+        finishReason: end.finishReason,
+        ended: end.interrupted ? undefined : end.ended,
         createdAt: Date.now(),
       },
     });
+    this.done.clear();
     this.emit({ type: "state", state: "idle" });
   }
 }
