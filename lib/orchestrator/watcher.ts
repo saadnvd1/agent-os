@@ -27,6 +27,7 @@ import { raiseHeldAsks } from "./held-asks";
 import { rebaseConflicting } from "./rebase";
 import { wakeTasks } from "./pr-wake";
 import { tickLoops } from "../loops/tickLoops";
+import { installReportHooks } from "../reports/hooks";
 import { awayTick } from "../away/run";
 import { healthTick } from "../health/tick";
 import { observeCi } from "../health/ci";
@@ -194,6 +195,7 @@ async function tick(): Promise<void> {
 }
 
 export function startOrchestratorWatcher(): void {
+  installReportHooks();
   if (timer) return;
   timer = setInterval(() => void tick(), DELIVER_EVERY_MS);
   timer.unref();

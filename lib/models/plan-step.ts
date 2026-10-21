@@ -22,6 +22,7 @@ import { queueEvent } from "../orchestrator/events";
 import { recordAutoApproval } from "../approvals/no-approvals";
 import { addNote } from "../orchestrator/notes";
 import { amendBrief, scopeChangesOf } from "../orchestrator/amendments";
+import { ACCEPTANCE_PROMPT } from "../plans/acceptance";
 import { PIECES_PROMPT, foldedBrief, pieceBrief } from "../plans/pieces";
 import { orchestratorOf } from "../tasks/starter";
 import { isRemoteHost } from "../hosts";
@@ -46,7 +47,9 @@ export function planPrompt(task: string, only = false): string {
 ---
 Plan first. This turn, only read and plan: write the implementation plan for the task above to \`${PLAN_FILE}\` in this worktree (what to change, file by file; the tests; how you'll verify it; anything ambiguous and the call you'd make). Change no other file, and don't commit, push or open a PR. Don't end your turn while subagents or background commands you started are still running; wait for their results and write the plan in the same turn. End the turn once the plan is written: ${after}.
 
-${PIECES_PROMPT}`;
+${PIECES_PROMPT}
+
+${ACCEPTANCE_PROMPT}`;
 }
 
 export const PLAN_RETRY_PROMPT = `Write the plan to \`${PLAN_FILE}\` now, plan only.`;

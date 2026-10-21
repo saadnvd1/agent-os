@@ -6,6 +6,7 @@ import {
   Home,
   Package,
   ScrollText,
+  ClipboardList,
   Users,
 } from "lucide-react";
 import {
@@ -27,6 +28,7 @@ interface PaneViewToggleProps {
   isConductor: boolean;
   // The task merged and has a log.
   hasLog?: boolean;
+  hasReport?: boolean;
   workerCount: number;
   gitDrawerOpen: boolean;
   shellDrawerOpen: boolean;
@@ -85,6 +87,7 @@ export function PaneViewToggle({
   showGit,
   isConductor,
   hasLog,
+  hasReport,
   workerCount,
   gitDrawerOpen,
   shellDrawerOpen,
@@ -136,6 +139,15 @@ export function PaneViewToggle({
           onClick={() => onViewModeChange("artifacts")}
         >
           <Package className="h-3.5 w-3.5" />
+        </ToggleButton>
+      )}
+      {hasReport && (
+        <ToggleButton
+          label="Report"
+          active={viewMode === "report"}
+          onClick={() => onViewModeChange("report")}
+        >
+          <ClipboardList className="h-3.5 w-3.5" />
         </ToggleButton>
       )}
       {hasLog && (
