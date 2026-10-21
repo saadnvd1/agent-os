@@ -38,11 +38,13 @@ async function ownExtras(session: Session): Promise<RoleExtras> {
     return (await import("../../orchestrator/worker")).orchestratorExtras(
       session
     );
-  if (!session.task_brief) return {};
+  // A role's brief (and an analyst's) is the session's own system prompt.
+  const own = session.system_prompt?.trim();
+  if (!session.task_brief) return own ? { systemAppend: own } : {};
   const atTokens =
     session.task_status === "running" ? refreshSettings().taskTokens : 0;
   return {
-    systemAppend: session.task_brief,
+    systemAppend: [session.task_brief, own].filter(Boolean).join("\n\n"),
     ...(atTokens > 0 && { refresh: { atTokens, role: "task" as const } }),
   };
 }

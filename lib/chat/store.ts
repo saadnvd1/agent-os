@@ -153,6 +153,25 @@ export function lastItems(
   return rows.reverse().map((r) => JSON.parse(r.data) as ChatItem);
 }
 
+// The items after `afterItemId`, oldest first, at most the latest `limit`;
+// with no item given (or one since deleted), just the latest `limit`.
+export function itemsAfter(
+  sessionId: string,
+  afterItemId: string | null,
+  limit = 400
+): ChatItem[] {
+  flushItems();
+  const rows = db
+    .prepare(
+      `SELECT data FROM chat_items WHERE session_id = ?
+         AND seq > COALESCE((SELECT seq FROM chat_items
+           WHERE session_id = ? AND item_id = ?), -1)
+       ORDER BY seq DESC LIMIT ?`
+    )
+    .all(sessionId, sessionId, afterItemId, limit) as { data: string }[];
+  return rows.reverse().map((r) => JSON.parse(r.data) as ChatItem);
+}
+
 // What the agent has said since the last message to it, as text: where a
 // chat task's BLOCKED: line stays until someone answers it.
 export function saidSinceLastMessage(sessionId: string, n = 20): string {

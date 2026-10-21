@@ -49,6 +49,11 @@ export const TABLES_WATCHED_SESSION_GROUPS = ["session_groups"] as const;
 
 export const TABLES_WATCHED_WORK_CLAIMS = ["work_claims"] as const;
 
+export const TABLES_WATCHED_ANALYST = [
+  "analyst_links",
+  "analyst_recommendations",
+] as const;
+
 // Every table any migration watches, for the browser's topic map to cover.
 export const WATCHED_TABLES: readonly string[] = [
   ...TABLES_WATCHED_45,
@@ -61,6 +66,7 @@ export const WATCHED_TABLES: readonly string[] = [
   ...TABLES_WATCHED_LEARNING_CARDS,
   ...TABLES_WATCHED_SESSION_GROUPS,
   ...TABLES_WATCHED_WORK_CLAIMS,
+  ...TABLES_WATCHED_ANALYST,
 ];
 
 export function installChangeTriggers(

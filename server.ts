@@ -6,6 +6,8 @@ import next from "next";
 import { WebSocketServer, WebSocket } from "ws";
 import { ensureBusBrief } from "./lib/agents/launch";
 import { reattachChats } from "./lib/chat/runner";
+import { setTurnEndHook } from "./lib/chat/registry";
+import { analystTurnEndHook, resumeAnalystLinks } from "./lib/analyst";
 import { serveChatSocket } from "./lib/chat/socket";
 import { startStackWatcher } from "./lib/stacks";
 import { startPauseWatcher } from "./lib/tasks/pause";
@@ -224,6 +226,8 @@ app.prepare().then(async () => {
     const folder = sessionFolder(id);
     if (folder) refreshGitSoon(folder);
   });
+  // An analyst hears each of its coding agent's turns as they end.
+  setTurnEndHook(analystTurnEndHook);
   // Terminal sessions are watched through tmux control mode, or tapped with
   // pipe-pane where tmux is too old for it.
   const control = await startTmuxControl();
@@ -453,7 +457,11 @@ app.prepare().then(async () => {
   void sweepSims();
   setInterval(sweepSims, 5 * 60_000);
   // Chat turns that kept running through a restart.
-  void reattachChats().finally(() => startPauseWatcher());
+  void reattachChats().finally(() => {
+    startPauseWatcher();
+    // Digests a restart cut off, and turns that ended while it was down.
+    void resumeAnalystLinks();
+  });
   // Older chats get into the search index in the background, a batch at a time.
   if (process.env.AGENTOS_SEARCH_INDEX !== "off") startConversationBackfill();
   // Reviews this restart cut off run again and deliver their verdicts.

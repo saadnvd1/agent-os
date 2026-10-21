@@ -78,6 +78,17 @@ interface Registry {
   listeners: Map<string, Set<Listener>>;
   // What each agent offers per folder: commands, skills, models.
   caps: Map<string, Capabilities>;
+  // Told of every finished turn (lib/analyst), set by the server.
+  turnEndHook?: TurnEndHook;
+}
+
+export type TurnEndHook = (
+  sessionId: string,
+  item: Extract<ChatItem, { kind: "turn_end" }>
+) => void;
+
+export function setTurnEndHook(fn: TurnEndHook): void {
+  registry.turnEndHook = fn;
 }
 
 // Shared across every module instance in the process (custom server and the
@@ -102,6 +113,8 @@ export function emit(sessionId: string, m: ChatServerMessage): void {
     (m.type === "item" && m.item.kind === "turn_end")
   )
     touchActive(sessionId);
+  if (m.type === "item" && m.item.kind === "turn_end")
+    registry.turnEndHook?.(sessionId, m.item);
   registry.listeners.get(sessionId)?.forEach((fn) => fn(m));
   // Idle, running, waiting and back, and a finished turn (unread): the
   // sidebar hears at once.
