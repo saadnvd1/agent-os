@@ -24,6 +24,7 @@ import { FileChip } from "./FileChip";
 import { ImageThumb } from "./ImageThumb";
 import { Markdown } from "./Markdown";
 import { openSessionLink } from "./session-link";
+import { TurnCopy } from "./TurnCopy";
 import { UndoButton } from "./Undo";
 import { useRowState } from "./rowState";
 import { useBookmarkChat } from "@/components/Bookmarks/context";
@@ -407,6 +408,7 @@ export function TurnEnd({ item }: { item: Of<"turn_end"> }) {
       <div className="group text-muted-foreground/60 flex items-center gap-3 font-mono text-[11px]">
         <span className="bg-foreground/[0.06] h-px flex-1" />
         {label}
+        <TurnCopy turnEndId={item.id} />
         <TurnBookmark turnEndId={item.id} />
         <span className="bg-foreground/[0.06] h-px flex-1" />
       </div>

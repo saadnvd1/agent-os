@@ -49,3 +49,14 @@ export async function fetchExport(
     name: exportFileName(title, sel ? rangeSlug(sel) : "all", req.format),
   };
 }
+
+/** One turn as Markdown (secrets masked), and its last agent message. */
+export async function fetchTurnCopy(
+  sessionId: string,
+  startId: string
+): Promise<{ full: string; response: string }> {
+  const res = await post(`/api/sessions/${sessionId}/export/turn`, {
+    startId,
+  });
+  return res.ok ? res.json() : failure(res);
+}
