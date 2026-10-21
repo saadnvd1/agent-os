@@ -31,6 +31,10 @@ export const looksRandom = (s: string) =>
 export const SECRET_ASSIGNMENT =
   /^(\s*(?:export\s+)?[A-Z][A-Z0-9_]*(?:KEY|TOKEN|SECRET|PASSWORD|PASS|PWD|CREDENTIALS?|AUTH)[A-Z0-9_]*\s*[=:]\s*).+$/gm;
 
+// The same assignment inline, ahead of a command: API_TOKEN=... npm test.
+const INLINE_ASSIGNMENT =
+  /\b([A-Z][A-Z0-9_]*(?:KEY|TOKEN|SECRET|PASSWORD|PASS|PWD|CREDENTIALS?|AUTH)[A-Z0-9_]*=)(?!\[redacted\])("[^"]*"|'[^']*'|\S+)/g;
+
 // A URL's userinfo (https://key@host, postgres://user:pw@host) and a query
 // parameter that carries a credential (?token=, &api_key=).
 export const URL_USERINFO = /\b([a-z][a-z0-9+.-]*:\/\/)[^@\s/]+@/gi;
@@ -47,6 +51,7 @@ const URL_PASSWORD = /\b([a-z][a-z0-9+.-]*:\/\/[^:\s/@]+:)[^@\s]+@/gi;
 export function redact(text: string): string {
   let out = text
     .replace(SECRET_ASSIGNMENT, "$1[redacted]")
+    .replace(INLINE_ASSIGNMENT, "$1[redacted]")
     .replace(URL_PASSWORD, "$1[redacted]@");
   for (const p of TOKEN_PATTERNS) out = out.replace(p, "[redacted]");
   return out.replace(BASE64_RUN, (m) => (looksRandom(m) ? "[redacted]" : m));
