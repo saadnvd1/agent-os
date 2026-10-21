@@ -66,11 +66,23 @@ always wins over an `env` entry of the same name, and `env` can't set names a
 shell, runtime, git or the agent reads (`PATH`, `NODE_OPTIONS`, `TERM`,
 `GIT_*`, `ANTHROPIC_*`, `AGENTOS_*`…): a config that sets one, such as
 `NODE_OPTIONS` or `TERM`, is refused, and the error names the variable and why. The agent's brief gets a
-short **Running this project** section: its ports, the dev command, how to
+short **Running this project** section (just its ports when the project has
+no `agentos.json`): its ports, the dev command, how to
 wait for `ready` in one backgrounded call, the test command, the login URL on
 its own port, the browsing map and the notes. Only declared fields are
 mentioned, and `env` values never are. Keep secrets out of the file: it is
 committed.
+
+Ports are judged per machine: a linked machine's sessions never block a port
+here, and a port the Dev Servers panel runs a server on is never handed out.
+Before starting a server the agent runs **`aos port [NAME|PORT]`**: it says
+whether its ports are free, names who holds a taken one (a session, the panel,
+a Windows process under WSL 2, or a PID and folder outside AgentOS), moves the
+session's port to the next free one, and repeats the brief's lines with the new
+value (exit 3 when it moved one or the port named is someone else's). A
+`package.json` server script, `agentos.json` `dev` or Vite config that
+hardcodes a port (`-p 3000`, `--port=3000`, `PORT=3000`, `server.port`) gets a
+line in the brief with the command to run on the session's own port instead.
 
 With `database`, every task and worktree session gets its **own Postgres
 database**, a copy of `from` named `<from>_aos_<hash of the session>`, made

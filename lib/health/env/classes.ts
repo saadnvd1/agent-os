@@ -12,6 +12,19 @@ const USE_ENV =
 
 export const ENV_CLASSES: readonly EnvClass[] = [
   {
+    id: "port-in-use",
+    label: "Port taken by another process",
+    scope: "shell",
+    match: [
+      /\bEADDRINUSE\b/,
+      /^(?:\S+Error: )?(?:\[Errno \d+\] )?Address already in use\b/i,
+      /^(?:Error: )?Port \d+ is already in use\b/,
+      /^Something is already running on port \d+/,
+      /\bport is already allocated\b/,
+    ],
+    fix: "A port this command needs is taken by another process on this machine. Don't wait for it and don't stop it: run `aos port <that port>` to see who holds it and get a free one, then start on that one (pass it with --port or PORT=). If you need that exact port, tell the orchestrator.",
+  },
+  {
     id: "python-version",
     label: "Python too old for the code",
     scope: "shell",
@@ -116,4 +129,4 @@ export const SHELL_TOOLS = new Set([
 // Commands that show text somebody else wrote: an error in their output is
 // in the data, not something this run hit.
 export const READERS =
-  /^(?:grep|egrep|rg|ag|cat|head|tail|less|more|sed\s+-n|awk|jq|sqlite3|journalctl|echo|printf|aos\s+(?:history|inbox)|sm\s+logs|gh\s+run\s+view|git\s+(?:log|show|diff|grep))\b/;
+  /^(?:grep|egrep|rg|ag|cat|head|tail|less|more|ls|wc|sed\s+-n|awk|jq|sqlite3|journalctl|echo|printf|aos\s+(?:history|inbox)|sm\s+logs|gh\s+run\s+view|git\s+(?:log|show|diff|grep))\b/;

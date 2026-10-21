@@ -18,6 +18,10 @@ const usage = `aos: talk to other agent sessions in AgentOS
   aos loop <task> start|status|stop|run
                                      the developer-analyst loop: --criteria "..." (repeat),
                                      --cycles N --cost USD --minutes N --grace S
+  aos port [NAME|PORT]               before starting a server: whether your ports are
+                                     free on this machine, who holds a taken one, and
+                                     a free one in its place (exit 3 when it moved one
+                                     or the port you named is someone else's)
   aos send <session> <message...>    message a session (name, old name, project/name,
                                      <workspace>/<name>, <workspace>/orchestrator, id or
                                      id prefix; "orchestrator" is yours); says delivered,
@@ -366,6 +370,16 @@ async function main() {
       return loopCmd(args);
     case "claim":
       return claimCmd(args);
+    case "port": {
+      needMe();
+      const { text, blocked } = await post("/api/bus/ports", {
+        from: me,
+        ...(args[0] && { target: args[0] }),
+      });
+      console.log(text);
+      if (blocked) process.exit(3);
+      return;
+    }
     case "peers": {
       const { peers } = await call(
         `/api/bus/peers${me ? `?from=${encodeURIComponent(me)}` : ""}`

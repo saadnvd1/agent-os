@@ -89,6 +89,12 @@ Once linked:
   press Move again to finish it, or **Resume here**, which first asks the
   other machine whether it arrived. Tasks waiting on you (an escalated gate or
   an open ask), card tasks and stacked tasks don't move yet.
+- **Ports belong to the machine a task runs on.** The machine that runs it
+  gives it a port slot from its own sessions and listeners, so the same slot on
+  two machines never collides, and a linked machine's sessions never block a
+  port here. A task that finds its port taken runs `aos port`, which names the
+  holder on that machine and gives it a free one; that machine's health
+  watcher tells an agent that waits on a port someone else holds.
 - **An orchestrator's task moves too**, by the orchestrator's `move` tool (`task`,
   `machine`; `here` brings it back) or the Move button. Its state is re-keyed to
   the task's new session id in the same step it lands: brief and scope changes,
