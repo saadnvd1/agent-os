@@ -32,6 +32,7 @@ import {
   type ItemRow,
   type RunRow,
 } from "./derive";
+import { agentosSignature, fromAgentosDirs, fromKept } from "./agentos-files";
 import { keepFiles, readManifest, relInside, sessionKeptDir } from "./keep";
 
 export const MAX_FILES = 500;
@@ -161,6 +162,16 @@ async function build(session: Session): Promise<Entry[]> {
 
   const manifest = worktree && !worktreeThere ? readManifest(session.id) : null;
   if (worktree) {
+    const known = new Set(candidates.map((c) => c.key));
+    candidates.push(
+      ...(worktreeThere
+        ? fromAgentosDirs(worktree, known)
+        : manifest
+          ? fromKept(worktree, manifest.kept, sqliteMs(manifest.at), known)
+          : [])
+    );
+  }
+  if (worktree) {
     const planFile = path.join(worktree, PLAN_FILE);
     const named = candidates.some((c) => c.key === `file:${planFile}`);
     const there = worktreeThere
@@ -255,6 +266,9 @@ interface Cached {
 }
 const cache = new Map<string, Cached>();
 
+const isLocalWorktree = (s: Session) =>
+  !!s.worktree_path && (!s.host_id || s.host_id === "local");
+
 function signature(session: Session): string {
   const row = db
     .prepare(`SELECT max(seq) AS seq FROM chat_items WHERE session_id = ?`)
@@ -265,6 +279,9 @@ function signature(session: Session): string {
     session.pr_number,
     session.worktree_path,
     session.updated_at,
+    isLocalWorktree(session)
+      ? agentosSignature(expand(session.worktree_path!))
+      : "",
   ].join("|");
 }
 
