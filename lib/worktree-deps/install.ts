@@ -7,6 +7,7 @@
 
 import * as fs from "fs";
 import * as path from "path";
+import { sessionPath } from "../agents/tool-path";
 
 export interface PackageManager {
   name: "bun" | "pnpm" | "yarn" | "npm";
@@ -67,12 +68,14 @@ export function shellCommand(command: string): string {
 }
 
 // What setup commands run under: the server's environment without the
-// settings that make an install skip devDependencies.
+// settings that make an install skip devDependencies, on the PATH a session
+// gets (version managers' shims first), so `bundle` isn't the system Ruby's.
 export function setupEnv(
   base: NodeJS.ProcessEnv,
   extra: Record<string, string> = {}
 ): NodeJS.ProcessEnv {
   const env: NodeJS.ProcessEnv = { ...base, ...extra };
+  if (!extra.PATH) env.PATH = sessionPath(base.PATH);
   for (const key of Object.keys(env)) {
     const k = key.toLowerCase();
     if (
