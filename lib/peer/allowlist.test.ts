@@ -23,6 +23,9 @@ describe("peer allowlist", () => {
   });
 
   it.each([
+    ["GET", "/api/machine/browser"],
+    ["PATCH", "/api/machine"],
+    ["GET", "/api/hosts/h-1/agents"],
     ["POST", "/api/pair/start"],
     ["POST", "/api/pair/claim"],
     ["GET", "/api/devices"],

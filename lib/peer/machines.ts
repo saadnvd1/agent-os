@@ -17,6 +17,8 @@ export interface AccountMachine {
   /** The Machines host it's linked as, when it is. */
   hostId: string | null;
   linkState: "active" | "suspended" | null;
+  /** How it's linked: Connect, or the Tailscale/ssh link in Machines. */
+  linkedVia: "connect" | "tailscale" | null;
   suspendedReason: string | null;
 }
 
@@ -54,6 +56,28 @@ export async function accountMachines(
       }[]
     ).map((r) => [r.machine_id, r])
   );
+  // Machines linked the other way: AgentOS to AgentOS over Tailscale or ssh.
+  const tokenLinked = (
+    getDb()
+      .prepare(
+        `SELECT h.id, h.name, i.name AS reported, i.connect_machine_id AS machine_id
+         FROM host_links l JOIN hosts h ON h.id = l.host_id
+         LEFT JOIN host_info i ON i.host_id = h.id WHERE h.kind != 'connect'`
+      )
+      .all() as {
+      id: string;
+      name: string;
+      reported: string | null;
+      machine_id: string | null;
+    }[]
+  ).map((r) => ({ ...r, names: [r.name, r.reported] }));
+  const sameMachine = (id: string, name: string) =>
+    tokenLinked.find(
+      (t) =>
+        t.machine_id === id ||
+        (!t.machine_id &&
+          t.names.some((n) => n && n.toLowerCase() === name.toLowerCase()))
+    );
   return {
     enrolled: view.enrolled,
     entitlements: view.entitlements,
@@ -62,6 +86,7 @@ export async function accountMachines(
     uncheckedSince: view.uncheckedSince,
     machines: view.peers.map((p) => {
       const pin = pins.get(p.id);
+      const other = pin ? undefined : sameMachine(p.id, p.name);
       const seen = p.lastSeenAt ? Date.parse(p.lastSeenAt) : NaN;
       return {
         id: p.id,
@@ -70,12 +95,15 @@ export async function accountMachines(
         online: Number.isFinite(seen) && now - seen < ONLINE_MS,
         lastSeenAt: p.lastSeenAt,
         version: p.version,
-        hostId: pin?.host_id ?? null,
+        hostId: pin?.host_id ?? other?.id ?? null,
         linkState: pin
           ? pin.state === "active"
             ? "active"
             : "suspended"
-          : null,
+          : other
+            ? "active"
+            : null,
+        linkedVia: pin ? "connect" : other ? "tailscale" : null,
         suspendedReason:
           pin && pin.state !== "active" ? pin.suspended_reason : null,
       };

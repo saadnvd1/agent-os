@@ -90,10 +90,17 @@ export function ChipItem({
   );
 }
 
-export function ChipHeading({ children }: { children: React.ReactNode }) {
+export function ChipHeading({
+  children,
+  first,
+}: {
+  children: React.ReactNode;
+  // The top of the menu: nothing above it to separate from.
+  first?: boolean;
+}) {
   return (
     <>
-      <DropdownMenuSeparator />
+      {!first && <DropdownMenuSeparator />}
       <DropdownMenuLabel className="text-muted-foreground text-[11px] font-medium">
         {children}
       </DropdownMenuLabel>

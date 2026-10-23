@@ -17,7 +17,7 @@ export const startedText = (c: Pick<Claim, "startedAt">, now: number) => {
 
 /** "last heard 6m ago". */
 export const lastHeardText = (at: number | null, now: number) => {
-  if (at === null) return "this machine";
+  if (at === null) return "serves this dashboard";
   const s = span(now - at);
   return s === "under a minute" ? "heard just now" : `last heard ${s} ago`;
 };

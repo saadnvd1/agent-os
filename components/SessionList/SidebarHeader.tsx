@@ -1,5 +1,6 @@
 "use client";
 
+import { MachineSwitcher } from "./MachineSwitcher";
 import {
   Archive,
   Star,
@@ -188,6 +189,9 @@ export function SidebarHeader(props: SidebarHeaderProps) {
             menuItem("Add project", props.onAddProject, { icon: FolderPlus }),
           ]}
         />
+      </div>
+      <div className="w-full empty:hidden">
+        <MachineSwitcher />
       </div>
     </div>
   );

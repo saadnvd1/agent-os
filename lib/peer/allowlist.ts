@@ -58,6 +58,8 @@ export const PEER_ROUTES: readonly PeerRoute[] = [
   { method: "GET", pattern: "/api/projects" },
   { method: "POST", pattern: "/api/projects/availability" },
   { method: "GET", pattern: "/api/tmux/discover" },
+  // Its name, OS, addresses, agents and models, for the new-session form.
+  { method: "GET", pattern: "/api/machine" },
   { method: "GET", pattern: "/api/load" },
 
   { method: "GET", pattern: "/api/worktree-sweep" },

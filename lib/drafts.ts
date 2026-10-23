@@ -63,7 +63,13 @@ export function newDraft(
   id: string,
   project: DraftProject | null,
   carry: Carry,
-  opts: { openPr?: boolean; now?: number; workspaceId?: string | null } = {}
+  opts: {
+    openPr?: boolean;
+    now?: number;
+    workspaceId?: string | null;
+    // Where a scratch chat starts: the machine the sidebar is narrowed to.
+    hostId?: string | null;
+  } = {}
 ): Draft {
   const real = project && !project.is_uncategorized ? project : null;
   const agentType = real?.agent_type ?? carry.agentType ?? "claude";
@@ -71,7 +77,7 @@ export function newDraft(
     id,
     projectId: real?.id ?? null,
     workspaceId: real ? null : (opts.workspaceId ?? null),
-    hostId: real?.host_id || "local",
+    hostId: real?.host_id || opts.hostId || "local",
     agentType,
     model: resolveModelForAgent(
       agentType,

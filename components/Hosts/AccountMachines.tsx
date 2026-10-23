@@ -55,7 +55,9 @@ function MachineRow({
       </div>
       {linked ? (
         <span className="text-xs font-medium text-emerald-600 dark:text-emerald-400">
-          Linked
+          {machine.linkedVia === "tailscale"
+            ? "Linked over Tailscale"
+            : "Linked"}
         </span>
       ) : machine.linkState === "suspended" ? (
         <span

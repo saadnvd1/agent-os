@@ -54,3 +54,13 @@ export function machineGroups(
     .filter((g) => g.rows.length > 0)
     .sort((a, b) => a.name.localeCompare(b.name));
 }
+
+/** Whether a session belongs to the machine the sidebar is narrowed to. */
+export function inMachineScope(
+  session: Pick<Session, "host_id">,
+  scope: string | null
+): boolean {
+  if (!scope) return true;
+  const host = session.host_id || "local";
+  return host === scope;
+}

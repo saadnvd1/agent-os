@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useMemo } from "react";
+import { useCallback, useEffect, useMemo } from "react";
 import { useSnapshot } from "valtio";
 import type { Session } from "@/lib/db";
 import type { SessionGroup } from "@/lib/sidebar/shelves";
@@ -11,7 +11,11 @@ import {
   projectsInWorkspace,
 } from "@/lib/sidebar/shelves";
 import type { TaskState } from "@/lib/tasks/state";
-import { machineGroups, onMachineOnly } from "@/lib/sidebar/machines";
+import {
+  inMachineScope,
+  machineGroups,
+  onMachineOnly,
+} from "@/lib/sidebar/machines";
 import { orchestratorsToStart } from "@/lib/sidebar/orchestrator-row";
 import { useSessionsQuery } from "@/data/sessions";
 import { useLinkedHostNames } from "@/data/hosts";
@@ -23,6 +27,7 @@ import { useSelectedWorkspace } from "@/hooks/useSelectedWorkspace";
 import { useOrchestratorsQuery } from "@/data/orchestrators";
 import { useClock } from "@/hooks/useMinuteTick";
 import { sidebarUi } from "@/stores/sidebarUi";
+import { machinesUi, machinesUiActions } from "@/stores/machines";
 import type { SessionStatus } from "./SessionList.types";
 
 // One empty list for queries still loading, so memos below hold.
@@ -35,6 +40,10 @@ export function useSidebarData(
   sessionStatuses: Record<string, SessionStatus> | undefined
 ) {
   const ui = useSnapshot(sidebarUi);
+  const scope = useSnapshot(machinesUi).scopeHostId;
+  useEffect(() => {
+    machinesUiActions.hydrate();
+  }, []);
   // Wakes and 3-day settles are read from the clock.
   const now = useClock();
 
@@ -98,6 +107,7 @@ export function useSidebarData(
       sessions: sessions.filter(
         (s) =>
           !onMachineOnly(s, linked) &&
+          inMachineScope(s, scope) &&
           inWorkspace(
             s,
             (id) => byId.get(id)?.workspace_id,
@@ -122,7 +132,14 @@ export function useSidebarData(
       machines:
         project || ui.orchestratorId
           ? []
-          : machineGroups({ ...common, sessions }, linked),
+          : machineGroups(
+              { ...common, sessions },
+              scope
+                ? Object.fromEntries(
+                    Object.entries(linked).filter(([id]) => id === scope)
+                  )
+                : linked
+            ),
     };
   }, [
     now,
@@ -138,6 +155,7 @@ export function useSidebarData(
     project,
     ui.query,
     ui.orchestratorId,
+    scope,
   ]);
 
   // Per workspace, how many of its project sessions are working: the

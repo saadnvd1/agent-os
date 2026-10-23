@@ -1,7 +1,10 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createHost, listHosts } from "@/lib/hosts";
+import { refreshHostInfo } from "@/lib/machines/remote";
 
 export async function GET() {
+  // Linked machines' names and OS, for the next read; never waited on.
+  refreshHostInfo();
   return NextResponse.json({ hosts: listHosts() });
 }
 

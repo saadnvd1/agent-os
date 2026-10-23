@@ -1,5 +1,6 @@
 "use client";
 
+import { machinesUi } from "@/stores/machines";
 import { useEffect, useRef } from "react";
 import { subscribe } from "valtio";
 import { FolderGit2 } from "lucide-react";
@@ -64,7 +65,11 @@ export function useDraftRequests(options: Options) {
           ? { agentType: s.agent_type, model: s.model, access: s.chat_access }
           : {};
       const project = projects.find((p) => p.id === projectId) ?? null;
-      const draft = makeDraft(uuid(), project, carry, { openPr, workspaceId });
+      const draft = makeDraft(uuid(), project, carry, {
+        openPr,
+        workspaceId,
+        hostId: openPr ? null : machinesUi.scopeHostId,
+      });
       draftsActions.put(draft);
       show(draft.id);
     };

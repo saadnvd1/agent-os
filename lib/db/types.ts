@@ -325,4 +325,8 @@ export interface Host {
   // who unlinked it.
   peer_state?: "active" | "suspended" | "unlinked" | null;
   peer_note?: string | null;
+  // What the machine reported about itself (host_info), when it has.
+  hostname?: string | null;
+  os?: string | null;
+  arch?: string | null;
 }
