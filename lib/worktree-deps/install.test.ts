@@ -1,6 +1,7 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import * as fs from "fs";
 import * as path from "path";
+import { sessionPath } from "../agents/tool-path";
 import { detectPackageManager, setupEnv, shellCommand } from "./install";
 import { setupWorktree, type SetupResult } from "../env-setup";
 import { bringDependencies } from ".";
@@ -61,7 +62,21 @@ describe("setupEnv", () => {
       },
       { PORT: "3000" }
     );
-    expect(env).toEqual({ PATH: "/bin", PORT: "3000" });
+    expect(env).toEqual({ PATH: sessionPath("/bin"), PORT: "3000" });
+  });
+
+  // sessionPath's own tests cover the shims' order.
+  it("runs on a session's PATH, so version managers' shims win", () => {
+    expect(
+      setupEnv({ NODE_ENV: "production", PATH: "/usr/bin:/bin" }).PATH
+    ).toBe(sessionPath("/usr/bin:/bin"));
+  });
+
+  it("keeps a PATH the setup config sets itself", () => {
+    expect(
+      setupEnv({ NODE_ENV: "production", PATH: "/bin" }, { PATH: "/custom" })
+        .PATH
+    ).toBe("/custom");
   });
 });
 
