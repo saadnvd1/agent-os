@@ -13,6 +13,9 @@ import {
 } from "@/components/ui/dialog";
 import { useNow } from "@/components/Chat/useNow";
 import { useClaims } from "@/data/claims";
+import { useHostsQuery } from "@/data/hosts";
+import { useBrowserMachine } from "@/data/machines";
+import { machineLabel } from "@/lib/machines/label";
 import { claimsUi, claimsUiActions } from "@/stores/claimsUi";
 import { cn } from "@/lib/utils";
 import { ClaimRow } from "./ClaimRow";
@@ -50,6 +53,12 @@ export function ClaimsSheet() {
         .flatMap((o) => o.shared)
     );
   const here = data?.machine.id;
+  const browser = useBrowserMachine();
+  const { data: hosts } = useHostsQuery();
+  // The browser's machine by name: claims know machines by their own ids.
+  const browserName = hosts
+    ?.find((h) => h.id === browser.hostId)
+    ?.name.toLowerCase();
 
   return (
     <Dialog open={snap.open} onOpenChange={claimsUiActions.setOpen}>
@@ -77,7 +86,16 @@ export function ClaimsSheet() {
                     key={m.id}
                     className="bg-muted/40 flex items-center gap-2 rounded-lg px-3 py-2 text-xs"
                   >
-                    <span className="font-medium">{m.name}</span>
+                    <span className="font-medium">
+                      {machineLabel(
+                        { id: m.self ? "local" : m.id, name: m.name },
+                        m.self
+                          ? browser.hostId
+                          : m.name.toLowerCase() === browserName
+                            ? m.id
+                            : null
+                      )}
+                    </span>
                     <span
                       className={cn(
                         "text-muted-foreground",

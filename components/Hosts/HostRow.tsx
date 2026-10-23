@@ -11,15 +11,20 @@ import {
   PlugZap,
   Loader2,
   Link2,
+  MapPin,
+  Pencil,
   Unlink,
 } from "lucide-react";
 import { Notice } from "@/components/ui/notice";
 import type { Host } from "@/lib/db";
 import { useDeleteHost, useLinkHost, useTestHost } from "@/data/hosts";
+import { useBrowserMachine } from "@/data/machines";
+import { machineDetail, machineLabel } from "@/lib/machines/label";
 import { useUnlinkPeer } from "@/data/peers";
 import { NEEDS_PRO, UPGRADE_URL } from "@/lib/peer/reasons";
 import { cn } from "@/lib/utils";
 import { PeerActivitySheet } from "./PeerActivitySheet";
+import { RenameHost } from "./RenameHost";
 
 function connectLine(host: Host): string {
   if (host.peer_state === "active")
@@ -67,6 +72,9 @@ export function HostRow({ host }: { host: Host }) {
   const unlink = useUnlinkPeer();
   const [activity, setActivity] = useState(false);
   const [confirmUnlink, setConfirmUnlink] = useState(false);
+  const [renaming, setRenaming] = useState(false);
+  const browser = useBrowserMachine();
+  const here = browser.hostId === host.id;
   const isLocal = host.id === "local";
   const viaConnect = host.kind === "connect";
   const pinned =
@@ -80,17 +88,58 @@ export function HostRow({ host }: { host: Host }) {
       <div className="flex items-center gap-3">
         <Icon className="text-muted-foreground h-4 w-4 shrink-0" />
         <div className="min-w-0 flex-1">
-          <p className="truncate text-sm font-medium">{host.name}</p>
+          <p className="truncate text-sm font-medium">
+            {machineLabel(host, browser.hostId)}
+          </p>
           <p className="text-muted-foreground truncate text-xs">
             {isLocal
-              ? "Where agent-os is running"
-              : viaConnect
-                ? connectLine(host)
-                : host.linked
-                  ? `${host.ssh_target} · tasks run on its AgentOS`
-                  : host.ssh_target}
+              ? [machineDetail(host), "serves this dashboard"]
+                  .filter(Boolean)
+                  .join(" · ")
+              : [
+                  machineDetail(host),
+                  viaConnect
+                    ? connectLine(host)
+                    : host.linked
+                      ? `${host.ssh_target} · tasks run on its AgentOS`
+                      : host.ssh_target,
+                ]
+                  .filter(Boolean)
+                  .join(" · ")}
           </p>
         </div>
+        <Button
+          variant="ghost"
+          size="icon-sm"
+          className="h-11 w-11 sm:h-8 sm:w-8"
+          onClick={() => setRenaming(true)}
+          disabled={renaming}
+          aria-label={`Rename ${host.name}`}
+          title="Give it a name of your own"
+        >
+          <Pencil className="h-4 w-4" />
+        </Button>
+        <Button
+          variant="ghost"
+          size="icon-sm"
+          className={cn("h-11 w-11 sm:h-8 sm:w-8", here && "text-primary")}
+          aria-pressed={here}
+          onClick={() => browser.set(here ? null : host.id)}
+          aria-label={
+            here
+              ? `This browser is not on ${host.name}`
+              : `This browser is on ${host.name}`
+          }
+          title={
+            here
+              ? browser.detected
+                ? "Detected from the connection. Tap to say otherwise"
+                : "You said you're here. Tap to undo"
+              : "Say this is the machine you're using now"
+          }
+        >
+          <MapPin className="h-4 w-4" />
+        </Button>
         {!isLocal && (
           <>
             {!viaConnect && (
@@ -171,6 +220,7 @@ export function HostRow({ host }: { host: Host }) {
           </>
         )}
       </div>
+      {renaming && <RenameHost host={host} onDone={() => setRenaming(false)} />}
       {result && (
         <p
           className={cn(

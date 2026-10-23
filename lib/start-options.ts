@@ -10,6 +10,7 @@ import { getProviderDefinition } from "./providers/registry";
 import { probeAgents } from "./agents/probe";
 import { gitCheck } from "./git";
 import { listHosts } from "./hosts";
+import { hostCatalog } from "./machines/remote";
 import { projectMachines } from "./hosts/project-machines";
 import { getModelOptions, getDefaultModelForAgent } from "./model-catalog";
 import { effectiveModels } from "./models/config";
@@ -52,6 +53,10 @@ export async function startOptions(
     planError = error instanceof Error ? error.message : String(error);
   }
 
+  // A project on another machine shows that machine's agents, as it reports them.
+  const there = here
+    ? null
+    : (await hostCatalog(project?.host_id ?? "")).catalog;
   const [probes, git, machines] = await Promise.all([
     here ? probeAgents() : Promise.resolve(null),
     project && here
@@ -78,10 +83,21 @@ export async function startOptions(
     ).map((a) => ({
       value: a.value,
       label: a.label,
-      installed: probes?.[a.value]?.installed ?? null,
-      auth: probes?.[a.value]?.auth ?? null,
-      hint: probes?.[a.value]?.hint ?? null,
-      models: getModelOptions(a.value),
+      installed:
+        probes?.[a.value]?.installed ??
+        there?.agents.find((t) => t.agent === a.value)?.installed ??
+        null,
+      auth:
+        probes?.[a.value]?.auth ??
+        there?.agents.find((t) => t.agent === a.value)?.auth ??
+        null,
+      hint:
+        probes?.[a.value]?.hint ??
+        there?.agents.find((t) => t.agent === a.value)?.hint ??
+        null,
+      models:
+        there?.agents.find((t) => t.agent === a.value)?.models ??
+        getModelOptions(a.value),
       defaultModel: getDefaultModelForAgent(a.value),
     })),
     taskModels: modelChoices(models),

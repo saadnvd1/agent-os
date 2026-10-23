@@ -21,6 +21,40 @@ the same project.
 On other machines, files, git, worktrees, dev servers and summarize are not
 available yet; the terminal, status, rename and send-keys are.
 
+## Names, and which machine you're on
+
+Every screen names the machine serving the dashboard by its real hostname,
+for example `spark-54423f (host)`: the Machines dialog, the draft's Machine
+chip and Work across machines all read one source. Rename any machine from
+its row (the pencil); renaming this one sets the name Work across machines
+shows to your other machines too. A linked machine reports its OS, hostname
+and addresses (`GET /api/machine`, allowed to linked machines), which show
+under its name and are kept while it is offline.
+
+**You're here** marks the machine your browser is on. The server only claims
+it when the connection says so: an unproxied request from this machine, or one
+from an address a linked machine reported. Through Connect or a proxy it can't
+tell, so tap the pin on a row to say which machine you're using; that is
+remembered in this browser.
+
+A machine linked over Tailscale or ssh counts as linked in "On your AgentOS
+account" too (matched by Connect id, else by name), so it isn't offered
+**Link** again.
+
+## Agents and models follow the machine
+
+The draft's Agent menu lists the agents and models of the machine picked,
+grouped by agent, as that machine reports them (installed, signed in, the
+models each agent offers, including what OpenCode or Pi list). Models served by
+a local Ollama appear in their own group; picking one switches the draft to the
+agent that runs it (OpenCode, else Pi), and one nothing here can run is greyed
+out. Change the machine and the agent falls back to one it has. A machine on an
+older AgentOS can't report, and the menu says so. Tasks on another machine run
+Claude Code only.
+
+The machine switcher under the workspace name narrows the sidebar to one
+machine's sessions and starts new scratch chats there.
+
 ## Sessions on a linked machine
 
 Once a machine is linked (below), this AgentOS talks to the AgentOS running

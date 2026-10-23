@@ -301,3 +301,22 @@ describe("draftHostGone", () => {
     expect(draftHostGone({ ...box, hostId: "local" }, true, gone)).toBe(false);
   });
 });
+
+describe("a scratch chat's machine", () => {
+  const carry = { agentType: "claude" as const };
+  it("starts on the machine the sidebar is narrowed to", () => {
+    expect(newDraft("d", null, carry, { hostId: "pc" }).hostId).toBe("pc");
+    expect(newDraft("d", null, carry, { hostId: null }).hostId).toBe("local");
+  });
+
+  it("leaves a project where it lives", () => {
+    const project = {
+      id: "p",
+      agent_type: "claude",
+      default_model: "opus",
+      host_id: "box",
+      is_uncategorized: false,
+    } as DraftProject;
+    expect(newDraft("d", project, carry, { hostId: "pc" }).hostId).toBe("box");
+  });
+});

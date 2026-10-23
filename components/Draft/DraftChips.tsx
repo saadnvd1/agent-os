@@ -2,7 +2,6 @@
 
 import { useEffect } from "react";
 import {
-  Bot,
   Cpu,
   Eye,
   FolderGit2,
@@ -15,14 +14,13 @@ import {
 import type { Host } from "@/lib/db";
 import type { Project } from "@/lib/db";
 import { draftHostGone, newDraft, type Draft } from "@/lib/drafts";
-import { AGENT_OPTIONS, agentLabel } from "@/lib/agent-options";
-import { resolveModelForAgent } from "@/lib/model-catalog";
 import type { GitCheck } from "@/data/git/queries";
-import { useAgentStatusQuery } from "@/data/agents";
 import { useProjectMachinesQuery } from "@/data/projects";
 import { modelChoices, useModelsQuery } from "@/data/models";
-import type { AgentProbe } from "@/lib/agents/probe";
+import { useBrowserMachine } from "@/data/machines";
+import { machineLabel } from "@/lib/machines/label";
 import { RoleChips } from "./RoleChips";
+import { AgentModelChip } from "./AgentModelChip";
 import { ChipHeading, ChipItem, ChipMenu, ChipToggle } from "./Chip";
 import {
   DEFAULT_PRIORITY,
@@ -30,14 +28,6 @@ import {
   PRIORITY_HINT,
   PRIORITY_LABEL,
 } from "@/lib/tasks/schedule-types";
-
-// What stands between an agent and its first prompt, if anything.
-export function agentBlocker(probe?: AgentProbe): string | null {
-  if (!probe) return null;
-  if (!probe.installed) return "Not installed";
-  if (probe.auth === "needs-login") return "Needs sign-in";
-  return null;
-}
 
 const BRANCHES_SHOWN = 20;
 
@@ -58,6 +48,7 @@ export function DraftChips({
   git: GitCheck | undefined;
   onChange: (patch: Partial<Draft>) => void;
 }) {
+  const browser = useBrowserMachine();
   const real = projects.filter((p) => !p.is_uncategorized);
   const project = real.find((p) => p.id === draft.projectId) ?? null;
   const projectHere = !!project && (project.host_id || "local") === "local";
@@ -70,10 +61,6 @@ export function DraftChips({
       : hosts;
   const host = hosts.find((h) => h.id === draft.hostId);
   const local = draft.hostId === "local";
-  // Which agents are installed and signed in, on this machine: a draft for
-  // another machine shows them all.
-  const { data: localProbes } = useAgentStatusQuery();
-  const probes = local ? localProbes : undefined;
   const base = draft.baseBranch ?? git?.defaultBranch ?? "main";
   const { data: models } = useModelsQuery(draft.openPr);
   // A project elsewhere runs where it lives; a scratch chat, a task or a
@@ -147,7 +134,7 @@ export function DraftChips({
         <ChipMenu
           icon={Monitor}
           name="Machine"
-          label={host?.name ?? draft.hostId}
+          label={host ? machineLabel(host) : draft.hostId}
           disabled={!canMove}
           title={canMove ? undefined : "Runs where the project lives"}
         >
@@ -164,31 +151,14 @@ export function DraftChips({
                 })
               }
             >
-              {h.name}
+              {machineLabel(h, browser.hostId)}
             </ChipItem>
           ))}
         </ChipMenu>
       )}
 
       {!draft.openPr && !draft.agentRole && (
-        <ChipMenu icon={Bot} name="Agent" label={agentLabel(draft.agentType)}>
-          {AGENT_OPTIONS.map((o) => (
-            <ChipItem
-              key={o.value}
-              checked={o.value === draft.agentType}
-              disabled={probes?.[o.value] ? !probes[o.value].installed : false}
-              hint={agentBlocker(probes?.[o.value]) ?? undefined}
-              onSelect={() =>
-                onChange({
-                  agentType: o.value,
-                  model: resolveModelForAgent(o.value, draft.model),
-                })
-              }
-            >
-              {o.label}
-            </ChipItem>
-          ))}
-        </ChipMenu>
+        <AgentModelChip draft={draft} onChange={onChange} />
       )}
 
       {!draft.openPr && local && (
@@ -313,14 +283,6 @@ export function DraftChips({
           title="Runs in a terminal instead of a chat; only a terminal task can move"
           onChange={(terminal) => onChange({ terminal })}
         />
-      )}
-      {!draft.openPr && agentBlocker(probes?.[draft.agentType]) && (
-        <p className="w-full text-xs text-amber-600 dark:text-amber-400">
-          {agentBlocker(probes?.[draft.agentType])}
-          {probes?.[draft.agentType]?.hint
-            ? `: ${probes[draft.agentType].hint}`
-            : ""}
-        </p>
       )}
     </div>
   );

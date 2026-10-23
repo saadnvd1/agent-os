@@ -1,5 +1,7 @@
 import { randomUUID } from "crypto";
 import { getDb, type Host } from "../db";
+import { machineName } from "../claims/machine";
+import { setThisMachineName, thisMachine } from "../machines/identity";
 import {
   LOCAL_HOST_ID,
   isValidSshTarget,
@@ -18,6 +20,18 @@ export const LOCAL_HOST: Host = {
   sort_order: -1,
   created_at: "",
 };
+
+/** This machine as a host row, under its real (or user-set) name. */
+export function localHost(): Host {
+  const me = thisMachine();
+  return {
+    ...LOCAL_HOST,
+    name: me.name,
+    hostname: me.hostname,
+    os: me.os,
+    arch: me.arch,
+  };
+}
 
 export function isRemoteHost(hostId: string | null | undefined): boolean {
   return !!hostId && hostId !== LOCAL_HOST_ID;
@@ -38,18 +52,20 @@ export function listRemoteHosts(): Host[] {
           (SELECT p.suspended_reason FROM peer_links p WHERE p.host_id = h.id),
           (SELECT u.reason FROM peer_unlinked u WHERE u.host_id = h.id
             ORDER BY u.at DESC LIMIT 1))
-        END AS peer_note
-         FROM hosts h ORDER BY sort_order, created_at`
+        END AS peer_note,
+        i.hostname AS hostname, i.os AS os, i.arch AS arch
+         FROM hosts h LEFT JOIN host_info i ON i.host_id = h.id
+         ORDER BY h.sort_order, h.created_at`
     )
     .all() as Host[];
 }
 
 export function listHosts(): Host[] {
-  return [LOCAL_HOST, ...listRemoteHosts()];
+  return [localHost(), ...listRemoteHosts()];
 }
 
 export function getHost(hostId: string | null | undefined): Host | null {
-  if (!isRemoteHost(hostId)) return LOCAL_HOST;
+  if (!isRemoteHost(hostId)) return localHost();
   return (
     (getDb().prepare(`SELECT * FROM hosts WHERE id = ?`).get(hostId) as
       Host | undefined) ?? null
@@ -59,7 +75,11 @@ export function getHost(hostId: string | null | undefined): Host | null {
 /** A machine by its name (any case) or id. */
 export function hostIdNamed(ref: string): string {
   const want = ref.trim().toLowerCase();
-  if (["local", "here", "this machine"].includes(want)) return LOCAL_HOST_ID;
+  if (
+    ["local", "here", "this machine"].includes(want) ||
+    machineName().toLowerCase() === want
+  )
+    return LOCAL_HOST_ID;
   const host = listRemoteHosts().find(
     (h) => h.id === ref || h.name.toLowerCase() === want
   );
@@ -109,6 +129,7 @@ export function deleteHost(hostId: string): void {
   }
   db.prepare(`DELETE FROM host_links WHERE host_id = ?`).run(hostId);
   db.prepare(`DELETE FROM peer_links WHERE host_id = ?`).run(hostId);
+  db.prepare(`DELETE FROM host_info WHERE host_id = ?`).run(hostId);
   db.prepare(`DELETE FROM hosts WHERE id = ?`).run(hostId);
 }
 
@@ -138,4 +159,21 @@ export function hostExecFile(
   timeout?: number
 ): Promise<ExecResult> {
   return runFileOnTarget(sshTargetFor(hostId), file, args, timeout);
+}
+
+/** Rename a machine; this one's name is the one Work across machines shows. */
+export function renameHost(hostId: string, raw: string): string {
+  if (!isRemoteHost(hostId)) return setThisMachineName(raw);
+  const name = raw.trim().slice(0, 60);
+  if (!name) throw new Error("Name is required");
+  const db = getDb();
+  if (!db.prepare(`SELECT 1 FROM hosts WHERE id = ?`).get(hostId))
+    throw new Error("Unknown host");
+  const clash = db
+    .prepare(`SELECT 1 FROM hosts WHERE lower(name) = lower(?) AND id != ?`)
+    .get(name, hostId);
+  if (clash || name.toLowerCase() === machineName().toLowerCase())
+    throw new Error(`Another machine is already called "${name}"`);
+  db.prepare(`UPDATE hosts SET name = ? WHERE id = ?`).run(name, hostId);
+  return name;
 }

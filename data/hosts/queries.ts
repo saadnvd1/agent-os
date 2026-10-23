@@ -61,6 +61,23 @@ export function useDeleteHost() {
   });
 }
 
+/** Rename a machine; "local" renames this one. */
+export function useRenameHost() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: async ({ id, name }: { id: string; name: string }) =>
+      json<{ name: string }>(
+        await fetch(`/api/hosts/${encodeURIComponent(id)}`, {
+          method: "PATCH",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ name }),
+        })
+      ),
+    // The name is on the claims, the sidebar and the chips too.
+    onSuccess: () => queryClient.invalidateQueries(),
+  });
+}
+
 export interface HostTestResult {
   ok: boolean;
   hostname?: string;

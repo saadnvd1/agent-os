@@ -103,7 +103,7 @@ describe("claims keys and helpers", () => {
     expect(startedText({ startedAt: 0 }, 12 * 60_000)).toBe("started 12m ago");
     expect(startedText({ startedAt: 0 }, 5_000)).toBe("just started");
     expect(lastHeardText(0, 6 * 60_000)).toBe("last heard 6m ago");
-    expect(lastHeardText(null, 0)).toBe("this machine");
+    expect(lastHeardText(null, 0)).toBe("serves this dashboard");
   });
 
   const c = (id: string, repo: string, startedAt: number) =>

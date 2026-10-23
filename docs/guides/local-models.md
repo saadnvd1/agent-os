@@ -61,3 +61,7 @@ The line under a turn reads **Ended early** (not **Done**) when it stopped short
 - it sent an empty reply, or the server returned an error.
 
 A task whose turn ends this way is not treated as finished work: the orchestrator is told it ended early and why. Each case also writes one line to the chat worker's log (`[chat] turn ended early {…}`) with the driver, provider, model, finish reason and the last 240 characters of the reply with secrets masked. Never the prompt. The log sits next to the worker's socket in `~/.agent-os/chat/`.
+
+## Ollama models in the new-session menu
+
+AgentOS asks Ollama on each machine (`OLLAMA_HOST`, else `127.0.0.1:11434`) which models it serves and lists them under "Ollama" in the Agent menu of a new session, for the machine you picked. Picking one switches the session to OpenCode (or Pi) with that model. A model shows greyed out when neither agent lists it, which usually means OpenCode's config has no Ollama provider yet.
