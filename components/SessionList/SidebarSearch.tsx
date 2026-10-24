@@ -7,7 +7,7 @@ import { sidebarUiActions } from "@/stores/sidebarUi";
 // sessions too.
 export function SidebarSearch({ query }: { query: string }) {
   return (
-    <label className="bg-card text-muted-foreground focus-within:ring-primary/40 flex min-h-11 min-w-[6rem] flex-1 items-center gap-2 rounded-xl px-3 shadow-xs focus-within:ring-2 md:min-h-9 [@media(hover:none)]:md:min-h-11">
+    <label className="bg-card text-muted-foreground focus-within:ring-primary/40 flex min-h-11 min-w-[6rem] flex-[1_1_8rem] items-center gap-2 rounded-xl px-3 shadow-xs focus-within:ring-2 md:min-h-9 [@media(hover:none)]:md:min-h-11">
       <Search className="h-3.5 w-3.5 shrink-0" />
       <input
         type="search"

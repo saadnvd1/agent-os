@@ -32,7 +32,7 @@ export function MachineSwitcher() {
           type="button"
           aria-label={`Machine: ${current ? machineLabel(current) : "All machines"}`}
           className={cn(
-            "border-border/70 text-muted-foreground hover:text-foreground hover:bg-foreground/[0.04] flex h-11 max-w-full min-w-0 items-center gap-1.5 rounded-lg border px-2.5 text-xs md:h-8",
+            "text-muted-foreground hover:text-foreground bg-card flex min-h-11 max-w-full min-w-0 items-center gap-1.5 rounded-xl border border-transparent px-3 text-sm shadow-xs md:min-h-9 [@media(hover:none)]:md:min-h-11",
             current && "border-primary/40 bg-primary/10 text-primary"
           )}
         >

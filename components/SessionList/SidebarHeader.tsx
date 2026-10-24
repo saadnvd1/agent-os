@@ -67,8 +67,8 @@ export function SidebarHeader(props: SidebarHeaderProps) {
   const workspaceId = props.workspace?.id ?? null;
   const schedules = useSchedulesGlance(workspaceId);
   return (
-    <div className="flex flex-wrap items-center gap-x-1 px-3 pt-3 pb-2">
-      <div className="flex min-w-[9.5rem] flex-1 items-center">
+    <div className="@container flex flex-wrap items-center gap-x-1 gap-y-2 px-3 pt-3 pb-2">
+      <div className="flex min-w-[9.5rem] flex-1 basis-[9.5rem] items-center">
         <WorkspaceSwitcher
           workspaces={props.workspaces}
           current={props.workspace}
@@ -190,7 +190,7 @@ export function SidebarHeader(props: SidebarHeaderProps) {
           ]}
         />
       </div>
-      <div className="w-full empty:hidden">
+      <div className="flex w-full min-w-0 empty:hidden">
         <MachineSwitcher />
       </div>
     </div>
