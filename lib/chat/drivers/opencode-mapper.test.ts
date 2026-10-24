@@ -362,6 +362,8 @@ describe("OpenCodeMapper summary nudge", () => {
   it("puts the results brief in the prompt's system text", () => {
     expect(openCodeSystem("brief")).toBe(`brief\n\n${RESULTS_BRIEF}`);
     expect(openCodeSystem()).toBe(RESULTS_BRIEF);
+  });
+});
 
 describe("OpenCodeMapper live tool output", () => {
   it("streams a running tool's output, tails it, and the end replaces it", () => {

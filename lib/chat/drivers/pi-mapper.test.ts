@@ -337,6 +337,8 @@ describe("PiMapper summary nudge", () => {
       RESULTS_BRIEF
     );
     expect(piArgs({} as never).join(" ")).toContain(RESULTS_BRIEF);
+  });
+});
 
 describe("PiMapper live tool output", () => {
   const start = {
