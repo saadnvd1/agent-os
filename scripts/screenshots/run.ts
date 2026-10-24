@@ -5,6 +5,7 @@
  *     npm run screenshots              # everything
  *     npm run screenshots -- --keep    # leave the demo server up afterwards
  *     npm run screenshots -- --only hero,tasks
+ *     npm run screenshots -- --only running-turn   # a held running turn
  */
 import fs from "fs";
 import path from "path";
@@ -13,6 +14,7 @@ import { spawnServer } from "@/lib/dev-instance";
 import { BASE_URL, PORT, REPO, ROOT, demoEnv } from "./config";
 import { seed, teardownTmux } from "./seed";
 import { shoot } from "./shoot";
+import { SHOTS } from "./shots";
 import { frame } from "./frame";
 import { startPeer } from "./peer";
 
@@ -37,7 +39,7 @@ async function waitForServer(server: ChildProcess): Promise<void> {
   throw new Error(`Demo server did not answer on ${BASE_URL}`);
 }
 
-function startServer(): ChildProcess {
+function startServer(demoChat: boolean): ChildProcess {
   const log = fs.openSync(path.join(ROOT, "server.log"), "w");
   // Loopback only: the demo never listens on another network.
   return spawnServer({
@@ -49,6 +51,8 @@ function startServer(): ChildProcess {
       AGENTOS_BIND: "127.0.0.1",
       AGENTOS_ORCHESTRATOR: "off",
       AGENTOS_STACKS: "off",
+      // Scripted chat turns (lib/chat/drivers/demo-script), for on-demand shots.
+      ...(demoChat ? { AGENTOS_DEMO_CHAT: "1" } : {}),
     }),
     stdio: ["ignore", log, log],
     detached: true,
@@ -64,21 +68,41 @@ function stopServer(server: ChildProcess): void {
   }
 }
 
+// An on-demand shot has no README frame; its raw captures would go with the
+// demo root, so they are copied to .agentos/screenshots (git-ignored there).
+function keepOnDemand(raw: Awaited<ReturnType<typeof shoot>>): void {
+  const names = new Set(SHOTS.filter((s) => s.onDemand).map((s) => s.name));
+  const dir = path.join(process.cwd(), ".agentos", "screenshots");
+  for (const shot of raw) {
+    if (!names.has(shot.name)) continue;
+    fs.mkdirSync(dir, { recursive: true });
+    fs.writeFileSync(path.join(path.dirname(dir), ".gitignore"), "*\n");
+    for (const file of shot.files) {
+      fs.copyFileSync(file, path.join(dir, path.basename(file)));
+      console.log(`  .agentos/screenshots/${path.basename(file)}`);
+    }
+  }
+}
+
 async function main() {
   const only = arg("--only")?.split(",");
+  const onDemand = !!only?.some(
+    (n) => SHOTS.find((s) => s.name === n)?.onDemand
+  );
   const reuse = has("--reuse");
   let server: ChildProcess | null = null;
   const peer = reuse ? null : startPeer();
   try {
     if (!reuse) {
       console.log("Seeding demo data");
-      await seed();
+      await seed(onDemand);
       console.log(`Starting demo server on :${PORT}`);
-      server = startServer();
+      server = startServer(onDemand);
       await waitForServer(server);
     }
     console.log("Shooting");
     const raw = await shoot(only);
+    keepOnDemand(raw);
     console.log("Framing");
     await frame(raw);
   } finally {

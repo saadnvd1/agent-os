@@ -44,6 +44,9 @@ interface SessionSeed {
   minutesAgo: number;
   task?: { prompt: string; status: "running" | "merged"; branch: string };
   chat?: (start: number) => ChatItem[];
+  // Seeded only for the on-demand shots (shots.ts), so it never shows in the
+  // README's sidebar.
+  onDemand?: boolean;
 }
 
 const WORKSPACES = [
@@ -55,6 +58,14 @@ const WORKSPACES = [
 ];
 
 const SESSIONS: SessionSeed[] = [
+  {
+    key: "running",
+    name: "running-turn",
+    project: "storefront",
+    view: "chat",
+    minutesAgo: 1,
+    onDemand: true,
+  },
   {
     key: "checkout",
     name: "checkout-totals",
@@ -241,7 +252,7 @@ function tmux(args: string[]): void {
   execFileSync("tmux", demoTmuxArgs(args), { env: demoEnv(), stdio: "pipe" });
 }
 
-async function seedDb(): Promise<void> {
+async function seedDb(onDemand: boolean): Promise<void> {
   process.env.DB_PATH = DB_PATH;
   const { getDb, insertSessionRow } = await import("../../lib/db");
   const db = getDb();
@@ -266,6 +277,7 @@ async function seedDb(): Promise<void> {
   const sessionIds = new Map<string, string>();
   const now = Date.now();
   for (const s of SESSIONS) {
+    if (s.onDemand && !onDemand) continue;
     const id = randomUUID();
     sessionIds.set(s.key, id);
     const tmuxName = `claude-${id}`;
@@ -441,14 +453,14 @@ function seedLinkedMachine(db: Db): void {
   ).run(PEER_HOST.id, `http://127.0.0.1:${PEER_PORT}`);
 }
 
-export async function seed(): Promise<void> {
+export async function seed(onDemand = false): Promise<void> {
   teardownTmux();
   fs.rmSync(ROOT, { recursive: true, force: true });
   fs.mkdirSync(SCREENS, { recursive: true });
   fs.mkdirSync(TMUX_TMPDIR, { recursive: true, mode: 0o700 });
   writeHome();
   createRepos();
-  await seedDb();
+  await seedDb(onDemand);
   console.log(`  seeded ${DB_PATH}`);
 }
 

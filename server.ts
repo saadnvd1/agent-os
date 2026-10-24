@@ -39,6 +39,7 @@ import {
   assertDemoSandbox,
   demoAllowsUpgrade,
   admitDemoSocket,
+  demoChatMode,
   demoMode,
   gateDemoRequest,
   refuseDemoUpgrade,
@@ -116,7 +117,9 @@ if (!live) {
 claimAgentosEnv(port);
 // Demo mode: seeded data, nothing that runs code (lib/security/demo).
 const demo = demoMode();
-if (demo) assertDemoSandbox();
+// The screenshot server's scripted chat turns: the sandbox, not the lockdown.
+const demoChat = demoChatMode();
+if (demo || demoChat) assertDemoSandbox();
 // Fixed for this process and handed to the chat workers it starts.
 buildId();
 if (!demo) {
@@ -252,7 +255,12 @@ app.prepare().then(async () => {
   });
   chatWss.on("connection", (ws: WebSocket, request: IncomingMessage) => {
     const params = new URL(request.url ?? "", "http://x").searchParams;
-    serveChatSocket(ws, params, (json) => sendBounded(ws, json), demo);
+    serveChatSocket(
+      ws,
+      params,
+      (json) => sendBounded(ws, json),
+      demo || demoChat
+    );
   });
 
   // Handle WebSocket upgrades

@@ -17,6 +17,18 @@ import {
 export { RUN_PREFIX };
 export const FILE_PREFIX = "f-";
 
+// Where the run root goes. A socket made under it (a tmux server's, Chrome's
+// own `com.google.Chrome.XXXXXX/SingletonSocket`) must fit sun_path's 104
+// bytes on macOS, and an AgentOS session's $TMPDIR is already about 95 of
+// them, so a long one is passed over for /tmp.
+const MAX_REAL_TMPDIR = 24;
+export function runRootBase(
+  real: string,
+  platform: NodeJS.Platform = process.platform
+): string {
+  return platform !== "win32" && real.length > MAX_REAL_TMPDIR ? "/tmp" : real;
+}
+
 export const LEGACY_PREFIXES = LEGACY_TEST_TEMP_PREFIXES;
 
 const DAY_MS = 24 * 60 * 60 * 1000;

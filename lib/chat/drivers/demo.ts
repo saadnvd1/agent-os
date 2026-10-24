@@ -1,16 +1,18 @@
 /**
  * The demo's stand-in for an agent (AGENTOS_DEMO=1): no process, no tools,
  * just a short canned reply streamed the way a real one is, so the chat
- * flow still works end to end.
+ * flow still works end to end. A typed `demo: running turn` runs the
+ * scripted turn in demo-script.ts instead.
  */
 
 import type { ChatConversation, ChatDriver } from "../driver";
 import type { DriverEvent } from "../events";
+import { parseDemoScript, runDemoScript, type DemoScript } from "./demo-script";
 
 export const DEMO_REPLY =
   "This is a demo, so agents don't run here. On your own machine, this is where the agent would answer and get to work.";
 
-const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
+const sleep = (ms: number) => new Promise<void>((r) => setTimeout(r, ms));
 
 // Events pushed by sends and read by one consumer, in order.
 function channel() {
@@ -89,12 +91,27 @@ export function demoConversation(stepMs = 40): ChatConversation {
     });
     out.push({ type: "state", state: "idle" });
   };
+  // A scripted turn that a newer one took over from says nothing more.
+  let generation = 0;
+  const script = async (s: DemoScript, mine: number) => {
+    if (closed) return;
+    stopped = false;
+    await runDemoScript(s, {
+      push: (e) => mine === generation && out.push(e),
+      stopped: () => stopped || closed,
+      sleep,
+    });
+  };
   const refuse = async () => {
     throw new Error("Not available in the demo.");
   };
   return {
-    send() {
-      turn = turn.then(reply);
+    send(text) {
+      const s = parseDemoScript(text);
+      // A scripted turn takes over from one still running.
+      const mine = s ? ++generation : generation;
+      if (s) stopped = true;
+      turn = turn.then(s ? () => script(s, mine) : reply);
       return undefined;
     },
     async interrupt() {

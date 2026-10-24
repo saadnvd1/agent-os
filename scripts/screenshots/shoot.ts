@@ -104,7 +104,9 @@ export async function shoot(only?: string[]): Promise<Raw[]> {
   const browser = await launch();
   const results: Raw[] = [];
   try {
-    for (const shot of SHOTS.filter((s) => !only || only.includes(s.name))) {
+    for (const shot of SHOTS.filter((s) =>
+      only ? only.includes(s.name) : !s.onDemand
+    )) {
       results.push({ name: shot.name, files: await take(browser, shot) });
     }
   } finally {

@@ -1,13 +1,25 @@
 import { spawnSync } from "node:child_process";
 import { chmodSync, readFileSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
-import { beforeEach, describe, expect, it } from "vitest";
+import { createServer } from "node:net";
+import { beforeAll, beforeEach, describe, expect, it } from "vitest";
 import { OscScanner } from "./parse";
 import { tempDir } from "@/lib/test-temp";
 
 const SCRIPT = join(process.cwd(), "scripts", "claude-status-hook.sh");
 let dir: string;
 let tty: string;
+// Nothing listens here, so the hook's ask to AgentOS fails at once instead of
+// reaching a live server on the default port.
+let deadUrl: string;
+
+beforeAll(async () => {
+  const server = createServer();
+  await new Promise<void>((r) => server.listen(0, "127.0.0.1", r));
+  const { port } = server.address() as { port: number };
+  await new Promise((r) => server.close(r));
+  deadUrl = `http://127.0.0.1:${port}`;
+});
 
 // A fake tmux on PATH that names a plain file as the pane's tty.
 beforeEach(() => {
@@ -25,6 +37,7 @@ function run(event: string, input: object, env: Record<string, string> = {}) {
       NODE_ENV: "test",
       PATH: `${dir}:/usr/bin:/bin`,
       TMUX_PANE: "%1",
+      AGENTOS_URL: deadUrl,
       ...env,
     },
     encoding: "utf-8",
