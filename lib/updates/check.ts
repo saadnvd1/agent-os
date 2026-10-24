@@ -163,6 +163,38 @@ export async function compare(deps: CheckDeps): Promise<CheckResult> {
   };
 }
 
+/**
+ * A cached answer was worked out against whatever HEAD was then. If the
+ * checkout has since moved (a pull by hand, a switch to another branch) and
+ * now contains the latest commit, there's nothing to update to.
+ */
+export async function reconcile(
+  check: CheckResult | null,
+  deps: Pick<CheckDeps, "git">
+): Promise<CheckResult | null> {
+  if (!check?.available || !check.latest) return check;
+  try {
+    const head = (await deps.git(["rev-parse", "HEAD"])).trim();
+    if (head === check.current?.sha) return check;
+    const has = await deps
+      .git(["merge-base", "--is-ancestor", check.latest.sha, "HEAD"])
+      .then(
+        () => true,
+        () => false
+      );
+    return has
+      ? {
+          ...check,
+          available: false,
+          behind: 0,
+          current: { version: check.latest.version, sha: head },
+        }
+      : check;
+  } catch {
+    return check;
+  }
+}
+
 let memo: CheckResult | null = null;
 let inflight: Promise<CheckResult> | null = null;
 
