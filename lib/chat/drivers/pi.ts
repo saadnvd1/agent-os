@@ -7,6 +7,7 @@ import { PiAccess, PiDialogs, writeExtension } from "./pi-approvals";
 import { TEXT_TOOLS_EXTENSION } from "./pi-text-tools";
 import { PiMapper } from "./pi-mapper";
 import { PiRpc } from "./pi-rpc";
+import { RESULTS_BRIEF, SUMMARY_NUDGE } from "./turn-outcome";
 
 type P = Record<string, unknown>;
 
@@ -17,7 +18,10 @@ export function piArgs(o: ChatStartOptions, ...extensions: string[]): string[] {
   // A path, so a conversation started elsewhere never makes Pi ask about it.
   if (o.resumeId) args.push("--session", o.resumeId);
   if (o.model && o.model !== AGENT_DEFAULT_MODEL) args.push("--model", o.model);
-  if (o.systemAppend) args.push("--append-system-prompt", o.systemAppend);
+  args.push(
+    "--append-system-prompt",
+    [o.systemAppend, RESULTS_BRIEF].filter(Boolean).join("\n\n")
+  );
   return args;
 }
 
@@ -78,6 +82,7 @@ export const piDriver: ChatDriver = {
     const dialogs = new PiDialogs(emit);
     const access = new PiAccess(options.access);
     // Sent now: goes once the stopped run has ended.
+    let nudged = false;
     const held: { text: string; images?: ChatImage[] }[] = [];
     const rpc: PiRpc = new PiRpc(
       piArgs(
@@ -132,6 +137,13 @@ export const piDriver: ChatDriver = {
           if (!s.isCompacting) break;
           await new Promise((r) => setTimeout(r, 200));
         }
+      if (!nudged && mapper.needsSummary()) {
+        nudged = true;
+        console.info("[chat] asked the model for its results summary");
+        void prompt(SUMMARY_NUDGE);
+        return;
+      }
+      nudged = false;
       mapper.endTurn();
       void rpc
         .request<{ contextUsage?: P }>("get_session_stats")

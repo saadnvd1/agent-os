@@ -185,6 +185,8 @@ export type ChatItem =
       input: unknown;
       status: ToolStatus;
       output?: string;
+      // How it ended ("exit 1", "HTTP 404"), kept when the output is deferred.
+      outcome?: string;
       diff?: FileDiff;
       // When it finished, to show how long a step took.
       endedAt?: number;

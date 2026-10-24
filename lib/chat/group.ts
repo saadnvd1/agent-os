@@ -1,12 +1,14 @@
 import type { ChatItem } from "./events";
 import { readingOrder } from "./reading-order";
+import { stepCounts, type StepCounts } from "./tool-outcome";
 import { eventTurnAt, type EventTurn } from "./turns";
 
 export type ToolItem = Extract<ChatItem, { kind: "tool" }>;
 export type UndoItem = Extract<ChatItem, { kind: "undo" }>;
 
 export type TimelineBlock =
-  | { type: "item"; item: ChatItem }
+  // `steps` rides on the end of a stopped or failed turn: what ran in it.
+  | { type: "item"; item: ChatItem; steps?: StepCounts }
   | { type: "tools"; id: string; tools: ToolItem[] }
   | { type: "undone"; id: string; undo: UndoItem; items: ChatItem[] }
   // Consecutive turns an event started, with the reply to each.
@@ -30,6 +32,8 @@ export function groupTimeline(
   const items = opts.foldEvents ? readingOrder(all) : all;
   const blocks: TimelineBlock[] = [];
   let tools: ToolItem[] = [];
+  // Every tool call since the last turn ended, grouped or not.
+  let turnTools: ToolItem[] = [];
   const flush = () => {
     if (tools.length) blocks.push({ type: "tools", id: tools[0].id, tools });
     tools = [];
@@ -74,8 +78,10 @@ export function groupTimeline(
       i = end;
     } else if (item.kind === "tool" && STANDALONE_TOOLS.has(item.name)) {
       flush();
+      turnTools.push(item);
       blocks.push({ type: "item", item });
     } else if (item.kind === "tool") {
+      turnTools.push(item);
       tools.push(item);
     } else if (item.kind === "reasoning" && tools.length) {
       continue;
@@ -91,7 +97,15 @@ export function groupTimeline(
       continue;
     } else {
       flush();
-      blocks.push({ type: "item", item });
+      const cut =
+        item.kind === "turn_end" &&
+        (item.interrupted || item.ended?.reason === "error");
+      blocks.push(
+        cut && turnTools.length
+          ? { type: "item", item, steps: stepCounts(turnTools) }
+          : { type: "item", item }
+      );
+      if (item.kind === "turn_end") turnTools = [];
     }
   }
   flush();
@@ -123,7 +137,13 @@ function undoneRanges(items: ChatItem[]): Map<number, number> {
 // until they change, so a streamed delta re-renders only its own block.
 export function sameBlock(a: TimelineBlock, b: TimelineBlock): boolean {
   if (a === b) return true;
-  if (a.type === "item" && b.type === "item") return a.item === b.item;
+  if (a.type === "item" && b.type === "item")
+    return (
+      a.item === b.item &&
+      a.steps?.total === b.steps?.total &&
+      a.steps?.ok === b.steps?.ok &&
+      a.steps?.failed === b.steps?.failed
+    );
   if (a.type === "tools" && b.type === "tools")
     return sameItems(a.tools, b.tools);
   if (a.type === "undone" && b.type === "undone")

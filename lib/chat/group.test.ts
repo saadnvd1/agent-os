@@ -213,3 +213,29 @@ describe("sameBlock on undone ranges", () => {
     expect(sameBlock(undone(items), undone(longer))).toBe(false);
   });
 });
+
+describe("groupTimeline steps on a cut turn", () => {
+  const end = (id: string, interrupted?: boolean): ChatItem => ({
+    id,
+    kind: "turn_end",
+    createdAt: 0,
+    ...(interrupted ? { interrupted } : {}),
+  });
+  const stopped = (id: string): ChatItem => ({
+    ...(tool(id) as Extract<ChatItem, { kind: "tool" }>),
+    status: "stopped",
+  });
+  const steps = (items: ChatItem[]) =>
+    groupTimeline(items).flatMap((b) =>
+      b.type === "item" && b.item.kind === "turn_end" ? [b.steps] : []
+    );
+
+  it("counts only the tools of the turn that was stopped", () => {
+    expect(
+      steps([tool("t1"), end("e1"), tool("t2"), stopped("t3"), end("e2", true)])
+    ).toEqual([
+      undefined,
+      { total: 2, ok: 1, failed: 0, stopped: 1, running: 0 },
+    ]);
+  });
+});

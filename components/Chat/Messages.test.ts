@@ -1,7 +1,7 @@
 import { createElement } from "react";
 import { renderToStaticMarkup } from "react-dom/server";
 import { describe, expect, it, vi } from "vitest";
-import { AssistantMessage, UserMessage } from "./Messages";
+import { AssistantMessage, TurnEnd, UserMessage } from "./Messages";
 
 const item = {
   id: "a1",
@@ -117,5 +117,17 @@ describe("UserMessage code blocks", () => {
       expect(html).toContain("number");
       expect(html).not.toContain("```");
     }
+  });
+});
+
+describe("TurnEnd steps", () => {
+  it("says what a stopped turn got through", () => {
+    const html = renderToStaticMarkup(
+      createElement(TurnEnd, {
+        item: { id: "e", kind: "turn_end", interrupted: true } as never,
+        steps: { total: 5, ok: 3, failed: 1, stopped: 1, running: 0 },
+      })
+    );
+    expect(html).toContain("Stopped · 4 of 5 steps done, 1 failed, 1 not run");
   });
 });

@@ -1,5 +1,6 @@
 "use client";
 
+import type { StepCounts } from "@/lib/chat/tool-outcome";
 import {
   memo,
   useCallback,
@@ -99,7 +100,15 @@ interface ItemActions {
   onQuote?: (text: string) => void;
 }
 
-function Item({ item, actions }: { item: ChatItem; actions: ItemActions }) {
+function Item({
+  item,
+  actions,
+  steps,
+}: {
+  item: ChatItem;
+  actions: ItemActions;
+  steps?: StepCounts;
+}) {
   switch (item.kind) {
     case "user":
       return (
@@ -119,7 +128,7 @@ function Item({ item, actions }: { item: ChatItem; actions: ItemActions }) {
     case "todos":
       return <Todos item={item} />;
     case "turn_end":
-      return <TurnEnd item={item} />;
+      return <TurnEnd item={item} steps={steps} />;
     case "error":
       return <ErrorMessage item={item} />;
     case "command_output":
@@ -209,7 +218,7 @@ const Block = memo(
       </UndoneBlock>
     ) : (
       <div data-item={b.item.id}>
-        <Item item={b.item} actions={actions} />
+        <Item item={b.item} actions={actions} steps={b.steps} />
       </div>
     );
   },

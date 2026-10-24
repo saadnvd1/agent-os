@@ -1,5 +1,6 @@
 import { db } from "../db";
 import type { ChatItem, ToolBody } from "./events";
+import { toolCode } from "./tool-outcome";
 
 // A conversation opens on its latest items and pages older ones in as the
 // reader scrolls up, so a long one costs what's on screen, not its history.
@@ -23,8 +24,10 @@ export function lighten(item: ChatItem): ChatItem {
   if (item.kind !== "tool" || (item.output === undefined && !item.diff))
     return item;
   const { output, diff, ...rest } = item;
+  const outcome = toolCode(output);
   return {
     ...rest,
+    ...(outcome ? { outcome } : {}),
     deferred: true,
     ...(diff ? { hasDiff: true } : {}),
     ...(output ? { hasOutput: true } : {}),

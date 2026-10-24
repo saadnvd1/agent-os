@@ -5,6 +5,7 @@
  *
  *     npx tsx scripts/screenshots/seed.ts
  */
+import { verifyConversation } from "./chat-verify";
 import fs from "fs";
 import path from "path";
 import { randomUUID } from "crypto";
@@ -147,6 +148,14 @@ const SESSIONS: SessionSeed[] = [
     view: "chat",
     minutesAgo: 60 * 5,
     chat: docsConversation,
+  },
+  {
+    key: "verify",
+    name: "sync-reachability",
+    project: "ml-pipeline",
+    view: "chat",
+    minutesAgo: 60 * 8,
+    chat: verifyConversation,
   },
   {
     key: "backfill",

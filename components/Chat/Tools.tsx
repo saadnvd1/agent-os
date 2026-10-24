@@ -8,6 +8,8 @@ import { lineDiff, shortPath, type DiffLine } from "@/lib/chat/diff";
 import { needsBody } from "@/lib/chat/bodyCache";
 import { cn } from "@/lib/utils";
 import { formatElapsed } from "@/lib/chat/elapsed";
+import { stepCounts, toolOutcome } from "@/lib/chat/tool-outcome";
+import { StepOutcomes } from "./StepOutcomes";
 import { Highlighted } from "./Code";
 import { BackgroundButton, BackgroundState, useBackground } from "./background";
 import { useNow } from "./useNow";
@@ -163,6 +165,18 @@ function ToolRow({ tool }: { tool: ToolItem }) {
           <span className="min-w-0 flex-1 truncate font-mono text-xs">
             {tool.title}
           </span>
+          {toolOutcome(tool) && (
+            <span
+              className={cn(
+                "shrink-0 font-mono text-[11px]",
+                tool.status === "error"
+                  ? "text-destructive"
+                  : "text-muted-foreground"
+              )}
+            >
+              {toolOutcome(tool)}
+            </span>
+          )}
           {tool.backgroundTaskId ? (
             <BackgroundState tool={tool} />
           ) : (
@@ -180,8 +194,7 @@ function ToolRow({ tool }: { tool: ToolItem }) {
 // A run of tool calls: one quiet line, expandable to every step.
 export function ToolGroup({ tools }: { tools: ToolItem[] }) {
   const running = tools.some((t) => t.status === "running");
-  const failed = tools.filter((t) => t.status === "error").length;
-  const stopped = tools.filter((t) => t.status === "stopped").length;
+  const { ok, failed, stopped } = stepCounts(tools);
   const edits = tools.filter((t) => t.diff || t.hasDiff).length;
   const moved = tools.filter((t) => t.backgroundTaskId).length;
   const [open, setOpen] = useRowState(`steps:${tools[0].id}`, false);
@@ -211,13 +224,14 @@ export function ToolGroup({ tools }: { tools: ToolItem[] }) {
             {!running &&
               edits > 0 &&
               ` · ${edits} edit${edits === 1 ? "" : "s"}`}
+            {!running && (failed > 0 || stopped > 0) && ` · ${ok} ok`}
           </span>
           {running && <Elapsed tool={latest} />}
           {failed > 0 && (
             <span className="text-destructive">{failed} failed</span>
           )}
-          {stopped > 0 && failed === 0 && (
-            <span className="text-muted-foreground/70">stopped</span>
+          {stopped > 0 && (
+            <span className="text-muted-foreground/70">{stopped} not run</span>
           )}
           {!running && moved > 0 && (
             <span className="text-muted-foreground/70">
@@ -227,6 +241,9 @@ export function ToolGroup({ tools }: { tools: ToolItem[] }) {
         </button>
         {running && <BackgroundButton tool={latest} />}
       </div>
+      {!open && !running && (
+        <StepOutcomes tools={tools} onOpen={() => setOpen(true)} />
+      )}
       {open && (
         <div className="pb-1">
           {tools.map((t) => (
