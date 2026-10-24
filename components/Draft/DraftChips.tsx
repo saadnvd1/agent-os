@@ -20,6 +20,7 @@ import { modelChoices, useModelsQuery } from "@/data/models";
 import { useBrowserMachine } from "@/data/machines";
 import { machineLabel } from "@/lib/machines/label";
 import { RoleChips } from "./RoleChips";
+import { AnalystModelChip } from "./AnalystModelChip";
 import { AgentModelChip } from "./AgentModelChip";
 import { ChipHeading, ChipItem, ChipMenu, ChipToggle } from "./Chip";
 import {
@@ -230,6 +231,13 @@ export function DraftChips({
           on={!!draft.withAnalyst}
           title="A second chat reviews each turn and drafts the next prompt for you to send"
           onChange={(withAnalyst) => onChange({ withAnalyst })}
+        />
+      )}
+      {project && !draft.openPr && local && draft.withAnalyst && (
+        <AnalystModelChip
+          draft={draft}
+          projectId={project.id}
+          onChange={onChange}
         />
       )}
       {project && draft.openPr && local && (

@@ -1,10 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { db, type Session } from "@/lib/db";
-import { setChatModel } from "@/lib/chat/settings";
-import { providerFor, sessionRole } from "@/lib/models/resolve";
-import { switchSessionModel } from "@/lib/models/session-model";
-import { PI } from "@/lib/models/providers";
-import { formatModelRef, parseModelRef } from "@/lib/models/roles";
+import { switchSessionModelRef } from "@/lib/models/session-model";
 
 // POST /api/sessions/:id/model {ref} - move a running session to another
 // model ("provider/model", or "pi/<provider>/<model>" for a Pi session),
@@ -23,24 +19,7 @@ export async function POST(
   if (typeof ref !== "string" || !ref.trim())
     return NextResponse.json({ error: "ref is required" }, { status: 400 });
   try {
-    const parsed = parseModelRef(ref);
-    if (session.agent_type === "pi") {
-      if (parsed.provider !== PI)
-        throw new Error(
-          "A Pi session runs on a Pi model (pi/<provider>/<model>)"
-        );
-      await setChatModel(id, parsed.model);
-    } else {
-      if (parsed.provider === PI)
-        throw new Error("Only a Pi session can move to a Pi model");
-      await switchSessionModel(id, {
-        role: sessionRole(session),
-        ref: formatModelRef(parsed),
-        provider: providerFor(parsed.provider),
-        model: parsed.model,
-        source: "task",
-      });
-    }
+    await switchSessionModelRef(session, ref);
     return NextResponse.json({ ok: true });
   } catch (error) {
     const message = error instanceof Error ? error.message : String(error);

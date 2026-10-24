@@ -78,6 +78,16 @@ A task whose turn ends this way is not treated as finished work: the orchestrato
 
 AgentOS asks Ollama on each machine (`OLLAMA_HOST`, else `127.0.0.1:11434`) which models it serves and lists them under "Ollama" in the Agent menu of a new session, for the machine you picked. Picking one switches the session to OpenCode (or Pi) with that model. A model shows greyed out when neither agent lists it, which usually means OpenCode's config has no Ollama provider yet.
 
+## An analyst on another model
+
+An analyst can run on any model AgentOS lists: Claude, a provider from Settings > Models (DeepSeek, Z.ai, Ollama through an Anthropic-compatible endpoint) or a Pi model. Claude stays the default; nothing changes until you pick one.
+
+Pick it where the analyst starts: the **Add an analyst** sheet, the **Analyst model** chip next to **With analyst** on a new chat, the Model chip when the role is Analyst, Settings > Agent roles, `aos spawn <project> --role analyst --model <provider/model>`, or the model button of a running analyst. The first option reads **Default analyst model (<name>)** and is whatever Settings, the workspace or the project give the Analyst role. Changing one analyst's model changes only that analyst: the coding agent's model and the role setting stay as they are.
+
+A model that can't be used is shown greyed, with the reason, not hidden: its provider is off or has no key, its server isn't answering, it can't call tools, or (for a running analyst) it runs on the other agent, so start a new analyst for it.
+
+An analyst reads code and transcripts through tools, so a model must be able to call them. AgentOS asks an Ollama server (`/api/show`) and treats a model whose capabilities don't include `tools` as unable. A server that can't be asked (llama.cpp, vLLM, LM Studio, or no answer) and every cloud provider count as able. Starting an analyst on a model that can't call tools is refused with that reason.
+
 ### Compaction and stalls (OpenCode)
 
 When OpenCode compacts a long conversation, the activity line shows "Compacting context…" with its own timer; on a local model reading a big context this can take minutes. The summary itself isn't shown in the chat. If a model request gets no sign of life for 22 minutes (one header timeout plus two), AgentOS stops the turn and says "Model request stalled", or that the model didn't finish compacting, instead of waiting through OpenCode's own retries. A turn that ends with nothing after a compaction, or right after a tool step with no reply, says so too. Each of these ends offers **Retry**, which sends "continue"; the finished steps are kept.

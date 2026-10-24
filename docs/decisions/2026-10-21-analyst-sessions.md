@@ -27,6 +27,10 @@ Settings → Models says otherwise) and the coder's crew. A pairing is a row in
 - Start one from a chat's ⋯ menu, the pane menu, the role pill's Add Analyst,
   or the With analyst chip on a new chat.
 
+- **Any model, 2026-10-24.** The analyst runs on Claude unless a model is
+  picked for it: any model the server lists that can call tools, including
+  Pi's and other providers'. See docs/guides/local-models.md.
+
 ## Why not the orchestrator or the review step
 
 The orchestrator supervises many tasks for a workspace and decides merges. The

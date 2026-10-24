@@ -13,8 +13,10 @@ import {
 } from "@/components/ui/dialog";
 import { Switch } from "@/components/ui/switch";
 import { RoleModelSelect } from "@/components/Models/RoleModelSelect";
+import { useSessionsQuery } from "@/data/sessions/queries";
 import { analystUi, analystUiActions } from "@/stores/analystUi";
 import { useStartAnalystBeside } from "./pair";
+import { useAnalystModels } from "./useAnalystModels";
 
 // Pairs an analyst with a chat: it reviews each turn the coding agent
 // finishes and recommends the next prompt, which the user sends or not.
@@ -46,6 +48,9 @@ function StartAnalystForm({
   const [model, setModel] = useState<string | null>(null);
   const [reviewLast, setReviewLast] = useState(false);
   const start = useStartAnalystBeside();
+  const { data } = useSessionsQuery();
+  const coder = data?.sessions.find((s) => s.id === sessionId);
+  const models = useAnalystModels(coder?.project_id);
 
   return (
     <DialogContent className="sm:max-w-[460px]">
@@ -68,8 +73,8 @@ function StartAnalystForm({
         <RoleModelSelect
           id="analyst-model"
           value={model}
-          inheritLabel="The analyst role's model"
-          claudeOnly
+          inheritLabel={models.defaultLabel}
+          blockedBy={models.blockedBy}
           onChange={setModel}
         />
       </div>

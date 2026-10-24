@@ -179,7 +179,13 @@ export function DraftPanel({
       );
       if (draft.withAnalyst && project && draft.hostId === "local") {
         if (session.view === "chat")
-          void startAnalyst.run({ coderSessionId: session.id }, paneId);
+          void startAnalyst.run(
+            {
+              coderSessionId: session.id,
+              analystModel: draft.analystModel ?? undefined,
+            },
+            paneId
+          );
         else toast("An analyst reviews chats: this session runs in a terminal");
       }
     } catch (error) {

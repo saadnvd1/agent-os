@@ -7,6 +7,7 @@ import {
 } from "@/components/Models/ModelBadges";
 import { useAgentRolesQuery, useModelChoices } from "@/data/models";
 import type { Draft } from "@/lib/drafts";
+import { analystBlock, defaultAnalystLabel } from "@/lib/models/usable";
 import {
   AGENT_ROLES,
   AGENT_ROLE_DEFS,
@@ -34,6 +35,9 @@ export function RoleChips({
   const current = override ?? bound?.choice ?? null;
   const modelName = (ref: string | undefined | null) =>
     ref ? ref.split("/").slice(1).join("/") : "…";
+  const analyst = role === "analyst";
+  const whyNot = (c: (typeof choices)[number]) =>
+    c.unusable ?? (analyst ? analystBlock(c) : null);
   return (
     <>
       <ChipMenu
@@ -71,7 +75,9 @@ export function RoleChips({
           label={
             draft.roleModel
               ? modelName(draft.roleModel)
-              : `Role model: ${modelName(bound?.binding?.ref)}`
+              : analyst
+                ? defaultAnalystLabel(bound?.binding?.ref, choices)
+                : `Role model: ${modelName(bound?.binding?.ref)}`
           }
         >
           <ChipItem
@@ -79,14 +85,17 @@ export function RoleChips({
             onSelect={() => onChange({ roleModel: null })}
             hint={bound?.binding ? modelName(bound.binding.ref) : undefined}
           >
-            Role model
+            {analyst
+              ? defaultAnalystLabel(bound?.binding?.ref, choices)
+              : "Role model"}
           </ChipItem>
           {choices.map((c) => (
             <ChipItem
               key={c.ref}
               checked={c.ref === draft.roleModel}
               onSelect={() => onChange({ roleModel: c.ref })}
-              hint={c.group}
+              disabled={!!whyNot(c)}
+              hint={whyNot(c) ?? c.group}
             >
               <span className="flex items-center gap-1.5">
                 <AvailabilityDot availability={c.availability} />

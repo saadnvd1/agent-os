@@ -9,6 +9,7 @@ import { AGENT_ROLE_DEFS, type AgentRole } from "./agent-roles";
 import { modelAvailability, choiceFor } from "./catalog";
 import { savedModelSettings } from "./config";
 import { PI } from "./providers";
+import { checkToolUse, ollamaOrigin } from "./tool-use";
 import { resolveRole, type RoleSource, type RoutedModel } from "./resolve";
 
 export interface RoleBinding {
@@ -50,6 +51,22 @@ export class ModelUnavailableError extends Error {
   }
 }
 
+// An analyst reads code and transcripts through tools: a model its server
+// says can't call them is refused, with the reason.
+export async function assertCanCallTools(
+  role: AgentRole,
+  ref: string
+): Promise<void> {
+  if (role !== "analyst") return;
+  const choice = choiceFor(ref);
+  if (!choice || choice.locality !== "local" || !choice.endpoint) return;
+  const model = choice.ref.split("/").slice(choice.agent === "pi" ? 2 : 1);
+  if (!(await checkToolUse(ollamaOrigin(choice.endpoint), model.join("/"))))
+    throw new Error(
+      `${choice.label} can't call tools; an analyst reads code through tools`
+    );
+}
+
 export interface RoleStart {
   role: AgentRole;
   routed: RoutedModel;
@@ -82,13 +99,17 @@ export async function prepareRoleStart(
 ): Promise<RoleStart> {
   const binding = bindingFor(role, opts);
   const state = await modelAvailability(binding.routed.ref);
-  if (state.state !== "down")
+  if (state.state !== "down") {
+    await assertCanCallTools(role, binding.routed.ref);
     return startFrom(role, binding.routed, binding.routed.source);
+  }
   if (opts.useFallback && binding.fallback) {
     const alt = bindingFor(role, { ...opts, override: binding.fallback });
     const altState = await modelAvailability(alt.routed.ref);
-    if (altState.state !== "down")
+    if (altState.state !== "down") {
+      await assertCanCallTools(role, alt.routed.ref);
       return startFrom(role, alt.routed, "fallback");
+    }
   }
   throw new ModelUnavailableError(
     role,

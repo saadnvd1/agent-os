@@ -50,6 +50,18 @@ export interface ModelPrice {
   output: number;
 }
 
+// Why a provider can't run a Claude Code session, or null when it can.
+export function providerProblem(p: ModelProvider): string | null {
+  if (!p.enabled) return `The ${p.label} provider is turned off`;
+  // Anthropic runs on the Claude login: no URL or key of ours.
+  if (p.id === ANTHROPIC) return null;
+  if (!p.baseUrl || !p.auth)
+    return `The ${p.label} provider needs a base URL and a key`;
+  if (p.api !== "anthropic")
+    return `${p.label} speaks the OpenAI API; Claude Code needs an Anthropic-compatible endpoint`;
+  return null;
+}
+
 export const ANTHROPIC_PROVIDER: ModelProvider = {
   id: ANTHROPIC,
   label: "Anthropic (Claude login)",

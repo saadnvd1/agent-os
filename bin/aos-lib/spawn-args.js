@@ -11,6 +11,7 @@ function parseSpawnArgs(words, fail) {
   let onMac = false;
   let group;
   let role;
+  let model;
   let project;
   let i = 0;
   for (; i < words.length; i++) {
@@ -47,6 +48,10 @@ function parseSpawnArgs(words, fail) {
       if (role === undefined)
         fail("--role needs developer, analyst, reviewer or supervisor");
     } else if (w.startsWith("--role=")) role = w.slice(7);
+    else if (w === "--model") {
+      model = words[++i];
+      if (model === undefined) fail("--model needs a provider/model");
+    } else if (w.startsWith("--model=")) model = w.slice(8);
     else if (project === undefined) project = w;
     else break;
   }
@@ -61,6 +66,7 @@ function parseSpawnArgs(words, fail) {
     onMac,
     group: group?.trim() || undefined,
     role: role?.trim().toLowerCase() || undefined,
+    model: model?.trim() || undefined,
     project,
     prompt: words.slice(i),
   };

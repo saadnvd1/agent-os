@@ -24,12 +24,12 @@ import {
   sendChat,
   sendQueuedNow,
   setChatAccess,
-  setChatModel,
   setChatPlan,
   stopChatTask,
   undoChat,
   watchChat,
 } from "./runner";
+import { setComposerModel } from "../models/session-model";
 import { stopChatTurn } from "./stop";
 import { clientSend } from "./client-send";
 import { searchChat } from "./search";
@@ -189,7 +189,8 @@ function onChatMessage(
         .then(answer)
     );
   } else if (msg.type === "interrupt") run(stopChatTurn(sessionId));
-  else if (msg.type === "set_model") run(setChatModel(sessionId, msg.model));
+  else if (msg.type === "set_model")
+    run(setComposerModel(sessionId, msg.model));
   else if (msg.type === "set_access") run(setChatAccess(sessionId, msg.access));
   else if (msg.type === "set_plan") run(setChatPlan(sessionId, !!msg.plan));
   else if (msg.type === "refresh_commands") run(refreshCapabilities(sessionId));
