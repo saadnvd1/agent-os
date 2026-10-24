@@ -2,7 +2,7 @@ import { randomUUID } from "crypto";
 import type { DriverEvent, UsageTotals } from "../events";
 import { openCodeTool } from "./opencode-rules";
 import { TurnItems } from "./turn-items";
-import { logTurnEnd, turnOutcome } from "./turn-outcome";
+import { logTurnEnd, needsSummary, turnOutcome } from "./turn-outcome";
 
 type P = Record<string, unknown>;
 const str = (v: unknown) => (typeof v === "string" ? v : "");
@@ -37,6 +37,10 @@ export class OpenCodeMapper {
     calls: new Set<string>(),
   };
   private aborted = false;
+  // Tool calls this turn, kept through the nudged run that continues it.
+  private toolIds = new Set<string>();
+  private nudged = false;
+  private nudgeDue = false;
   // Idle from before the prompt is stale until the session goes busy.
   private admitted = false;
   totals: UsageTotals = {
@@ -157,6 +161,7 @@ export class OpenCodeMapper {
       return;
     }
     if (part.type === "tool") {
+      this.toolIds.add(id);
       if (this.last.id === str(part.messageID)) this.last.calls.add(id);
       this.tool(id, part);
     }
@@ -201,6 +206,24 @@ export class OpenCodeMapper {
     if (!this.admitted || !this.items.inTurn) return;
     this.emit({ type: "usage", totals: { ...this.totals } });
     const text = [...this.last.text.values()].join("\n");
+    if (
+      !this.nudged &&
+      needsSummary({
+        toolsRun: this.toolIds.size,
+        text,
+        toolCalls: this.last.calls.size,
+        finishReason: this.last.finish,
+        error: this.error ?? undefined,
+        aborted: this.aborted,
+      })
+    ) {
+      // The turn stays open: the driver asks for the summary, once.
+      this.nudged = this.nudgeDue = true;
+      this.last.id = "";
+      this.admitted = false;
+      console.info("[chat] asked the model for its results summary");
+      return;
+    }
     const ended =
       this.aborted || !this.last.id
         ? undefined
@@ -227,11 +250,20 @@ export class OpenCodeMapper {
     });
     this.error = null;
     this.last.id = "";
+    this.toolIds.clear();
+    this.nudged = this.nudgeDue = false;
     this.aborted = false;
     this.admitted = false;
     for (const id of this.current) this.past.add(id);
     this.current.clear();
     this.parts.clear();
+  }
+
+  // True once after a turn ended without its results: send SUMMARY_NUDGE.
+  takeNudge(): boolean {
+    const due = this.nudgeDue;
+    this.nudgeDue = false;
+    return due;
   }
 
   // The prompt never reached a busy session (it failed, or finished before

@@ -7,6 +7,7 @@ import { OpenCodeMapper } from "./opencode-mapper";
 import { openCodeRules } from "./opencode-rules";
 import { OpenCodeServer } from "./opencode-server";
 import { OpenCodeApprovals } from "./opencode-approvals";
+import { RESULTS_BRIEF, SUMMARY_NUDGE } from "./turn-outcome";
 
 type P = Record<string, unknown>;
 const str = (v: unknown) => (typeof v === "string" ? v : "");
@@ -14,6 +15,11 @@ const str = (v: unknown) => (typeof v === "string" ? v : "");
 // How long a prompt may go without the session turning busy before the
 // turn is checked on.
 const ADMIT_MS = 15_000;
+
+// AgentOS's own brief, then the results line every session gets.
+export function openCodeSystem(append?: string): string {
+  return [append, RESULTS_BRIEF].filter(Boolean).join("\n\n");
+}
 
 export function openCodeModel(model: string) {
   const slash = model.indexOf("/");
@@ -106,6 +112,7 @@ export const openCodeDriver: ChatDriver = {
       if (ours(p.sessionID)) approvals.handle(e.type, p);
       const wasInTurn = mapper.items.inTurn;
       mapper.map(e);
+      if (mapper.takeNudge()) return void prompt(SUMMARY_NUDGE);
       if (wasInTurn && !mapper.items.inTurn && held.length) {
         const next = held.shift()!;
         void prompt(next.text, next.images);
@@ -160,7 +167,9 @@ export const openCodeDriver: ChatDriver = {
         await server.call("POST", `/session/${sessionId}/prompt_async`, {
           model,
           agent: plan ? "plan" : "build",
-          system: options.systemAppend || undefined,
+          system: [options.systemAppend, RESULTS_BRIEF]
+            .filter(Boolean)
+            .join("\n\n"),
           parts: openCodeParts(text, images),
         });
       } catch (error) {

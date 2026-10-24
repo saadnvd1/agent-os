@@ -4,7 +4,8 @@ import { describe, expect, it, vi } from "vitest";
 import type { ChatItem, DriverEvent } from "../events";
 import { OpenCodeMapper } from "./opencode-mapper";
 import { openCodeRules, permissionCard } from "./opencode-rules";
-import { openCodeModel, openCodeParts } from "./opencode";
+import { openCodeModel, openCodeParts, openCodeSystem } from "./opencode";
+import { RESULTS_BRIEF } from "./turn-outcome";
 
 type Event = { type: string; properties: Record<string, unknown> };
 
@@ -253,5 +254,113 @@ describe("OpenCodeMapper turns that end early", () => {
     for (const name of ["text", "tool"])
       for (const i of replay(name).items)
         if (i.kind === "turn_end") expect(i.ended).toBeUndefined();
+  });
+});
+
+describe("OpenCodeMapper summary nudge", () => {
+  const S = "s1";
+  const ev = (type: string, properties: Record<string, unknown>) => ({
+    type,
+    properties: { sessionID: S, ...properties },
+  });
+  const step = (id: string, text: string, tool = false, finish = "stop") => [
+    ev("message.updated", { info: { id, role: "assistant", finish } }),
+    ...(tool
+      ? [
+          ev("message.part.updated", {
+            part: {
+              id: `${id}-t`,
+              messageID: id,
+              type: "tool",
+              tool: "bash",
+              state: { status: "completed", input: {}, output: "ok" },
+            },
+          }),
+        ]
+      : []),
+    ev("message.part.updated", {
+      part: { id: `${id}-x`, messageID: id, type: "text", text },
+    }),
+  ];
+  const busy = ev("session.status", { status: { type: "busy" } });
+  const idle = ev("session.idle", {});
+  function run(...batches: Record<string, unknown>[][]) {
+    const out: DriverEvent[] = [];
+    const mapper = new OpenCodeMapper(
+      () => S,
+      (e) => out.push(e)
+    );
+    mapper.prompted();
+    const nudges: boolean[] = [];
+    for (const batch of batches) {
+      for (const e of batch) mapper.map(e as never);
+      nudges.push(mapper.takeNudge());
+    }
+    return { out, mapper, nudges };
+  }
+  const ends = (out: DriverEvent[]) =>
+    out.filter((e) => e.type === "state" && e.state === "idle").length;
+
+  it("keeps the turn open and asks once after tools and a lead-in", () => {
+    const { out, mapper, nudges } = run(
+      [
+        busy,
+        ...step("m0", "", true, "tool-calls"),
+        ...step("m1", "Here's what I found:"),
+        idle,
+      ],
+      [busy, ...step("m2", ""), idle]
+    );
+    expect(nudges).toEqual([true, false]);
+    expect(ends(out)).toBe(1);
+    expect(mapper.items.inTurn).toBe(false);
+  });
+
+  it("ends normally when the reply has the results", () => {
+    const { out, nudges } = run([
+      busy,
+      ...step("m0", "", true, "tool-calls"),
+      ...step("m1", "All 3 checks passed."),
+      idle,
+    ]);
+    expect(nudges).toEqual([false]);
+    expect(ends(out)).toBe(1);
+  });
+
+  it("doesn't nudge without tools, after an error, a length cut-off or an interrupt", () => {
+    expect(run([busy, ...step("m1", "Let me look:"), idle]).nudges).toEqual([
+      false,
+    ]);
+    expect(
+      run([
+        busy,
+        ...step("m0", "", true, "tool-calls"),
+        ...step("m1", "Found:", false, "length"),
+        idle,
+      ]).nudges
+    ).toEqual([false]);
+    expect(
+      run([
+        busy,
+        ...step("m0", "", true, "tool-calls"),
+        ...step("m1", "Found:"),
+        ev("session.error", { error: { name: "X", data: { message: "bad" } } }),
+        idle,
+      ]).nudges
+    ).toEqual([false]);
+    expect(
+      run([
+        busy,
+        ...step("m0", "", true, "tool-calls"),
+        ...step("m1", "Found:"),
+        ev("session.error", { error: { name: "MessageAbortedError" } }),
+        idle,
+      ]).nudges
+    ).toEqual([false]);
+  });
+
+  it("puts the results brief in the prompt's system text", () => {
+    expect(openCodeSystem("brief")).toBe(`brief\n\n${RESULTS_BRIEF}`);
+    expect(openCodeSystem()).toBe(RESULTS_BRIEF);
   });
 });
