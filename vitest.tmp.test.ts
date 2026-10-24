@@ -6,6 +6,7 @@ import { describe, expect, it } from "vitest";
 import {
   RUN_PREFIX,
   leaks,
+  runRootBase,
   snapshot,
   sweepStale,
   testTmpPrefixes,
@@ -79,6 +80,30 @@ describe("the run's temp root", () => {
     expect(tmpdir().startsWith(fileDir)).toBe(true);
     for (const v of ["DB_PATH", "HOME", "AGENTOS_KEPT_DIR"])
       expect(process.env[v]!.startsWith(fileDir)).toBe(true);
+  });
+});
+
+describe("runRootBase", () => {
+  it("passes over a long temp folder for /tmp, and keeps a short one", () => {
+    const session = `/var/folders/mw/${"x".repeat(30)}/T/agentos-s-${"1".repeat(36)}`;
+    expect(runRootBase(session, "darwin")).toBe("/tmp");
+    expect(runRootBase(session, "linux")).toBe("/tmp");
+    expect(runRootBase("/tmp", "linux")).toBe("/tmp");
+    expect(runRootBase("/var/tmp", "linux")).toBe("/var/tmp");
+    expect(
+      runRootBase("C:\\Users\\x\\AppData\\Local\\Temp\\long\\path", "win32")
+    ).toBe("C:\\Users\\x\\AppData\\Local\\Temp\\long\\path");
+  });
+
+  it("leaves room under a test's folder for a socket path", () => {
+    // A unix socket path is capped at 104 bytes on macOS; Chrome's own
+    // singleton socket is the longest one a test starts.
+    const longest = join(
+      process.env.TMPDIR!,
+      "com.google.Chrome.XXXXXX",
+      "SingletonSocket"
+    );
+    expect(longest.length).toBeLessThanOrEqual(104);
   });
 });
 

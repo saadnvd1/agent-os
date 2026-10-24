@@ -57,7 +57,12 @@ export function setupMoveRepo(): MoveFixture {
     restore: () => {
       process.env.HOME = saved.HOME;
       delete process.env.CLAUDE_CONFIG_DIR;
-      fs.rmSync(tmp, { recursive: true, force: true });
+      fs.rmSync(tmp, {
+        recursive: true,
+        force: true,
+        maxRetries: 5,
+        retryDelay: 100,
+      });
     },
   };
 }

@@ -1,4 +1,5 @@
 import type { Page } from "playwright";
+import { RUNNING_TURN_SHOTS } from "./running-turn";
 
 // Each shot is one or more raw captures; frame.ts composes them.
 export interface Part {
@@ -15,6 +16,9 @@ export interface Part {
 export interface Shot {
   name: string;
   parts: Part[];
+  // Only with --only <name>: it changes the demo (a session is added, a turn
+  // is started) and is not one of the README's pictures.
+  onDemand?: boolean;
 }
 
 const CHAT = "checkout-totals";
@@ -57,6 +61,7 @@ async function openDialog(page: Page, button: RegExp): Promise<void> {
 }
 
 export const SHOTS: Shot[] = [
+  ...RUNNING_TURN_SHOTS,
   {
     name: "hero",
     parts: [

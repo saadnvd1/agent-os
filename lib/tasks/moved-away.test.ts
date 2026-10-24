@@ -25,8 +25,11 @@ vi.mock("../sessions/end", () => ({
     ended.push(s.id);
   },
 }));
+const background = vi.hoisted(() => [] as Promise<void>[]);
 vi.mock("../async-operations", () => ({
-  runInBackground: (task: () => Promise<void>) => void task(),
+  runInBackground: (task: () => Promise<void>) => {
+    background.push(task());
+  },
 }));
 
 import { db, updateSessionRow } from "../db";
@@ -44,7 +47,9 @@ let f: MoveFixture;
 beforeAll(() => {
   f = setupMoveRepo();
 });
-afterAll(() => {
+afterAll(async () => {
+  // Work started in the background still writes under the fixture.
+  await Promise.allSettled(background);
   f.restore();
   fs.rmSync(WT_ROOT, { recursive: true, force: true });
 });

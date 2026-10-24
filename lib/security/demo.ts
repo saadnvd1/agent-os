@@ -23,6 +23,14 @@ type Env = Record<string, string | undefined>;
 
 export const demoMode = (env: Env = process.env) => env.AGENTOS_DEMO === "1";
 
+/**
+ * Only the chat is a stand-in (AGENTOS_DEMO_CHAT=1): the screenshot server's
+ * scripted turns (lib/chat/drivers/demo-script). The rest of the server is a
+ * normal one, so it is held to the same sandbox as the demo (server.ts).
+ */
+export const demoChatMode = (env: Env = process.env) =>
+  env.AGENTOS_DEMO_CHAT === "1";
+
 const within = (child: string, parent: string) => {
   const rel = path.relative(parent, child);
   return rel === "" || (!rel.startsWith("..") && !path.isAbsolute(rel));

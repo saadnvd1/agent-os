@@ -7,10 +7,18 @@
 import { randomUUID } from "crypto";
 import { clientSend } from "./client-send";
 import type { ChatConversation } from "./driver";
-import type { ChatClientMessage, ChatServerMessage } from "./events";
+import type {
+  ChatClientMessage,
+  ChatServerMessage,
+  ChatState,
+  ModelWait,
+} from "./events";
 import { demoConversation } from "./drivers/demo";
+import { DEMO_SCRIPT_PROMPT, parseDemoScript } from "./drivers/demo-script";
+import { ModelWaitTracker } from "./model-wait";
+import type { WorkerEvent } from "./worker/protocol";
 import { emit, getSession } from "./registry";
-import { saveItem } from "./store";
+import { deleteItems, saveItem } from "./store";
 import { DEMO_REFUSAL, DEMO_VISITOR_TEXT } from "../security/demo";
 
 const conversations = new Map<string, ChatConversation>();
@@ -21,13 +29,34 @@ export const setDemoReplyStep = (ms: number) => (stepMs = ms);
 export const MAX_SENDS = 50;
 const sends = new Map<string, number>();
 
+// What a demo chat is doing, for a watcher that connects mid-turn (the stored
+// items alone would show a running step as stopped).
+const live = new Map<string, { state: ChatState; wait: ModelWait | null }>();
+
+/** The demo chat's running turn, or null with none. */
+export function demoLive(sessionId: string) {
+  return live.get(sessionId) ?? null;
+}
+
 function conversation(sessionId: string): ChatConversation {
   let c = conversations.get(sessionId);
   if (c) return c;
   c = demoConversation(stepMs);
   conversations.set(sessionId, c);
+  let tracker = new ModelWaitTracker();
   void (async () => {
     for await (const e of c.events) {
+      // Each turn follows its own waits, whatever the last one left.
+      if (e.type === "state" && e.state === "running")
+        tracker = new ModelWaitTracker();
+      if (tracker.on(e as WorkerEvent))
+        emit(sessionId, { type: "model_wait", wait: tracker.wait });
+      if (e.type === "state") {
+        if (e.state === "idle") live.delete(sessionId);
+        else live.set(sessionId, { state: e.state, wait: tracker.wait });
+      }
+      const state = live.get(sessionId);
+      if (state) state.wait = tracker.wait;
       if (e.type === "item") {
         if (!("streaming" in e.item && e.item.streaming))
           saveItem(sessionId, e.item);
@@ -49,16 +78,24 @@ export function sendDemoChat(
   const count = sends.get(sessionId) ?? 0;
   if (count >= MAX_SENDS) throw new Error(DEMO_REFUSAL);
   sends.set(sessionId, count + 1);
+  // The scripted turn (drivers/demo-script) is canned text a visitor can only
+  // trigger, never change, so its prompt is shown as is.
+  const script = parseDemoScript(trimmed) !== null;
+  // A scripted turn starts a clean chat, so screenshots never show the last.
+  if (script) {
+    deleteItems(sessionId);
+    live.delete(sessionId);
+  }
   const item = {
     id,
     kind: "user" as const,
-    text: DEMO_VISITOR_TEXT,
+    text: script ? DEMO_SCRIPT_PROMPT : DEMO_VISITOR_TEXT,
     tagged: true as const,
     createdAt: Date.now(),
   };
   saveItem(sessionId, item);
   emit(sessionId, { type: "item", item });
-  conversation(sessionId).send(DEMO_VISITOR_TEXT);
+  conversation(sessionId).send(script ? trimmed : DEMO_VISITOR_TEXT);
 }
 
 /** After a re-seed: stub conversations and send counts start over. */
@@ -69,6 +106,7 @@ export function resetDemoChat(): void {
     emit(sessionId, { type: "state", state: "idle" });
   }
   conversations.clear();
+  live.clear();
   sends.clear();
 }
 

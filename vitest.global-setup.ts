@@ -15,6 +15,7 @@ import {
   exists,
   leaks,
   rmTree,
+  runRootBase,
   snapshot,
   sweepStale,
   testTmpPrefixes,
@@ -36,6 +37,7 @@ export default function setup(project: TestProject) {
 
   const real = process.env.TMPDIR || tmpdir();
   process.env.AGENTOS_TEST_REAL_TMPDIR = real;
+  const base = runRootBase(real);
 
   // At most once an hour across concurrent runs.
   const stamp = join(real, `${RUN_PREFIX}sweep.stamp`);
@@ -52,7 +54,13 @@ export default function setup(project: TestProject) {
     } catch {
       // read-only temp: the sweep below still runs
     }
-    const { removed, failed } = sweepStale(real);
+    let removed = 0;
+    let failed = 0;
+    for (const dir of new Set([real, base])) {
+      const r = sweepStale(dir);
+      removed += r.removed;
+      failed += r.failed;
+    }
     if (removed || failed)
       console.log(
         `test temp sweep: removed ${removed} old leftover(s)${failed ? `, ${failed} could not be removed` : ""}`
@@ -61,7 +69,11 @@ export default function setup(project: TestProject) {
 
   const prefixes = testTmpPrefixes(process.cwd());
   const watched = [
-    ...new Set([real, ...(process.platform === "darwin" ? ["/tmp"] : [])]),
+    ...new Set([
+      real,
+      base,
+      ...(process.platform === "darwin" ? ["/tmp"] : []),
+    ]),
   ];
   const before = new Map(watched.map((d) => [d, snapshot(d, prefixes)]));
 
@@ -79,7 +91,15 @@ export default function setup(project: TestProject) {
     })()
   );
 
-  const root = mkdtempSync(join(real, RUN_PREFIX));
+  let made: string;
+  try {
+    made = mkdtempSync(join(base, RUN_PREFIX));
+  } catch {
+    made = mkdtempSync(join(real, RUN_PREFIX));
+  }
+  // Canonical (/private/tmp on a Mac): code that resolves symlinks must agree
+  // with the paths the tests built.
+  const root = realpathSync(made);
   process.env.TMPDIR = root;
   project.provide("tmpRoot", root);
 
@@ -98,7 +118,7 @@ export default function setup(project: TestProject) {
         problems.push(`left behind: ${join(dir, name)}`);
     for (const name of worktreeLeaks(realWorktrees, worktreesBefore, [
       root,
-      realpathSync(real) + root.slice(real.length),
+      made,
     ]))
       problems.push(
         `worktree left in the real home: ${join(realWorktrees, name)}`

@@ -61,6 +61,18 @@ process.env.AGENTOS_SESSION_LOGS_DIR = join(sub("session-logs"), "logs");
 // A removed worktree's kept artifacts go here, not to ~/.agent-os/kept.
 process.env.AGENTOS_KEPT_DIR = sub("kept");
 
+// Nor the AgentOS this run happens to be started from: a child the tests
+// start (the status hook, `aos`) would otherwise talk to the live server.
+// CI has none of these; a test that needs one sets its own.
+for (const key of [
+  "AGENTOS_URL",
+  "AGENTOS_PORT",
+  "AGENTOS_SESSION_ID",
+  "AGENTOS_TOKEN",
+  "AGENTOS_SERVER",
+])
+  delete process.env[key];
+
 // Nor the owner's phone: a test that sends sets its own notify command.
 delete process.env.AGENTOS_NOTIFY_CMD;
 

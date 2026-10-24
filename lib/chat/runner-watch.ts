@@ -5,6 +5,7 @@ import { recentTasks, settle } from "./store";
 import { readPage, toolBody, type ItemPage } from "./page";
 import { listQueue } from "./queued";
 import { runningWorkers } from "./worker/client";
+import { demoLive } from "./demo";
 
 function savedContext(sessionId: string): ChatContext | null {
   const raw = getSession(sessionId).chat_context;
@@ -21,6 +22,7 @@ function savedContext(sessionId: string): ChatContext | null {
 function present(sessionId: string, items: ChatItem[]): ChatItem[] {
   const live = registry.live.get(sessionId);
   if (live) return items.map((i) => live.streaming.get(i.id) ?? i);
+  if (demoLive(sessionId)) return items;
   return runningWorkers().includes(sessionId) ? items : settle(items);
 }
 
@@ -28,6 +30,7 @@ function present(sessionId: string, items: ChatItem[]): ChatItem[] {
 // client gets the latest page and asks for older ones.
 export function watchChat(sessionId: string, listener: Listener): () => void {
   const live = registry.live.get(sessionId);
+  const demo = demoLive(sessionId);
   const page = readPage(sessionId);
   const onPage = new Set(page.items.map((i) => i.id));
   // The composer lists background work still going or just done, even when
@@ -40,9 +43,9 @@ export function watchChat(sessionId: string, listener: Listener): () => void {
     cursor: page.cursor,
     hasMore: page.hasMore,
     tasks: present(sessionId, tasks),
-    state: live?.state ?? "idle",
+    state: live?.state ?? demo?.state ?? "idle",
     compacting: live?.compacting ?? null,
-    modelWait: live?.modelWait ?? null,
+    modelWait: live?.modelWait ?? demo?.wait ?? null,
     queue: listQueue(sessionId),
     suggestion: getSession(sessionId).chat_suggestion ?? null,
   });

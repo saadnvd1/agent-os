@@ -10,8 +10,10 @@ import {
   handleDemoChat,
   sendDemoChat,
   resetDemoChat,
+  demoLive,
   setDemoReplyStep,
 } from "./demo";
+import { watchChat } from "./runner-watch";
 import { DEMO_VISITOR_TEXT } from "../security/demo";
 import type { ChatClientMessage } from "./events";
 import { registry } from "./registry";
@@ -24,6 +26,9 @@ vi.mock("./worker/client", async (original) => ({
   ...(await original<typeof import("./worker/client")>()),
   connectWorker,
 }));
+
+const interruptDemo = async (id: string) =>
+  handleDemoChat(id, { type: "interrupt" }, () => {});
 
 function newSession(): string {
   const id = randomUUID();
@@ -64,6 +69,14 @@ describe("demo chat driver", () => {
     expect(items.at(-1)?.kind).toBe("turn_end");
   });
 
+  it("also serves the screenshot server's scripted chat, and only with its flag", () => {
+    vi.stubEnv("AGENTOS_DEMO", "");
+    vi.stubEnv("AGENTOS_DEMO_CHAT", "1");
+    expect(chatDriverFor("claude")?.id).toBe("demo");
+    vi.stubEnv("AGENTOS_DEMO_CHAT", "");
+    expect(chatDriverFor("claude")?.id).toBe("claude");
+  });
+
   it("is the only driver a demo has, for chat agents only", () => {
     expect(chatDriverFor("claude")?.id).toBe("demo");
     expect(chatDriverFor("codex")?.id).toBe("demo");
@@ -91,6 +104,38 @@ describe("demo chat", () => {
     expect(seen.some((m) => m.type === "delta")).toBe(true);
     expect(seen.at(-1)).toEqual({ type: "state", state: "idle" });
     expect(connectWorker).not.toHaveBeenCalled();
+  });
+
+  it("runs the scripted turn for its trigger, and a reload sees it running", async () => {
+    const id = newSession();
+    const seen = watch(id);
+    sendDemoChat(id, "demo: running turn step hold=2");
+    await until(() => listItems(id).some((i) => i.kind === "tool"));
+    expect(listItems(id)[0]).toMatchObject({ kind: "user" });
+    expect(listItems(id)[0]).not.toMatchObject({ text: DEMO_VISITOR_TEXT });
+    expect(demoLive(id)?.state).toBe("running");
+
+    // A watcher who connects now: the step is running, not stopped.
+    const snaps: ChatServerMessage[] = [];
+    const off = watchChat(id, (m) => snaps.push(m));
+    off();
+    const snap = snaps.find((m) => m.type === "snapshot");
+    expect(snap).toMatchObject({ state: "running" });
+    const tool = (snap as { items: { kind: string; status?: string }[] }).items
+      .filter((i) => i.kind === "tool")
+      .at(-1);
+    expect(tool?.status).toBe("running");
+
+    await interruptDemo(id);
+    await until(() => demoLive(id) === null);
+    expect(seen.some((m) => m.type === "model_wait")).toBe(true);
+    expect(listItems(id).at(-1)?.kind).toBe("turn_end");
+  });
+
+  it("keeps a visitor's own words out of a message that is not the trigger", () => {
+    const id = newSession();
+    sendDemoChat(id, "demo: running turn step please");
+    expect(listItems(id)[0]).toMatchObject({ text: DEMO_VISITOR_TEXT });
   });
 
   it("answers only history, tool bodies, task output and search from storage", () => {
