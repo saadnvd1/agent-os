@@ -2,7 +2,7 @@
 // whether the caller may start an update.
 
 import { isActivePhase, type UpdateView } from "./banner";
-import { cachedCheck, checkForUpdate } from "./check";
+import { cachedCheck, checkForUpdate, reconcile } from "./check";
 import {
   preflight,
   readLog,
@@ -40,6 +40,7 @@ export async function updateView(
   )
     check = (await checkForUpdate({ force: true, always: true }, deps.check))
       .result;
+  check = await reconcile(check, deps.check);
   // The log can carry paths and remote URLs; only a device that may update sees it.
   const run =
     stored && (stored.phase === "failed" || stored.phase === "built")

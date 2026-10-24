@@ -6,6 +6,7 @@ import {
   CHECK_EVERY_MS,
   checkForUpdate,
   compareUrl,
+  reconcile,
   resetCheckCache,
   updateChecksEnabled,
   type CheckDeps,
@@ -109,6 +110,68 @@ describe("checkForUpdate", () => {
     commit(install, "local only");
     const { result } = await checkForUpdate({}, deps());
     expect(result).toMatchObject({ status: "ok", available: false, behind: 0 });
+  });
+
+  describe("on a branch other than the default", () => {
+    const push = (n: number) => {
+      for (let i = 1; i <= n; i++) commit(pusher, `change ${i}`);
+      sh(pusher, "push", "-q", "origin", "main");
+    };
+
+    it("shows an update on main when behind, hides it when current", async () => {
+      push(2);
+      expect((await checkForUpdate({}, deps())).result.available).toBe(true);
+      sh(install, "pull", "-q");
+      const again = await checkForUpdate({ force: true, always: true }, deps());
+      expect(again.result.available).toBe(false);
+    });
+
+    it("hides it when the branch already contains the latest release", async () => {
+      push(2);
+      sh(install, "checkout", "-q", "-b", "pinned");
+      sh(install, "pull", "-q", "origin", "main");
+      const { result } = await checkForUpdate({}, deps());
+      expect(result).toMatchObject({ available: false, behind: 0 });
+    });
+
+    it("hides it when the branch is ahead of the latest release", async () => {
+      push(2);
+      sh(install, "checkout", "-q", "-b", "pinned");
+      sh(install, "pull", "-q", "origin", "main");
+      commit(install, "pinned extra");
+      const { result } = await checkForUpdate({}, deps());
+      expect(result.available).toBe(false);
+    });
+
+    it("drops a cached update once the checkout has moved onto the latest release", async () => {
+      push(2);
+      const { result } = await checkForUpdate({}, deps());
+      expect(result.available).toBe(true);
+      sh(install, "checkout", "-q", "-b", "pinned");
+      sh(install, "pull", "-q", "origin", "main");
+      expect(await reconcile(result, deps())).toMatchObject({
+        available: false,
+        behind: 0,
+      });
+      const behind = await reconcile(result, {
+        git: async (a) => sh(install, ...a),
+      });
+      expect(behind?.available).toBe(false);
+    });
+
+    it("keeps a cached update while the checkout is still behind", async () => {
+      push(2);
+      const { result } = await checkForUpdate({}, deps());
+      sh(install, "checkout", "-q", "-b", "pinned");
+      expect((await reconcile(result, deps()))?.available).toBe(true);
+    });
+
+    it("still shows it when the branch is behind the latest release", async () => {
+      sh(install, "checkout", "-q", "-b", "pinned");
+      push(2);
+      const { result } = await checkForUpdate({}, deps());
+      expect(result).toMatchObject({ available: true, behind: 2 });
+    });
   });
 
   it("says unknown, with the error, outside a git checkout", async () => {
