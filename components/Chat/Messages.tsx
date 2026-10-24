@@ -2,6 +2,8 @@
 
 import type { StepCounts } from "@/lib/chat/tool-outcome";
 import { memo } from "react";
+import { retryableEnd } from "@/lib/chat/turn-end";
+import { useChatIdle, useRetryTurn } from "./idle";
 import { useSnapshot } from "valtio";
 import {
   Check,
@@ -398,6 +400,10 @@ export function TurnEnd({
 }) {
   const secs = item.durationMs ? Math.round(item.durationMs / 1000) : null;
   const early = !item.interrupted && item.ended;
+  const idle = useChatIdle();
+  const retryTurn = useRetryTurn();
+  const canRetry =
+    !!early && idle && retryTurn.id === item.id && retryableEnd(early.reason);
   const label = item.interrupted
     ? "Stopped"
     : early
@@ -419,6 +425,15 @@ export function TurnEnd({
             <span className="mt-1 block font-mono text-[11px] opacity-80">
               finish reason: {item.finishReason}
             </span>
+          )}
+          {canRetry && (
+            <button
+              type="button"
+              onClick={retryTurn.retry}
+              className="hover:bg-foreground/[0.06] mt-2 block min-h-11 rounded-md border border-current/30 px-3 text-sm font-medium md:min-h-8"
+            >
+              Retry
+            </button>
           )}
         </div>
       )}

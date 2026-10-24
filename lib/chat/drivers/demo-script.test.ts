@@ -98,4 +98,39 @@ describe("runDemoScript", () => {
       item: { kind: "turn_end", interrupted: true },
     });
   });
+
+  it("holds a compaction, then lets go of it", async () => {
+    const { events, run } = harness();
+    await runDemoScript({ phase: "compact", holdMs: 0 }, run, "t");
+    const flags = events.flatMap((e) =>
+      e.type === "compacting" ? [e.active] : []
+    );
+    expect(flags).toEqual([true, false]);
+  });
+
+  it("ends a stalled turn and an empty one after compaction with their notices", async () => {
+    for (const [phase, reason] of [
+      ["stalled", "stalled"],
+      ["empty", "compaction_empty"],
+    ] as const) {
+      const { events, run } = harness();
+      await runDemoScript({ phase, holdMs: 0 }, run, "t");
+      const end = events.find(
+        (e) => e.type === "item" && e.item.kind === "turn_end"
+      );
+      expect(end).toMatchObject({ item: { ended: { reason } } });
+      expect(tools(events).at(-1)?.status).toBe("done");
+    }
+  });
+
+  it("reads the new phases from the trigger", () => {
+    expect(parseDemoScript("demo: running turn compact hold=5")).toMatchObject({
+      phase: "compact",
+      holdMs: 5000,
+    });
+    expect(parseDemoScript("demo: running turn stalled")?.phase).toBe(
+      "stalled"
+    );
+    expect(parseDemoScript("demo: running turn empty")?.phase).toBe("empty");
+  });
 });

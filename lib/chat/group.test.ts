@@ -221,6 +221,12 @@ describe("groupTimeline steps on a cut turn", () => {
     createdAt: 0,
     ...(interrupted ? { interrupted } : {}),
   });
+  const endAs = (id: string, reason: "stalled" | "length"): ChatItem => ({
+    id,
+    kind: "turn_end",
+    createdAt: 0,
+    ended: { reason, notice: "n" },
+  });
   const stopped = (id: string): ChatItem => ({
     ...(tool(id) as Extract<ChatItem, { kind: "tool" }>),
     status: "stopped",
@@ -237,5 +243,12 @@ describe("groupTimeline steps on a cut turn", () => {
       undefined,
       { total: 2, ok: 1, failed: 0, stopped: 1, running: 0 },
     ]);
+  });
+
+  it("counts steps on a stalled end, not on a length stop", () => {
+    expect(steps([tool("t1"), endAs("e1", "stalled")])).toEqual([
+      { total: 1, ok: 1, failed: 0, stopped: 0, running: 0 },
+    ]);
+    expect(steps([tool("t1"), endAs("e1", "length")])).toEqual([undefined]);
   });
 });

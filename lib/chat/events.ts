@@ -151,7 +151,16 @@ interface Base {
 }
 
 export type TurnEndReason =
-  "no_tool_call" | "length" | "parse_failure" | "empty" | "error";
+  | "no_tool_call"
+  | "length"
+  | "parse_failure"
+  | "empty"
+  | "error"
+  // The model gave no reply for too long, or none after a compaction, or
+  // the turn stopped right after a tool step.
+  | "stalled"
+  | "compaction_empty"
+  | "cut_off";
 
 export type ChatItem =
   | (Base & {

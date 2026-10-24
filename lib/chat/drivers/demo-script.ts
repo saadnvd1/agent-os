@@ -4,12 +4,17 @@
  * model, a retry) for a set time, then finishes. Demo only: the demo driver
  * is the one place that reads it (AGENTOS_DEMO=1; no real session gets here).
  *
- *     demo: running turn [step|wait|retry] [hold=<seconds>]
+ *     demo: running turn [step|wait|retry|compact|stalled|empty] [hold=<seconds>]
+ *
+ * compact holds a compaction; stalled and empty end the turn the way a stalled
+ * model request and an empty reply after compaction do (with a Retry).
  */
 
-import type { DriverEvent } from "../events";
+import type { DriverEvent, TurnEndReason } from "../events";
+import { COMPACTION_EMPTY_NOTICE, stalledNotice } from "./turn-outcome";
 
-export type DemoPhase = "step" | "wait" | "retry";
+export type DemoPhase =
+  "step" | "wait" | "retry" | "compact" | "stalled" | "empty";
 
 export interface DemoScript {
   // Hold only this state; none runs all three, one after the other.
@@ -19,7 +24,8 @@ export interface DemoScript {
 
 export const DEFAULT_HOLD_S = 30;
 export const MAX_HOLD_S = 120;
-const TRIGGER = /^demo: running turn(?: (step|wait|retry))?(?: hold=(\d+))?$/;
+const TRIGGER =
+  /^demo: running turn(?: (step|wait|retry|compact|stalled|empty))?(?: hold=(\d+))?$/;
 
 export function parseDemoScript(text: string): DemoScript | null {
   const m = TRIGGER.exec(text.trim());
@@ -99,6 +105,13 @@ async function runningStep(run: ScriptRun, id: string, holdMs: number) {
   });
 }
 
+// A compaction of a big context, held, then done.
+async function compacting(run: ScriptRun, holdMs: number) {
+  run.push({ type: "compacting", active: true });
+  await hold(run, holdMs);
+  run.push({ type: "compacting", active: false });
+}
+
 export async function runDemoScript(
   script: DemoScript,
   run: ScriptRun,
@@ -108,6 +121,13 @@ export async function runDemoScript(
   const phases: DemoPhase[] = script.phase
     ? [script.phase]
     : ["step", "wait", "retry"];
+  // The end of a turn that stopped short, after one finished step.
+  const ending: { reason: TurnEndReason; notice: string } | undefined =
+    script.phase === "stalled"
+      ? { reason: "stalled", notice: stalledNotice(22 * 60_000, false) }
+      : script.phase === "empty"
+        ? { reason: "compaction_empty", notice: COMPACTION_EMPTY_NOTICE }
+        : undefined;
   run.push({ type: "state", state: "running" });
   run.push({ type: "turn_start" });
   run.push({
@@ -124,6 +144,11 @@ export async function runDemoScript(
     if (run.stopped()) break;
     if (phase === "step")
       await runningStep(run, `demo-t-${runId}`, script.holdMs);
+    else if (phase === "stalled" || phase === "empty") {
+      await runningStep(run, `demo-t-${runId}`, 0);
+      if (phase === "empty") await compacting(run, script.holdMs);
+      else await hold(run, script.holdMs);
+    } else if (phase === "compact") await compacting(run, script.holdMs);
     else {
       if (phase === "retry")
         run.push({
@@ -141,6 +166,7 @@ export async function runDemoScript(
       kind: "turn_end",
       durationMs: Date.now() - started,
       interrupted: run.stopped() || undefined,
+      ended: run.stopped() ? undefined : ending,
       createdAt: Date.now(),
     },
   });

@@ -2,7 +2,13 @@ import { randomUUID } from "crypto";
 import type { DriverEvent, UsageTotals } from "../events";
 import { openCodeTool } from "./opencode-rules";
 import { TurnItems } from "./turn-items";
-import { logTurnEnd, needsSummary, turnOutcome } from "./turn-outcome";
+import {
+  logTurnEnd,
+  needsSummary,
+  stalledNotice,
+  turnOutcome,
+  type TurnEnded,
+} from "./turn-outcome";
 import { retryNotice, TurnRetry, type RetryDecision } from "./transient-retry";
 
 type P = Record<string, unknown>;
@@ -11,6 +17,9 @@ const num = (v: unknown) => Number(v) || 0;
 
 // A prompt this big (tokens) is worth compacting before the last retry.
 const HEAVY_TOKENS = 16_000;
+
+// Events that show the session is alive; a retry notice is not one.
+const PROGRESS = /^(message\.|session\.(status|compacted|error)|todo\.)/;
 
 const TODO = new Set(["pending", "in_progress", "completed"]);
 
@@ -63,6 +72,15 @@ export class OpenCodeMapper {
   lastInputTokens = 0;
   // Compacting between retries makes the session busy and idle: not a turn.
   private holding = false;
+  // OpenCode is compacting the context (its summary request is out).
+  private compacting = false;
+  // A compaction ran in this turn; the messages that are its summary.
+  private compacted = false;
+  private summaries = new Set<string>();
+  // Tool calls not finished yet: the turn waits on them, not on the model.
+  private open = new Set<string>();
+  // When the session last did anything: the stall watchdog's clock.
+  private progressAt = Date.now();
 
   constructor(
     private sessionId: () => string | null,
@@ -84,12 +102,26 @@ export class OpenCodeMapper {
       this.agentRetried = false;
     }
     this.admitted = false;
+    this.progressAt = Date.now();
     this.items.startTurn();
+  }
+
+  // How long the turn has waited on the model without a sign of life; 0
+  // while it isn't waiting on one (a tool runs, a retry is queued).
+  silentMs(now = Date.now()): number {
+    if (!this.items.inTurn || this.holding || this.retrying || this.open.size)
+      return 0;
+    return Math.max(0, now - this.progressAt);
   }
 
   map(e: P): void {
     const p = (e.properties ?? {}) as P;
     if (p.sessionID && p.sessionID !== this.sessionId()) return;
+    if (
+      PROGRESS.test(e.type as string) &&
+      !(e.type === "session.status" && str((p.status as P)?.type) === "retry")
+    )
+      this.progressAt = Date.now();
     switch (e.type) {
       case "session.status": {
         const type = str((p.status as P)?.type);
@@ -113,6 +145,8 @@ export class OpenCodeMapper {
       case "session.error":
         return this.failed(p.error as P | undefined);
       case "session.compacted":
+        this.compacted = true;
+        this.setCompacting(false);
         return this.emit({
           type: "item",
           item: { id: randomUUID(), kind: "compacted", createdAt: Date.now() },
@@ -144,7 +178,15 @@ export class OpenCodeMapper {
     this.current.add(id);
     this.roles.set(id, str(info.role));
     if (info.role !== "assistant") return;
-    if (this.last.id !== id)
+    const summary =
+      info.summary === true ||
+      info.mode === "compaction" ||
+      info.agent === "compaction";
+    if (summary) {
+      this.summaries.add(id);
+      this.setCompacting(!(info.time as P)?.completed && !info.error);
+    }
+    if (!summary && this.last.id !== id)
       this.last = {
         id,
         finish: "",
@@ -153,9 +195,11 @@ export class OpenCodeMapper {
         text: new Map(),
         calls: new Set(),
       };
-    this.last.finish = str(info.finish) || this.last.finish;
-    this.last.provider = str(info.providerID) || this.last.provider;
-    this.last.model = str(info.modelID) || this.last.model;
+    if (!summary) {
+      this.last.finish = str(info.finish) || this.last.finish;
+      this.last.provider = str(info.providerID) || this.last.provider;
+      this.last.model = str(info.modelID) || this.last.model;
+    }
     if (info.error) this.failed(info.error as P);
     if (!(info.time as P)?.completed || this.counted.has(id)) return;
     this.counted.add(id);
@@ -181,8 +225,12 @@ export class OpenCodeMapper {
     const id = str(part.id);
     if (this.past.has(id) || this.past.has(str(part.messageID))) return;
     this.current.add(id);
+    // A compaction starts as a part of the message that asks for it.
+    if (part.type === "compaction") return this.setCompacting(true);
     // Only the agent's own messages: the prompt comes back as a part too.
     if (this.roles.get(str(part.messageID)) !== "assistant") return;
+    // The summary is the agent's memory, not part of the reply.
+    if (this.summaries.has(str(part.messageID))) return;
     if (part.type === "text" || part.type === "reasoning") {
       if (part.synthetic || part.ignored) return;
       const kind = part.type === "text" ? "assistant" : "reasoning";
@@ -200,6 +248,11 @@ export class OpenCodeMapper {
     }
     if (part.type === "tool") {
       this.toolIds.add(id);
+      const done = ["completed", "error"].includes(
+        str((part.state as P | undefined)?.status)
+      );
+      if (done) this.open.delete(id);
+      else this.open.add(id);
       if (this.last.id === str(part.messageID)) this.last.calls.add(id);
       this.tool(id, part);
     }
@@ -234,8 +287,15 @@ export class OpenCodeMapper {
       this.items.toolDone(id, "error", str(state.error), start);
   }
 
+  private setCompacting(on: boolean): void {
+    if (on === this.compacting) return;
+    this.compacting = on;
+    this.emit({ type: "compacting", active: on });
+  }
+
   private failed(error: P | undefined): void {
     if (!error) return;
+    this.setCompacting(false);
     if (error.name === "MessageAbortedError") this.aborted = true;
     else
       this.error =
@@ -268,6 +328,9 @@ export class OpenCodeMapper {
     for (const id of this.current) this.past.add(id);
     this.current.clear();
     this.parts.clear();
+    this.open.clear();
+    this.summaries.clear();
+    this.compacted = false;
   }
 
   // A failed turn is waiting for its retry to go out.
@@ -287,6 +350,7 @@ export class OpenCodeMapper {
 
   private idle(): void {
     if (this.holding || !this.admitted || !this.items.inTurn) return;
+    this.setCompacting(false);
     if (this.error && !this.aborted && this.retryTurn()) return;
     this.emit({ type: "usage", totals: { ...this.totals } });
     const text = [...this.last.text.values()].join("\n");
@@ -308,18 +372,26 @@ export class OpenCodeMapper {
       console.info("[chat] asked the model for its results summary");
       return;
     }
-    const ended =
-      this.aborted || !this.last.id
-        ? undefined
-        : turnOutcome({
-            finishReason: this.last.finish,
-            text,
-            toolCalls: this.last.calls.size,
-            error: this.error ?? undefined,
-            retries: this.retry.tried,
-            agentRetried: this.agentRetried,
-            summary: this.items.summary(),
-          });
+    const ended = this.aborted
+      ? undefined
+      : turnOutcome({
+          finishReason: this.last.finish,
+          text,
+          toolCalls: this.last.calls.size,
+          compacted: this.compacted,
+          toolsDone: /tool/i.test(this.last.finish) && !this.open.size,
+          error: this.error ?? undefined,
+          retries: this.retry.tried,
+          agentRetried: this.agentRetried,
+          summary: this.items.summary(),
+        });
+    this.finish(ended, text);
+    this.clearTurn();
+    this.nudged = this.nudgeDue = false;
+  }
+
+  // The turn is over: the end told, then the state reset.
+  private finish(ended: TurnEnded | undefined, text: string): void {
     if (ended)
       logTurnEnd({
         driver: "opencode",
@@ -335,6 +407,21 @@ export class OpenCodeMapper {
       finishReason: this.last.finish || undefined,
       ended,
     });
+  }
+
+  // The model stayed silent past the limit: the driver stops the session and
+  // the turn ends here, with what it got through kept.
+  stalled(ms: number): void {
+    if (!this.items.inTurn) return;
+    const compacting = this.compacting;
+    this.setCompacting(false);
+    this.retrying = false;
+    this.emit({ type: "usage", totals: { ...this.totals } });
+    const ended: TurnEnded = {
+      reason: "stalled",
+      notice: stalledNotice(ms, compacting),
+    };
+    this.finish(ended, "");
     this.clearTurn();
     this.nudged = this.nudgeDue = false;
   }

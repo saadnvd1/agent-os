@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import type { ChatItem } from "./events";
 import {
+  LONG_COMPACT_HINT,
   LONG_WAIT_HINT,
   currentActivity,
   phaseOf,
@@ -190,5 +191,35 @@ describe("stepLabel and shortModel", () => {
     expect(shortModel("claude-sonnet-4-20250514")).toBe("claude-sonnet-4");
     expect(shortModel("")).toBe("the model");
     expect(shortModel(undefined)).toBe("the model");
+  });
+});
+
+describe("a compaction's activity", () => {
+  it("has its own timer, and a hint once it drags on", () => {
+    const since = 1_000;
+    const early = currentActivity(
+      [user()],
+      "running",
+      { since, before: 150_000 },
+      null,
+      "m",
+      since + 60_000
+    );
+    expect(early).toMatchObject({
+      kind: "compacting",
+      since,
+      compacting: true,
+    });
+    expect(early?.label).toContain("Compacting context");
+    expect(early?.hint).toBeUndefined();
+    const late = currentActivity(
+      [user()],
+      "running",
+      { since },
+      null,
+      "m",
+      since + 130_000
+    );
+    expect(late?.hint).toBe(LONG_COMPACT_HINT);
   });
 });

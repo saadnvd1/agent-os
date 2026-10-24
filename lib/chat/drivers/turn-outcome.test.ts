@@ -5,8 +5,10 @@ import {
   hasToolMarkup,
   logTurnEnd,
   needsSummary,
+  stalledNotice,
   turnOutcome,
 } from "./turn-outcome";
+import { retryableEnd } from "../turn-end";
 
 afterEach(() => vi.restoreAllMocks());
 
@@ -173,5 +175,38 @@ describe("failureReport", () => {
     expect(turnOutcome({ ...base, error: "400 bad request" })?.notice).toBe(
       "The model's server returned an error, shown above."
     );
+  });
+});
+
+describe("compaction and cut-off ends", () => {
+  it("names an empty reply after compaction and a stop after tools", () => {
+    expect(
+      turnOutcome({ text: "", toolCalls: 0, compacted: true })?.reason
+    ).toBe("compaction_empty");
+    expect(
+      turnOutcome({ text: "", toolCalls: 1, toolsDone: true })?.reason
+    ).toBe("cut_off");
+    expect(turnOutcome({ text: "", toolCalls: 1 })).toBeUndefined();
+    expect(
+      turnOutcome({ text: "All set.", toolCalls: 0, compacted: true })
+    ).toBeUndefined();
+  });
+
+  it("words a stall with the minutes and what was cut", () => {
+    expect(stalledNotice(22 * 60_000, false)).toContain("22 minutes");
+    expect(stalledNotice(60_000, true)).toMatch(/compacting.*1 minute,/);
+  });
+
+  it("offers Retry for the model's own failures only", () => {
+    for (const r of [
+      "error",
+      "stalled",
+      "compaction_empty",
+      "cut_off",
+      "empty",
+    ] as const)
+      expect(retryableEnd(r)).toBe(true);
+    expect(retryableEnd("length")).toBe(false);
+    expect(retryableEnd("no_tool_call")).toBe(false);
   });
 });

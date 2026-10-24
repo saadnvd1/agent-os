@@ -2,6 +2,7 @@ import { createElement } from "react";
 import { renderToStaticMarkup } from "react-dom/server";
 import { describe, expect, it, vi } from "vitest";
 import { AssistantMessage, TurnEnd, UserMessage } from "./Messages";
+import { ChatIdle, RetryTurn } from "./idle";
 
 const item = {
   id: "a1",
@@ -129,5 +130,37 @@ describe("TurnEnd steps", () => {
       })
     );
     expect(html).toContain("Stopped · 4 of 5 steps done, 1 failed, 1 not run");
+  });
+});
+
+describe("TurnEnd retry", () => {
+  const end = (reason: string, id = "e") =>
+    ({
+      id,
+      kind: "turn_end",
+      ended: { reason, notice: "It stalled." },
+    }) as never;
+  const html = (item: never, retry: { id: string | null }, idle = true) =>
+    renderToStaticMarkup(
+      createElement(
+        ChatIdle.Provider,
+        { value: idle },
+        createElement(
+          RetryTurn.Provider,
+          { value: { ...retry, retry: () => {} } },
+          createElement(TurnEnd, { item })
+        )
+      )
+    );
+
+  it("offers Retry on the latest stalled end while idle", () => {
+    expect(html(end("stalled"), { id: "e" })).toContain(">Retry<");
+    expect(html(end("compaction_empty"), { id: "e" })).toContain(">Retry<");
+  });
+
+  it("does not on an older end, a running chat, or an ending retry can't fix", () => {
+    expect(html(end("stalled"), { id: "later" })).not.toContain("Retry");
+    expect(html(end("stalled"), { id: "e" }, false)).not.toContain("Retry");
+    expect(html(end("length"), { id: "e" })).not.toContain("Retry");
   });
 });
