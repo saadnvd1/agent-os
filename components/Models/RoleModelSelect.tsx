@@ -15,25 +15,35 @@ import { AvailabilityDot, LocalityBadge } from "./ModelBadges";
 
 const INHERIT = "__inherit";
 
-function Row({ choice }: { choice: ModelChoice }) {
+function Row({ choice, why }: { choice: ModelChoice; why?: string | null }) {
   return (
-    <span className="flex min-w-0 flex-1 items-center gap-2">
-      <AvailabilityDot availability={choice.availability} />
-      <span className="truncate">{choice.label}</span>
-      <LocalityBadge locality={choice.locality} />
+    <span className="flex min-w-0 flex-1 flex-col">
+      <span className="flex min-w-0 items-center gap-2">
+        <AvailabilityDot availability={choice.availability} />
+        <span className="truncate">{choice.label}</span>
+        <LocalityBadge locality={choice.locality} />
+      </span>
+      {why && (
+        <span className="text-muted-foreground text-xs whitespace-normal">
+          {why}
+        </span>
+      )}
     </span>
   );
 }
 
 // A model picker over the server's list: grouped by provider, each model
 // labelled Local or Cloud with whether its server answers. `claudeOnly`
-// leaves out the models that run through Pi.
+// leaves out the models that run through Pi. `blockedBy` greys a model with
+// the reason it can't be picked instead of hiding it; a model whose provider
+// isn't set up is always greyed.
 export function RoleModelSelect({
   id,
   value,
   inheritLabel,
   claudeOnly,
   gateOnly,
+  blockedBy,
   disabled,
   onChange,
 }: {
@@ -43,11 +53,16 @@ export function RoleModelSelect({
   claudeOnly?: boolean;
   // Only models that can serve a merge gate are selectable.
   gateOnly?: boolean;
+  blockedBy?: (c: ModelChoice) => string | null;
   disabled?: boolean;
   onChange: (ref: string | null) => void;
 }) {
   const { data } = useModelChoices();
   const choices = (data ?? []).filter((c) => !claudeOnly || c.agent !== "pi");
+  const whyNot = (c: ModelChoice) =>
+    c.unusable ??
+    blockedBy?.(c) ??
+    (gateOnly && !c.gateCapable ? "Can't serve a merge gate" : null);
   const groups = [...new Set(choices.map((c) => c.group))];
   const current = value ? choices.find((c) => c.ref === value) : undefined;
   return (
@@ -73,10 +88,10 @@ export function RoleModelSelect({
                 <SelectItem
                   key={c.ref}
                   value={c.ref}
-                  disabled={gateOnly && !c.gateCapable}
+                  disabled={!!whyNot(c)}
                   className="min-h-11 md:min-h-0"
                 >
-                  <Row choice={c} />
+                  <Row choice={c} why={whyNot(c)} />
                 </SelectItem>
               ))}
           </SelectGroup>

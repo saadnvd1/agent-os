@@ -2,6 +2,7 @@
 
 import { AlertTriangle } from "lucide-react";
 import type { AgentRoleView } from "@/lib/models/agent-roles-view";
+import { analystBlock, defaultAnalystLabel } from "@/lib/models/usable";
 import { cn } from "@/lib/utils";
 import { RoleModelSelect } from "./RoleModelSelect";
 
@@ -33,7 +34,11 @@ export function AgentRoleCard({
   onFallback: (ref: string | null) => void;
 }) {
   const down = role.choice?.availability.state === "down";
-  const label = `Default (${role.default.split("/").slice(1).join("/")})`;
+  const analyst = role.id === "analyst";
+  const label = analyst
+    ? defaultAnalystLabel(role.default, [])
+    : `Default (${role.default.split("/").slice(1).join("/")})`;
+  const blockedBy = analyst ? analystBlock : undefined;
   const inheritLabel =
     scope === "settings"
       ? role.modelRole === "advise"
@@ -66,6 +71,7 @@ export function AgentRoleCard({
             ? `${inheritLabel} · ${role.binding.ref.split("/").slice(1).join("/")}`
             : inheritLabel
         }
+        blockedBy={blockedBy}
         disabled={pending}
         onChange={onChange}
       />
@@ -102,7 +108,8 @@ export function AgentRoleCard({
               id={`agent-role-fallback-${role.id}`}
               value={role.fallback}
               inheritLabel="None (don't fall back)"
-              claudeOnly
+              claudeOnly={!analyst}
+              blockedBy={blockedBy}
               disabled={pending}
               onChange={onFallback}
             />

@@ -2,8 +2,9 @@ import fs from "fs";
 import path from "path";
 import { describe, expect, it } from "vitest";
 import { tempDir } from "@/lib/test-temp";
-import { modelCatalog, piProviders } from "./catalog";
+import { modelCatalog, piProviders, unconfiguredChoices } from "./catalog";
 import { effectiveModels } from "./config";
+import { PROVIDER_PRESETS } from "./providers";
 
 const write = (content: unknown) => {
   const file = path.join(tempDir("aos-pi-cat-"), "models.json");
@@ -89,5 +90,36 @@ describe("modelCatalog", () => {
   it("leaves out a provider that is turned off", () => {
     const all = modelCatalog(effectiveModels({}), []);
     expect(all.some((c) => c.ref.startsWith("deepseek/"))).toBe(false);
+  });
+
+  it("marks a model that can call tools, and an enabled provider with no key", () => {
+    const all = modelCatalog(
+      effectiveModels({
+        providers: [
+          {
+            ...PROVIDER_PRESETS.find((p) => p.id === "deepseek")!,
+            enabled: true,
+          },
+        ],
+      }),
+      []
+    );
+    expect(
+      all.find((c) => c.ref === "anthropic/claude-opus-5-5")
+    ).toMatchObject({ toolUse: true });
+    const ds = all.find((c) => c.ref === "deepseek/deepseek-flash")!;
+    expect(ds.toolUse).toBe(true);
+    expect(ds.unusable).toMatch(/needs a base URL and a key/);
+  });
+});
+
+describe("unconfiguredChoices", () => {
+  it("lists the models of a provider that is turned off, with why", () => {
+    const off = unconfiguredChoices(effectiveModels({}));
+    expect(off.find((c) => c.ref === "deepseek/deepseek-flash")).toMatchObject({
+      group: "DeepSeek",
+      unusable: "The DeepSeek provider is turned off",
+    });
+    expect(off.some((c) => c.ref.startsWith("anthropic/"))).toBe(false);
   });
 });

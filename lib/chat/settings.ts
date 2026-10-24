@@ -9,6 +9,7 @@ import { db, type Session } from "../db";
 import { agentEnv } from "../agents/launch";
 import { modelDisplayName, resolveModelForAgent } from "../model-catalog";
 import { chatDriverFor } from "./drivers";
+import { composerModelValue, roleComposerModels } from "./role-models";
 import {
   CHAT_ACCESS,
   type ChatAccess,
@@ -75,15 +76,17 @@ export function cachedCommands(session: Session): ChatCommand[] {
 export function emitCapabilities(session: Session, listener?: Listener): void {
   const caps = registry.caps.get(capsKey(session));
   if (!caps) return;
-  const model = chatModel(session);
+  const models = roleComposerModels(session, caps.models);
+  const model =
+    models === caps.models ? chatModel(session) : composerModelValue(session);
   const m: ChatServerMessage = {
     type: "capabilities",
     commands: visibleCommands(caps),
-    models: caps.models,
+    models,
     model,
     modelLabel:
-      caps.models.find((o) => o.value === model)?.label ??
-      modelDisplayName(model),
+      models.find((o) => o.value === model)?.label ??
+      modelDisplayName(chatModel(session)),
     access: effectiveChatAccess(session.chat_access),
     plan: canPlan(session) ? !!session.chat_plan && !noApprovalsOn() : null,
     background: chatDriverFor(session.agent_type)?.backgroundTasks === true,

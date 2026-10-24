@@ -24,8 +24,9 @@ vi.mock("../chat/runner", () => ({ sendQueuedNow: async () => {} }));
 
 import { db, type Session } from "../db";
 import { createProject } from "../projects";
-import { setModelSettings } from "../models/config";
+import { savedModelSettings, setModelSettings } from "../models/config";
 import { clearAvailability } from "../models/availability";
+import { clearToolUse } from "../models/tool-use";
 import { ModelUnavailableError } from "../models/agent-binding";
 import { launchSession } from "./launch";
 import { crewMembers } from "./crew";
@@ -37,6 +38,8 @@ const row = (id: string) =>
 let server: http.Server;
 let port: number;
 let piFile: string;
+// What the stub Ollama reports for a model; null is a server with no such endpoint.
+let showCaps: string[] | null = null;
 
 function writePi(url: string) {
   fs.writeFileSync(
@@ -48,7 +51,13 @@ function writePi(url: string) {
 }
 
 beforeAll(async () => {
-  server = http.createServer((_q, r) => r.end("{}"));
+  server = http.createServer((q, r) =>
+    r.end(
+      q.url === "/api/show" && showCaps
+        ? JSON.stringify({ capabilities: showCaps })
+        : "{}"
+    )
+  );
   await new Promise<void>((r) => server.listen(0, "127.0.0.1", r));
   port = (server.address() as AddressInfo).port;
   piFile = path.join(tempDir("aos-pi-"), "models.json");
@@ -60,6 +69,8 @@ afterAll(async () => {
 });
 beforeEach(() => {
   clearAvailability();
+  clearToolUse();
+  showCaps = null;
   db.prepare(`DELETE FROM settings WHERE key LIKE 'models%'`).run();
   writePi(`http://127.0.0.1:${port}/v1`);
 });
@@ -176,5 +187,45 @@ describe("a session started in a role", () => {
       agent_type: "claude",
       model: "claude-sonnet-5-5",
     });
+  });
+
+  it("starts an Analyst on a Pi model when one is picked, leaving the role's default alone", async () => {
+    showCaps = ["completion", "tools"];
+    const { session } = await launchSession({
+      projectId: project().id,
+      agentType: "claude",
+      agentRole: "analyst",
+      model: "pi/local/qwen3-27b",
+    });
+    expect(row(session.id)).toMatchObject({
+      agent_type: "pi",
+      model: "local/qwen3-27b",
+      agent_role: "analyst",
+    });
+    expect(savedModelSettings().roles?.analyze).toBeUndefined();
+  });
+
+  it("refuses an Analyst on a model its server says can't call tools", async () => {
+    showCaps = ["completion"];
+    const count = () =>
+      (db.prepare(`SELECT COUNT(*) n FROM sessions`).get() as { n: number }).n;
+    const before = count();
+    await expect(
+      launchSession({
+        projectId: project().id,
+        agentType: "claude",
+        agentRole: "analyst",
+        model: "pi/local/qwen3-27b",
+      })
+    ).rejects.toThrow(/can't call tools/);
+    expect(count()).toBe(before);
+    // The same model is fine for a Developer.
+    const dev = await launchSession({
+      projectId: project().id,
+      agentType: "claude",
+      agentRole: "developer",
+      model: "pi/local/qwen3-27b",
+    });
+    expect(row(dev.session.id).agent_type).toBe("pi");
   });
 });

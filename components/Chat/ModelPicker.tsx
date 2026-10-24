@@ -53,6 +53,7 @@ export function ModelPicker({
           <DropdownMenuItem
             key={m.value}
             onSelect={() => onPick(m.value)}
+            disabled={!!m.disabled}
             className="flex min-h-11 items-start gap-2 md:min-h-9"
           >
             <Check
@@ -60,9 +61,9 @@ export function ModelPicker({
             />
             <span className="flex flex-col">
               <span className="text-sm">{m.label}</span>
-              {m.description && (
+              {(m.disabled || m.description) && (
                 <span className="text-muted-foreground line-clamp-2 text-xs">
-                  {m.description}
+                  {m.disabled ?? m.description}
                 </span>
               )}
             </span>

@@ -10,7 +10,8 @@ import os from "os";
 import path from "path";
 import { effectiveModels, type EffectiveModels } from "./config";
 import { ANTHROPIC } from "./roles";
-import { PI, type ModelProvider } from "./providers";
+import { PI, providerProblem, type ModelProvider } from "./providers";
+import { cachedToolUse, ollamaOrigin } from "./tool-use";
 import { hostLocality, type Locality } from "./locality";
 import {
   cachedAvailability,
@@ -31,6 +32,10 @@ export interface ModelChoice {
   availability: Availability;
   // May serve a merge gate: Claude Code can run it.
   gateCapable: boolean;
+  // May call tools, which an analyst needs (lib/models/tool-use).
+  toolUse: boolean;
+  // Why it can't be started at all (its provider is off or half set up).
+  unusable?: string;
   // Where the server is (never a key).
   endpoint?: string;
 }
@@ -84,6 +89,16 @@ export function piProviders(file = piModelsFile()): PiProvider[] {
 const providerEndpoint = (p: ModelProvider) =>
   p.baseUrl ? probeUrl(p.baseUrl, p.api) : undefined;
 
+// Anthropic's and cloud models can; a model on a local server is asked of it.
+const toolUseOf = (
+  baseUrl: string | undefined,
+  locality: Locality,
+  model: string
+) =>
+  baseUrl && locality === "local"
+    ? cachedToolUse(ollamaOrigin(baseUrl), model)
+    : true;
+
 export function modelCatalog(
   effective: EffectiveModels = effectiveModels(),
   pi: PiProvider[] = piProviders()
@@ -98,6 +113,7 @@ export function modelCatalog(
         : locality === "local" && endpoint
           ? cachedAvailability(endpoint)
           : { state: "unknown", checkedAt: null };
+    const unusable = providerProblem(p) ?? undefined;
     for (const m of p.models)
       out.push({
         ref: `${p.id}/${m}`,
@@ -107,6 +123,8 @@ export function modelCatalog(
         locality,
         availability,
         gateCapable: p.api === "anthropic",
+        toolUse: toolUseOf(p.baseUrl, locality, m),
+        ...(unusable && { unusable }),
         endpoint: p.baseUrl,
       });
   }
@@ -126,10 +144,34 @@ export function modelCatalog(
         locality,
         availability,
         gateCapable: false,
+        toolUse: toolUseOf(p.baseUrl, locality, m.id),
         endpoint: p.baseUrl,
       });
   }
   return out;
+}
+
+// The models of providers that are turned off, so a picker can show them
+// greyed with the reason rather than leave them out.
+export function unconfiguredChoices(
+  effective: EffectiveModels = effectiveModels()
+): ModelChoice[] {
+  return effective.providers
+    .filter((p) => !p.enabled)
+    .flatMap((p) =>
+      p.models.map((m) => ({
+        ref: `${p.id}/${m}`,
+        label: m,
+        group: p.label,
+        agent: "claude" as const,
+        locality: hostLocality(p.baseUrl),
+        availability: { state: "unknown" as const, checkedAt: null },
+        gateCapable: false,
+        toolUse: true,
+        unusable: providerProblem(p) ?? undefined,
+        endpoint: p.baseUrl,
+      }))
+    );
 }
 
 export const choiceFor = (

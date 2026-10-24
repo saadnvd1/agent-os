@@ -21,6 +21,7 @@ import {
   ANTHROPIC_PROVIDER,
   PI,
   PI_PROVIDER,
+  providerProblem,
   type ModelProvider,
 } from "./providers";
 import {
@@ -111,13 +112,8 @@ export function providerFor(
   }
   const p = models.providers.find((x) => x.id === id);
   if (!p) throw new Error(`No model provider "${id}" (Settings > Models)`);
-  if (!p.enabled) throw new Error(`The ${p.label} provider is turned off`);
-  if (!p.baseUrl || !p.auth)
-    throw new Error(`The ${p.label} provider needs a base URL and a key`);
-  if (p.api !== "anthropic")
-    throw new Error(
-      `${p.label} speaks the OpenAI API; Claude Code needs an Anthropic-compatible endpoint`
-    );
+  const problem = providerProblem(p);
+  if (problem) throw new Error(problem);
   return p;
 }
 

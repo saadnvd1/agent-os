@@ -35,6 +35,8 @@ export interface Draft {
   roleModel?: string | null;
   // Pair it with an analyst that reviews each turn (a local chat only).
   withAnalyst?: boolean;
+  // The analyst's model, "provider/model"; unset, the analyst role's.
+  analystModel?: string | null;
   // A task's priority in the queue; unset: normal.
   taskPriority?: Priority;
   createdAt: number;

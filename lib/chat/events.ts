@@ -27,6 +27,8 @@ export interface ChatModel {
   value: string;
   label: string;
   description?: string;
+  // Why it can't be picked now; it is listed greyed with this.
+  disabled?: string;
 }
 
 export type ToolStatus = "running" | "done" | "error" | "stopped";

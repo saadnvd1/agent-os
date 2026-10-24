@@ -497,12 +497,13 @@ async function main() {
         onMac,
         group,
         role,
+        model,
         project,
         prompt: words,
       } = parseSpawnArgs(args, fail);
       if (!project || !words.length)
         fail(
-          `usage: aos ${cmd} <project> [--name "<name>"]${cmd === "task" ? " [--on <machine>] [--after <task|any>] [--terminal] [--plan-only] [--piece <name>] [--priority urgent|blocking|normal|background] [--on-mac]" : ""} [--group "<name>"]${cmd === "spawn" ? " [--role developer|analyst|reviewer|supervisor]" : ""} <prompt...>`
+          `usage: aos ${cmd} <project> [--name "<name>"]${cmd === "task" ? " [--on <machine>] [--after <task|any>] [--terminal] [--plan-only] [--piece <name>] [--priority urgent|blocking|normal|background] [--on-mac]" : ""} [--group "<name>"]${cmd === "spawn" ? " [--role developer|analyst|reviewer|supervisor [--model <provider/model>]]" : ""} <prompt...>`
         );
       if ((priority || onMac) && cmd !== "task")
         fail("--priority and --on-mac work for tasks only");
@@ -512,6 +513,7 @@ async function main() {
       if (planOnly && cmd !== "task") fail("--plan-only works for tasks only");
       if (piece && cmd !== "task") fail("--piece works for tasks only");
       if (role && cmd !== "spawn") fail("--role works for spawn only");
+      if (model && !role) fail("--model works with --role");
       if (planOnly && terminal)
         fail("--plan-only needs a chat task, not --terminal");
       const { session, queued, builds } = await post("/api/bus/spawn", {
@@ -530,6 +532,7 @@ async function main() {
         ...(onMac && { machine: "mac" }),
         ...(group && { group }),
         ...(role && { agentRole: role }),
+        ...(role && model && { model }),
       });
       if (queued) {
         console.log(

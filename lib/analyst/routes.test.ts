@@ -85,6 +85,23 @@ describe("analyst routes", () => {
     expect((await create(bad)).status).toBe(400);
   });
 
+  it("starts the analyst on the model picked for it, else on none (its role's)", async () => {
+    const { launched } = await import("./__fixtures__/mocks");
+    const picked = await create(
+      req({ coderSessionId: coder(), analystModel: "ollama/qwen3.8" })
+    );
+    expect(picked.status).toBe(200);
+    expect(launched.at(-1)).toMatchObject({
+      agentRole: "analyst",
+      model: "ollama/qwen3.8",
+    });
+    expect((await create(req({ coderSessionId: coder() }))).status).toBe(200);
+    expect(launched.at(-1)).toMatchObject({
+      agentRole: "analyst",
+      model: null,
+    });
+  });
+
   it("pairs, pauses, reviews, sends, dismisses and unlinks", async () => {
     const id = coder();
     expect(await (await ofSession(req(), ctx(id))).json()).toEqual({

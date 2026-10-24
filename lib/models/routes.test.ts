@@ -6,6 +6,7 @@ import { TRUST_HEADER } from "../security/auth";
 import { PROVIDER_PRESETS } from "./providers";
 
 const models = await import("@/app/api/models/route");
+const choices = await import("@/app/api/models/choices/route");
 const workspaceModels = await import("@/app/api/workspaces/[id]/models/route");
 const taskModel = await import("@/app/api/tasks/[id]/model/route");
 const test = await import("@/app/api/models/test/route");
@@ -73,6 +74,20 @@ describe("model routing routes", () => {
     );
     expect(bad.status).toBe(400);
     expect((await bad.json()).error).toMatch(/provider\/model/);
+  });
+
+  it("lists models of providers that are off, saying why", async () => {
+    const list = (await (await choices.GET()).json()).choices as {
+      ref: string;
+      toolUse: boolean;
+      unusable?: string;
+    }[];
+    const opus = list.find((c) => c.ref === "anthropic/claude-opus-5-5")!;
+    expect(opus.toolUse).toBe(true);
+    expect(opus.unusable).toBeUndefined();
+    expect(list.find((c) => c.ref === "zai/glm-5.3")?.unusable).toMatch(
+      /turned off/
+    );
   });
 
   it("keeps a workspace's own role models", async () => {
