@@ -6,11 +6,13 @@ import type {
   ToolStatus,
   TurnEndReason,
 } from "../events";
-import { clipOutput } from "../tools";
+import { clipOutput, tailOutput } from "../tools";
 
 type Tool = Extract<ChatItem, { kind: "tool" }>;
 type Text = Extract<ChatItem, { kind: "assistant" | "reasoning" }>;
 type Todo = Extract<ChatItem, { kind: "todos" }>["todos"][number];
+
+const PROGRESS_MS = 250;
 
 export interface ToolStart {
   name: string;
@@ -64,6 +66,7 @@ export class TurnItems {
   private startedAt = 0;
   // What the turn has done so far, for the report when it stops short.
   private stats = newStats();
+  private progressAt = new Map<string, number>();
   inTurn = false;
 
   constructor(private emit: (e: DriverEvent) => void) {}
@@ -136,6 +139,20 @@ export class TurnItems {
     this.emit({ type: "item", item });
   }
 
+  // A running step's output so far (the whole of it each time, not a
+  // delta). Sent at most every PROGRESS_MS; the end replaces it.
+  progress(id: string, output: string): void {
+    const tool = this.tools.get(id);
+    if (!tool || !output) return;
+    const tail = tailOutput(output);
+    if (tail === tool.output) return;
+    const now = Date.now();
+    if (now - (this.progressAt.get(id) ?? 0) < PROGRESS_MS) return;
+    this.progressAt.set(id, now);
+    tool.output = tail;
+    this.emit({ type: "item", item: { ...tool } });
+  }
+
   hasText(key: string): boolean {
     return this.texts.has(key);
   }
@@ -154,6 +171,7 @@ export class TurnItems {
     if (!tool) return;
     this.tools.delete(id);
     this.count(tool, update, status);
+    this.progressAt.delete(id);
     this.emit({
       type: "item",
       item: {

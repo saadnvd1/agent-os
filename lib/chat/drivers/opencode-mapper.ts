@@ -213,7 +213,9 @@ export class OpenCodeMapper {
     if (tool === "todowrite" || status === "pending") return;
     const start = openCodeTool(tool, state.input);
     if (!this.items.hasTool(id)) this.items.tool(id, start);
-    if (status === "completed")
+    if (status === "running")
+      this.items.progress(id, str((state.metadata as P | undefined)?.output));
+    else if (status === "completed")
       this.items.toolDone(id, "done", str(state.output), start);
     else if (status === "error")
       this.items.toolDone(id, "error", str(state.error), start);

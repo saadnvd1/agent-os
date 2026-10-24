@@ -362,6 +362,51 @@ describe("OpenCodeMapper summary nudge", () => {
   it("puts the results brief in the prompt's system text", () => {
     expect(openCodeSystem("brief")).toBe(`brief\n\n${RESULTS_BRIEF}`);
     expect(openCodeSystem()).toBe(RESULTS_BRIEF);
+
+describe("OpenCodeMapper live tool output", () => {
+  it("streams a running tool's output, tails it, and the end replaces it", () => {
+    vi.useFakeTimers();
+    const out: DriverEvent[] = [];
+    const mapper = new OpenCodeMapper(
+      () => "s1",
+      (e) => out.push(e)
+    );
+    mapper.prompted();
+    const e = (type: string, properties: Record<string, unknown>) =>
+      mapper.map({ type, properties: { sessionID: "s1", ...properties } });
+    const tool = (state: Record<string, unknown>) =>
+      e("message.part.updated", {
+        part: {
+          id: "p1",
+          messageID: "m1",
+          type: "tool",
+          tool: "bash",
+          state: { input: { command: "make" }, ...state },
+        },
+      });
+    const last = () =>
+      out
+        .flatMap((x) =>
+          x.type === "item" && x.item.kind === "tool" ? [x.item] : []
+        )
+        .at(-1)!;
+    e("session.status", { status: { type: "busy" } });
+    e("message.updated", { info: { id: "m1", role: "assistant" } });
+    tool({ status: "running", metadata: { output: "building" } });
+    expect(last()).toMatchObject({ status: "running", output: "building" });
+    vi.advanceTimersByTime(300);
+    tool({
+      status: "running",
+      metadata: {
+        output: Array.from({ length: 900 }, (_, i) => `row ${i}`).join("\n"),
+      },
+    });
+    const lines = last().output!.split("\n");
+    expect(lines.length).toBeLessThanOrEqual(201);
+    expect(lines.at(-1)).toBe("row 899");
+    tool({ status: "completed", output: "built" });
+    expect(last()).toMatchObject({ status: "done", output: "built" });
+    vi.useRealTimers();
   });
 });
 
