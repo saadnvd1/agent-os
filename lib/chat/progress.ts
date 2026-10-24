@@ -7,6 +7,8 @@ export type Phase = "planning" | "coding" | "testing" | "error";
 
 // A wait on one model call this long gets a hint that it may be normal.
 export const LONG_WAIT_MS = 2 * 60_000;
+export const LONG_COMPACT_HINT =
+  "Compacting a large context on a local model can take minutes.";
 export const LONG_WAIT_HINT =
   "Still waiting on the model; large prompts on local models can take minutes";
 
@@ -118,6 +120,8 @@ export function currentActivity(
       compacting: true,
       kind: "compacting",
       steps: 0,
+      hint:
+        now - compacting.since > LONG_WAIT_MS ? LONG_COMPACT_HINT : undefined,
     };
   const lastUser = items.findLast((i) => i.kind === "user" && !i.midTurn);
   const tools = turnTools(items);

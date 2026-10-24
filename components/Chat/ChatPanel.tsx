@@ -56,7 +56,8 @@ import { McpServers } from "./McpServers";
 import { ChatSessionId } from "./session";
 import { ArtifactCard } from "./Artifact";
 import { PlanCard } from "./PlanCard";
-import { ChatIdle } from "./idle";
+import { ChatIdle, RetryTurn } from "./idle";
+import { RETRY_TEXT } from "@/lib/chat/turn-end";
 import { ContextMeter } from "./ContextMeter";
 import { SetupCard } from "./SetupCard";
 import { UserTurn } from "./EventRow";
@@ -631,6 +632,11 @@ export function ChatPanel({
   // Another conversation starts without the last one's find.
   useEffect(() => closeFind, [sessionId, closeFind]);
   const idle = !running && connected;
+  const lastEndId = items.findLast((i) => i.kind === "turn_end")?.id ?? null;
+  const retryTurn = useMemo(
+    () => ({ id: lastEndId, retry: () => send(RETRY_TEXT) }),
+    [lastEndId, send]
+  );
   const actions: ItemActions = useMemo(
     () => ({
       respond,
@@ -691,7 +697,9 @@ export function ChatPanel({
                   </div>
                   <ChatSessionId.Provider value={sessionId}>
                     <ChatIdle.Provider value={idle}>
-                      <TimelineRows blocks={blocks} actions={actions} />
+                      <RetryTurn.Provider value={retryTurn}>
+                        <TimelineRows blocks={blocks} actions={actions} />
+                      </RetryTurn.Provider>
                     </ChatIdle.Provider>
                   </ChatSessionId.Provider>
                   {pending.map((p) => (

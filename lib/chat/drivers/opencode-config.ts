@@ -13,6 +13,11 @@ type P = Record<string, unknown>;
 // that never answers still ends the request.
 export const HEADER_TIMEOUT_MS = 1_200_000;
 
+// How long a turn may wait on the model with no sign of life before AgentOS
+// stops it. Just past one header timeout: OpenCode would retry the same
+// stall up to five more times, hours on a local model.
+export const STALL_MS = HEADER_TIMEOUT_MS + 120_000;
+
 const isObject = (v: unknown): v is P =>
   !!v && typeof v === "object" && !Array.isArray(v);
 

@@ -44,7 +44,7 @@ export function watchChat(sessionId: string, listener: Listener): () => void {
     hasMore: page.hasMore,
     tasks: present(sessionId, tasks),
     state: live?.state ?? demo?.state ?? "idle",
-    compacting: live?.compacting ?? null,
+    compacting: live?.compacting ?? demo?.compacting ?? null,
     modelWait: live?.modelWait ?? demo?.wait ?? null,
     queue: listQueue(sessionId),
     suggestion: getSession(sessionId).chat_suggestion ?? null,

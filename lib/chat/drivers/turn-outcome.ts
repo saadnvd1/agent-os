@@ -80,10 +80,26 @@ export function failureReport(o: {
   return `The model's server ${kind === "timeout" ? "timed out" : "kept failing"} (${why})${tries}. ${done} Not finished: the model's next reply, so the task is incomplete. Send "continue" to resume; the finished steps are kept.`;
 }
 
+export const COMPACTION_EMPTY_NOTICE =
+  'The model returned nothing after compaction, so the task is incomplete. Retry sends "continue"; the finished steps are kept.';
+
+export const CUT_OFF_NOTICE =
+  'The turn stopped right after a tool step, before the model replied, so the task may be incomplete. Retry sends "continue"; the finished steps are kept.';
+
+// Said when a model request got no answer for the whole stall limit.
+export function stalledNotice(ms: number, compacting: boolean): string {
+  const min = Math.max(1, Math.round(ms / 60_000));
+  return `${compacting ? "The model didn't finish compacting the context" : "Model request stalled"}: no response for ${plural(min, "minute")}, so AgentOS stopped waiting. The finished steps are kept. Retry sends "continue".`;
+}
+
 export function turnOutcome(r: {
   finishReason?: string;
   text: string;
   toolCalls: number;
+  // A compaction ran in this turn.
+  compacted?: boolean;
+  // Every tool call of the turn has finished.
+  toolsDone?: boolean;
   error?: string;
   retries?: number;
   agentRetried?: boolean;
@@ -107,7 +123,12 @@ export function turnOutcome(r: {
           })
         : "The model's server returned an error, shown above.",
     };
-  if (r.toolCalls > 0) return undefined;
+  if (r.toolCalls > 0)
+    return r.toolsDone
+      ? { reason: "cut_off", notice: CUT_OFF_NOTICE }
+      : undefined;
+  if (r.compacted && !r.text.trim())
+    return { reason: "compaction_empty", notice: COMPACTION_EMPTY_NOTICE };
   if (hasToolMarkup(r.text))
     return {
       reason: "parse_failure",

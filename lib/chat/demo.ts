@@ -11,6 +11,7 @@ import type {
   ChatClientMessage,
   ChatServerMessage,
   ChatState,
+  Compacting,
   ModelWait,
 } from "./events";
 import { demoConversation } from "./drivers/demo";
@@ -31,7 +32,10 @@ const sends = new Map<string, number>();
 
 // What a demo chat is doing, for a watcher that connects mid-turn (the stored
 // items alone would show a running step as stopped).
-const live = new Map<string, { state: ChatState; wait: ModelWait | null }>();
+const live = new Map<
+  string,
+  { state: ChatState; wait: ModelWait | null; compacting: Compacting | null }
+>();
 
 /** The demo chat's running turn, or null with none. */
 export function demoLive(sessionId: string) {
@@ -46,6 +50,18 @@ function conversation(sessionId: string): ChatConversation {
   let tracker = new ModelWaitTracker();
   void (async () => {
     for await (const e of c.events) {
+      if (e.type === "compacting") {
+        // The tokens before are the scripted prompt's (drivers/demo-script).
+        const compacting = e.active
+          ? { since: Date.now(), before: 48_200 }
+          : null;
+        const state = live.get(sessionId);
+        if (state) state.compacting = compacting;
+        tracker.on({ type: "compacting", compacting } as WorkerEvent);
+        emit(sessionId, { type: "compacting", compacting });
+        emit(sessionId, { type: "model_wait", wait: tracker.wait });
+        continue;
+      }
       // Each turn follows its own waits, whatever the last one left.
       if (e.type === "state" && e.state === "running")
         tracker = new ModelWaitTracker();
@@ -53,7 +69,12 @@ function conversation(sessionId: string): ChatConversation {
         emit(sessionId, { type: "model_wait", wait: tracker.wait });
       if (e.type === "state") {
         if (e.state === "idle") live.delete(sessionId);
-        else live.set(sessionId, { state: e.state, wait: tracker.wait });
+        else
+          live.set(sessionId, {
+            state: e.state,
+            wait: tracker.wait,
+            compacting: null,
+          });
       }
       const state = live.get(sessionId);
       if (state) state.wait = tracker.wait;

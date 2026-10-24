@@ -77,3 +77,7 @@ A task whose turn ends this way is not treated as finished work: the orchestrato
 ## Ollama models in the new-session menu
 
 AgentOS asks Ollama on each machine (`OLLAMA_HOST`, else `127.0.0.1:11434`) which models it serves and lists them under "Ollama" in the Agent menu of a new session, for the machine you picked. Picking one switches the session to OpenCode (or Pi) with that model. A model shows greyed out when neither agent lists it, which usually means OpenCode's config has no Ollama provider yet.
+
+### Compaction and stalls (OpenCode)
+
+When OpenCode compacts a long conversation, the activity line shows "Compacting context…" with its own timer; on a local model reading a big context this can take minutes. The summary itself isn't shown in the chat. If a model request gets no sign of life for 22 minutes (one header timeout plus two), AgentOS stops the turn and says "Model request stalled", or that the model didn't finish compacting, instead of waiting through OpenCode's own retries. A turn that ends with nothing after a compaction, or right after a tool step with no reply, says so too. Each of these ends offers **Retry**, which sends "continue"; the finished steps are kept.

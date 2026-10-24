@@ -1,7 +1,15 @@
-import type { ChatItem } from "./events";
+import type { ChatItem, TurnEndReason } from "./events";
 import { readingOrder } from "./reading-order";
 import { stepCounts, type StepCounts } from "./tool-outcome";
 import { eventTurnAt, type EventTurn } from "./turns";
+
+// Ends that stop a turn mid-task: they show how many steps got done.
+const CUT_SHORT = new Set<TurnEndReason>([
+  "error",
+  "stalled",
+  "compaction_empty",
+  "cut_off",
+]);
 
 export type ToolItem = Extract<ChatItem, { kind: "tool" }>;
 export type UndoItem = Extract<ChatItem, { kind: "undo" }>;
@@ -99,7 +107,8 @@ export function groupTimeline(
       flush();
       const cut =
         item.kind === "turn_end" &&
-        (item.interrupted || item.ended?.reason === "error");
+        (item.interrupted ||
+          (item.ended !== undefined && CUT_SHORT.has(item.ended.reason)));
       blocks.push(
         cut && turnTools.length
           ? { type: "item", item, steps: stepCounts(turnTools) }

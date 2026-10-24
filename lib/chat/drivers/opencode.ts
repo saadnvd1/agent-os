@@ -8,7 +8,7 @@ import { openCodeRules } from "./opencode-rules";
 import { OpenCodeServer } from "./opencode-server";
 import { OpenCodeApprovals } from "./opencode-approvals";
 import { RESULTS_BRIEF, SUMMARY_NUDGE } from "./turn-outcome";
-import { openCodeConfigContent } from "./opencode-config";
+import { openCodeConfigContent, STALL_MS } from "./opencode-config";
 import { writeOpenCodeGuard } from "./opencode-plugin";
 import { typescriptPath } from "./edit-guard";
 import { continuePrompt, type RetryDecision } from "./transient-retry";
@@ -43,6 +43,9 @@ function conversationEnv(
     return env;
   }
 }
+
+// How often a waiting turn is checked for silence.
+const WATCH_MS = 30_000;
 
 // How long a prompt may go without the session turning busy before the
 // turn is checked on.
@@ -142,6 +145,20 @@ export const openCodeDriver: ChatDriver = {
     const held: { text: string; images?: ChatImage[] }[] = [];
     const stream = new AbortController();
     let closed = false;
+    // A turn silent for STALL_MS (an env override is for tests only) is
+    // stopped: OpenCode's own retries could wait for hours.
+    const stallMs = Number(process.env.AGENTOS_OPENCODE_STALL_MS) || STALL_MS;
+    const watchdog = setInterval(
+      () => {
+        const silent = mapper.silentMs();
+        if (silent < stallMs) return;
+        cancelRetry();
+        mapper.stalled(silent);
+        void abort();
+      },
+      Math.min(WATCH_MS, stallMs / 2)
+    );
+    watchdog.unref();
 
     const fail = (error: Error) => mapper.items.error(error.message);
     const ours = (id: unknown) => id === sessionId || children.has(str(id));
@@ -286,6 +303,7 @@ export const openCodeDriver: ChatDriver = {
     function close() {
       if (closed) return;
       closed = true;
+      clearInterval(watchdog);
       cancelRetry();
       approvals.pending.expireAll();
       stream.abort();
