@@ -322,6 +322,14 @@ export interface Compacting {
   before?: number;
 }
 
+// A model call the turn is waiting on: since when, the last measured prompt
+// size (a floor: the next prompt is at least that big), and a retry under way.
+export interface ModelWait {
+  since: number;
+  promptTokens?: number;
+  retry?: { attempt: number; message?: string };
+}
+
 export interface UndoPreview {
   canUndo: boolean;
   error?: string;
@@ -347,7 +355,11 @@ export type DriverEvent =
   | { type: "at_rest" } // it has run every message it was given
   | { type: "state"; state: ChatState }
   // The agent started (true) or finished (false) compacting its context.
-  | { type: "compacting"; active: boolean };
+  | { type: "compacting"; active: boolean }
+  // One model response's measured prompt (input plus cache), in tokens.
+  | { type: "prompt_tokens"; tokens: number }
+  // The agent is retrying a failed model request.
+  | { type: "model_retry"; attempt: number; message?: string };
 
 // A tool call's output and diff, loaded when it's opened.
 export interface ToolBody {
@@ -368,6 +380,7 @@ export type ChatServerMessage =
       tasks: ChatItem[];
       state: ChatState;
       compacting?: Compacting | null;
+      modelWait?: ModelWait | null;
       queue: QueuedMessage[];
       suggestion: string | null;
     }
@@ -393,6 +406,7 @@ export type ChatServerMessage =
   | { type: "delta"; id: string; text: string }
   | { type: "state"; state: ChatState }
   | { type: "compacting"; compacting: Compacting | null }
+  | { type: "model_wait"; wait: ModelWait | null }
   | {
       type: "capabilities";
       commands: ChatCommand[];

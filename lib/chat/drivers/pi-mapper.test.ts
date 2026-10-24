@@ -404,5 +404,38 @@ describe("PiMapper retries", () => {
     expect(out.some((e) => e.type === "item" && e.item.kind === "note")).toBe(
       true
     );
+
+describe("PiMapper request reports", () => {
+  it("reports the prompt a response was measured on, and retries", () => {
+    const out: DriverEvent[] = [];
+    const mapper = new PiMapper((e) => out.push(e));
+    mapper.map({ type: "agent_start" });
+    mapper.map({
+      type: "message_end",
+      message: {
+        role: "assistant",
+        content: [],
+        usage: { input: 100, cacheRead: 40, cacheWrite: 10, output: 3 },
+      },
+    });
+    mapper.map({
+      type: "auto_retry_start",
+      attempt: 1,
+      errorMessage: "overloaded",
+    });
+    expect(out).toContainEqual({ type: "prompt_tokens", tokens: 150 });
+    expect(out).toContainEqual({
+      type: "model_retry",
+      attempt: 1,
+      message: "overloaded",
+    });
+  });
+
+  it("says nothing of the prompt when usage is missing", () => {
+    const out: DriverEvent[] = [];
+    const mapper = new PiMapper((e) => out.push(e));
+    mapper.map({ type: "agent_start" });
+    mapper.map({ type: "message_end", message: { role: "assistant" } });
+    expect(out.some((e) => e.type === "prompt_tokens")).toBe(false);
   });
 });

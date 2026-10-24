@@ -233,6 +233,16 @@ export class ClaudeMapper {
       case "task_progress":
       case "task_notification":
         return this.task(m);
+      case "api_retry": {
+        const r = m as { attempt?: number; error_status?: number | null };
+        return [
+          {
+            type: "model_retry",
+            attempt: Number(r.attempt) || 1,
+            message: r.error_status ? `HTTP ${r.error_status}` : undefined,
+          },
+        ];
+      }
       case "status": {
         // "compacting" while the context is summarised, null once it's done.
         const status = (m as { status?: string | null }).status;

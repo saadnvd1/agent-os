@@ -97,6 +97,14 @@ export class OpenCodeMapper {
         if (type === "busy" || type === "retry") {
           this.admitted = true;
           this.items.startTurn();
+          if (type === "retry") {
+            const st = p.status as P;
+            this.emit({
+              type: "model_retry",
+              attempt: num(st.attempt) || 1,
+              message: str(st.message) || undefined,
+            });
+          }
         } else if (type === "idle") this.idle();
         return;
       }
@@ -154,6 +162,11 @@ export class OpenCodeMapper {
     const t = (info.tokens ?? {}) as P;
     const cache = (t.cache ?? {}) as P;
     this.lastInputTokens = num(t.input) + num(cache.read);
+    if (this.lastInputTokens + num(cache.write) > 0)
+      this.emit({
+        type: "prompt_tokens",
+        tokens: this.lastInputTokens + num(cache.write),
+      });
     this.totals = {
       costUsd: this.totals.costUsd + num(info.cost),
       inputTokens: this.totals.inputTokens + num(t.input),

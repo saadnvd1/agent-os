@@ -127,6 +127,11 @@ export class PiMapper {
           resultText(e.result)
         );
       case "auto_retry_start":
+        this.emit({
+          type: "model_retry",
+          attempt: Number(e.attempt) || 1,
+          message: str(e.errorMessage) || undefined,
+        });
         this.agentRetried = true;
         return this.items.note(
           `Pi is trying again (${str(e.attempt)} of ${str(e.maxAttempts)}): ${str(e.errorMessage).slice(0, 160)}`
@@ -199,6 +204,8 @@ export class PiMapper {
       this.items.retext(`${this.message}:${fixed.index}`, str(fixed.text));
     const u = (m.usage ?? {}) as P;
     const n = (k: string) => Number(u[k]) || 0;
+    const prompt = n("input") + n("cacheRead") + n("cacheWrite");
+    if (prompt > 0) this.emit({ type: "prompt_tokens", tokens: prompt });
     this.totals = {
       costUsd: this.totals.costUsd + (Number((u.cost as P)?.total) || 0),
       inputTokens: this.totals.inputTokens + n("input"),

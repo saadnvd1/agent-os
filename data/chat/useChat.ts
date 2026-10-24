@@ -16,6 +16,7 @@ import type {
   ChatServerMessage,
   ChatState,
   Compacting,
+  ModelWait,
   FileSuggestion,
   QueuedMessage,
   ToolBody,
@@ -164,6 +165,7 @@ export function useChat(
   }, []);
   const [state, setState] = useState<ChatState>("idle");
   const [compacting, setCompacting] = useState<Compacting | null>(null);
+  const [modelWait, setModelWait] = useState<ModelWait | null>(null);
   const [connected, setConnected] = useState(false);
   // The chat whose snapshot the items are, once one has landed.
   const [loadedFor, setLoadedFor] = useState<string | null>(null);
@@ -271,6 +273,7 @@ export function useChat(
           setLoadingOlder(false);
           setState(m.state);
           setCompacting(m.compacting ?? null);
+          setModelWait(m.modelWait ?? null);
           setQueue(m.queue ?? []);
           setSuggestion(m.suggestion ?? null);
           setLoadedFor(sessionId);
@@ -295,9 +298,14 @@ export function useChat(
           searchRequests.current.delete(m.reqId);
         } else if (m.type === "compacting") {
           setCompacting(m.compacting);
+        } else if (m.type === "model_wait") {
+          setModelWait(m.wait);
         } else if (m.type === "state") {
           setState(m.state);
-          if (m.state === "idle" || m.state === "error") setCompacting(null);
+          if (m.state === "idle" || m.state === "error") {
+            setCompacting(null);
+            setModelWait(null);
+          }
         } else if (m.type === "capabilities") {
           setRefreshingCommands(false);
           setCommands(m.commands);
@@ -596,6 +604,7 @@ export function useChat(
     pinToolBody,
     state,
     compacting,
+    modelWait,
     connected,
     commands,
     refreshCommands,

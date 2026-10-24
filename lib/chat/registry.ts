@@ -10,9 +10,11 @@ import type {
   ChatServerMessage,
   ChatState,
   Compacting,
+  ModelWait,
 } from "./events";
 import { markStatusDirty } from "../status/dirty";
 import { FLUSH_MS } from "./store";
+import type { ModelWaitTracker } from "./model-wait";
 
 // Long enough for the worker's buffered write of an item to land.
 const EMIT_SETTLE_MS = 2 * FLUSH_MS;
@@ -23,6 +25,9 @@ export interface Live {
   state: ChatState;
   // Set while its agent compacts the context, over a "running" state.
   compacting?: Compacting | null;
+  // The model call the turn is waiting on, if any (lib/chat/model-wait).
+  modelWait?: ModelWait | null;
+  waitTracker?: ModelWaitTracker;
   // Streamed items carry their latest text here, ahead of SQLite.
   streaming: Map<string, ChatItem>;
   // What the turn is doing right now, for the session list.

@@ -33,6 +33,7 @@ import { sentPrompts } from "@/lib/chat/history";
 import { quoteInsert, quoteMarkdown } from "@/lib/chat/quote";
 import { OrchestratorBar } from "@/components/Orchestrator/OrchestratorBar";
 import { ActivityLine } from "./Activity";
+import { modelLabel as pickedModelLabel } from "./ModelPicker";
 import { Approval } from "./Approval";
 import { BackgroundTasks } from "./BackgroundTasks";
 import { SubagentCard } from "./Subagent";
@@ -319,6 +320,7 @@ export function ChatPanel({
     requestFiles,
     search,
     compacting,
+    modelWait,
     loadedFor,
   } = useChat(sessionId, (text) => setPrefill({ text, at: Date.now() }));
   const startFresh = useFreshStart();
@@ -796,6 +798,8 @@ export function ChatPanel({
           items={items}
           state={state}
           compacting={compacting}
+          modelWait={modelWait}
+          model={pickedModelLabel(models, model, modelLabel)}
           onStop={interrupt}
         />
         <BackgroundTasks
