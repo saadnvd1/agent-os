@@ -113,9 +113,12 @@ export default function setup(project: TestProject) {
       }
     }
     if (exists(root)) problems.push(`not removed: ${root}`);
+    // Another test run (a second task's scripts/check) makes its own run root
+    // in the same /tmp; ours is checked above, so a run root is never a leak.
     for (const dir of watched)
       for (const name of leaks(dir, prefixes, before.get(dir) ?? new Set()))
-        problems.push(`left behind: ${join(dir, name)}`);
+        if (!name.startsWith(RUN_PREFIX))
+          problems.push(`left behind: ${join(dir, name)}`);
     for (const name of worktreeLeaks(realWorktrees, worktreesBefore, [
       root,
       made,
