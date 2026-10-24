@@ -81,3 +81,17 @@ export function clipOutput(text: string): string {
     ? `${text.slice(0, MAX_TOOL_OUTPUT)}\n… (${text.length - MAX_TOOL_OUTPUT} more characters)`
     : text;
 }
+
+export const LIVE_OUTPUT_LINES = 200;
+
+// A running step's output so far: the last lines, never more than a
+// finished step keeps. The end of a long build is what the reader wants.
+export function tailOutput(text: string): string {
+  const lines = text.split("\n");
+  let tail =
+    lines.length > LIVE_OUTPUT_LINES
+      ? lines.slice(-LIVE_OUTPUT_LINES).join("\n")
+      : text;
+  if (tail.length > MAX_TOOL_OUTPUT) tail = tail.slice(-MAX_TOOL_OUTPUT);
+  return tail === text ? tail : `…\n${tail}`;
+}

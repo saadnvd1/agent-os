@@ -120,6 +120,11 @@ export class PiMapper {
           str(e.toolCallId),
           piTool(str(e.toolName), e.args)
         );
+      case "tool_execution_update":
+        return this.items.progress(
+          str(e.toolCallId),
+          resultText(e.partialResult)
+        );
       case "tool_execution_end":
         return this.items.toolDone(
           str(e.toolCallId),

@@ -340,6 +340,80 @@ describe("PiMapper summary nudge", () => {
   });
 });
 
+describe("PiMapper live tool output", () => {
+  const start = {
+    type: "tool_execution_start",
+    toolCallId: "c1",
+    toolName: "bash",
+    args: { command: "make" },
+  };
+  const update = (text: string) => ({
+    type: "tool_execution_update",
+    toolCallId: "c1",
+    toolName: "bash",
+    args: { command: "make" },
+    partialResult: { content: [{ type: "text", text }] },
+  });
+  const setup = () => {
+    vi.useFakeTimers();
+    const out: DriverEvent[] = [];
+    const mapper = new PiMapper((e) => out.push(e));
+    const tools = () =>
+      out.flatMap((e) =>
+        e.type === "item" && e.item.kind === "tool" ? [e.item] : []
+      );
+    return { mapper, tools };
+  };
+  afterEach(() => vi.useRealTimers());
+
+  it("puts partial output on the running step", () => {
+    const { mapper, tools } = setup();
+    mapper.map(start);
+    mapper.map(update("compiling a"));
+    expect(tools().at(-1)).toMatchObject({
+      status: "running",
+      output: "compiling a",
+    });
+  });
+
+  it("keeps only the tail of a noisy command", () => {
+    const { mapper, tools } = setup();
+    mapper.map(start);
+    mapper.map(
+      update(Array.from({ length: 1000 }, (_, i) => `line ${i}`).join("\n"))
+    );
+    const lines = tools().at(-1)!.output!.split("\n");
+    expect(lines.length).toBeLessThanOrEqual(201);
+    expect(lines.at(-1)).toBe("line 999");
+    expect(lines).not.toContain("line 0");
+  });
+
+  it("sends updates no faster than the throttle", () => {
+    const { mapper, tools } = setup();
+    mapper.map(start);
+    mapper.map(update("a"));
+    mapper.map(update("ab"));
+    expect(tools()).toHaveLength(2);
+    vi.advanceTimersByTime(300);
+    mapper.map(update("abc"));
+    expect(tools().at(-1)!.output).toBe("abc");
+  });
+
+  it("replaces the partial output with the final result", () => {
+    const { mapper, tools } = setup();
+    mapper.map(start);
+    mapper.map(update("partial"));
+    mapper.map({
+      type: "tool_execution_end",
+      toolCallId: "c1",
+      toolName: "bash",
+      isError: false,
+      result: { content: [{ type: "text", text: "final" }] },
+    });
+    expect(tools().at(-1)).toMatchObject({ status: "done", output: "final" });
+  });
+});
+
 describe("PiMapper retries", () => {
   const HEADERS = "Provider response headers timed out after 300000ms";
   const failed = [

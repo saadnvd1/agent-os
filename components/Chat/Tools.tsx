@@ -1,6 +1,6 @@
 "use client";
 
-import { createContext, useContext, useEffect } from "react";
+import { createContext, useContext, useEffect, useRef } from "react";
 import { Check, ChevronRight, Layers, Loader2, Square, X } from "lucide-react";
 import type { FileDiff, ToolBody } from "@/lib/chat/events";
 import type { ToolItem } from "@/lib/chat/group";
@@ -111,6 +111,36 @@ export function ToolPreview({
   );
 }
 
+// A step's output. While it runs the view follows the end, unless the
+// reader scrolled up to read.
+export function LiveOutput({
+  text,
+  running,
+}: {
+  text: string;
+  running: boolean;
+}) {
+  const ref = useRef<HTMLPreElement>(null);
+  const pinned = useRef(true);
+  useEffect(() => {
+    const el = ref.current;
+    if (running && el && pinned.current) el.scrollTop = el.scrollHeight;
+  }, [text, running]);
+  return (
+    <pre
+      ref={ref}
+      data-testid="tool-output"
+      onScroll={(e) => {
+        const el = e.currentTarget;
+        pinned.current = el.scrollHeight - el.scrollTop - el.clientHeight < 24;
+      }}
+      className="text-muted-foreground max-h-64 overflow-auto rounded-lg px-2 font-mono text-[11px] whitespace-pre-wrap"
+    >
+      {text}
+    </pre>
+  );
+}
+
 function ToolDetail({ tool }: { tool: ToolItem }) {
   const body = useToolBody(tool);
   if (body === undefined && tool.hasDiff)
@@ -123,9 +153,7 @@ function ToolDetail({ tool }: { tool: ToolItem }) {
     <div className="space-y-2 pb-2 pl-6">
       <ToolPreview name={tool.name} input={tool.input} diff={body?.diff} />
       {body?.output && !body.diff && (
-        <pre className="text-muted-foreground max-h-64 overflow-auto rounded-lg px-2 font-mono text-[11px] whitespace-pre-wrap">
-          {body.output}
-        </pre>
+        <LiveOutput text={body.output} running={tool.status === "running"} />
       )}
       {body === undefined && tool.hasOutput && (
         <Loader2 className="text-muted-foreground h-3.5 w-3.5 animate-spin" />
@@ -147,6 +175,10 @@ function Elapsed({ tool }: { tool: ToolItem }) {
     </span>
   );
 }
+
+// A running step that has printed something: its output shows as it comes.
+const streaming = (tool: ToolItem) =>
+  tool.status === "running" && !!tool.output && !tool.deferred;
 
 function ToolRow({ tool }: { tool: ToolItem }) {
   const [open, setOpen] = useRowState(
@@ -186,7 +218,7 @@ function ToolRow({ tool }: { tool: ToolItem }) {
         <BackgroundButton tool={tool} />
         <BookmarkButton itemId={tool.id} />
       </div>
-      {open && <ToolDetail tool={tool} />}
+      {(open || streaming(tool)) && <ToolDetail tool={tool} />}
     </div>
   );
 }
@@ -243,6 +275,11 @@ export function ToolGroup({ tools }: { tools: ToolItem[] }) {
       </div>
       {!open && !running && (
         <StepOutcomes tools={tools} onOpen={() => setOpen(true)} />
+      )}
+      {!open && streaming(latest) && (
+        <div className="pb-1">
+          <ToolDetail tool={latest} />
+        </div>
       )}
       {open && (
         <div className="pb-1">
