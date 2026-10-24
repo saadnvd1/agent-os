@@ -5,6 +5,7 @@ import type { ChatItem, DriverEvent } from "../events";
 import { piTool, PiMapper } from "./pi-mapper";
 import { piArgs, piImages } from "./pi";
 import { PiDialogs } from "./pi-approvals";
+import { RESULTS_BRIEF } from "./turn-outcome";
 
 // Recorded from pi 0.73.1 in RPC mode (partials elided); the abort from its
 // docs.
@@ -164,7 +165,7 @@ describe("pi arguments", () => {
       "--session",
       "/s/1.jsonl",
       "--append-system-prompt",
-      "brief",
+      `brief\n\n${RESULTS_BRIEF}`,
     ]);
     expect(piImages([{ mediaType: "image/png", data: "QQ==" }])).toEqual([
       { type: "image", data: "QQ==", mimeType: "image/png" },
@@ -287,5 +288,54 @@ describe("PiMapper turns that end early", () => {
     for (const e of events)
       if (e.type === "item" && e.item.kind === "turn_end")
         expect(e.item.ended).toBeUndefined();
+  });
+});
+
+describe("PiMapper summary nudge", () => {
+  const msg = (text: string) => ({
+    type: "message_end",
+    message: {
+      role: "assistant",
+      stopReason: "stop",
+      content: [{ type: "text", text }],
+    },
+  });
+  const tool = {
+    type: "tool_execution_start",
+    toolCallId: "t1",
+    toolName: "bash",
+    args: {},
+  };
+
+  it("wants a summary after tools and a lead-in, and keeps the count through a nudged run", () => {
+    const mapper = new PiMapper(() => {});
+    mapper.map({ type: "agent_start" });
+    mapper.map(tool);
+    mapper.map(msg("Here's what I found:"));
+    expect(mapper.needsSummary()).toBe(true);
+    mapper.map({ type: "agent_start" });
+    mapper.map(msg(""));
+    expect(mapper.needsSummary()).toBe(true);
+    mapper.map(msg("All reachable."));
+    expect(mapper.needsSummary()).toBe(false);
+  });
+
+  it("doesn't after a turn without tools, nor in the next turn once reset", () => {
+    const mapper = new PiMapper(() => {});
+    mapper.map({ type: "agent_start" });
+    mapper.map(msg("Let me look:"));
+    expect(mapper.needsSummary()).toBe(false);
+    mapper.map(tool);
+    mapper.endTurn();
+    mapper.map({ type: "agent_start" });
+    mapper.map(msg("Let me look:"));
+    expect(mapper.needsSummary()).toBe(false);
+  });
+
+  it("always puts the results brief in the system prompt", () => {
+    expect(piArgs({ systemAppend: "brief" } as never).join(" ")).toContain(
+      RESULTS_BRIEF
+    );
+    expect(piArgs({} as never).join(" ")).toContain(RESULTS_BRIEF);
   });
 });

@@ -2,7 +2,7 @@ import { randomUUID } from "crypto";
 import type { DriverEvent, UsageTotals } from "../events";
 import { toolDiff, toolTitle } from "../tools";
 import { TurnItems, type ToolStart } from "./turn-items";
-import { logTurnEnd, turnOutcome } from "./turn-outcome";
+import { logTurnEnd, needsSummary, turnOutcome } from "./turn-outcome";
 
 type P = Record<string, unknown>;
 const str = (v: unknown) => (typeof v === "string" ? v : "");
@@ -53,6 +53,7 @@ export class PiMapper {
   private error = "";
   // The last answer's text, its tool calls and who gave it, for the notice
   // when a turn ends without doing anything.
+  private toolsRun = 0;
   private last = { text: "", calls: 0, provider: "", model: "", api: "" };
   totals: UsageTotals = {
     costUsd: 0,
@@ -74,6 +75,8 @@ export class PiMapper {
   map(e: P): void {
     switch (e.type) {
       case "agent_start":
+        // A nudged run continues the same turn, so its tools still count.
+        if (!this.items.inTurn) this.toolsRun = 0;
         this.stopReason = this.error = "";
         this.last = { text: "", calls: 0, provider: "", model: "", api: "" };
         return this.items.startTurn();
@@ -85,6 +88,7 @@ export class PiMapper {
       case "message_end":
         return this.ended(e.message as P);
       case "tool_execution_start":
+        this.toolsRun++;
         return this.items.tool(
           str(e.toolCallId),
           piTool(str(e.toolName), e.args)
@@ -166,6 +170,18 @@ export class PiMapper {
       cacheReadTokens: this.totals.cacheReadTokens + n("cacheRead"),
       cacheWriteTokens: this.totals.cacheWriteTokens + n("cacheWrite"),
     };
+  }
+
+  // The run ran tools and ended without saying what they found.
+  needsSummary(): boolean {
+    return needsSummary({
+      toolsRun: this.toolsRun,
+      text: this.last.text,
+      toolCalls: this.last.calls,
+      finishReason: this.stopReason,
+      error: this.error || undefined,
+      aborted: this.aborted,
+    });
   }
 
   // The run is over: Pi has nothing left to do for it.

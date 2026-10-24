@@ -106,3 +106,28 @@ export function logTurnEnd(o: {
     })
   );
 }
+
+// Asked of the model once when its turn ran tools but ended without the
+// report it set out to give.
+export const SUMMARY_NUDGE =
+  "You ran checks or tools but haven't reported the results. Reply now with a short summary: what worked, what failed (with the exit code or HTTP status) and what you didn't check. Don't run more tools.";
+
+// Appended to the system prompt of agents AgentOS drives itself.
+export const RESULTS_BRIEF =
+  "After running checks, probes or discovery, end your turn with a results summary: what worked, what failed (exit code or HTTP status) and what you didn't check. Never end on a lead-in such as 'Here's what I found:' without the list.";
+
+// Whether a turn that ran tools ended without telling what they found: an
+// empty last reply, or one that only promises the report.
+export function needsSummary(r: {
+  toolsRun: number;
+  text: string;
+  toolCalls: number;
+  finishReason?: string;
+  error?: string;
+  aborted?: boolean;
+}): boolean {
+  if (r.toolsRun === 0 || r.toolCalls > 0 || r.aborted || r.error) return false;
+  if (r.finishReason === "length") return false;
+  const text = r.text.trim();
+  return !text || announcesAction(text) || text.endsWith(":");
+}

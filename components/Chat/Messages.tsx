@@ -1,5 +1,6 @@
 "use client";
 
+import type { StepCounts } from "@/lib/chat/tool-outcome";
 import { memo } from "react";
 import { useSnapshot } from "valtio";
 import {
@@ -378,7 +379,23 @@ export function Todos({ item }: { item: Of<"todos"> }) {
   );
 }
 
-export function TurnEnd({ item }: { item: Of<"turn_end"> }) {
+// What a stopped or failed turn got through.
+export function stepsLabel(s: StepCounts): string {
+  const done = s.ok + s.failed;
+  const parts = [`${done} of ${s.total} steps done`];
+  if (s.failed) parts.push(`${s.failed} failed`);
+  const unfinished = s.stopped + s.running;
+  if (unfinished) parts.push(`${unfinished} not run`);
+  return parts.join(", ");
+}
+
+export function TurnEnd({
+  item,
+  steps,
+}: {
+  item: Of<"turn_end">;
+  steps?: StepCounts;
+}) {
   const secs = item.durationMs ? Math.round(item.durationMs / 1000) : null;
   const early = !item.interrupted && item.ended;
   const label = item.interrupted
@@ -407,7 +424,7 @@ export function TurnEnd({ item }: { item: Of<"turn_end"> }) {
       )}
       <div className="group text-muted-foreground/60 flex items-center gap-3 font-mono text-[11px]">
         <span className="bg-foreground/[0.06] h-px flex-1" />
-        {label}
+        {steps ? `${label} · ${stepsLabel(steps)}` : label}
         <TurnCopy turnEndId={item.id} />
         <TurnBookmark turnEndId={item.id} />
         <span className="bg-foreground/[0.06] h-px flex-1" />

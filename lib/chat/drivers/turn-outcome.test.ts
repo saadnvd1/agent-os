@@ -3,6 +3,7 @@ import {
   announcesAction,
   hasToolMarkup,
   logTurnEnd,
+  needsSummary,
   turnOutcome,
 } from "./turn-outcome";
 
@@ -97,4 +98,30 @@ describe("logTurnEnd", () => {
     expect(json).not.toContain(key);
     expect(line).not.toHaveProperty("prompt");
   });
+});
+
+describe("needsSummary", () => {
+  const ran = { toolsRun: 3, text: "", toolCalls: 0 };
+
+  it.each([
+    ["an empty last reply", ""],
+    ["a lead-in ending in a colon", "Here's what I can verify is reachable:"],
+    ["an announced next step", "Let me summarize what I found"],
+  ])("asks after tools and %s", (_, text) =>
+    expect(needsSummary({ ...ran, text })).toBe(true)
+  );
+
+  it.each([
+    ["no tools ran", { toolsRun: 0 }],
+    [
+      "the reply is a real summary",
+      { text: "API: 200. DB: refused (exit 7)." },
+    ],
+    ["the turn was stopped", { aborted: true }],
+    ["the model errored", { error: "boom" }],
+    ["it hit the output limit", { finishReason: "length" }],
+    ["the last reply still made calls", { toolCalls: 1 }],
+  ])("doesn't when %s", (_, over) =>
+    expect(needsSummary({ ...ran, ...over })).toBe(false)
+  );
 });
