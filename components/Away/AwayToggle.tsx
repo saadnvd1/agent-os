@@ -39,16 +39,16 @@ export function AwayToggle() {
   return (
     <ADropdownMenu
       minWidth="220px"
+      tooltip={
+        away
+          ? `Away ${until}`
+          : "Away: let the orchestrators follow work through"
+      }
       trigger={
         <Button
           variant="ghost"
           size="icon-sm"
           aria-label={away ? `Away ${until}` : "Away"}
-          title={
-            away
-              ? `Away ${until}`
-              : "Away: let the orchestrators follow work through"
-          }
           disabled={setAway.isPending}
           className={cn(
             "relative h-11 w-11 md:h-8 md:w-8 [@media(hover:none)]:md:h-11 [@media(hover:none)]:md:w-11",

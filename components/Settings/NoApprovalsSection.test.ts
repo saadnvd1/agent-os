@@ -38,6 +38,7 @@ vi.mock("@/data/approvals", () => ({
   }),
 }));
 
+const { TooltipProvider } = await import("@/components/ui/tooltip");
 const { NoApprovalsSection } = await import("./NoApprovalsSection");
 const { NoApprovalsBadge } =
   await import("@/components/Approvals/NoApprovalsBadge");
@@ -112,10 +113,12 @@ describe("the No approvals toggle", () => {
 
 describe("the badge", () => {
   it("shows only while the mode is on", () => {
-    render(createElement(NoApprovalsBadge));
+    const badge = () =>
+      createElement(TooltipProvider, null, createElement(NoApprovalsBadge));
+    render(badge());
     expect(host.textContent).toBe("");
     state.on = true;
-    render(createElement(NoApprovalsBadge));
+    render(badge());
     expect(host.textContent).toContain("No approvals");
   });
 });

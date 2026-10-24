@@ -168,7 +168,7 @@ export function SessionList({
         }
         pinControls={pinControls}
       />
-      <div className="flex gap-2 px-3 pb-2">
+      <div className="flex flex-wrap gap-2 px-3 pb-2">
         <SidebarSearch query={ui.query} />
         <ProjectFilter
           projects={data.workspaceProjects}
