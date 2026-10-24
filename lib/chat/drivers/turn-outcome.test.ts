@@ -1,6 +1,7 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
 import {
   announcesAction,
+  failureReport,
   hasToolMarkup,
   logTurnEnd,
   needsSummary,
@@ -124,4 +125,53 @@ describe("needsSummary", () => {
   ])("doesn't when %s", (_, over) =>
     expect(needsSummary({ ...ran, ...over })).toBe(false)
   );
+});
+
+describe("failureReport", () => {
+  const HEADERS = "Provider response headers timed out after 300000ms";
+  const summary = {
+    steps: 4,
+    failed: 2,
+    files: [{ path: "src/applier/sources.ts", ok: 0, failed: 2 }],
+  };
+
+  it("says what finished, what didn't, and how to go on", () => {
+    const text = failureReport({ error: HEADERS, retries: 3, summary });
+    expect(text).toContain("timed out");
+    expect(text).toContain(HEADERS);
+    expect(text).toContain("3 retries didn't get through");
+    expect(text).toContain("4 tool steps (2 failed)");
+    expect(text).toContain("src/applier/sources.ts (2 failed)");
+    expect(text).toContain("Not finished");
+    expect(text).toContain('Send "continue"');
+  });
+
+  it("says so when nothing had finished, or the agent retried", () => {
+    const text = failureReport({
+      error: HEADERS,
+      retries: 0,
+      agentRetried: true,
+    });
+    expect(text).toContain("Nothing had finished yet.");
+    expect(text).toContain("even after the agent retried it");
+  });
+
+  it("scrubs a secret out of the error", () => {
+    const key = ["sk", "-", "a1B2c3D4e5F6".repeat(4)].join("");
+    const text = failureReport({
+      error: `fetch failed for key ${key}`,
+      retries: 1,
+    });
+    expect(text).not.toContain(key);
+  });
+
+  it("replaces the bare notice for a transient error only", () => {
+    const base = { text: "", toolCalls: 0 };
+    expect(
+      turnOutcome({ ...base, error: HEADERS, retries: 3, summary })?.notice
+    ).toContain("Not finished");
+    expect(turnOutcome({ ...base, error: "400 bad request" })?.notice).toBe(
+      "The model's server returned an error, shown above."
+    );
+  });
 });

@@ -19,6 +19,18 @@ export interface ToolStart {
   diff?: FileDiff;
 }
 
+export interface TurnSummary {
+  steps: number;
+  failed: number;
+  files: { path: string; ok: number; failed: number }[];
+}
+
+const newStats = () => ({
+  steps: 0,
+  failed: 0,
+  files: new Map<string, { ok: number; failed: number }>(),
+});
+
 // An API's error as its message: providers wrap JSON in JSON.
 export function readableError(text: string): string {
   let message = text.trim();
@@ -50,6 +62,8 @@ export class TurnItems {
   // Texts that finished in this turn, so one can be corrected afterwards.
   private done = new Map<string, Text>();
   private startedAt = 0;
+  // What the turn has done so far, for the report when it stops short.
+  private stats = newStats();
   inTurn = false;
 
   constructor(private emit: (e: DriverEvent) => void) {}
@@ -58,6 +72,7 @@ export class TurnItems {
     if (this.inTurn) return;
     this.inTurn = true;
     this.startedAt = Date.now();
+    this.stats = newStats();
     this.emit({ type: "turn_start" });
   }
 
@@ -138,6 +153,7 @@ export class TurnItems {
     const tool = this.tools.get(id);
     if (!tool) return;
     this.tools.delete(id);
+    this.count(tool, update, status);
     this.emit({
       type: "item",
       item: {
@@ -153,10 +169,49 @@ export class TurnItems {
     });
   }
 
+  private count(
+    tool: Tool,
+    update: Partial<ToolStart> | undefined,
+    status: ToolStatus
+  ): void {
+    if (status === "stopped") return;
+    this.stats.steps++;
+    if (status === "error") this.stats.failed++;
+    const input = (update?.input ?? tool.input) as { file_path?: unknown };
+    if (!/^(Edit|Write|MultiEdit)$/.test(tool.name)) return;
+    if (typeof input?.file_path !== "string") return;
+    const file = this.stats.files.get(input.file_path) ?? { ok: 0, failed: 0 };
+    file[status === "error" ? "failed" : "ok"]++;
+    this.stats.files.set(input.file_path, file);
+  }
+
+  // The turn so far: tool steps run, how many failed, files edited.
+  summary(): TurnSummary {
+    return {
+      steps: this.stats.steps,
+      failed: this.stats.failed,
+      files: [...this.stats.files].map(([path, n]) => ({ path, ...n })),
+    };
+  }
+
   todos(todos: Todo[]): void {
     this.emit({
       type: "item",
       item: { id: "todos", kind: "todos", todos, createdAt: Date.now() },
+    });
+  }
+
+  // A line in the conversation that isn't the agent's: a retry under way.
+  note(text: string): void {
+    this.emit({
+      type: "item",
+      item: {
+        id: randomUUID(),
+        kind: "note",
+        text,
+        tone: "note",
+        createdAt: Date.now(),
+      },
     });
   }
 

@@ -1,5 +1,7 @@
 import { redact } from "../../orchestrator/untrusted";
 import type { TurnEndReason } from "../events";
+import type { TurnSummary } from "./turn-items";
+import { classifyProviderError } from "./transient-retry";
 
 export interface TurnEnded {
   reason: TurnEndReason;
@@ -43,11 +45,49 @@ export function hasToolMarkup(text: string): boolean {
   );
 }
 
+const plural = (n: number, one: string, many = `${one}s`) =>
+  `${n} ${n === 1 ? one : many}`;
+
+// Where a turn stopped when the model's server kept failing: what the model
+// got done, what it didn't, and what to do next. The error text is scrubbed.
+export function failureReport(o: {
+  error: string;
+  retries: number;
+  // The agent retried it before AgentOS saw the error.
+  agentRetried?: boolean;
+  summary?: TurnSummary;
+}): string {
+  const kind = classifyProviderError(o.error);
+  const why = redact(o.error.replace(/\s+/g, " ").trim()).slice(0, 240);
+  const tries = o.retries
+    ? ` and ${plural(o.retries, "retry", "retries")} didn't get through`
+    : o.agentRetried
+      ? " even after the agent retried it"
+      : "";
+  const s = o.summary;
+  const done = s?.steps
+    ? `Finished before it stopped: ${plural(s.steps, "tool step")}${s.failed ? ` (${s.failed} failed)` : ""}${
+        s.files.length
+          ? `; edits to ${s.files
+              .map(
+                (f) =>
+                  `${f.path}${f.failed ? ` (${f.failed} failed${f.ok ? `, ${f.ok} applied` : ""})` : ""}`
+              )
+              .join(", ")}`
+          : ""
+      }.`
+    : "Nothing had finished yet.";
+  return `The model's server ${kind === "timeout" ? "timed out" : "kept failing"} (${why})${tries}. ${done} Not finished: the model's next reply, so the task is incomplete. Send "continue" to resume; the finished steps are kept.`;
+}
+
 export function turnOutcome(r: {
   finishReason?: string;
   text: string;
   toolCalls: number;
   error?: string;
+  retries?: number;
+  agentRetried?: boolean;
+  summary?: TurnSummary;
 }): TurnEnded | undefined {
   if (r.finishReason === "length")
     return {
@@ -58,7 +98,14 @@ export function turnOutcome(r: {
   if (r.error)
     return {
       reason: "error",
-      notice: "The model's server returned an error, shown above.",
+      notice: classifyProviderError(r.error)
+        ? failureReport({
+            error: r.error,
+            retries: r.retries ?? 0,
+            agentRetried: r.agentRetried,
+            summary: r.summary,
+          })
+        : "The model's server returned an error, shown above.",
     };
   if (r.toolCalls > 0) return undefined;
   if (hasToolMarkup(r.text))

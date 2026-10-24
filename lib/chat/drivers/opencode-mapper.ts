@@ -3,10 +3,14 @@ import type { DriverEvent, UsageTotals } from "../events";
 import { openCodeTool } from "./opencode-rules";
 import { TurnItems } from "./turn-items";
 import { logTurnEnd, needsSummary, turnOutcome } from "./turn-outcome";
+import { retryNotice, TurnRetry, type RetryDecision } from "./transient-retry";
 
 type P = Record<string, unknown>;
 const str = (v: unknown) => (typeof v === "string" ? v : "");
 const num = (v: unknown) => Number(v) || 0;
+
+// A prompt this big (tokens) is worth compacting before the last retry.
+const HEAVY_TOKENS = 16_000;
 
 const TODO = new Set(["pending", "in_progress", "completed"]);
 
@@ -51,15 +55,34 @@ export class OpenCodeMapper {
     cacheWriteTokens: 0,
   };
 
+  // Retrying a turn the model's server dropped.
+  readonly retry = new TurnRetry();
+  // OpenCode retried the failure itself: AgentOS adds nothing on top.
+  private agentRetried = false;
+  // The last answer's prompt size, to judge whether compacting would help.
+  lastInputTokens = 0;
+  // Compacting between retries makes the session busy and idle: not a turn.
+  private holding = false;
+
   constructor(
     private sessionId: () => string | null,
-    private emit: (e: DriverEvent) => void
+    private emit: (e: DriverEvent) => void,
+    // Called when a failed turn is to be tried again.
+    private onRetry: (
+      d: Extract<RetryDecision, { retry: true }>,
+      error: string
+    ) => void = () => {}
   ) {
     this.items = new TurnItems(emit);
   }
 
-  // A prompt went out: its turn starts now.
-  prompted(): void {
+  // A prompt went out: its turn starts now. A retry is the same turn.
+  prompted(retried = false): void {
+    this.retrying = false;
+    if (!retried) {
+      this.retry.reset();
+      this.agentRetried = false;
+    }
     this.admitted = false;
     this.items.startTurn();
   }
@@ -70,6 +93,7 @@ export class OpenCodeMapper {
     switch (e.type) {
       case "session.status": {
         const type = str((p.status as P)?.type);
+        if (type === "retry") this.agentRetried = true;
         if (type === "busy" || type === "retry") {
           this.admitted = true;
           this.items.startTurn();
@@ -129,6 +153,7 @@ export class OpenCodeMapper {
     this.counted.add(id);
     const t = (info.tokens ?? {}) as P;
     const cache = (t.cache ?? {}) as P;
+    this.lastInputTokens = num(t.input) + num(cache.read);
     this.totals = {
       costUsd: this.totals.costUsd + num(info.cost),
       inputTokens: this.totals.inputTokens + num(t.input),
@@ -202,8 +227,52 @@ export class OpenCodeMapper {
         str((error.data as P)?.message) || str(error.name) || "OpenCode failed";
   }
 
+  // A turn that failed on a dropped request goes on in place: the notice,
+  // then the driver sends the prompt again. False when it should end.
+  private retryTurn(): boolean {
+    const error = this.error ?? "";
+    const d = this.retry.next({
+      error,
+      harnessRetried: this.agentRetried,
+      contextHeavy: this.lastInputTokens >= HEAVY_TOKENS,
+    });
+    if (!d.retry) return false;
+    this.items.note(retryNotice(d, error));
+    this.clearTurn();
+    this.retrying = true;
+    this.onRetry(d, error);
+    return true;
+  }
+
+  private clearTurn(): void {
+    this.error = null;
+    this.last.id = "";
+    this.toolIds.clear();
+    this.aborted = false;
+    this.admitted = false;
+    for (const id of this.current) this.past.add(id);
+    this.current.clear();
+    this.parts.clear();
+  }
+
+  // A failed turn is waiting for its retry to go out.
+  retrying = false;
+
+  // The reader stopped the turn while it waited to retry.
+  stopRetrying(): void {
+    this.retrying = false;
+    this.holding = false;
+    this.emit({ type: "usage", totals: { ...this.totals } });
+    this.items.endTurn({ interrupted: true });
+  }
+
+  holdIdle(on: boolean): void {
+    this.holding = on;
+  }
+
   private idle(): void {
-    if (!this.admitted || !this.items.inTurn) return;
+    if (this.holding || !this.admitted || !this.items.inTurn) return;
+    if (this.error && !this.aborted && this.retryTurn()) return;
     this.emit({ type: "usage", totals: { ...this.totals } });
     const text = [...this.last.text.values()].join("\n");
     if (
@@ -232,6 +301,9 @@ export class OpenCodeMapper {
             text,
             toolCalls: this.last.calls.size,
             error: this.error ?? undefined,
+            retries: this.retry.tried,
+            agentRetried: this.agentRetried,
+            summary: this.items.summary(),
           });
     if (ended)
       logTurnEnd({
@@ -248,15 +320,8 @@ export class OpenCodeMapper {
       finishReason: this.last.finish || undefined,
       ended,
     });
-    this.error = null;
-    this.last.id = "";
-    this.toolIds.clear();
+    this.clearTurn();
     this.nudged = this.nudgeDue = false;
-    this.aborted = false;
-    this.admitted = false;
-    for (const id of this.current) this.past.add(id);
-    this.current.clear();
-    this.parts.clear();
   }
 
   // True once after a turn ended without its results: send SUMMARY_NUDGE.

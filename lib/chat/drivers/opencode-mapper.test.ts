@@ -364,3 +364,129 @@ describe("OpenCodeMapper summary nudge", () => {
     expect(openCodeSystem()).toBe(RESULTS_BRIEF);
   });
 });
+
+describe("OpenCodeMapper retries", () => {
+  const HEADERS = "Provider response headers timed out after 300000ms";
+  const SID = "ses_1";
+
+  function drive() {
+    const out: DriverEvent[] = [];
+    const retries: { delayMs: number; compactFirst: boolean }[] = [];
+    const mapper = new OpenCodeMapper(
+      () => SID,
+      (e) => out.push(e),
+      (d) => retries.push(d)
+    );
+    const send = (type: string, properties: Record<string, unknown>) =>
+      mapper.map({ type, properties: { sessionID: SID, ...properties } });
+    let n = 0;
+    const fail = (message = HEADERS) => {
+      send("session.status", { status: { type: "busy" } });
+      send("message.updated", {
+        info: { id: `m${++n}`, role: "assistant", providerID: "local" },
+      });
+      send("session.error", { error: { name: "APIError", data: { message } } });
+      send("session.status", { status: { type: "idle" } });
+    };
+    const ends = () =>
+      out.flatMap((e) =>
+        e.type === "item" && e.item.kind === "turn_end" ? [e.item] : []
+      );
+    const notes = () =>
+      out.flatMap((e) =>
+        e.type === "item" && e.item.kind === "note" ? [e.item.text] : []
+      );
+    return { mapper, retries, send, fail, ends, notes };
+  }
+
+  function ranTool(d: ReturnType<typeof drive>) {
+    d.mapper.items.tool("t1", {
+      name: "Edit",
+      title: "Edit src/applier/sources.ts",
+      input: { file_path: "src/applier/sources.ts" },
+    });
+    d.mapper.items.toolDone("t1", "error", "oldString not found");
+  }
+
+  it("keeps the turn open and asks for a retry", () => {
+    const d = drive();
+    d.mapper.prompted();
+    d.fail();
+    expect(d.ends()).toHaveLength(0);
+    expect(d.mapper.items.inTurn).toBe(true);
+    expect(d.retries).toHaveLength(1);
+    expect(d.retries[0].delayMs).toBeGreaterThan(1000);
+    expect(d.notes()[0]).toContain("Trying again");
+  });
+
+  it("gives up after three retries with a report of what finished", () => {
+    const d = drive();
+    d.mapper.prompted();
+    ranTool(d);
+    for (let i = 0; i < 3; i++) {
+      d.fail();
+      d.mapper.prompted(true);
+    }
+    expect(d.ends()).toHaveLength(0);
+    d.fail();
+    const [end] = d.ends();
+    expect(d.retries).toHaveLength(3);
+    expect(end.ended?.notice).toContain("3 retries didn't get through");
+    expect(end.ended?.notice).toContain("src/applier/sources.ts (1 failed)");
+    expect(d.mapper.items.inTurn).toBe(false);
+  });
+
+  it("does not retry on top of OpenCode's own retries", () => {
+    const d = drive();
+    d.mapper.prompted();
+    d.send("session.status", {
+      status: { type: "retry", attempt: 1, message: HEADERS, next: 1 },
+    });
+    d.fail();
+    expect(d.retries).toHaveLength(0);
+    expect(d.ends()[0].ended?.notice).toContain("even after the agent retried");
+  });
+
+  it("ends an error that isn't transient straight away", () => {
+    const d = drive();
+    d.mapper.prompted();
+    d.fail("401 Unauthorized");
+    expect(d.retries).toHaveLength(0);
+    expect(d.ends()[0].ended?.notice).toBe(
+      "The model's server returned an error, shown above."
+    );
+  });
+
+  it("starts the count over for a new message", () => {
+    const d = drive();
+    d.mapper.prompted();
+    for (let i = 0; i < 3; i++) {
+      d.fail();
+      d.mapper.prompted(true);
+    }
+    d.fail();
+    d.mapper.prompted();
+    d.fail();
+    expect(d.retries).toHaveLength(4);
+  });
+
+  it("ignores the idle of a compaction between retries", () => {
+    const d = drive();
+    d.mapper.prompted();
+    d.fail();
+    d.mapper.holdIdle(true);
+    d.send("session.status", { status: { type: "busy" } });
+    d.send("session.status", { status: { type: "idle" } });
+    d.mapper.holdIdle(false);
+    expect(d.ends()).toHaveLength(0);
+    expect(d.mapper.items.inTurn).toBe(true);
+  });
+
+  it("ends as interrupted when stopped while waiting", () => {
+    const d = drive();
+    d.mapper.prompted();
+    d.fail();
+    d.mapper.stopRetrying();
+    expect(d.ends()[0]).toMatchObject({ interrupted: true });
+  });
+});

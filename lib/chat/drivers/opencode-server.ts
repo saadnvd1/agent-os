@@ -85,7 +85,12 @@ export class OpenCodeServer {
   }
 
   // One JSON call. Errors carry OpenCode's message, never the URL.
-  async call<T>(method: string, path: string, body?: unknown): Promise<T> {
+  async call<T>(
+    method: string,
+    path: string,
+    body?: unknown,
+    timeoutMs = CALL_MS
+  ): Promise<T> {
     await this.ready;
     const res = await fetch(this.endpoint(path), {
       method,
@@ -94,7 +99,7 @@ export class OpenCodeServer {
         ...(body !== undefined && { "content-type": "application/json" }),
       },
       body: body === undefined ? undefined : JSON.stringify(body),
-      signal: AbortSignal.timeout(CALL_MS),
+      signal: AbortSignal.timeout(timeoutMs),
     });
     const text = await res.text();
     const data = text ? (JSON.parse(text) as T & P) : (undefined as T);
