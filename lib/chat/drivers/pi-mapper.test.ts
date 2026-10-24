@@ -404,6 +404,8 @@ describe("PiMapper retries", () => {
     expect(out.some((e) => e.type === "item" && e.item.kind === "note")).toBe(
       true
     );
+  });
+});
 
 describe("PiMapper request reports", () => {
   it("reports the prompt a response was measured on, and retries", () => {

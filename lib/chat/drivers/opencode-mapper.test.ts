@@ -488,6 +488,8 @@ describe("OpenCodeMapper retries", () => {
     d.fail();
     d.mapper.stopRetrying();
     expect(d.ends()[0]).toMatchObject({ interrupted: true });
+  });
+});
 
 describe("OpenCodeMapper request reports", () => {
   const mapper = () => {
