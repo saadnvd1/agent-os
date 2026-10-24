@@ -60,6 +60,18 @@ The line under a turn reads **Ended early** (not **Done**) when it stopped short
 - it wrote a tool call AgentOS couldn't run;
 - it sent an empty reply, or the server returned an error.
 
+### When the model's server stops answering
+
+A request that times out (OpenCode's "Provider response headers timed out") or is dropped (connection reset, 429, 5xx) is tried again, up to three times, waiting 2, 4 and 8 seconds. The tool steps that already ran stay in the conversation, and the retry tells the model to carry on, not redo them. If the context is large, it is compacted before the last try. Where OpenCode or Pi already retried the failure themselves, AgentOS adds no retries on top. Stopping the turn cancels a retry that is waiting.
+
+When the tries run out the turn ends early with a notice of what finished (tool steps, files edited, which edits failed) and what didn't. Send "continue" and it picks up from there.
+
+With OpenCode, AgentOS also raises the wait for a model server's first response from 5 to 20 minutes for the providers in your OpenCode config and the one you picked, since a local model reading a long prompt sends nothing until it has finished. The 5 minute limit on silence once a reply is streaming stays. A `headerTimeout` you set yourself in `opencode.json` is kept.
+
+### Edits that miss, and broken syntax
+
+AgentOS puts a guard beside the edit tools of OpenCode and Pi. An edit whose old text isn't in the file is refused before it runs, and the model is shown the file's current lines around the closest match and told to read the file again; sending the same failing edit again says so. Anything the agent's own matching would accept is let through. After an edit or write to a `.ts`, `.tsx`, `.js` or similar file, a syntax-only parse adds any new syntax errors and names declared twice in one block to the tool result, so the model fixes them at once. Errors the file already had are not repeated. The parse uses the project's own `typescript` package, or AgentOS's; with neither, it says nothing.
+
 A task whose turn ends this way is not treated as finished work: the orchestrator is told it ended early and why. Each case also writes one line to the chat worker's log (`[chat] turn ended early {…}`) with the driver, provider, model, finish reason and the last 240 characters of the reply with secrets masked. Never the prompt. The log sits next to the worker's socket in `~/.agent-os/chat/`.
 
 ## Ollama models in the new-session menu

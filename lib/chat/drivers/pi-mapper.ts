@@ -3,6 +3,12 @@ import type { DriverEvent, UsageTotals } from "../events";
 import { toolDiff, toolTitle } from "../tools";
 import { TurnItems, type ToolStart } from "./turn-items";
 import { logTurnEnd, needsSummary, turnOutcome } from "./turn-outcome";
+import {
+  COMPACT_AT_PERCENT,
+  retryNotice,
+  TurnRetry,
+  type RetryDecision,
+} from "./transient-retry";
 
 type P = Record<string, unknown>;
 const str = (v: unknown) => (typeof v === "string" ? v : "");
@@ -63,8 +69,29 @@ export class PiMapper {
     cacheWriteTokens: 0,
   };
 
-  constructor(private emit: (e: DriverEvent) => void) {
+  // Retrying a turn the model's server dropped, when Pi didn't.
+  readonly retry = new TurnRetry();
+  private agentRetried = false;
+  // A failed turn is waiting for its retry to go out.
+  retrying = false;
+  // The context's fill, as last reported.
+  contextPercent = 0;
+
+  constructor(
+    private emit: (e: DriverEvent) => void,
+    // Called when a failed turn is to be tried again.
+    private onRetry: (
+      d: Extract<RetryDecision, { retry: true }>,
+      error: string
+    ) => void = () => {}
+  ) {
     this.items = new TurnItems(emit);
+  }
+
+  // The reader sent a message: a new turn's retries start over.
+  userPrompt(): void {
+    this.retry.reset();
+    this.agentRetried = false;
   }
 
   // The last answer in the run stopped because the reader stopped it.
@@ -99,6 +126,15 @@ export class PiMapper {
           e.isError ? "error" : "done",
           resultText(e.result)
         );
+      case "auto_retry_start":
+        this.agentRetried = true;
+        return this.items.note(
+          `Pi is trying again (${str(e.attempt)} of ${str(e.maxAttempts)}): ${str(e.errorMessage).slice(0, 160)}`
+        );
+      case "auto_retry_end":
+        if (e.success === false && e.finalError && !this.error)
+          this.error = str(e.finalError);
+        return;
       case "compaction_start":
         return this.emit({ type: "compacting", active: true });
       case "compaction_end":
@@ -184,9 +220,31 @@ export class PiMapper {
     });
   }
 
+  private retryTurn(): boolean {
+    const d = this.retry.next({
+      error: this.error,
+      harnessRetried: this.agentRetried,
+      contextHeavy: this.contextPercent >= COMPACT_AT_PERCENT,
+    });
+    if (!d.retry) return false;
+    this.items.note(retryNotice(d, this.error));
+    this.retrying = true;
+    this.onRetry(d, this.error);
+    return true;
+  }
+
+  // The reader stopped the turn while it waited to retry.
+  stopRetrying(): void {
+    this.retrying = false;
+    this.emit({ type: "usage", totals: { ...this.totals } });
+    this.items.endTurn({ interrupted: true });
+  }
+
   // The run is over: Pi has nothing left to do for it.
   endTurn(): void {
     if (!this.items.inTurn) return;
+    if (this.error && !this.aborted && this.retryTurn()) return;
+    this.retrying = false;
     this.emit({ type: "usage", totals: { ...this.totals } });
     const ended = this.aborted
       ? undefined
@@ -195,6 +253,9 @@ export class PiMapper {
           text: this.last.text,
           toolCalls: this.last.calls,
           error: this.error || undefined,
+          retries: this.retry.tried,
+          agentRetried: this.agentRetried,
+          summary: this.items.summary(),
         });
     if (ended)
       logTurnEnd({

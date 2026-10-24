@@ -8,9 +8,41 @@ import { openCodeRules } from "./opencode-rules";
 import { OpenCodeServer } from "./opencode-server";
 import { OpenCodeApprovals } from "./opencode-approvals";
 import { RESULTS_BRIEF, SUMMARY_NUDGE } from "./turn-outcome";
+import { openCodeConfigContent } from "./opencode-config";
+import { writeOpenCodeGuard } from "./opencode-plugin";
+import { typescriptPath } from "./edit-guard";
+import { continuePrompt, type RetryDecision } from "./transient-retry";
 
 type P = Record<string, unknown>;
 const str = (v: unknown) => (typeof v === "string" ? v : "");
+
+// Compacting can take a while; the retry waits for it.
+const COMPACT_MS = 300_000;
+
+// The server's environment for one conversation: the edit guard plugin, a
+// longer header wait for its providers, and the TypeScript to check syntax
+// with. Where any of it can't be set up the conversation runs without it.
+function conversationEnv(
+  cwd: string,
+  model: string,
+  env: NodeJS.ProcessEnv
+): NodeJS.ProcessEnv {
+  try {
+    const ts = typescriptPath();
+    const withTs = { ...env, ...(ts && { AGENTOS_TYPESCRIPT: ts }) };
+    return {
+      ...withTs,
+      OPENCODE_CONFIG_CONTENT: openCodeConfigContent({
+        cwd,
+        env: withTs,
+        model,
+        pluginFile: writeOpenCodeGuard(),
+      }),
+    };
+  } catch {
+    return env;
+  }
+}
 
 // How long a prompt may go without the session turning busy before the
 // turn is checked on.
@@ -85,13 +117,23 @@ export const openCodeDriver: ChatDriver = {
   start(options): ChatConversation {
     const out = new InputQueue<DriverEvent>();
     const emit = (e: DriverEvent) => out.push(e);
-    const server = new OpenCodeServer(options.cwd, {
-      ...sessionBaseEnv(),
-      ...options.env,
-    });
+    const server = new OpenCodeServer(
+      options.cwd,
+      conversationEnv(options.cwd, options.model ?? "", {
+        ...sessionBaseEnv(),
+        ...options.env,
+      })
+    );
     let sessionId: string | null = null;
     const children = new Set<string>();
-    const mapper = new OpenCodeMapper(() => sessionId, emit);
+    let retryTimer: ReturnType<typeof setTimeout> | null = null;
+    // Bumped when a retry is cancelled, so one already under way stops.
+    let retryGen = 0;
+    const mapper = new OpenCodeMapper(
+      () => sessionId,
+      emit,
+      (d, error) => scheduleRetry(d, error)
+    );
     const approvals = new OpenCodeApprovals(emit, server, (e) => fail(e));
     let access = options.access;
     let plan = !!options.plan;
@@ -160,17 +202,59 @@ export const openCodeDriver: ChatDriver = {
       });
     }
 
-    async function prompt(text: string, images?: ChatImage[]) {
-      mapper.prompted();
+    // The failed request goes again after its wait, on a compacted context
+    // for the last try. Stopping or closing cancels it.
+    function scheduleRetry(
+      d: Extract<RetryDecision, { retry: true }>,
+      error: string
+    ) {
+      cancelRetry();
+      const gen = retryGen;
+      retryTimer = setTimeout(() => {
+        retryTimer = null;
+        void resume(d, error, gen);
+      }, d.delayMs);
+    }
+
+    // Whether a retry was waiting or under way.
+    function cancelRetry(): boolean {
+      const pending = retryTimer !== null || mapper.retrying;
+      if (retryTimer) clearTimeout(retryTimer);
+      retryTimer = null;
+      retryGen++;
+      return pending;
+    }
+
+    async function resume(
+      d: Extract<RetryDecision, { retry: true }>,
+      error: string,
+      gen: number
+    ) {
+      const live = () => !closed && mapper.items.inTurn && gen === retryGen;
+      if (!live()) return;
+      if (d.compactFirst && model) {
+        mapper.holdIdle(true);
+        await server
+          .call("POST", `/session/${sessionId}/summarize`, model, COMPACT_MS)
+          .catch(() => {});
+        mapper.holdIdle(false);
+        if (!live()) return;
+      }
+      await prompt(continuePrompt(error), undefined, true);
+    }
+
+    async function prompt(text: string, images?: ChatImage[], retried = false) {
+      if (!retried) cancelRetry();
+      mapper.prompted(retried);
       try {
         await ready;
         await server.call("POST", `/session/${sessionId}/prompt_async`, {
           model,
           agent: plan ? "plan" : "build",
-          system: [options.systemAppend, RESULTS_BRIEF]
-            .filter(Boolean)
-            .join("\n\n"),
-          parts: openCodeParts(text, images),
+          system: openCodeSystem(options.systemAppend),
+          parts: retried
+            ? [{ type: "text", text, synthetic: true }]
+            : openCodeParts(text, images),
         });
       } catch (error) {
         fail(error as Error);
@@ -189,6 +273,11 @@ export const openCodeDriver: ChatDriver = {
     }
 
     async function abort() {
+      // A turn waiting to retry has nothing running to abort: it ends here.
+      if (cancelRetry()) {
+        mapper.stopRetrying();
+        for (const next of held.splice(0)) void prompt(next.text, next.images);
+      }
       await ready;
       for (const id of [sessionId, ...children])
         await server.call("POST", `/session/${id}/abort`).catch(() => {});
@@ -197,6 +286,7 @@ export const openCodeDriver: ChatDriver = {
     function close() {
       if (closed) return;
       closed = true;
+      cancelRetry();
       approvals.pending.expireAll();
       stream.abort();
       server.close();

@@ -339,3 +339,70 @@ describe("PiMapper summary nudge", () => {
     expect(piArgs({} as never).join(" ")).toContain(RESULTS_BRIEF);
   });
 });
+
+describe("PiMapper retries", () => {
+  const HEADERS = "Provider response headers timed out after 300000ms";
+  const failed = [
+    { type: "agent_start" },
+    {
+      type: "message_end",
+      message: {
+        role: "assistant",
+        stopReason: "error",
+        errorMessage: HEADERS,
+        content: [],
+      },
+    },
+  ];
+
+  function drive() {
+    const out: DriverEvent[] = [];
+    const retries: unknown[] = [];
+    const mapper = new PiMapper(
+      (e) => out.push(e),
+      (d) => retries.push(d)
+    );
+    const ends = () =>
+      out.flatMap((e) =>
+        e.type === "item" && e.item.kind === "turn_end" ? [e.item] : []
+      );
+    return { mapper, out, retries, ends };
+  }
+
+  it("holds the turn open and asks for a retry", () => {
+    const { mapper, retries, ends } = drive();
+    for (const e of failed) mapper.map(e);
+    mapper.endTurn();
+    expect(retries).toHaveLength(1);
+    expect(ends()).toHaveLength(0);
+    expect(mapper.retrying).toBe(true);
+  });
+
+  it("reports after three retries", () => {
+    const { mapper, retries, ends } = drive();
+    for (let i = 0; i < 4; i++) {
+      for (const e of failed) mapper.map(e);
+      mapper.endTurn();
+    }
+    expect(retries).toHaveLength(3);
+    expect(ends()[0].ended?.notice).toContain("3 retries didn't get through");
+  });
+
+  it("leaves it to Pi when Pi retried, and shows its retries", () => {
+    const { mapper, retries, ends, out } = drive();
+    mapper.map({ type: "agent_start" });
+    mapper.map({
+      type: "auto_retry_start",
+      attempt: 1,
+      maxAttempts: 3,
+      errorMessage: HEADERS,
+    });
+    mapper.map(failed[1]);
+    mapper.endTurn();
+    expect(retries).toHaveLength(0);
+    expect(ends()[0].ended?.notice).toContain("even after the agent retried");
+    expect(out.some((e) => e.type === "item" && e.item.kind === "note")).toBe(
+      true
+    );
+  });
+});

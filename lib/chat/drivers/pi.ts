@@ -6,12 +6,17 @@ import { AGENT_DEFAULT_MODEL } from "../../providers/registry";
 import { PiAccess, PiDialogs, writeExtension } from "./pi-approvals";
 import { TEXT_TOOLS_EXTENSION } from "./pi-text-tools";
 import { PiMapper } from "./pi-mapper";
+import { writePiEditGuard } from "./pi-edit-guard";
+import { typescriptPath } from "./edit-guard";
+import { continuePrompt, type RetryDecision } from "./transient-retry";
 import { PiRpc } from "./pi-rpc";
 import { RESULTS_BRIEF, SUMMARY_NUDGE } from "./turn-outcome";
 
 type P = Record<string, unknown>;
 
 const SETTLE_TRIES = 5;
+// Compacting can take a while; the retry waits for it.
+const COMPACT_MS = 300_000;
 
 export function piArgs(o: ChatStartOptions, ...extensions: string[]): string[] {
   const args = extensions.flatMap((e) => ["-e", e]);
@@ -41,6 +46,15 @@ const splitModel = (model: string) => {
     ? { provider: model.slice(0, slash), modelId: model.slice(slash + 1) }
     : null;
 };
+
+// The edit guard extension, or none where it can't be written.
+function guardExtension(): string[] {
+  try {
+    return [writePiEditGuard()];
+  } catch {
+    return [];
+  }
+}
 
 export const piDriver: ChatDriver = {
   id: "pi",
@@ -78,7 +92,11 @@ export const piDriver: ChatDriver = {
   start(options): ChatConversation {
     const out = new InputQueue<DriverEvent>();
     const emit = (e: DriverEvent) => out.push(e);
-    const mapper = new PiMapper(emit);
+    let retryTimer: ReturnType<typeof setTimeout> | null = null;
+    // Bumped when a retry is cancelled, so one already under way stops.
+    let retryGen = 0;
+    let closed = false;
+    const mapper = new PiMapper(emit, (d, error) => scheduleRetry(d, error));
     const dialogs = new PiDialogs(emit);
     const access = new PiAccess(options.access);
     // Sent now: goes once the stopped run has ended.
@@ -87,6 +105,7 @@ export const piDriver: ChatDriver = {
     const rpc: PiRpc = new PiRpc(
       piArgs(
         options,
+        ...guardExtension(),
         writeExtension(),
         writeExtension("agentos-text-tools.mjs", TEXT_TOOLS_EXTENSION)
       ),
@@ -96,6 +115,7 @@ export const piDriver: ChatDriver = {
           ...sessionBaseEnv(),
           ...options.env,
           AGENTOS_PI_ACCESS_FILE: access.file,
+          ...(typescriptPath() && { AGENTOS_TYPESCRIPT: typescriptPath() }),
           PI_OFFLINE: "1",
         },
       },
@@ -110,6 +130,7 @@ export const piDriver: ChatDriver = {
           });
         },
         exit(error) {
+          cancelRetry();
           dialogs.pending.expireAll();
           mapper.items.endTurn({ error });
           access.remove();
@@ -150,6 +171,7 @@ export const piDriver: ChatDriver = {
         .then((s) => {
           const c = s.contextUsage;
           if (c?.tokens == null || !c.contextWindow) return;
+          mapper.contextPercent = Number(c.percent) || 0;
           emit({
             type: "context",
             context: {
@@ -164,8 +186,50 @@ export const piDriver: ChatDriver = {
         .catch(() => {});
     }
 
-    const prompt = (text: string, images?: ChatImage[]) =>
-      rpc
+    // The failed request goes again after its wait, on a compacted context
+    // for the last try. Stopping or closing cancels it.
+    function scheduleRetry(
+      d: Extract<RetryDecision, { retry: true }>,
+      error: string
+    ) {
+      cancelRetry();
+      const gen = retryGen;
+      retryTimer = setTimeout(() => {
+        retryTimer = null;
+        void resume(d, error, gen);
+      }, d.delayMs);
+    }
+
+    // Whether a retry was waiting or under way.
+    function cancelRetry(): boolean {
+      const pending = retryTimer !== null || mapper.retrying;
+      if (retryTimer) clearTimeout(retryTimer);
+      retryTimer = null;
+      retryGen++;
+      return pending;
+    }
+
+    async function resume(
+      d: Extract<RetryDecision, { retry: true }>,
+      error: string,
+      gen: number
+    ) {
+      const live = () => !closed && mapper.retrying && gen === retryGen;
+      if (!live()) return;
+      if (d.compactFirst) {
+        await rpc.request("compact", {}, COMPACT_MS).catch(() => {});
+        if (!live()) return;
+      }
+      mapper.retrying = false;
+      await prompt(continuePrompt(error), undefined, true);
+    }
+
+    const prompt = (text: string, images?: ChatImage[], retried = false) => {
+      if (!retried) {
+        cancelRetry();
+        mapper.userPrompt();
+      }
+      return rpc
         .request("prompt", {
           message: text,
           images: piImages(images),
@@ -175,10 +239,22 @@ export const piDriver: ChatDriver = {
         .catch((error: Error) => {
           mapper.items.error(error.message);
         });
+    };
+
+    // A turn waiting to retry has nothing running to abort: it ends here.
+    function stopWaiting(): boolean {
+      if (!cancelRetry()) return false;
+      mapper.stopRetrying();
+      return true;
+    }
 
     return {
       send(text, images, sendOptions) {
         if (sendOptions?.now && mapper.items.inTurn) {
+          if (stopWaiting()) {
+            void prompt(text, images);
+            return undefined;
+          }
           held.push({ text, images });
           // Abort answers once the run has stopped; what was held goes then.
           void rpc
@@ -193,6 +269,7 @@ export const piDriver: ChatDriver = {
       },
       // Stops the run only: a message already sent still goes after it.
       async interrupt() {
+        if (stopWaiting()) return;
         await rpc.request("abort", {}, 0);
       },
       async setModel(model) {
@@ -211,6 +288,8 @@ export const piDriver: ChatDriver = {
         return { canUndo: false, error: "Pi can't undo from chat", files: [] };
       },
       close() {
+        closed = true;
+        cancelRetry();
         dialogs.pending.expireAll();
         rpc.close();
         out.end();
