@@ -619,3 +619,16 @@ describe("ClaudeMapper turn starts", () => {
     ]);
   });
 });
+
+describe("ClaudeMapper model retries", () => {
+  it("reports an api_retry as a model retry", () => {
+    expect(
+      new ClaudeMapper().map({
+        type: "system",
+        subtype: "api_retry",
+        attempt: 2,
+        error_status: 529,
+      } as never)
+    ).toEqual([{ type: "model_retry", attempt: 2, message: "HTTP 529" }]);
+  });
+});

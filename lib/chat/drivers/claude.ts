@@ -454,5 +454,13 @@ export function usageEvents(
       ? "review"
       : "sub";
   const call = callFromAssistant(m.message, kind, agentType, at);
-  return call ? [{ type: "call_usage", call }] : [];
+  if (!call) return [];
+  const prompt =
+    call.input + call.cacheRead + call.cacheWrite5m + call.cacheWrite1h;
+  return [
+    { type: "call_usage", call },
+    ...(kind === "main" && prompt > 0
+      ? [{ type: "prompt_tokens" as const, tokens: prompt }]
+      : []),
+  ];
 }

@@ -537,3 +537,48 @@ describe("OpenCodeMapper retries", () => {
     expect(d.ends()[0]).toMatchObject({ interrupted: true });
   });
 });
+
+describe("OpenCodeMapper request reports", () => {
+  const mapper = () => {
+    const out: DriverEvent[] = [];
+    const m = new OpenCodeMapper(
+      () => "s1",
+      (e) => out.push(e)
+    );
+    m.prompted();
+    return { m, out };
+  };
+
+  it("reports a retry and still starts the turn", () => {
+    const { m, out } = mapper();
+    m.map({
+      type: "session.status",
+      properties: {
+        sessionID: "s1",
+        status: { type: "retry", attempt: 3, message: "rate limited" },
+      },
+    });
+    expect(out).toContainEqual({
+      type: "model_retry",
+      attempt: 3,
+      message: "rate limited",
+    });
+  });
+
+  it("reports the measured prompt of a completed response", () => {
+    const { m, out } = mapper();
+    m.map({
+      type: "message.updated",
+      properties: {
+        sessionID: "s1",
+        info: {
+          id: "a1",
+          role: "assistant",
+          time: { completed: 1 },
+          tokens: { input: 200, output: 5, cache: { read: 800, write: 0 } },
+        },
+      },
+    });
+    expect(out).toContainEqual({ type: "prompt_tokens", tokens: 1000 });
+  });
+});

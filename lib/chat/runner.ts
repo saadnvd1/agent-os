@@ -16,9 +16,9 @@ import { randomUUID } from "crypto";
 import os from "os";
 import { db, type Session } from "../db";
 import type { CompactFirst } from "./stale";
+import { trackModelWait } from "./model-wait-live";
 import type {
   ApprovalDecision,
-  ChatContext,
   ChatFile,
   ChatImage,
   ChatServerMessage,
@@ -34,26 +34,17 @@ import {
   type Listener,
   type Live,
 } from "./registry";
-import {
-  capsKey,
-  emitCapabilities,
-  releaseUnwatchedSoon,
-  sendCapabilities,
-  setChatPlan,
-} from "./settings";
+import { capsKey, emitCapabilities, setChatPlan } from "./settings";
 import {
   endOrphanedTasks,
   endRunningTasks,
   getItem,
   hasItem,
   itemsOfKind,
-  recentTasks,
   sessionsWithRunningTasks,
   saveItem,
-  settle,
 } from "./store";
 import { noteToolResult } from "../health/env/recordHit";
-import { readPage, toolBody, type ItemPage } from "./page";
 import {
   deleteQueued,
   editQueued,
@@ -100,16 +91,6 @@ export {
   setChatModel,
   setChatPlan,
 } from "./settings";
-
-function savedContext(sessionId: string): ChatContext | null {
-  const raw = getSession(sessionId).chat_context;
-  if (!raw) return null;
-  try {
-    return JSON.parse(raw) as ChatContext;
-  } catch {
-    return null;
-  }
-}
 
 const CARRY_OUT = "Carry out the plan.";
 
@@ -192,6 +173,7 @@ function emitEnded(
 
 function onWorkerEvent(sessionId: string, live: Live, e: WorkerEvent): void {
   track(live, e);
+  if (trackModelWait(sessionId, live, e)) return;
   if (e.type === "item" && e.item.kind === "tool")
     noteToolResult(sessionId, e.item);
   if (
@@ -968,55 +950,7 @@ export function chatTaskOutput(
   return taskOutputTail(taskId, task.outputFile);
 }
 
-// What a watcher is sent of stored items: the live text of what's still
-// streaming, or with no conversation running, nothing left running.
-function present(sessionId: string, items: ChatItem[]): ChatItem[] {
-  const live = registry.live.get(sessionId);
-  if (live) return items.map((i) => live.streaming.get(i.id) ?? i);
-  return runningWorkers().includes(sessionId) ? items : settle(items);
-}
-
-// Snapshot then live updates. Returns the unsubscribe function. Every
-// client gets the latest page and asks for older ones.
-export function watchChat(sessionId: string, listener: Listener): () => void {
-  const live = registry.live.get(sessionId);
-  const page = readPage(sessionId);
-  const onPage = new Set(page.items.map((i) => i.id));
-  // The composer lists background work still going or just done, even when
-  // it started before the page.
-  const recent = Date.now() - 60 * 60 * 1000;
-  const tasks = recentTasks(sessionId, recent).filter((t) => !onPage.has(t.id));
-  listener({
-    type: "snapshot",
-    items: present(sessionId, page.items),
-    cursor: page.cursor,
-    hasMore: page.hasMore,
-    tasks: present(sessionId, tasks),
-    state: live?.state ?? "idle",
-    compacting: live?.compacting ?? null,
-    queue: listQueue(sessionId),
-    suggestion: getSession(sessionId).chat_suggestion ?? null,
-  });
-  listener({ type: "context", context: savedContext(sessionId) });
-  sendCapabilities(sessionId, listener).catch((error) =>
-    console.error(`[chat ${sessionId}] capabilities not sent:`, error)
-  );
-  let set = registry.listeners.get(sessionId);
-  if (!set) registry.listeners.set(sessionId, (set = new Set()));
-  set.add(listener);
-  return () => {
-    set?.delete(listener);
-    releaseUnwatchedSoon();
-  };
-}
-
-// The page before `before`, as the reader scrolls up.
-export function chatHistory(sessionId: string, before: number): ItemPage {
-  const page = readPage(sessionId, before);
-  return { ...page, items: present(sessionId, page.items) };
-}
-
-export const chatToolBody = toolBody;
+export { chatHistory, chatToolBody, watchChat } from "./runner-watch";
 
 // After a restart: reconnect to every worker still running a conversation,
 // and send the queues of conversations whose worker is gone.
