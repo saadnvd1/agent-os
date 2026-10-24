@@ -121,9 +121,16 @@ export function PairChip({
         <DropdownMenuSeparator />
         <DropdownMenuItem
           variant="destructive"
+          className="min-h-11"
           onSelect={() => end.mutate(true, { onError: fail })}
         >
-          Unlink and finish the analyst
+          <span className="flex flex-col gap-0.5">
+            <span>End analyst</span>
+            <span className="text-muted-foreground text-[11px] font-normal whitespace-normal">
+              Stops the reviews and moves the analyst to Done. Its conversation
+              is kept; nothing is deleted.
+            </span>
+          </span>
         </DropdownMenuItem>
       </DropdownMenuContent>
     </DropdownMenu>
