@@ -9,6 +9,7 @@ import { needsBody } from "@/lib/chat/bodyCache";
 import { cn } from "@/lib/utils";
 import { formatElapsed } from "@/lib/chat/elapsed";
 import { stepCounts, toolOutcome } from "@/lib/chat/tool-outcome";
+import { stepSummary } from "@/lib/chat/step-summary";
 import { StepOutcomes } from "./StepOutcomes";
 import { Highlighted } from "./Code";
 import { BackgroundButton, BackgroundState, useBackground } from "./background";
@@ -227,13 +228,12 @@ function ToolRow({ tool }: { tool: ToolItem }) {
 export function ToolGroup({ tools }: { tools: ToolItem[] }) {
   const running = tools.some((t) => t.status === "running");
   const { ok, failed, stopped } = stepCounts(tools);
-  const edits = tools.filter((t) => t.diff || t.hasDiff).length;
   const moved = tools.filter((t) => t.backgroundTaskId).length;
   const [open, setOpen] = useRowState(`steps:${tools[0].id}`, false);
   const latest =
     tools.findLast((t) => t.status === "running") ?? tools[tools.length - 1];
   return (
-    <div className="bg-foreground/[0.025] rounded-xl px-2 py-1">
+    <div className="bg-foreground/[0.025] rounded-xl px-2 py-0.5">
       <div className="flex items-center gap-1">
         <button
           type="button"
@@ -250,12 +250,7 @@ export function ToolGroup({ tools }: { tools: ToolItem[] }) {
             <Loader2 className="text-primary h-3.5 w-3.5 shrink-0 animate-spin" />
           ) : null}
           <span className="min-w-0 flex-1 truncate">
-            {running
-              ? latest.title
-              : `${tools.length} step${tools.length === 1 ? "" : "s"}`}
-            {!running &&
-              edits > 0 &&
-              ` · ${edits} edit${edits === 1 ? "" : "s"}`}
+            {running ? latest.title : stepSummary(tools)}
             {!running && (failed > 0 || stopped > 0) && ` · ${ok} ok`}
           </span>
           {running && <Elapsed tool={latest} />}
