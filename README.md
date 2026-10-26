@@ -63,6 +63,16 @@ agent-os start
 
 Then open AgentOS, add a project from ⌘K, and press ⌥N. The [install guide](docs/guides/install.md) covers Windows (WSL2), the supported agents, first run and the `agent-os` commands. To use it from your phone, see the [phone guide](docs/guides/phone.md).
 
+## Connect
+
+Connect (in development) lets you reach AgentOS from anywhere, without a tailnet or opening a port. Sign in at [runagentos.com](https://runagentos.com), get a code, and run:
+
+```bash
+agent-os connect   # links this machine with the code from runagentos.com
+```
+
+The machine gets its own address at `https://m-<id>.runagentos.com`, served through a Cloudflare tunnel that AgentOS starts and stops with itself. Its key is made on the machine and never leaves it, and a device still has to be paired before it gets in. Connect also hosts the read-only links made with Share. How it works, and what it does and doesn't trust, is in [docs/reference/security.md](docs/reference/security.md#connect).
+
 ## Security
 
 AgentOS gives whoever uses it a terminal as you, so it decides who that is. This machine (localhost) is always trusted. Your tailnet is trusted by default. Everything else, including Wi-Fi and any reverse proxy, needs a paired device. `AGENTOS_AUTH=off` removes pairing and gives anyone who reaches the port a shell, so use it only behind a proxy that does its own login. The full model, Connect and demo mode are in [docs/reference/security.md](docs/reference/security.md).
