@@ -34,6 +34,14 @@ vi.mock("@/lib/agents/spawn", () => ({
   },
 }));
 
+vi.mock("@/lib/sessions/launch", async (importOriginal) => ({
+  ...(await importOriginal<typeof import("@/lib/sessions/launch")>()),
+  launchSession: async (o: { name?: string; prompt: string }) => {
+    created.push({ kind: "session", name: o.name, prompt: o.prompt });
+    return { session: { id: "s1", name: o.name ?? "generated" } };
+  },
+}));
+
 const { POST } = await import("@/app/api/bus/spawn/route");
 
 // Runs bin/aos against a server that records what it was sent.

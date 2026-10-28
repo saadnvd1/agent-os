@@ -37,6 +37,15 @@ vi.mock("@/lib/agents/spawn", async () => {
   };
 });
 
+const chats: Opts[] = [];
+vi.mock("@/lib/sessions/launch", async (importOriginal) => ({
+  ...(await importOriginal<typeof import("@/lib/sessions/launch")>()),
+  launchSession: async (o: Opts) => {
+    chats.push(o);
+    return { session: { id: "c1", name: "c" } };
+  },
+}));
+
 const { db } = await import("@/lib/db");
 const { createProject } = await import("@/lib/projects");
 const { seedOrchestrator, seedSession } =
@@ -68,6 +77,7 @@ const post = (body: object) =>
 beforeEach(() => {
   tasks.length = 0;
   sessions.length = 0;
+  chats.length = 0;
 });
 
 function seedTask(worktree?: string) {
@@ -129,10 +139,24 @@ describe("who an aos start records", () => {
   it("aos spawn from a task records it too", async () => {
     const caller = seedTask();
     await post({ mode: "session", from: caller });
-    expect(sessions[0]).toMatchObject({
+    expect(chats[0]).toMatchObject({
       startedBy: caller,
       parentSessionId: caller,
     });
+  });
+
+  it("aos spawn opens a chat; --terminal opens a tmux session", async () => {
+    await post({ mode: "session" });
+    expect(chats).toHaveLength(1);
+    expect(chats[0]).toMatchObject({ agentType: "claude", autoApprove: true });
+    expect(sessions).toHaveLength(0);
+    await post({ mode: "session", view: "terminal" });
+    expect(chats).toHaveLength(1);
+    expect(sessions).toHaveLength(1);
+    expect(
+      (await post({ mode: "session", view: "terminal", agentRole: "analyst" }))
+        .status
+    ).toBe(400);
   });
 });
 
