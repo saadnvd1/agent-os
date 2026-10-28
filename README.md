@@ -17,7 +17,7 @@ and check on all of it from your phone.
 - **Each kind of work on the right model.** Planning, review, implementation and titles each run on their own model, set in Settings → Models. [More](docs/reference/model-routing.md)
 - **Nothing starts until you send.** ⌥N opens a draft with project, machine, agent and branch as chips. [More](docs/guides/sessions.md)
 - **Other machines in the same list.** Link another machine that runs AgentOS and start or move work there. [More](docs/reference/machines.md)
-- **Built for your phone.** The whole app works on a phone; pair it with a QR code. [More](docs/guides/phone.md)
+- **Built for your phone.** The whole app works on a phone; pair it with a QR code, or get the [iPhone app](https://apps.apple.com/us/app/agentos-coding-agents/id6820980797) from the App Store. [More](docs/guides/phone.md)
 - **Phone to orchestrator.** A paired phone can send a shake report or a shared page or file to a workspace's orchestrator (`POST /api/orchestrators/:workspaceId/intake`, saved under `intake/` beside the database, shared content marked untrusted), and fetch names to improve dictation (`GET /api/voice/vocab?workspace=`). [More](docs/guides/phone.md)
 - **An analyst beside your coding agent.** Pair a chat with a second one that reviews each turn, explains it in plain English, flags issues and drafts the next prompt, which you send, edit or dismiss. It runs on Claude unless you pick another model, local ones included. Side by side on a desktop, a switch on a phone. [More](docs/decisions/2026-10-21-analyst-sessions.md)
 - **Agents that talk to each other.** Sessions message each other with `aos`, and you see every conversation in Messages. [More](docs/guides/agent-network.md)
@@ -46,6 +46,10 @@ and check on all of it from your phone.
 
 ## Install
 
+[<img src="docs/assets/app-store-badge.svg" alt="Download on the App Store" height="40">](https://apps.apple.com/us/app/agentos-coding-agents/id6820980797)
+
+The iPhone app, [AgentOS: Coding Agents](https://apps.apple.com/us/app/agentos-coding-agents/id6820980797), is on the App Store.
+
 You need Node.js 22+, tmux, and at least one agent CLI (the installer offers to set up what's missing).
 
 ```bash
@@ -70,6 +74,8 @@ Connect (in development) lets you reach AgentOS from anywhere, without a tailnet
 ```bash
 agent-os connect   # links this machine with the code from runagentos.com
 ```
+
+Reach it from your phone with the [AgentOS iPhone app](https://apps.apple.com/us/app/agentos-coding-agents/id6820980797), now on the App Store.
 
 The machine gets its own address at `https://m-<id>.runagentos.com`, served through a Cloudflare tunnel that AgentOS starts and stops with itself. Its key is made on the machine and never leaves it, and a device still has to be paired before it gets in. Connect also hosts the read-only links made with Share. How it works, and what it does and doesn't trust, is in [docs/reference/security.md](docs/reference/security.md#connect).
 
