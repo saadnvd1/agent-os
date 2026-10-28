@@ -36,7 +36,7 @@ aos inbox                         # read messages sent to you
 aos history <session>             # your conversation with a session
 aos read <session>                # what a session in your workspace said and did
                                   # (--turns N | --lines N, --all, --grep text, --json)
-aos spawn <project> "prompt"      # start a new agent session in a project
+aos spawn <project> "prompt"      # start a new chat session in a project (--terminal: tmux)
 aos task <project> "prompt"       # start a background task that ends in a PR
                                   # (both take --group <name>: file it in a group)
 aos group                         # your workspace's groups and their sizes

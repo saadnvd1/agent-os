@@ -16,7 +16,7 @@ import {
   waitingPiecesFor,
 } from "@/lib/plans/claim";
 
-// mode "session" starts an interactive agent; "task" starts one that ends in
+// mode "session" starts an interactive agent (a chat unless view is "terminal"); "task" starts one that ends in
 // a PR, or queues it (over the workspace's limit, or with `after`).
 export async function POST(request: NextRequest) {
   try {
@@ -106,32 +106,40 @@ export async function POST(request: NextRequest) {
         : NextResponse.json({ session: out.started, builds }, { status: 201 });
     }
     if (agentRole !== undefined) {
-      if (mode !== "session") throw new Error("--role works for spawn only");
       if (!isAgentRole(agentRole))
         throw new Error("--role is developer, analyst, reviewer or supervisor");
-      const { session } = await launchSession({
-        projectId: target.id,
-        agentType: "claude",
+      if (startView(view) === "terminal")
+        throw new Error("--terminal doesn't work with --role");
+    }
+    // A terminal session is typed its first prompt in tmux; anything else
+    // opens as a chat (the default view).
+    if (startView(view) === "terminal") {
+      const session = await spawnSession({
+        project: String(project ?? ""),
         prompt,
         name: given,
-        model: typeof model === "string" ? model : null,
-        autoApprove: true,
+        model,
         startedBy,
-        startedVia: starter.startedVia,
         parentSessionId: starter.parentSessionId,
         groupId,
-        agentRole,
       });
       return NextResponse.json({ session }, { status: 201 });
     }
-    const session = await spawnSession({
-      project: String(project ?? ""),
+    if (typeof prompt !== "string" || !prompt.trim())
+      throw new Error("Give the new session a prompt");
+    if (target.is_uncategorized) throw new Error("Pick a real project");
+    const { session } = await launchSession({
+      projectId: target.id,
+      agentType: "claude",
       prompt,
       name: given,
-      model,
+      model: typeof model === "string" ? model : null,
+      autoApprove: true,
       startedBy,
+      startedVia: starter.startedVia,
       parentSessionId: starter.parentSessionId,
       groupId,
+      agentRole,
     });
     return NextResponse.json({ session }, { status: 201 });
   } catch (error) {
