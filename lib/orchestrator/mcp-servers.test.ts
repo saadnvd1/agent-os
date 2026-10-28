@@ -38,6 +38,15 @@ describe("an orchestrator's MCP permissions", () => {
     expect(p.disallowedTools).toEqual(ORCHESTRATOR_PERMISSIONS.disallowedTools);
   });
 
+  it("run in bypassPermissions with full access, so .claude/ writes are not denied", () => {
+    const on = orchestratorPermissions(["linear"], true);
+    expect(on.permissionMode).toBe("bypassPermissions");
+    expect(on.allowedTools).toContain("Edit");
+    expect(orchestratorPermissions(["linear"], false).permissionMode).toBe(
+      "dontAsk"
+    );
+  });
+
   it("allow no MCP server when none is named", () => {
     expect(orchestratorPermissions([]).allowedTools).toEqual(
       ORCHESTRATOR_PERMISSIONS.allowedTools
