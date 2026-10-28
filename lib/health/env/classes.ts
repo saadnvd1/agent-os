@@ -78,9 +78,15 @@ export const ENV_CLASSES: readonly EnvClass[] = [
     id: "local-permission",
     label: "Local permission denied",
     scope: "shell",
-    match: [/Permission denied/, /\bEACCES\b/, /Operation not permitted/],
+    // A quoted phrase is source code (`error: "Permission denied"`), not an error.
+    match: [
+      /(?<!["'`])Permission denied/,
+      /(?<!["'`])\bEACCES\b/,
+      /(?<!["'`])Operation not permitted/,
+    ],
+    // Another machine or a container: not this machine's permissions.
     except: {
-      command: /\b(?:ssh|scp|sftp|rsync|kubectl|docker\s+exec)\b/,
+      command: /\b(?:ssh|scp|sftp|rsync|kubectl|docker|podman)\b/,
       output: /\(publickey/,
     },
     fix: null,

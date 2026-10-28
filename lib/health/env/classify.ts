@@ -28,11 +28,48 @@ function commandOf(tool: string, input: unknown): string {
   return typeof file === "string" ? `${tool} ${genericPath(file)}` : tool;
 }
 
+// The command's parts, split on pipes, `;`, `&&` and newlines outside quotes,
+// so `grep -E "a|b"` stays one part.
+function commandParts(command: string): string[] {
+  const parts: string[] = [];
+  let cur = "";
+  let quote = "";
+  for (let i = 0; i < command.length; i++) {
+    const ch = command[i];
+    if (quote) {
+      if (ch === "\\" && quote === '"') cur += ch + (command[++i] ?? "");
+      else {
+        if (ch === quote) quote = "";
+        cur += ch;
+      }
+      continue;
+    }
+    if (ch === '"' || ch === "'") quote = ch;
+    // A lone `&` (`2>&1`, a background job) doesn't end a part.
+    const split =
+      ch === "\n" ||
+      ch === ";" ||
+      ch === "|" ||
+      (ch === "&" && command[i + 1] === "&");
+    if (split) {
+      if (command[i + 1] === ch && ch !== "\n" && ch !== ";") i++;
+      parts.push(cur);
+      cur = "";
+      continue;
+    }
+    cur += ch;
+  }
+  parts.push(cur);
+  return parts;
+}
+
+// Leading `VAR=value` assignments, as in `W=/path cd $W`.
+const ASSIGNMENTS = /^(?:[A-Za-z_][A-Za-z0-9_]*=(?:"[^"]*"|'[^']*'|\S*)\s*)+/;
+
 // True when every part of the command only reads (after `cd`).
 function onlyReads(command: string): boolean {
-  const parts = command
-    .split(/\n|&&|\|\||;|\|/)
-    .map((p) => p.trim())
+  const parts = commandParts(command)
+    .map((p) => p.trim().replace(ASSIGNMENTS, ""))
     .filter((p) => p && !/^cd\s/.test(p));
   return parts.length > 0 && parts.every((p) => READERS.test(p));
 }

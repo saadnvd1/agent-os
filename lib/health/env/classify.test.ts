@@ -89,6 +89,14 @@ const positives: [string, ToolResult, string][] = [
     "Permission",
   ],
   [
+    "local-permission",
+    bash(
+      "npm i -g foo 2>&1 | tail -3",
+      "npm error Error: EACCES: permission denied, mkdir '/usr/local/lib/node_modules/foo'"
+    ),
+    "EACCES",
+  ],
+  [
     "macos-automation",
     bash(
       "osascript -e 'tell app \"Mail\" to count accounts'",
@@ -165,6 +173,14 @@ describe("what is not a failure", () => {
     ["rg for it", bash("rg ModuleNotFoundError notes.md", out, "done")],
     ["reading a log", bash("cat server.log | head -50", out, "done")],
     [
+      "reading a test file after a variable assignment and cd",
+      bash(
+        'W=/tmp/wt; cd $W && sed -n 1,30p lib/x.test.ts; grep -n "it(" lib/x.test.ts',
+        '      "Error: listen EADDRINUSE: address already in use :::3000",',
+        "done"
+      ),
+    ],
+    [
       "a Read tool holding a traceback",
       {
         tool: "Read",
@@ -220,6 +236,29 @@ describe("what is not a failure", () => {
     [
       "a guard phrase on a call that wasn't refused",
       { tool: "Read", input: {}, output: "Refused: git pull", status: "done" },
+    ],
+    [
+      "a grep whose quoted pattern holds a pipe, finding code",
+      bash(
+        'grep -n -E "forbidden|denied" app/controllers/files_controller.rb | head -5; grep -n "files" config/routes.rb | head',
+        '103:        render json: { error: "Permission denied" }, status: :forbidden',
+        "done"
+      ),
+    ],
+    [
+      "a quoted phrase in code printed by a command that isn't a reader",
+      bash(
+        "bin/rails runner 'puts File.read(\"app/x.rb\")'",
+        'render json: { error: "Permission denied" }, status: :forbidden',
+        "done"
+      ),
+    ],
+    [
+      "a permission error inside a container",
+      bash(
+        "docker run -d --name check -p 127.0.0.1:8317:3000 demo:abc; docker logs check | tail -8",
+        "  errno: -13,\n  code: 'EACCES',\n  syscall: 'mkdir',\n  path: '/data/demo/screens'"
+      ),
     ],
     ["empty output", bash("python3 x.py", "")],
   ])("%s", (_name, result) => {
