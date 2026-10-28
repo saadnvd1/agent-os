@@ -10,6 +10,7 @@
  */
 
 import fs from "fs";
+import type { PermissionMode } from "@anthropic-ai/claude-agent-sdk";
 import os from "os";
 import path from "path";
 import { ORCHESTRATOR_PERMISSIONS } from "./tool-names";
@@ -26,12 +27,19 @@ export const toolPrefix = (server: string) =>
 
 // The permissions for an orchestrator whose workspace allows these servers:
 // a bare mcp__<server> rule allows all of that server's tools.
-export function orchestratorPermissions(servers: string[]) {
+//
+// With full access on, the mode is bypassPermissions: Claude Code always asks
+// before writing under .claude/ (skills, settings, hooks), and in dontAsk
+// mode that ask is a denial. Off keeps dontAsk and the write guard.
+export function orchestratorPermissions(servers: string[], fullAccess = false) {
   const rules = [...new Set(servers.map((s) => s.trim()).filter(Boolean))].map(
     toolPrefix
   );
   return {
     ...ORCHESTRATOR_PERMISSIONS,
+    permissionMode: (fullAccess
+      ? "bypassPermissions"
+      : ORCHESTRATOR_PERMISSIONS.permissionMode) as PermissionMode,
     allowedTools: [...ORCHESTRATOR_PERMISSIONS.allowedTools, ...rules],
   };
 }

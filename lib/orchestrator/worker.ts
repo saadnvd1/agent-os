@@ -12,6 +12,7 @@ import {
 } from "./tools";
 import type { RoleExtras } from "../chat/worker/extras";
 import { refreshSettings } from "../chat/refresh";
+import { orchestratorFullAccess } from "./full-access";
 import { orchestratorToolRefusal } from "./write-guard";
 
 // What an orchestrator's chat worker starts with on top of any chat: its
@@ -22,7 +23,8 @@ export async function orchestratorExtras(
 ): Promise<RoleExtras> {
   const baseUrl = agentEnv(session.id).AGENTOS_URL;
   const permissions = orchestratorPermissions(
-    getWorkspace(session.workspace_id ?? "")?.orch_mcp_servers ?? []
+    getWorkspace(session.workspace_id ?? "")?.orch_mcp_servers ?? [],
+    orchestratorFullAccess(session)
   );
   return {
     systemAppend: await loadOrchestratorBrief(session),

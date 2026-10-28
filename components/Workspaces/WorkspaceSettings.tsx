@@ -61,7 +61,7 @@ export function WorkspaceSettings() {
           />
           <SettingToggle
             title="Orchestrator full access"
-            detail="Its shell and file writes aren't checked: it can push, commit, edit any repository or file on this machine, and merge a PR directly. Off: the deny list, write limits, quick-change cap and merge-only-through-the-gates apply."
+            detail="Its shell and file writes aren't checked: it can push, commit, edit any repository or file on this machine, and merge a PR directly, and edit .claude files (skills, settings, hooks). Applies when its conversation next restarts. Off: the deny list, write limits, quick-change cap and merge-only-through-the-gates apply."
             checked={w.orch_full_access}
             onChange={(on) => update.mutate({ id: w.id, orchFullAccess: on })}
           />
