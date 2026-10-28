@@ -60,6 +60,7 @@ docs/*
 !docs/decisions/
 !docs/guides/
 !docs/reference/
+!docs/assets/
 .mcp.json
 .git-evening
 
