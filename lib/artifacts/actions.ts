@@ -7,6 +7,7 @@ export type ArtifactActionId =
   | "share"
   | "open"
   | "download"
+  | "compare"
   | "open-pr"
   | "copy-path"
   | "open-in-files";
@@ -43,11 +44,18 @@ export interface PageVersions {
   actions: ArtifactAction[];
 }
 
-export function pageActions(ctx: { pdf: boolean }): ArtifactAction[] {
+// versions: how many versions the page has; Compare needs two.
+export function pageActions(ctx: {
+  pdf: boolean;
+  versions?: number;
+}): ArtifactAction[] {
   return [
     { id: "fullscreen", label: "Full screen" },
     { id: "share", label: "Share" },
     { id: "open", label: "Open" },
+    ...((ctx.versions ?? 1) > 1
+      ? [{ id: "compare" as const, label: "Compare" }]
+      : []),
     {
       id: "download",
       label: "Download",

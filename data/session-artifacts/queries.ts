@@ -1,6 +1,7 @@
 import { useQuery } from "@tanstack/react-query";
 import type { SessionArtifact } from "@/lib/session-artifacts/types";
 import type { PageVersions } from "@/lib/artifacts/actions";
+import type { CompareMode, CompareResult } from "@/lib/artifacts/compare/types";
 import { sessionArtifactKeys } from "./keys";
 
 export type { SessionArtifact } from "@/lib/session-artifacts/types";
@@ -74,5 +75,29 @@ export function useArtifactVersions(
     },
     enabled,
     staleTime: 30_000,
+  });
+}
+
+/** What changed between two versions of a page. */
+export function useArtifactCompare(
+  sessionId: string,
+  fromId: string,
+  toId: string,
+  mode: CompareMode,
+  enabled = true
+) {
+  return useQuery({
+    queryKey: sessionArtifactKeys.compare(sessionId, fromId, toId, mode),
+    queryFn: async (): Promise<Extract<CompareResult, { ok: true }>> => {
+      const res = await fetch(
+        `${artifactContentUrl(sessionId, fromId)}/compare?to=${encodeURIComponent(toId)}&mode=${mode}`
+      );
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) throw new Error(data.error || "Couldn't compare versions");
+      return data;
+    },
+    enabled: enabled && !!fromId && !!toId,
+    // Versions never change once saved.
+    staleTime: Infinity,
   });
 }

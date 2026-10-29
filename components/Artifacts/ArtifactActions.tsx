@@ -5,6 +5,7 @@ import type { ReactNode } from "react";
 import {
   Download,
   ExternalLink,
+  GitCompare,
   Loader2,
   Maximize2,
   MoreHorizontal,
@@ -47,6 +48,8 @@ interface Props {
   // bar: the Artifacts view's bottom bar on a phone.
   variant: "icons" | "labelled" | "bar";
   onFull?: () => void;
+  // Offered only by the owner's viewer, for a page with 2+ versions.
+  onCompare?: () => void;
 }
 
 // A rendered page's actions: full screen, share, open, download. One place
@@ -58,10 +61,12 @@ export function ArtifactActions({
   actions,
   variant,
   onFull,
+  onCompare,
 }: Props) {
   const has = (id: ArtifactAction["id"]) => actions.some((a) => a.id === id);
   const formats = actions.find((a) => a.id === "download")?.formats ?? [];
   const full = has("fullscreen") && onFull;
+  const compare = has("compare") ? onCompare : undefined;
   const request: PreviewRequest = {
     kind: "artifact",
     artifactId,
@@ -96,8 +101,13 @@ export function ArtifactActions({
             <Maximize2 className="h-4 w-4" />
           </Button>
         )}
-        {formats.length > 0 && (
-          <More request={request} title={title} formats={formats}>
+        {(formats.length > 0 || compare) && (
+          <More
+            request={request}
+            title={title}
+            formats={formats}
+            onCompare={compare}
+          >
             {(pending) => (
               <Button
                 variant="outline"
@@ -129,6 +139,12 @@ export function ArtifactActions({
           >
             <Maximize2 className="h-3.5 w-3.5" />
             <span className={label}>Full screen</span>
+          </Button>
+        )}
+        {compare && (
+          <Button variant="outline" size="sm" onClick={compare} title="Compare">
+            <GitCompare className="h-3.5 w-3.5" />
+            <span className={label}>Compare</span>
           </Button>
         )}
         {has("share") && (
@@ -238,6 +254,7 @@ export function ArtifactActions({
         title={title}
         formats={formats}
         onFull={full ? onFull : undefined}
+        onCompare={compare}
         href={has("open") ? href : undefined}
       >
         {(pending) => (
@@ -265,6 +282,7 @@ function More({
   title,
   formats,
   onFull,
+  onCompare,
   href,
   children,
 }: {
@@ -272,11 +290,12 @@ function More({
   title: string;
   formats: DownloadFormat[];
   onFull?: () => void;
+  onCompare?: () => void;
   href?: string;
   children: (pending: boolean) => ReactNode;
 }) {
   const { choose, pending } = useShareDownload(request, title);
-  if (!onFull && !href && !formats.length) return null;
+  if (!onFull && !onCompare && !href && !formats.length) return null;
   return (
     <DropdownMenu>
       <DropdownMenuTrigger asChild>{children(pending)}</DropdownMenuTrigger>
@@ -284,6 +303,11 @@ function More({
         {onFull && (
           <DropdownMenuItem className="min-h-11 gap-2" onSelect={onFull}>
             <Maximize2 className="h-4 w-4" /> Full screen
+          </DropdownMenuItem>
+        )}
+        {onCompare && (
+          <DropdownMenuItem className="min-h-11 gap-2" onSelect={onCompare}>
+            <GitCompare className="h-4 w-4" /> Compare versions
           </DropdownMenuItem>
         )}
         {href && (

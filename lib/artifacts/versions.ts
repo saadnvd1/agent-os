@@ -69,6 +69,6 @@ export function pageVersions(
     title: versions[versions.length - 1]?.title ?? a.title,
     latestId: versions[versions.length - 1]?.id ?? a.id,
     versions,
-    actions: pageActions(ctx),
+    actions: pageActions({ ...ctx, versions: versions.length }),
   };
 }

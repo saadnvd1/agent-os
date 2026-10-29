@@ -26,6 +26,7 @@ import { ArtifactIcon } from "./ArtifactRow";
 import { stateLabel } from "./helpers";
 import { ArtifactActions } from "./ArtifactActions";
 import { ArtifactFullscreen } from "./ArtifactFullscreen";
+import { ArtifactCompare } from "./Compare";
 import { VersionSwitcher } from "./VersionSwitcher";
 
 function Body({
@@ -131,6 +132,7 @@ export function ArtifactPreview({
 }) {
   const [copied, setCopied] = useState(false);
   const [full, setFull] = useState(false);
+  const [comparing, setComparing] = useState(false);
   // The version picked; none means the latest, which follows new versions.
   const [picked, setPicked] = useState<string | null>(null);
   const page =
@@ -151,6 +153,7 @@ export function ArtifactPreview({
   const many = versions.length > 1;
   const older = many && !!shown && shown.id !== latest?.id;
 
+  const showCompare = comparing && many;
   const label = stateLabel(artifact, pr);
   // Inside the worktree, the path from its top; the full one is copied.
   const where =
@@ -247,6 +250,7 @@ export function ArtifactPreview({
       actions={pageList}
       variant={variant}
       onFull={() => setFull(true)}
+      onCompare={() => setComparing(true)}
     />
   );
   const actions = isPage
@@ -297,15 +301,15 @@ export function ArtifactPreview({
           <div className="flex shrink-0 gap-1.5">{actions}</div>
         )}
       </div>
-      {mobile && switcher && (
+      {mobile && switcher && !showCompare && (
         <div className="bg-card border-b px-1">{switcher}</div>
       )}
-      {!mobile && switcher && (
+      {!mobile && switcher && !showCompare && (
         <div className="flex border-b px-3 py-1.5 sm:px-4 @3xl:hidden">
           {switcher}
         </div>
       )}
-      {older && latest && (
+      {older && latest && !showCompare && (
         <div className="flex min-h-11 items-center gap-2 border-b border-amber-500/25 bg-amber-500/[0.08] px-3 text-[12.5px] sm:px-4">
           <History className="h-3.5 w-3.5 shrink-0 text-amber-600 dark:text-amber-400" />
           <span className="min-w-0 flex-1 truncate">
@@ -324,15 +328,26 @@ export function ArtifactPreview({
           </Button>
         </div>
       )}
-      <div className="min-h-0 flex-1 overflow-auto">
-        <Body
-          sessionId={sessionId}
-          artifact={artifact}
-          pr={pr}
-          versionId={shownId ?? undefined}
-        />
-      </div>
-      {mobile && hasActions && (
+      {showCompare && shownId ? (
+        <div className="min-h-0 flex-1">
+          <ArtifactCompare
+            sessionId={sessionId}
+            versions={versions}
+            shownId={shownId}
+            onClose={() => setComparing(false)}
+          />
+        </div>
+      ) : (
+        <div className="min-h-0 flex-1 overflow-auto">
+          <Body
+            sessionId={sessionId}
+            artifact={artifact}
+            pr={pr}
+            versionId={shownId ?? undefined}
+          />
+        </div>
+      )}
+      {mobile && hasActions && !showCompare && (
         <div className="flex gap-2 border-t px-3 pt-2.5 pb-[max(0.75rem,env(safe-area-inset-bottom))]">
           {isPage ? <div className="flex-1">{actions}</div> : actions}
         </div>
