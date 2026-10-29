@@ -84,6 +84,7 @@ export const STATIC_SIBLINGS = [
   "pdf",
   "preview",
   "queue",
+  "resolve",
   "status",
 ];
 // No leading "-": an id that reaches a command line can't read as an option.
