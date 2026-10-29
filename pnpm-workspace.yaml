@@ -3,7 +3,9 @@
 # pnpm 11 ignores npm's "overrides" in package.json; these pin a patched
 # floor for transitive dependencies.
 overrides:
-  dompurify: ^3.4.16
+  dompurify: ^3.4.17
+  zod: ^4.6.6
+  "@vitest/mocker": ^4.1.12
   postcss-selector-parser: ^7.1.6
 
 # A version must be at least 7 days old (minutes) to be installed, and a
