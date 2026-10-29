@@ -66,10 +66,13 @@ export function ComposerMenu({
       ref={listRef}
       role="listbox"
       aria-label={label}
-      className="popover-surface absolute right-0 bottom-full left-0 mb-2 max-h-[min(55vh,340px)] overflow-x-hidden overflow-y-auto rounded-xl p-1.5"
+      className={cn(
+        "popover-surface absolute right-0 bottom-full left-0 mb-2 max-h-[min(55vh,340px)] overflow-x-hidden overflow-y-auto rounded-xl px-1.5 pb-1.5",
+        !refresh && "pt-1.5"
+      )}
     >
       {refresh && (
-        <div className="flex items-center justify-between pl-2.5">
+        <div className="bg-popover sticky top-0 z-20 flex items-center justify-between pt-1.5 pl-2.5">
           <span className="text-muted-foreground text-xs">{label}</span>
           <button
             type="button"
@@ -92,7 +95,13 @@ export function ComposerMenu({
         options.map((o, i) => (
           <Fragment key={o.key}>
             {o.group && o.group !== options[i - 1]?.group && (
-              <div className="text-muted-foreground px-2.5 pt-2 pb-0.5 text-[11px] tracking-wide uppercase">
+              <div
+                className={cn(
+                  "bg-popover text-muted-foreground sticky z-10 px-2.5 pt-2 pb-0.5 text-[11px] tracking-wide uppercase",
+                  // Sit below the pinned header row (6px + h-11 / md:h-7).
+                  refresh ? "top-[50px] md:top-[34px]" : "top-0"
+                )}
+              >
                 {o.group}
               </div>
             )}
@@ -114,7 +123,7 @@ export function ComposerMenu({
             >
               <span className="flex w-full min-w-0 items-center gap-2">
                 {o.icon}
-                <span className="max-w-[65%] shrink-0 truncate font-mono text-sm">
+                <span className="max-w-full min-w-0 shrink-0 font-mono text-sm break-all">
                   {o.icon ? (
                     o.label
                   ) : (
@@ -122,7 +131,7 @@ export function ComposerMenu({
                   )}
                 </span>
                 {o.hint && (
-                  <span className="text-muted-foreground/70 min-w-0 truncate font-mono text-xs">
+                  <span className="text-muted-foreground/70 min-w-0 flex-1 truncate font-mono text-xs">
                     {o.hint}
                   </span>
                 )}

@@ -11,6 +11,15 @@ export function slashQuery(
   return { query: m[2].toLowerCase(), start: m.index + m[1].length };
 }
 
+// The SDK ends a description with where the command comes from, "(user)",
+// "(project)" or "(plugin-name)"; the menu's group header says that already.
+export function stripSourceSuffix(description: string): string {
+  return description.replace(
+    /\s*\((?:user|project|builtin|plugin|[\w.-]+@[\w.-]+)\)\s*$/i,
+    ""
+  );
+}
+
 function isSubsequence(q: string, s: string): boolean {
   let i = 0;
   for (const ch of s) if (ch === q[i]) i++;

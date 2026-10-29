@@ -1,7 +1,7 @@
 import { randomUUID } from "crypto";
 import type { ChatCommand, ChatItem, DriverEvent } from "../events";
 import { clipOutput, toolDiff, toolTitle } from "../tools";
-import { leadingCommand } from "../commands";
+import { leadingCommand, stripSourceSuffix } from "../commands";
 import { usageTotals } from "../context";
 
 // Loose views of the SDK's message shapes: only what the mapper reads.
@@ -93,7 +93,7 @@ export type SdkCommand = {
 export function toCommand(c: SdkCommand): ChatCommand {
   return {
     name: c.name,
-    description: c.description ?? "",
+    description: stripSourceSuffix(c.description ?? ""),
     argumentHint: c.argumentHint || undefined,
     builtin: c.builtin,
   };

@@ -7,6 +7,7 @@ import {
   groupCommands,
   rankCommands,
   slashQuery,
+  stripSourceSuffix,
 } from "./commands";
 import type { ChatCommand } from "./events";
 
@@ -165,5 +166,23 @@ describe("groupCommands", () => {
     const g = groupCommands("re", [cmd("review"), cmd("resume")], []);
     expect(g).toHaveLength(1);
     expect(g[0].label).toBe("");
+  });
+});
+
+describe("stripSourceSuffix", () => {
+  it("drops the trailing source marker the SDK adds", () => {
+    expect(stripSourceSuffix("Review a PR (user)")).toBe("Review a PR");
+    expect(stripSourceSuffix("Run the checks (project)")).toBe(
+      "Run the checks"
+    );
+    expect(stripSourceSuffix("Ship it (plugin@market)")).toBe("Ship it");
+  });
+
+  it("keeps other parentheses and descriptions without a marker", () => {
+    expect(stripSourceSuffix("Fix (and test) the bug")).toBe(
+      "Fix (and test) the bug"
+    );
+    expect(stripSourceSuffix("(user) first")).toBe("(user) first");
+    expect(stripSourceSuffix("")).toBe("");
   });
 });
