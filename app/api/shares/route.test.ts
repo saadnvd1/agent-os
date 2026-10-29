@@ -117,7 +117,7 @@ const one = await import("./[id]/route");
 const { saveItem } = await import("@/lib/chat/store");
 const { seedSession } = await import("@/lib/orchestrator/testing");
 const { createProject } = await import("@/lib/projects");
-const { createArtifact } = await import("@/lib/artifacts/store");
+const { createArtifact, saveArtifact } = await import("@/lib/artifacts/store");
 const { getDb } = await import("@/lib/db");
 
 const secret = ["gh", "p_", "b".repeat(36)].join("");
@@ -339,6 +339,71 @@ describe("create", () => {
     const html = JSON.parse(seen[0].body).html as string;
     expect(html).not.toContain(secret);
     expect(html).toContain("noindex");
+  });
+
+  describe("follow latest", () => {
+    const page = (html: string) =>
+      `<html><head></head><body>${html}</body></html>`;
+    async function create(artifactId: string, extra: object = {}) {
+      const body = { kind: "artifact", artifactId, ...extra };
+      const p = await (
+        await preview.POST(post("/api/shares/preview", body))
+      ).json();
+      return shares.POST(
+        post("/api/shares", {
+          ...body,
+          sharedAt: p.sharedAt,
+          hash: p.hash,
+          expiresIn: "7d",
+        })
+      );
+    }
+    const stored = () =>
+      getDb().prepare(`SELECT follow_latest, version FROM shared_links`).get();
+
+    it("pins the shown version by default", async () => {
+      const sid = chat();
+      saveArtifact(sid, "Doc", page("one"), { sameTitle: true });
+      const v2 = saveArtifact(sid, "Doc", page("two"), {
+        sameTitle: true,
+      }).artifact;
+      expect((await create(v2.id)).status).toBe(201);
+      expect(stored()).toEqual({ follow_latest: 0, version: 2 });
+      const listed = await (await shares.GET()).json();
+      expect(listed.shares[0]).toMatchObject({ follow: false, version: 2 });
+    });
+
+    it("keeps follow: latest on the link and lists it", async () => {
+      const sid = chat();
+      const v1 = saveArtifact(sid, "Doc", page("one"), {
+        sameTitle: true,
+      }).artifact;
+      expect((await create(v1.id, { follow: "latest" })).status).toBe(201);
+      expect(stored()).toEqual({ follow_latest: 1, version: 1 });
+      const listed = await (await shares.GET()).json();
+      expect(listed.shares[0]).toMatchObject({ follow: true, version: 1 });
+    });
+
+    it("refuses to follow from an older version, and for a chat", async () => {
+      const sid = chat();
+      const v1 = saveArtifact(sid, "Doc", page("one"), {
+        sameTitle: true,
+      }).artifact;
+      saveArtifact(sid, "Doc", page("two"), { sameTitle: true });
+      const old = await create(v1.id, { follow: "latest" });
+      expect(old.status).toBe(409);
+      expect((await old.json()).error).toMatch(/share v2/);
+      const res = await shares.POST(
+        post("/api/shares", {
+          kind: "chat",
+          sessionId: sid,
+          follow: "latest",
+          hash: "x",
+        })
+      );
+      expect(res.status).toBe(400);
+      expect(seen).toHaveLength(0);
+    });
   });
 
   it("says so when Connect isn't linked, and for a bad expiry or hash", async () => {

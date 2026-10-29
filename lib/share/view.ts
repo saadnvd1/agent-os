@@ -7,6 +7,8 @@ export interface ShareTarget {
   kind: "chat" | "artifact";
   sessionId?: string;
   artifactId?: string;
+  /** A page link that is re-uploaded when the page gets a new version. */
+  follow?: "latest";
 }
 
 export interface PreviewRequest extends ShareTarget {
@@ -52,6 +54,10 @@ export interface SharedLinkRow {
   status: "active" | "expired" | "revoked";
   views: number | null;
   lastViewedAt: string | null;
+  /** True when the link follows the page's latest version. */
+  follow: boolean;
+  /** The page version the link shows now. */
+  version: number | null;
 }
 
 export interface SharesResponse {
