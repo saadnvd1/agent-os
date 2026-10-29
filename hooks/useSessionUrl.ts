@@ -3,7 +3,12 @@
 import { useCallback, useEffect, useLayoutEffect, useRef } from "react";
 import { toast } from "sonner";
 import type { Session } from "@/lib/db";
-import { SessionUrlSync, locateSession } from "@/lib/session-url";
+import {
+  SessionUrlSync,
+  locateSession,
+  pickSession,
+  type SessionRef,
+} from "@/lib/session-url";
 import { usePanes } from "@/contexts/PaneContext";
 
 interface Options {
@@ -16,9 +21,9 @@ interface Options {
 }
 
 /**
- * The address bar names the focused session (`/?session=<id>`), and an
- * address opens its session: on load, after pairing, and on back/forward.
- * With split panes it follows the focused pane.
+ * The address bar names the focused session (`/s/<name>-<id8>`, following
+ * renames), and an address opens its session: on load, after pairing, and on
+ * back/forward. With split panes it follows the focused pane.
  */
 export function useSessionUrl({
   sessions,
@@ -78,23 +83,22 @@ export function useSessionUrl({
         replace: (href) => window.history.replaceState(null, "", href),
       },
       {
-        isKnown: (id) => latest.current.sessions.some((s) => s.id === id),
+        find: (ref) => pickSession(ref, latest.current.sessions)?.id ?? null,
+        nameOf: (id) =>
+          latest.current.sessions.find((s) => s.id === id)?.name ?? null,
         open: (id) => {
           const session = latest.current.sessions.find((s) => s.id === id);
           if (session) reveal(session);
         },
         // Made a moment ago and not in the list yet: ask once more. Archived,
         // merged and dropped sessions aren't listed and stay not found.
-        openUnlisted: async (id) => {
+        openUnlisted: async (ref) => {
           const fresh = await latest.current.reloadSessions();
-          const session = fresh.find((s) => s.id === id);
+          const session = pickSession(ref, fresh);
           if (session) reveal(session);
           return !!session;
         },
-        notFound: () =>
-          toast.error("Session not found", {
-            description: "It may have been archived or deleted.",
-          }),
+        notFound: (ref) => void explainNotFound(ref),
       }
     );
     return syncRef.current;
@@ -112,6 +116,12 @@ export function useSessionUrl({
     getSync().focusChanged(focusedId);
   }, [getSync, focusedId]);
 
+  // A rename (by hand, or the title a first turn gives it) moves the slug.
+  const focusedName = sessions.find((s) => s.id === focusedId)?.name ?? null;
+  useEffect(() => {
+    if (focusedName !== null) getSync().renamed();
+  }, [getSync, focusedName]);
+
   const ready = hydrated && loaded;
   useEffect(() => {
     if (ready) void getSync().start();
@@ -122,4 +132,23 @@ export function useSessionUrl({
     window.addEventListener("popstate", onPop);
     return () => window.removeEventListener("popstate", onPop);
   }, [getSync]);
+}
+
+// An archived session says so, by name; anything else isn't found.
+async function explainNotFound(ref: SessionRef): Promise<void> {
+  const params = new URLSearchParams(
+    "id" in ref ? { ref: ref.id } : { ref: ref.short, slug: ref.slug ?? "" }
+  );
+  const found = await fetch(`/api/sessions/resolve?${params}`)
+    .then((r) => (r.ok ? r.json() : null))
+    .catch(() => null);
+  if (found?.archived) {
+    toast.error(`${found.name} is on the Done shelf`, {
+      description: "Bring it back from there to open it.",
+    });
+    return;
+  }
+  toast.error("Session not found", {
+    description: "It may have been archived or deleted.",
+  });
 }

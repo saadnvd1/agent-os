@@ -6,6 +6,7 @@ import type { TaskState } from "../../tasks/state";
 import type { DigestSignals } from "../../analyst/types";
 import { latestChecks } from "../../analyst/signals";
 import type { EvidenceRef } from "../types";
+import { sessionPath } from "../../session-url";
 
 const EXCERPT = 1500;
 const cap = (s: string, n = EXCERPT) =>
@@ -82,7 +83,7 @@ export function testEvidence(
       status: c.passed ? "pass" : "fail",
       at,
       sha: head ?? undefined,
-      href: `/?session=${sessionId}`,
+      href: sessionPath({ id: sessionId }),
     }));
 }
 
@@ -101,7 +102,7 @@ export function diffEvidence(
       label: `${m[3]} (+${m[1] === "-" ? 0 : m[1]} −${m[2] === "-" ? 0 : m[2]})`,
       status: "info",
       at,
-      href: `/?session=${sessionId}`,
+      href: sessionPath({ id: sessionId }),
     });
     if (out.length >= 40) break;
   }
@@ -174,7 +175,7 @@ export function logEvidence(log: {
     status: "pass",
     at: log.createdAt,
     excerpt: log.mergeCommit ? `Merge commit ${log.mergeCommit}` : undefined,
-    href: `/?session=${log.sessionId}`,
+    href: sessionPath({ id: log.sessionId }),
   };
 }
 

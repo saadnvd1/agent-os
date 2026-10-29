@@ -7,7 +7,7 @@ import {
 import {
   hrefWithSession,
   safeNextPath,
-  sessionIdFromHref,
+  sessionRefFromHref,
 } from "./session-url";
 
 describe("settingsFromHref", () => {
@@ -42,7 +42,7 @@ describe("hrefWithSettings", () => {
       section: "merging",
     });
     expect(opened).toBe("/?session=abc&settings=merging#x");
-    expect(sessionIdFromHref(opened)).toBe("abc");
+    expect(sessionRefFromHref(opened)).toEqual({ id: "abc" });
     expect(hrefWithSettings(opened, { open: true, section: "devices" })).toBe(
       "/?session=abc&settings=devices#x"
     );
@@ -58,8 +58,21 @@ describe("hrefWithSettings", () => {
   });
 
   it("survives a session switch and the way back from pairing", () => {
-    const href = hrefWithSession("/?settings=schedules", "s1");
+    const href = hrefWithSession("/?settings=schedules", { id: "s1" });
     expect(settingsFromHref(href).section).toBe("schedules");
     expect(safeNextPath("/?settings=schedules")).toBe("/?settings=schedules");
+  });
+
+  it("rides along on a session's readable address", () => {
+    const id = "920654a6-13dd-4073-8b7a-e082d3650f95";
+    const at = hrefWithSession("/?settings=merging", { id, name: "Fix it" });
+    expect(at).toBe("/s/fix-it-920654a6?settings=merging");
+    expect(settingsFromHref(at).section).toBe("merging");
+    expect(hrefWithSettings(at, { open: false, section: null })).toBe(
+      "/s/fix-it-920654a6"
+    );
+    expect(
+      hrefWithSettings("/s/fix-it-920654a6", { open: true, section: null })
+    ).toBe("/s/fix-it-920654a6?settings");
   });
 });

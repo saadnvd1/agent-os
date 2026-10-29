@@ -1,13 +1,17 @@
 import { describe, expect, it } from "vitest";
 import {
   SessionUrlSync,
+  hrefWithRef,
   hrefWithSession,
-  inAppSessionId,
+  inAppSessionRef,
   locateSession,
   pairLocation,
+  pickSession,
   safeNextPath,
-  sessionIdFromHref,
+  sessionPath,
+  sessionRefFromHref,
   sessionLink,
+  type SessionRef,
 } from "./session-url";
 import type { PaneState } from "./panes";
 
@@ -37,12 +41,21 @@ function browser(start: string) {
 }
 
 // The page: a list of sessions and a focused one, which open() changes the
-// way attaching a session does.
-function page(start: string, listed = ["a", "b", "c"]) {
+// way attaching a session does. Ids that aren't uuids keep `?session=`.
+function page(
+  start: string,
+  listed = ["a", "b", "c"],
+  names: Record<string, string> = {}
+) {
   const b = browser(start);
   const notFound: string[] = [];
   let unlisted: string[] = [];
   let shown: string | null = null;
+  const pick = (ref: SessionRef, ids: string[]) =>
+    pickSession(
+      ref,
+      ids.map((id) => ({ id, name: names[id] ?? id }))
+    )?.id ?? null;
   // The page reports focus from an effect: on change only.
   const show = (id: string | null) => {
     if (id === shown) return;
@@ -50,15 +63,17 @@ function page(start: string, listed = ["a", "b", "c"]) {
     sync.focusChanged(id);
   };
   const sync: SessionUrlSync = new SessionUrlSync(b.env, {
-    isKnown: (id) => listed.includes(id),
+    find: (ref) => pick(ref, listed),
+    nameOf: (id) => names[id] ?? id,
     open: (id) => show(id),
-    openUnlisted: async (id) => {
-      if (!unlisted.includes(id)) return false;
+    openUnlisted: async (ref) => {
+      const id = pick(ref, unlisted);
+      if (!id) return false;
       listed.push(id);
       show(id);
       return true;
     },
-    notFound: (id) => notFound.push(id),
+    notFound: (ref) => notFound.push("id" in ref ? ref.id : ref.short),
   });
   return {
     b,
@@ -66,6 +81,7 @@ function page(start: string, listed = ["a", "b", "c"]) {
     shown: () => shown,
     notFound,
     listed,
+    names,
     appearLater: (id: string) => (unlisted = [...unlisted, id]),
     // The user picking a session in the sidebar.
     pick: show,
@@ -80,20 +96,95 @@ function page(start: string, listed = ["a", "b", "c"]) {
   };
 }
 
+const U1 = "920654a6-13dd-4073-8b7a-e082d3650f95";
+const U2 = "1b2c3d4e-0000-4000-8000-000000000000";
+
 describe("address helpers", () => {
-  it("reads and writes the session param, keeping everything else", () => {
-    expect(sessionIdFromHref("http://h/?session=abc-123")).toBe("abc-123");
-    expect(sessionIdFromHref("/?x=1")).toBeNull();
-    expect(sessionIdFromHref("/?session=<script>")).toBeNull();
-    expect(hrefWithSession("/?x=1#h", "s1")).toBe("/?x=1&session=s1#h");
+  it("reads and writes the old session param, keeping everything else", () => {
+    expect(sessionRefFromHref("http://h/?session=abc-123")).toEqual({
+      id: "abc-123",
+    });
+    expect(sessionRefFromHref("/?x=1")).toBeNull();
+    expect(sessionRefFromHref("/?session=<script>")).toBeNull();
+    expect(hrefWithSession("/?x=1#h", { id: "s1" })).toBe("/?x=1&session=s1#h");
     expect(hrefWithSession("/?session=s1&x=1", null)).toBe("/?x=1");
-    expect(sessionLink("https://h:3011", "s1")).toBe(
+    expect(sessionLink("https://h:3011", { id: "s1" })).toBe(
       "https://h:3011/?session=s1"
     );
   });
 
+  it("gives a uuid session a readable path, the slug from its name", () => {
+    expect(sessionPath({ id: U1, name: "Live guest share plan" })).toBe(
+      "/s/live-guest-share-plan-920654a6"
+    );
+    expect(sessionPath({ id: U1 })).toBe("/s/920654a6");
+    expect(sessionPath({ id: U1, name: "🚀" })).toBe("/s/session-920654a6");
+    expect(sessionLink("https://h:3011", { id: U1, name: "Fix it" })).toBe(
+      "https://h:3011/s/fix-it-920654a6"
+    );
+    expect(
+      hrefWithSession(`/?session=${U1}&settings=merging#h`, {
+        id: U1,
+        name: "Fix it",
+      })
+    ).toBe("/s/fix-it-920654a6?settings=merging#h");
+    expect(hrefWithSession("/s/fix-it-920654a6?welcome=agents", null)).toBe(
+      "/?welcome=agents"
+    );
+    expect(hrefWithRef("/?x=1", { short: "920654a6", slug: "a-b" })).toBe(
+      "/s/a-b-920654a6?x=1"
+    );
+  });
+
+  it("reads every form of a session's address", () => {
+    expect(sessionRefFromHref("/s/live-guest-share-plan-920654a6")).toEqual({
+      short: "920654a6",
+      slug: "live-guest-share-plan",
+    });
+    expect(sessionRefFromHref("http://h/s/920654a6?settings")).toEqual({
+      short: "920654a6",
+      slug: null,
+    });
+    expect(sessionRefFromHref(`/s/${U1.toUpperCase()}`)).toEqual({ id: U1 });
+    expect(sessionRefFromHref(`/?session=${U1}`)).toEqual({ id: U1 });
+    for (const bad of [
+      "/s/",
+      "/s/name",
+      "/s/name-92065",
+      "/s/name-920654zz",
+      "/s/-920654a6x",
+      "/s/a/920654a6",
+      "/s/%3Cscript%3E-920654a6",
+      "/x/name-920654a6",
+    ]) {
+      expect(sessionRefFromHref(bad)).toBeNull();
+    }
+  });
+
+  it("picks the session a short id names, the slug breaking a clash", () => {
+    const twin = "920654a6-0000-4000-8000-000000000000";
+    const sessions = [
+      { id: U1, name: "Fix login", created_at: "2026-10-01" },
+      { id: twin, name: "Ship docs", created_at: "2026-10-03" },
+      { id: U2, name: "Other", created_at: "2026-10-02" },
+    ];
+    const at = (href: string) =>
+      pickSession(sessionRefFromHref(href)!, sessions)?.id;
+    expect(at("/s/other-1b2c3d4e")).toBe(U2);
+    expect(at("/s/whatever-1b2c3d4e")).toBe(U2);
+    expect(at("/s/fix-login-920654a6")).toBe(U1);
+    expect(at("/s/ship-docs-920654a6")).toBe(twin);
+    expect(at("/s/renamed-920654a6")).toBe(twin);
+    expect(at(`/?session=${U1}`)).toBe(U1);
+    expect(at("/s/deadbeef")).toBeUndefined();
+  });
+
   it("keeps only same-site paths to come back to after pairing", () => {
     expect(safeNextPath("/?session=abc")).toBe("/?session=abc");
+    expect(safeNextPath("/s/fix-it-920654a6")).toBe("/s/fix-it-920654a6");
+    expect(safeNextPath("/s/fix-it-920654a6?settings=x")).toBe(
+      "/s/fix-it-920654a6?settings=x"
+    );
     for (const bad of [
       null,
       "",
@@ -113,6 +204,11 @@ describe("address helpers", () => {
       "/a?session=a",
       "/\t/evil.example",
       "/\n/evil.example",
+      "/s/../x",
+      "/s//evil.example",
+      "/s/a/b",
+      "/x/s/a",
+      "/s/",
     ]) {
       expect(safeNextPath(bad)).toBeNull();
     }
@@ -239,7 +335,7 @@ describe("SessionUrlSync", () => {
     p.pick("a");
     await p.sync.start();
     expect(p.notFound).toEqual(["gone"]);
-    expect(p.b.entries).toEqual(["/?session=a&x=1"]);
+    expect(p.b.entries).toEqual(["/?x=1&session=a"]);
   });
 
   it("asks again for a session made a moment ago", async () => {
@@ -268,7 +364,8 @@ describe("SessionUrlSync", () => {
     const sync = new SessionUrlSync(
       b.env,
       {
-        isKnown: () => true,
+        find: (ref) => ("id" in ref ? ref.id : null),
+        nameOf: () => null,
         open: (id) => (opened = id),
         openUnlisted: async () => false,
         notFound: () => {},
@@ -287,17 +384,77 @@ describe("SessionUrlSync", () => {
   });
 });
 
-describe("inAppSessionId", () => {
+describe("readable addresses", () => {
+  const names = { [U1]: "Live guest share plan", [U2]: "Web perf audit" };
+
+  it("rewrites an old ?session= link to the readable one, without a new entry", async () => {
+    const p = page(`/?session=${U1}&settings=merging`, [U1, U2], names);
+    await p.sync.start();
+    expect(p.shown()).toBe(U1);
+    expect(p.b.entries).toEqual([
+      "/s/live-guest-share-plan-920654a6?settings=merging",
+    ]);
+  });
+
+  it("opens a stale slug by its id and puts the current one in its place", async () => {
+    const p = page("/s/old-name-920654a6", [U1, U2], names);
+    await p.sync.start();
+    expect(p.shown()).toBe(U1);
+    expect(p.b.entries).toEqual(["/s/live-guest-share-plan-920654a6"]);
+  });
+
+  it("follows a rename, by hand or by auto-title, without a new entry", async () => {
+    const p = page("/", [U1, U2], { ...names, [U2]: "Session 4" });
+    p.pick(U2);
+    await p.sync.start();
+    expect(p.b.entries).toEqual(["/s/session-4-1b2c3d4e"]);
+    p.names[U2] = "Web perf audit";
+    p.sync.renamed();
+    expect(p.b.entries).toEqual(["/s/web-perf-audit-1b2c3d4e"]);
+  });
+
+  it("pushes a switch and back returns to the readable address", async () => {
+    const p = page("/", [U1, U2], names);
+    p.pick(U1);
+    await p.sync.start();
+    p.pick(U2);
+    expect(p.b.entries).toEqual([
+      "/s/live-guest-share-plan-920654a6",
+      "/s/web-perf-audit-1b2c3d4e",
+    ]);
+    await p.back();
+    expect(p.shown()).toBe(U1);
+    expect(p.b.entries).toHaveLength(2);
+  });
+
+  it("asks the server about a short id the list doesn't have", async () => {
+    const p = page("/s/deadbeef", [U1], names);
+    p.pick(U1);
+    await p.sync.start();
+    expect(p.notFound).toEqual(["deadbeef"]);
+    expect(p.b.entries).toEqual(["/s/live-guest-share-plan-920654a6"]);
+  });
+});
+
+describe("inAppSessionRef", () => {
   const origin = "http://localhost:3108";
   it("names the session of a link to this instance", () => {
-    expect(inAppSessionId(`${origin}/?session=abc`, origin)).toBe("abc");
+    expect(inAppSessionRef(`${origin}/?session=abc`, origin)).toEqual({
+      id: "abc",
+    });
+    expect(inAppSessionRef(`${origin}/s/fix-it-920654a6`, origin)).toEqual({
+      short: "920654a6",
+      slug: "fix-it",
+    });
   });
   it("is null for another origin, another path, no session or junk", () => {
     expect(
-      inAppSessionId("https://example.com/?session=abc", origin)
+      inAppSessionRef("https://example.com/?session=abc", origin)
     ).toBeNull();
-    expect(inAppSessionId(`${origin}/settings?session=abc`, origin)).toBeNull();
-    expect(inAppSessionId(`${origin}/`, origin)).toBeNull();
-    expect(inAppSessionId("not a url", origin)).toBeNull();
+    expect(
+      inAppSessionRef(`${origin}/settings?session=abc`, origin)
+    ).toBeNull();
+    expect(inAppSessionRef(`${origin}/`, origin)).toBeNull();
+    expect(inAppSessionRef("not a url", origin)).toBeNull();
   });
 });

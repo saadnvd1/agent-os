@@ -191,7 +191,7 @@ export function SessionRowMenu({
           recipesUiActions.openRecipe(recipeRun!.id)
         );
       case "copy-link":
-        return item("Copy link", Link, () => copySessionLink(session.id));
+        return item("Copy link", Link, () => copySessionLink(session));
       case "share":
         return item("Share…", Share2, () =>
           shareUiActions.open({

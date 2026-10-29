@@ -1,5 +1,5 @@
 // The welcome has its own address: `/?welcome=<step>`, beside `?settings=`
-// and `?session=`. `/welcome` redirects here.
+// and a session's `/s/<name>-<id8>`. `/welcome` redirects here.
 
 export const WELCOME_PARAM = "welcome";
 

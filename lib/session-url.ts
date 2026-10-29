@@ -1,50 +1,152 @@
-// Every session has its own address: `/?session=<id>`. The id, not the name:
-// names change, ids don't. Nothing here grants access; the page behind the
-// address is behind the device gate like any other.
+// Every session has its own address: `/s/<slug>-<id8>`, the slug made from
+// its name and id8 the first group of its uuid. Only the id resolves: the
+// slug is rebuilt from the current name, so a rename never breaks a link,
+// and a stale one is rewritten in place. `/?session=<id>`, the address before,
+// still opens and is rewritten the same way. Nothing here grants access; the
+// page behind the address is behind the device gate like any other.
 
 import { getAllPaneIds, type PaneState } from "./panes";
+import { isUuid, sessionSlug, shortId, SHORT_ID_LEN } from "./session-slug";
 
 export const SESSION_PARAM = "session";
+export const SESSION_PATH = "/s/";
 
 // Ids are uuids today; anything id-shaped is accepted so other machines'
 // sessions fit too. Everything else in the address is ignored.
 const ID_SHAPE = /^[A-Za-z0-9_-]{1,128}$/;
+const SHORT = new RegExp(`^[0-9a-f]{${SHORT_ID_LEN}}$`);
+const SLUG = /^[a-z0-9]+(?:-[a-z0-9]+)*$/;
+// The one path segment of `/s/<ref>`.
+const REF_PATH = /^\/s\/([A-Za-z0-9-]{1,200})$/;
 
 // The site-relative origin used to parse paths with URL.
 const BASE = "http://agentos.invalid";
 
-export function sessionIdFromHref(href: string): string | null {
-  const id = new URL(href, BASE).searchParams.get(SESSION_PARAM);
-  return id && ID_SHAPE.test(id) ? id : null;
+/** What an address names: a whole id, or a short id and its (cosmetic) slug. */
+export type SessionRef =
+  { id: string } | { short: string; slug: string | null };
+
+/** A session as links need it: the name only makes the slug. */
+export interface SessionLinkable {
+  id: string;
+  name?: string | null;
 }
 
-/** The same address with the session set (or removed), as path+query+hash. */
-export function hrefWithSession(href: string, id: string | null): string {
+function refFromSegment(segment: string): SessionRef | null {
+  if (isUuid(segment)) return { id: segment.toLowerCase() };
+  const lower = segment.toLowerCase();
+  const dash = lower.lastIndexOf("-");
+  const short = lower.slice(dash + 1);
+  if (!SHORT.test(short)) return null;
+  const slug = dash > 0 ? lower.slice(0, dash) : null;
+  if (slug !== null && !SLUG.test(slug)) return null;
+  return { short, slug };
+}
+
+export function sessionRefFromHref(href: string): SessionRef | null {
   const url = new URL(href, BASE);
-  if (id) url.searchParams.set(SESSION_PARAM, id);
-  else url.searchParams.delete(SESSION_PARAM);
+  const m = REF_PATH.exec(url.pathname);
+  if (m) return refFromSegment(m[1]);
+  const id = url.searchParams.get(SESSION_PARAM);
+  return id && ID_SHAPE.test(id) ? { id } : null;
+}
+
+/** Whether a ref could name this id (the slug isn't consulted). */
+export function refMatches(ref: SessionRef, id: string): boolean {
+  if ("id" in ref) return ref.id === id || ref.id === id.toLowerCase();
+  return isUuid(id) && id.toLowerCase().startsWith(ref.short);
+}
+
+/**
+ * The session a ref names among these: the one id, else the one with the
+ * prefix, else (two sharing a prefix) the one whose slug matches, then the
+ * newest.
+ */
+export function pickSession<
+  T extends { id: string; name: string; created_at?: string | null },
+>(ref: SessionRef, sessions: readonly T[]): T | null {
+  const found = sessions.filter((s) => refMatches(ref, s.id));
+  if (found.length <= 1) return found[0] ?? null;
+  if ("short" in ref && ref.slug) {
+    const bySlug = found.filter((s) => sessionSlug(s.name) === ref.slug);
+    if (bySlug.length === 1) return bySlug[0];
+    if (bySlug.length > 1) return newest(bySlug);
+  }
+  return newest(found);
+}
+
+const newest = <T extends { created_at?: string | null }>(xs: T[]): T =>
+  xs.reduce((a, b) => ((b.created_at ?? "") > (a.created_at ?? "") ? b : a));
+
+/**
+ * A session's address: `/s/<slug>-<id8>`, or `/s/<id8>` when the name isn't
+ * at hand (opening it fills the slug in). An id that isn't a uuid keeps the
+ * old `/?session=<id>`.
+ */
+export function sessionPath(s: SessionLinkable): string {
+  if (!isUuid(s.id)) return `/?${SESSION_PARAM}=${encodeURIComponent(s.id)}`;
+  const short = shortId(s.id);
+  return s.name == null
+    ? `${SESSION_PATH}${short}`
+    : `${SESSION_PATH}${sessionSlug(s.name)}-${short}`;
+}
+
+/** The address a ref names as it stands, slug and all. */
+export function refPath(ref: SessionRef): string {
+  if ("id" in ref) return sessionPath({ id: ref.id });
+  const slug = ref.slug ? `${ref.slug}-` : "";
+  return `${SESSION_PATH}${slug}${ref.short}`;
+}
+
+function hrefWithPath(href: string, path: string | null): string {
+  const url = new URL(href, BASE);
+  url.searchParams.delete(SESSION_PARAM);
+  const target = new URL(path ?? "/", BASE);
+  url.pathname = target.pathname;
+  target.searchParams.forEach((v, k) => url.searchParams.set(k, v));
   return url.pathname + url.search + url.hash;
 }
 
+/**
+ * The same address showing this session (or none), as path+query+hash. Every
+ * other query param (`?settings=`, `?welcome=`) stays.
+ */
+export function hrefWithSession(
+  href: string,
+  s: SessionLinkable | null
+): string {
+  return hrefWithPath(href, s ? sessionPath(s) : null);
+}
+
+/** The same address showing the session a ref names. */
+export function hrefWithRef(href: string, ref: SessionRef): string {
+  return hrefWithPath(href, refPath(ref));
+}
+
 /** The session a link to this same instance opens, or null for any other link. */
-export function inAppSessionId(href: string, origin: string): string | null {
+export function inAppSessionRef(
+  href: string,
+  origin: string
+): SessionRef | null {
   let url: URL;
   try {
     url = new URL(href);
   } catch {
     return null;
   }
-  if (url.origin !== origin || url.pathname !== "/") return null;
-  return sessionIdFromHref(href);
+  if (url.origin !== origin) return null;
+  if (url.pathname !== "/" && !url.pathname.startsWith(SESSION_PATH))
+    return null;
+  return sessionRefFromHref(href);
 }
 
-export function sessionLink(origin: string, id: string): string {
-  return `${origin}/?${SESSION_PARAM}=${encodeURIComponent(id)}`;
+export function sessionLink(origin: string, s: SessionLinkable): string {
+  return `${origin}${sessionPath(s)}`;
 }
 
 /**
  * The address to come back to after pairing, or null. Only the app's own
- * page with a query survives: what a link to a session is. Checked after
+ * page survives: `/` with a query, or a session's `/s/<ref>`. Checked after
  * parsing, as `/.//host` and the like resolve to another host.
  */
 export function safeNextPath(raw: string | null | undefined): string | null {
@@ -55,7 +157,9 @@ export function safeNextPath(raw: string | null | undefined): string | null {
   } catch {
     return null;
   }
-  if (url.origin !== BASE || url.pathname !== "/" || !url.search) return null;
+  if (url.origin !== BASE) return null;
+  if (REF_PATH.test(url.pathname)) return url.pathname + url.search;
+  if (url.pathname !== "/" || !url.search) return null;
   return "/" + url.search;
 }
 
@@ -94,8 +198,10 @@ export interface SessionUrlEnv {
 }
 
 export interface SessionUrlDeps {
-  /** A session the sidebar lists. */
-  isKnown(id: string): boolean;
+  /** The listed session a ref names, or null. */
+  find(ref: SessionRef): string | null;
+  /** A listed session's current name, for its address. */
+  nameOf(id: string): string | null;
   /** Show a listed session. */
   open(id: string): void;
   /**
@@ -103,9 +209,9 @@ export interface SessionUrlDeps {
    * found and opened. Archived, merged and dropped sessions aren't listed and
    * stay not found.
    */
-  openUnlisted(id: string): Promise<boolean>;
+  openUnlisted(ref: SessionRef): Promise<boolean>;
   /** The address named a session that can't be opened. */
-  notFound(id: string): void;
+  notFound(ref: SessionRef): void;
 }
 
 /**
@@ -115,13 +221,15 @@ export interface SessionUrlDeps {
  *
  * A switch away from a live session pushes an entry, so back returns to it.
  * Anything else replaces: the first sync, leaving a session that was archived
- * or deleted, and leaving a sessionless address.
+ * or deleted, leaving a sessionless address, and rewriting an address that
+ * names the shown session another way (an old `?session=`, a stale slug, a
+ * rename).
  */
 export class SessionUrlSync {
   private started = false;
   // A session the address asked for, until it's the one focused (or the
   // open plainly didn't land).
-  private pending: string | null = null;
+  private pending: SessionRef | null = null;
   private pendingUntil = 0;
   private focused: string | null = null;
 
@@ -134,8 +242,8 @@ export class SessionUrlSync {
   /** Once panes and sessions are loaded: follow the address it opened with. */
   async start(): Promise<void> {
     if (this.started) return;
-    const id = sessionIdFromHref(this.env.href());
-    if (id) await this.go(id);
+    const ref = sessionRefFromHref(this.env.href());
+    if (ref) await this.go(ref);
     this.started = true;
     if (!this.pending) this.sync();
   }
@@ -144,42 +252,56 @@ export class SessionUrlSync {
   focusChanged(id: string | null): void {
     this.focused = id;
     if (this.pending && this.now() < this.pendingUntil) {
-      if (id !== this.pending) return;
+      if (!id || !refMatches(this.pending, id)) return;
     }
     this.pending = null;
     if (this.started) this.sync();
   }
 
+  /** The focused session's name changed: the address takes the new slug. */
+  renamed(): void {
+    if (this.started && !this.pending) this.write("replace");
+  }
+
   /** Back or forward landed on another entry. */
   async popstate(): Promise<void> {
     if (!this.started) return;
-    const id = sessionIdFromHref(this.env.href());
-    if (id && id !== this.focused) await this.go(id);
+    const ref = sessionRefFromHref(this.env.href());
+    if (ref) {
+      const id = this.deps.find(ref);
+      if (!id || id !== this.focused) await this.go(ref);
+    }
     // An entry with no session, or one that couldn't open: say what's shown.
     if (!this.pending) this.write("replace");
   }
 
-  private async go(id: string): Promise<void> {
-    if (id === this.focused) return;
-    this.pending = id;
+  private async go(ref: SessionRef): Promise<void> {
+    const id = this.deps.find(ref);
+    if (id && id === this.focused) return;
+    this.pending = ref;
     this.pendingUntil = this.now() + PENDING_MS;
-    if (this.deps.isKnown(id)) return this.deps.open(id);
-    const opened = await this.deps.openUnlisted(id).catch(() => false);
+    if (id) return this.deps.open(id);
+    const opened = await this.deps.openUnlisted(ref).catch(() => false);
     if (opened) return;
-    if (this.pending === id) this.pending = null;
-    this.deps.notFound(id);
+    if (this.pending === ref) this.pending = null;
+    this.deps.notFound(ref);
   }
 
   private sync(): void {
-    const current = sessionIdFromHref(this.env.href());
-    if (current === this.focused) return;
-    this.write(current && this.deps.isKnown(current) ? "push" : "replace");
+    const ref = sessionRefFromHref(this.env.href());
+    const current = ref && this.deps.find(ref);
+    this.write(current && current !== this.focused ? "push" : "replace");
   }
 
   private write(mode: "push" | "replace"): void {
     const href = this.env.href();
-    if (sessionIdFromHref(href) === this.focused) return;
-    const next = hrefWithSession(href, this.focused);
+    const id = this.focused;
+    const next = hrefWithSession(
+      href,
+      id ? { id, name: this.deps.nameOf(id) ?? undefined } : null
+    );
+    const url = new URL(href, BASE);
+    if (next === url.pathname + url.search + url.hash) return;
     if (mode === "push") this.env.push(next);
     else this.env.replace(next);
   }

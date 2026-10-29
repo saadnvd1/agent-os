@@ -12,7 +12,7 @@ import {
   queuedSubtitle,
   type QueuedRow as Row,
 } from "@/lib/sidebar/queued";
-import { sessionLink } from "@/lib/session-url";
+import { SessionAnchor } from "@/components/Chat/SessionAnchor";
 import { cn } from "@/lib/utils";
 import { useRowContext } from "./RowContext";
 import { RowShell, type RowMenuKind } from "./RowShell";
@@ -184,8 +184,8 @@ function QueuedSubtitle({ row }: { row: Row }) {
           (target ? (
             <>
               {" "}
-              <a
-                href={sessionLink("", target)}
+              <SessionAnchor
+                sessionId={target}
                 onClick={(e) => {
                   // The row opens it too; the link alone handles its click.
                   e.stopPropagation();
@@ -198,7 +198,7 @@ function QueuedSubtitle({ row }: { row: Row }) {
                 className="hover:text-foreground underline decoration-dotted underline-offset-2"
               >
                 {after}
-              </a>
+              </SessionAnchor>
             </>
           ) : (
             ` ${after}`

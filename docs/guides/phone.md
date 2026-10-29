@@ -165,7 +165,7 @@ dead, and caps alerting pushes at 10 an hour per device (one summary after).
 ## Sessions on a phone
 
 The whole app works on a phone, not a cut-down view. Every session has its
-own link (`/?session=<id>`) you can bookmark or share between devices, and
+own readable link (`/s/<name>-<id8>`) you can bookmark or share between devices, and
 pairing a new device is a QR code. Tailscale gives you an encrypted address
 that works from anywhere.
 

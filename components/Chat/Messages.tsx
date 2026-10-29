@@ -20,7 +20,7 @@ import { cn } from "@/lib/utils";
 import { leadingCommand } from "@/lib/chat/commands";
 import { compactedLine } from "@/lib/chat/stale";
 import { splitProse, splitUserText } from "@/lib/chat/user-text";
-import { inAppSessionId } from "@/lib/session-url";
+import { inAppSessionRef } from "@/lib/session-url";
 import { CodeBlock } from "./Code";
 import { CopyButton } from "./CopyButton";
 import { FileChip } from "./FileChip";
@@ -42,16 +42,16 @@ import {
 type Of<K extends ChatItem["kind"]> = Extract<ChatItem, { kind: K }>;
 
 function UserLink({ href }: { href: string }) {
-  const id =
+  const ref =
     typeof window === "undefined"
       ? null
-      : inAppSessionId(href, window.location.origin);
+      : inAppSessionRef(href, window.location.origin);
   return (
     <a
       href={href}
-      target={id ? undefined : "_blank"}
-      rel={id ? undefined : "noopener noreferrer"}
-      onClick={id ? (e) => openSessionLink(e, id) : undefined}
+      target={ref ? undefined : "_blank"}
+      rel={ref ? undefined : "noopener noreferrer"}
+      onClick={ref ? (e) => openSessionLink(e, ref) : undefined}
       className="chat-link font-medium"
     >
       {href}

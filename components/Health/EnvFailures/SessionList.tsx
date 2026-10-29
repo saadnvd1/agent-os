@@ -2,7 +2,7 @@
 
 import { openSessionLink } from "@/components/Chat/session-link";
 import { compactTimeAgo } from "@/lib/session-meta";
-import { hrefWithSession } from "@/lib/session-url";
+import { sessionPath } from "@/lib/session-url";
 import type { EnvSessionView } from "@/lib/health/env/types";
 
 export function SessionList({
@@ -27,7 +27,7 @@ export function SessionList({
       {sessions.map((s) => (
         <li key={s.sessionId} className="min-h-11 text-sm">
           <a
-            href={hrefWithSession("/", s.sessionId)}
+            href={sessionPath({ id: s.sessionId, name: s.name })}
             onClick={(e) => openSessionLink(e, s.sessionId)}
             className="font-medium underline-offset-2 hover:underline"
           >

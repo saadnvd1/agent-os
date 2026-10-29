@@ -141,6 +141,11 @@ describe("UserTurn", () => {
       user({ origin: { kind: "peer", label: "api", sessionId: "s1" } })
     );
     expect(html).toContain('href="/?session=s1"');
+    const id = "920654a6-13dd-4073-8b7a-e082d3650f95";
+    const readable = render(
+      user({ origin: { kind: "peer", label: "api", sessionId: id } })
+    );
+    expect(readable).toContain('href="/s/920654a6"');
   });
 
   it("shows the answers in an event batch as the reader's decisions", () => {

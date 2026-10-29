@@ -25,4 +25,15 @@ describe("welcome address", () => {
       hrefWithWelcome("http://h" + open, { open: false, step: "finish" })
     ).toBe("/?session=a#x");
   });
+
+  it("keeps a session's readable path", () => {
+    const open = hrefWithWelcome("http://h/s/fix-it-920654a6", {
+      open: true,
+      step: "agents",
+    });
+    expect(open).toBe("/s/fix-it-920654a6?welcome=agents");
+    expect(
+      hrefWithWelcome("http://h" + open, { open: false, step: "agents" })
+    ).toBe("/s/fix-it-920654a6");
+  });
 });
