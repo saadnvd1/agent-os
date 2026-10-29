@@ -721,6 +721,7 @@ function HomeContent() {
 
   useAppCommands({
     sessions,
+    statuses: sessionStatuses,
     onSelectSession: selectSession,
     onSearchCode: () => setShowQuickSwitcher(true),
   });

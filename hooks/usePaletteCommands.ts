@@ -17,7 +17,10 @@ export function usePaletteCommands(
   });
   const shape = commands
     ? commands
-        .map((c) => `${c.id}\u0000${c.title}\u0000${c.hint ?? ""}`)
+        .map(
+          (c) =>
+            `${c.id}\u0000${c.title}\u0000${c.hint ?? ""}\u0000${c.status ?? ""}`
+        )
         .join("\u0001")
     : null;
   useEffect(() => {

@@ -13,10 +13,11 @@ import { CommandsBody } from "./CommandsBody";
 import { ConversationSearch } from "./conversations/ConversationSearch";
 
 // ⌘K anywhere, or the header button on a phone: every action the open
-// features offer, found by typing, and (Tab) what was said in any chat.
+// features offer, found by typing, in tabs (Tab cycles them) that include
+// what was said in any chat.
 export function CommandPalette() {
-  const { open, mode } = useSnapshot(paletteUi);
-  const wide = mode === "conversations";
+  const { open, tab } = useSnapshot(paletteUi);
+  const wide = tab === "conversations";
   return (
     <Dialog open={open} onOpenChange={paletteActions.setOpen}>
       <DialogContent
@@ -37,7 +38,7 @@ export function CommandPalette() {
             ? "Search what was said in every conversation"
             : "Search for an action, a session or a conversation"}
         </DialogDescription>
-        {/* Mounted per opening and per mode, so each starts from its own query. */}
+        {/* Mounted per opening and per side, so each starts from its own query. */}
         {wide ? (
           <ConversationSearch key="conversations" />
         ) : (
