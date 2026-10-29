@@ -237,6 +237,43 @@ describe("guests", () => {
     ]);
   });
 
+  it("caps the lobby when a roster frame lists many pending guests", async () => {
+    await open();
+    down({
+      type: "roster",
+      guests: Array.from({ length: 60 }, (_, i) => ({
+        id: `r${i}`,
+        name: `Guest ${i}`,
+        status: "pending",
+      })),
+    });
+    expect(svc.viewOf(SHARE)!.guests).toHaveLength(10);
+  });
+
+  it("logs one join request per guest however often it repeats", async () => {
+    await open();
+    for (let i = 0; i < 3; i++) {
+      down({ type: "join_request", guest: { id: "g1", name: "Ahmed" } });
+      down({ type: "guest_left", guest: { id: "g1", name: "Ahmed" } });
+    }
+    expect(
+      listLog(SHARE).filter((l) => l.kind === "join_request")
+    ).toHaveLength(1);
+  });
+
+  it("a refused admit can never come back admitted from a later roster", async () => {
+    await open();
+    down({ type: "join_request", guest: { id: "g1", name: "Ahmed" } });
+    svc.admit(SHARE, "g1");
+    down({ type: "admit_failed", guest_id: "g1", reason: "limit" });
+    expect(svc.viewOf(SHARE)!.guests[0].status).toBe("pending");
+    down({
+      type: "roster",
+      guests: [{ id: "g1", name: "Ahmed", status: "admitted" }],
+    });
+    expect(svc.viewOf(SHARE)!.guests[0].status).toBe("pending");
+  });
+
   it("cleans a guest's name again", async () => {
     await open();
     down({ type: "join_request", guest: { id: "g1", name: "Ah‮med​" } });
@@ -376,6 +413,28 @@ describe("suggestions", () => {
       status: 404,
     });
     expect(sent.calls).toHaveLength(1);
+  });
+
+  it("drops a second suggestion with an id already used, so Send is unambiguous", async () => {
+    await open();
+    await card("first text");
+    down({
+      type: "suggestion",
+      id: "s1",
+      guest: { id: "g1", name: "Ahmed" },
+      text: "second text",
+    });
+    expect(svc.viewOf(SHARE)!.suggestions).toMatchObject([
+      { id: "s1", text: "first text" },
+    ]);
+    await svc.sendSuggestion(SHARE, "s1");
+    down({
+      type: "suggestion",
+      id: "s1",
+      guest: { id: "g1", name: "Ahmed" },
+      text: "after send",
+    });
+    expect(svc.viewOf(SHARE)!.suggestions).toEqual([]);
   });
 
   it("keeps the card when the send fails", async () => {

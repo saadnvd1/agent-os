@@ -9,6 +9,8 @@ import { cleanBody, cleanName } from "./clean";
 import { chunk } from "./ring";
 import {
   admittedGuestIds,
+  hasJoinRequest,
+  hasSuggestion,
   logLive,
   markLiveEnded,
   openSuggestions,
@@ -89,8 +91,10 @@ export function handleFrame(
         const name = cleanName(g.name);
         if (!name) continue;
         if (admitted.has(g.id)) setGuest(rt, g.id, name, "admitted", now);
-        else if (g.status === "pending")
+        else if (g.status === "pending") {
+          if (!rt.guests.has(g.id) && pendingCount(rt) >= MAX_LOBBY) continue;
           setGuest(rt, g.id, name, "pending", now);
+        }
       }
       return true;
     }
@@ -99,23 +103,21 @@ export function handleFrame(
       const name = cleanName(g.name);
       if (!name) return (drop("bad name"), false);
       if (rt.guests.has(g.id)) return true;
-      const waiting = [...rt.guests.values()].filter(
-        (x) => x.status === "pending"
-      ).length;
-      if (waiting >= MAX_LOBBY) {
+      if (pendingCount(rt) >= MAX_LOBBY) {
         fx.send(shareId, "deny", { guest_id: g.id });
         return true;
       }
       setGuest(rt, g.id, name, "pending", now);
-      logLive({
-        share_id: shareId,
-        kind: "join_request",
-        guest_id: g.id,
-        guest_name: name,
-        ref: null,
-        text: null,
-        sent_text: null,
-      });
+      if (!hasJoinRequest(shareId, g.id))
+        logLive({
+          share_id: shareId,
+          kind: "join_request",
+          guest_id: g.id,
+          guest_name: name,
+          ref: null,
+          text: null,
+          sent_text: null,
+        });
       return true;
     }
     case "presence": {
@@ -147,6 +149,8 @@ export function handleFrame(
         return (drop("suggestion from a guest not admitted here"), false);
       const text = cleanBody(s.text);
       if (!text) return (drop("empty suggestion"), false);
+      if (hasSuggestion(shareId, s.id))
+        return (drop("duplicate suggestion"), false);
       if (openSuggestions(shareId).length >= MAX_PENDING_CARDS) {
         fx.send(shareId, "suggestion_status", {
           guest_id: known.id,
@@ -178,6 +182,17 @@ export function handleFrame(
         .guest_id;
       const g = gid ? rt.guests.get(gid) : undefined;
       if (g) g.status = "pending";
+      // The admit line must not outlive a refused admit.
+      if (gid && admittedGuestIds(shareId).has(gid))
+        logLive({
+          share_id: shareId,
+          kind: "deny",
+          guest_id: gid,
+          guest_name: g?.name ?? null,
+          ref: null,
+          text: null,
+          sent_text: null,
+        });
       rt.notice = "Your plan's guest limit is reached.";
       return true;
     }
@@ -186,6 +201,10 @@ export function handleFrame(
       return true;
   }
   return false;
+}
+
+function pendingCount(rt: Runtime) {
+  return [...rt.guests.values()].filter((x) => x.status === "pending").length;
 }
 
 function setGuest(

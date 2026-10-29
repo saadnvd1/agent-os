@@ -125,7 +125,25 @@ export function admittedGuestIds(shareId: string): Set<string> {
   for (const l of listLog(shareId)) {
     if (!l.guest_id) continue;
     if (l.kind === "admit") out.add(l.guest_id);
-    else if (l.kind === "kick") out.delete(l.guest_id);
+    else if (l.kind === "kick" || l.kind === "deny") out.delete(l.guest_id);
   }
   return out;
+}
+
+/** Whether a suggestion with this id was ever logged for the share. */
+export function hasSuggestion(shareId: string, ref: string): boolean {
+  return !!db
+    .prepare(
+      `SELECT 1 FROM live_share_log WHERE share_id = ? AND kind = 'suggestion' AND ref = ? LIMIT 1`
+    )
+    .get(shareId, ref);
+}
+
+/** Whether a join request from this guest was already logged. */
+export function hasJoinRequest(shareId: string, guestId: string): boolean {
+  return !!db
+    .prepare(
+      `SELECT 1 FROM live_share_log WHERE share_id = ? AND kind = 'join_request' AND guest_id = ? LIMIT 1`
+    )
+    .get(shareId, guestId);
 }
