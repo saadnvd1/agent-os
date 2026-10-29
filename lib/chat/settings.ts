@@ -16,6 +16,7 @@ import {
   type ChatCommand,
   type ChatServerMessage,
 } from "./events";
+import { tagSources } from "./skill-source";
 import {
   createSkillWatcher,
   skillFolders,
@@ -200,6 +201,7 @@ async function loadCapabilities(
     if (w.loads.get(key)?.gen !== gen) return;
     registry.caps.set(key, {
       ...found,
+      commands: tagSources(found.commands, cwdOf(session)),
       terminalOnly: registry.caps.get(key)?.terminalOnly ?? new Set(),
       at: Date.now(),
     });

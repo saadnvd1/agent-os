@@ -4,6 +4,7 @@ import {
   isFreshCommand,
   withFresh,
   leadingCommand,
+  groupCommands,
   rankCommands,
   slashQuery,
 } from "./commands";
@@ -124,5 +125,45 @@ describe("/fresh", () => {
     const own = [{ name: "review", description: "" }];
     expect(withFresh(own).map((c) => c.name)).toEqual(["fresh", "review"]);
     expect(withFresh(withFresh(own))).toHaveLength(2);
+  });
+});
+
+describe("groupCommands", () => {
+  const from = (
+    name: string,
+    source: ChatCommand["source"],
+    description = ""
+  ): ChatCommand => ({ name, description, source });
+  const all = [
+    from("audit", "global", "Find code to DRY up"),
+    from("session-audit", "project", "Token waste in sessions"),
+    from("slack:search", "plugin", "Search Slack"),
+    from("review", "builtin", "Review the diff and audit it"),
+  ];
+
+  it("lists recent first, then one section per source, with nothing typed", () => {
+    const g = groupCommands("", all, ["audit"]);
+    expect(g.map((x) => x.label)).toEqual([
+      "Recent",
+      "Project",
+      "Plugin",
+      "Built-in",
+    ]);
+    expect(g[0].commands.map((c) => c.name)).toEqual(["audit"]);
+  });
+
+  it("puts name matches in their source and description-only matches last", () => {
+    const g = groupCommands("audit", all, []);
+    expect(g.map((x) => [x.label, x.commands.map((c) => c.name)])).toEqual([
+      ["Project", ["session-audit"]],
+      ["Global", ["audit"]],
+      ["Matched in description", ["review"]],
+    ]);
+  });
+
+  it("stays one flat list when no command has a source", () => {
+    const g = groupCommands("re", [cmd("review"), cmd("resume")], []);
+    expect(g).toHaveLength(1);
+    expect(g[0].label).toBe("");
   });
 });

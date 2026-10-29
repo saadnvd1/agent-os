@@ -21,7 +21,13 @@ export interface ChatCommand {
   description: string;
   argumentHint?: string;
   builtin?: boolean;
+  // Where it comes from, for grouping in the "/" menu.
+  source?: CommandSource;
+  // The plugin that ships it, when source is "plugin".
+  plugin?: string;
 }
+
+export type CommandSource = "project" | "global" | "plugin" | "builtin";
 
 export interface ChatModel {
   value: string;

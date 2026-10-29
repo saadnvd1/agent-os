@@ -16,7 +16,14 @@ import {
   composeMessage,
   type TextAttachment,
 } from "@/lib/chat/paste";
-import { insertCommand, rankCommands, slashQuery } from "@/lib/chat/commands";
+import {
+  groupCommands,
+  insertCommand,
+  leadingCommand,
+  slashQuery,
+  sourceLabel,
+} from "@/lib/chat/commands";
+import { loadRecent, saveRecent } from "@/lib/chat/recent-commands";
 import { mentionOption } from "@/lib/chat/mentions";
 import { cn } from "@/lib/utils";
 import { loadDraft, useSaveDraft } from "../useDraft";
@@ -184,25 +191,38 @@ export function ComposerBody({
   const slash = slashQuery(caret.before);
   const query = slash?.query ?? null;
   const mentions = useMentions(editor, caret, query === null, requestFiles);
-  const matches = useMemo(() => {
+  // Only read when the menu is open, so rendering on the server is harmless.
+  const [recent, setRecent] = useState(loadRecent);
+  const groups = useMemo(() => {
     if (query === null) return [];
     const all = [
       ...(onSetModel ? [MODEL_COMMAND] : []),
       ...commands.filter((c) => c.name !== "model"),
     ];
-    return rankCommands(query, all);
-  }, [query, commands, onSetModel]);
+    return groupCommands(query, all, recent);
+  }, [query, commands, onSetModel, recent]);
+  const rows = useMemo(
+    () => groups.flatMap((g) => g.commands.map((command) => ({ g, command }))),
+    [groups]
+  );
+  const matches = useMemo(() => rows.map((r) => r.command), [rows]);
   // One menu at a time: "/" commands or "@" files at the caret.
   const menuKey =
     query !== null ? `/${caret.pos}:${caret.before}` : mentions.key;
   const menuOpen = menuKey !== null && dismissed !== menuKey;
   const options: MenuOption[] =
     query !== null
-      ? matches.map((c, i) => ({
+      ? rows.map(({ g, command: c }, i) => ({
           key: `${c.name}-${i}`,
           label: `/${c.name}`,
           hint: c.argumentHint,
           description: c.description,
+          group: g.label || undefined,
+          // The heading already says it, except where a section mixes sources.
+          badge:
+            g.label === "Recent" || g.label === "Matched in description"
+              ? (sourceLabel(c) ?? undefined)
+              : undefined,
         }))
       : mentions.files.map((f) => ({
           key: `${f.dir ? "d" : "f"}:${f.path}`,
@@ -251,6 +271,9 @@ export function ComposerBody({
     !text.trim() && !images.length && !files.length && !attach.uploads.length;
   const submit = () => {
     if (empty || disabled || attach.uploading) return;
+    const used = leadingCommand(text)?.slice(1);
+    if (used && commands.some((c) => c.name === used))
+      setRecent(saveRecent(used));
     onSend(composeMessage(text, files), images, attached);
     setImages([]);
     setFiles([]);
@@ -308,6 +331,7 @@ export function ComposerBody({
           label={query !== null ? "Commands" : "Files"}
           empty={query !== null ? "No matching commands" : "No matching files"}
           options={options}
+          highlight={query ?? undefined}
           active={highlighted}
           onPick={pick}
           onHover={setActive}

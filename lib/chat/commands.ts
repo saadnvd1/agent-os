@@ -1,4 +1,4 @@
-import type { ChatCommand } from "./events";
+import type { ChatCommand, CommandSource } from "./events";
 
 // The /command being typed: a "/" at the start of a line or after whitespace,
 // then the partial name, right up to the caret. Not "a/b" or "http://x".
@@ -26,9 +26,14 @@ function score(q: string, c: ChatCommand): number {
   if (parts.some((p) => p.startsWith(q))) return 60;
   if (name.includes(q)) return 50;
   if (isSubsequence(q, name)) return 20;
-  if (c.description.toLowerCase().includes(q)) return 10;
+  const desc = c.description.toLowerCase();
+  if (desc.split(/[^a-z0-9]+/).some((w) => w.startsWith(q))) return 12;
+  if (desc.includes(q)) return 10;
   return 0;
 }
+
+// A match that only came from the description, not the name.
+const DESCRIPTION_ONLY = 12;
 
 // Best matches first; ties keep the agent's own order.
 export function rankCommands(
@@ -67,4 +72,69 @@ export function withFresh(commands: ChatCommand[]): ChatCommand[] {
   return commands.some((c) => c.name === "fresh")
     ? commands
     : [FRESH_COMMAND, ...commands];
+}
+
+export interface MenuGroup {
+  label: string;
+  commands: ChatCommand[];
+}
+
+const SOURCE_ORDER: CommandSource[] = [
+  "project",
+  "global",
+  "plugin",
+  "builtin",
+];
+
+export const SOURCE_LABEL: Record<CommandSource, string> = {
+  project: "Project",
+  global: "Global",
+  plugin: "Plugin",
+  builtin: "Built-in",
+};
+
+// "Global" / "Project" / "slack": the small label on a row.
+export function sourceLabel(c: ChatCommand): string | null {
+  if (!c.source) return null;
+  return c.source === "plugin" && c.plugin ? c.plugin : SOURCE_LABEL[c.source];
+}
+
+// The ranked commands as the menu shows them: what was used last, then one
+// section per source, then what only matched by description. A command with
+// no known source (an agent that doesn't report one) stays in one flat list.
+export function groupCommands(
+  query: string,
+  commands: ChatCommand[],
+  recent: string[]
+): MenuGroup[] {
+  const ranked = rankCommands(query, commands);
+  if (!commands.some((c) => c.source)) {
+    return ranked.length ? [{ label: "", commands: ranked }] : [];
+  }
+  const groups: MenuGroup[] = [];
+  const add = (label: string, list: ChatCommand[]) => {
+    if (list.length) groups.push({ label, commands: list });
+  };
+  const rest = (c: ChatCommand) => !recent.includes(c.name);
+  const used = recent
+    .map((n) => ranked.find((c) => c.name === n))
+    .filter((c): c is ChatCommand => !!c);
+  add("Recent", used);
+  const byName = (a: ChatCommand, b: ChatCommand) =>
+    a.name.localeCompare(b.name);
+  const named = ranked.filter(
+    (c) => rest(c) && (!query || score(query, c) > DESCRIPTION_ONLY)
+  );
+  for (const src of SOURCE_ORDER) {
+    const list = named.filter((c) => (c.source ?? "builtin") === src);
+    // Alphabetical when nothing was typed; best match first otherwise.
+    add(SOURCE_LABEL[src], query ? list : [...list].sort(byName));
+  }
+  add(
+    "Matched in description",
+    ranked.filter(
+      (c) => rest(c) && query && score(query, c) <= DESCRIPTION_ONLY
+    )
+  );
+  return groups;
 }
