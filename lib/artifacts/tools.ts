@@ -100,7 +100,12 @@ export async function renderPage(
       ctx.sessionId,
       args.title,
       readSource(args, ctx.cwd),
-      { update: args.update, note: args.note, sameTitle: true }
+      {
+        update: args.update,
+        note: args.note,
+        sameTitle: true,
+        matchContent: true,
+      }
     );
     if (created) {
       ctx.onRender(artifact, args.height);
@@ -112,7 +117,7 @@ export async function renderPage(
         {
           type: "text",
           text: created
-            ? `Shown in the chat as ${name} (artifact ${artifact.id}). To change it, call html_render again with update: "${artifact.id}"; every version is kept.`
+            ? `Shown in the chat as ${name} (artifact ${artifact.id}). To revise this page, pass update: "${artifact.id}" to html_render, even if the title changes; every version is kept.`
             : `Unchanged: the page is the same as ${name} (artifact ${artifact.id}), already in the chat.`,
         },
       ],
@@ -191,7 +196,7 @@ export function visualsTools(
             .string()
             .optional()
             .describe(
-              "The artifact id of a page you already showed in this chat, to show a new version of it. A page with the same title is updated too. Every version is kept."
+              "When revising a page you already showed, pass its artifact id, even if the title changes, to show a new version of it. Without it a page is matched by title or similar content, and otherwise saved as a new page. Every version is kept."
             ),
           note: z
             .string()
@@ -207,7 +212,7 @@ export function visualsTools(
 
 export const VISUALS_BRIEF = `## Showing visuals
 
-When a chart, table, diagram or mockup would say more than prose, build a self-contained HTML page (a chart is an HTML page; a CDN library such as Chart.js is fine), check it with \`html_preview\` and fix what the screenshot and console show, then show it with \`html_render\` before your final reply. The reader sees the page above that reply, so add only what the page doesn't say. An SVG or image file you write shows inline when your reply links to it by its absolute path, as ![name](/abs/path.svg).`;
+When a chart, table, diagram or mockup would say more than prose, build a self-contained HTML page (a chart is an HTML page; a CDN library such as Chart.js is fine), check it with \`html_preview\` and fix what the screenshot and console show, then show it with \`html_render\` before your final reply. The reader sees the page above that reply, so add only what the page doesn't say. To revise a page you already showed, call \`html_render\` again with \`update\` set to its artifact id (even if the title changes), so it becomes the next version, not a second page. An SVG or image file you write shows inline when your reply links to it by its absolute path, as ![name](/abs/path.svg).`;
 
 // An orchestrator reads other sessions' text, so it gets the short form and
 // is told what to keep out of a page.

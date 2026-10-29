@@ -36,6 +36,8 @@ export interface ArtifactVersion {
 
 export interface PageVersions {
   pageId: string;
+  // The page's name: its latest version's title.
+  title: string;
   latestId: string;
   versions: ArtifactVersion[];
   actions: ArtifactAction[];

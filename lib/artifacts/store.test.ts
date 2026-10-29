@@ -139,6 +139,50 @@ describe("versions", () => {
     expect(other.artifact.version).toBe(1);
   });
 
+  it("a retitled page is found by its latest title only", () => {
+    const session = randomUUID();
+    const a = createArtifact(session, "Old name", "1");
+    const v2 = saveArtifact(session, "New name", "2", { update: a.id });
+    const byNew = saveArtifact(session, "new name", "3", { sameTitle: true });
+    expect(byNew.artifact.page_id).toBe(a.page_id);
+    expect(byNew.artifact.version).toBe(3);
+    const byOld = saveArtifact(session, "Old name", "4", { sameTitle: true });
+    expect(byOld.artifact.page_id).not.toBe(a.page_id);
+    expect(v2.artifact.title).toBe("New name");
+  });
+
+  it("saves a retitled revision as the next version by content", () => {
+    const session = randomUUID();
+    const body = Array.from(
+      { length: 10 },
+      (_, i) => `Section ${i} explains how the pipeline stage handles retries`
+    ).join(". ");
+    const v1 = createArtifact(
+      session,
+      "Pipeline plan",
+      `<h1>x</h1><p>${body}</p>`
+    );
+    const r = saveArtifact(
+      session,
+      "Pipeline plan, final",
+      `<h1>y</h1><p>${body}. Added one closing remark.</p>`,
+      { matchContent: true }
+    );
+    expect(r.artifact.page_id).toBe(v1.page_id);
+    expect(r.artifact.version).toBe(2);
+    expect(r.artifact.title).toBe("Pipeline plan, final");
+    expect(r.artifact.note).toBe("Retitled from 'Pipeline plan'");
+    const kept = saveArtifact(session, "Third", `<p>${body}. More.</p>`, {
+      matchContent: true,
+      note: "mine",
+    });
+    expect(kept.artifact.note).toBe("mine");
+    const other = saveArtifact(session, "Unrelated", "<p>tiny</p>", {
+      matchContent: true,
+    });
+    expect(other.artifact.version).toBe(1);
+  });
+
   it("refuses to update another chat's page", () => {
     const a = createArtifact(randomUUID(), "Mine", "1");
     expect(() =>
