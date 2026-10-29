@@ -110,6 +110,7 @@ describe("a page's versions", () => {
       "fullscreen",
       "share",
       "open",
+      "compare",
       "download",
     ]);
   });

@@ -64,6 +64,7 @@ export const STATIC_SIBLINGS = [
   "browse",
   "check",
   "clone",
+  "compare",
   "connect",
   "detect",
   "done-idle",
@@ -84,6 +85,7 @@ export const STATIC_SIBLINGS = [
   "pdf",
   "preview",
   "queue",
+  "resolve",
   "status",
 ];
 // No leading "-": an id that reaches a command line can't read as an option.
@@ -101,6 +103,7 @@ const READS = [
   "sessions/[id]/pr",
   "sessions/[id]/artifacts",
   "sessions/[id]/artifacts/[id]",
+  "sessions/[id]/artifacts/[id]/compare",
   "sessions/[id]/setup",
   "sessions/[id]/preview",
   "projects",

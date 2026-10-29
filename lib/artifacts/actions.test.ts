@@ -36,3 +36,19 @@ describe("artifact actions", () => {
     ).toEqual(["open-pr"]);
   });
 });
+
+describe("compare action", () => {
+  it("is offered only with two or more versions", () => {
+    expect(ids(pageActions({ pdf: false }))).not.toContain("compare");
+    expect(ids(pageActions({ pdf: false, versions: 1 }))).not.toContain(
+      "compare"
+    );
+    expect(ids(pageActions({ pdf: false, versions: 2 }))).toEqual([
+      "fullscreen",
+      "share",
+      "open",
+      "compare",
+      "download",
+    ]);
+  });
+});
