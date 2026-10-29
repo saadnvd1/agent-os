@@ -91,6 +91,75 @@ describe("buildChatSnapshot", () => {
     expect(s.hits.secret).toBe(0);
   });
 
+  it("shares only the range, and says what was cut on each side", async () => {
+    const id = seeded();
+    const s = await buildChatSnapshot(id, ctx, {
+      includeTools: true,
+      fromId: "t1",
+      toId: "r1",
+    });
+    expect(s.items.map((i) => i.id)).toEqual(["t1", "r1"]);
+    expect(s.cutBefore).toBe(true);
+    expect(s.cutAfter).toBe(true);
+    expect(s.items[0].createdAt).toBeGreaterThan(0);
+  });
+
+  it("marks only the side that was cut, and nothing for a full range", async () => {
+    const id = seeded();
+    const tail = await buildChatSnapshot(id, ctx, {
+      includeTools: false,
+      fromId: "a1",
+    });
+    expect(tail.items.map((i) => i.id)).toEqual(["a1"]);
+    expect([tail.cutBefore, tail.cutAfter]).toEqual([true, false]);
+    const whole = await buildChatSnapshot(id, ctx, {
+      includeTools: false,
+      fromId: "u1",
+      toId: "a1",
+    });
+    expect([whole.cutBefore, whole.cutAfter]).toEqual([false, false]);
+  });
+
+  it("doesn't call tool rows hidden outside the range a cut", async () => {
+    const id = seeded();
+    const s = await buildChatSnapshot(id, ctx, {
+      includeTools: false,
+      fromId: "a1",
+      toId: "a1",
+    });
+    expect(s.cutBefore).toBe(true);
+    const head = await buildChatSnapshot(id, ctx, {
+      includeTools: false,
+      fromId: "u1",
+      toId: "u1",
+    });
+    expect([head.cutBefore, head.cutAfter]).toEqual([false, true]);
+  });
+
+  it("applies the dropped messages inside the range", async () => {
+    const id = seeded();
+    const s = await buildChatSnapshot(id, ctx, {
+      includeTools: true,
+      fromId: "t1",
+      dropIds: ["r1", "u1"],
+    });
+    expect(s.items.map((i) => i.id)).toEqual(["t1", "a1"]);
+  });
+
+  it("refuses a range that names a message that isn't there", async () => {
+    const id = seeded();
+    await expect(
+      buildChatSnapshot(id, ctx, { includeTools: false, fromId: "gone" })
+    ).rejects.toThrow(/pick the range again/);
+    await expect(
+      buildChatSnapshot(id, ctx, {
+        includeTools: false,
+        fromId: "a1",
+        toId: "u1",
+      })
+    ).rejects.toThrow();
+  });
+
   it("hides the output of a tool that read a secret file", async () => {
     const id = chat();
     const body = "DB_HOST=db.internal";

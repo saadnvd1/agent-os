@@ -20,6 +20,28 @@ const snap = (items: SnapshotItem[], toolsHidden = true): Snapshot => ({
 });
 const AT = "2026-10-13T12:00:00.000Z";
 
+describe("chatToMarkdown excerpt markers", () => {
+  const items = [item({ id: "1", type: "user", text: "hi" })];
+  it("marks a cut at the top and the bottom", () => {
+    const md = chatToMarkdown(
+      { ...snap(items), cutBefore: true, cutAfter: true },
+      { sharedAt: AT }
+    );
+    expect(md.indexOf("*Earlier messages not shared.*")).toBeLessThan(
+      md.indexOf("**User:**")
+    );
+    expect(md.indexOf("*Later messages not shared.*")).toBeGreaterThan(
+      md.indexOf("hi")
+    );
+  });
+
+  it("is silent for a whole chat", () => {
+    expect(chatToMarkdown(snap(items), { sharedAt: AT })).not.toContain(
+      "not shared"
+    );
+  });
+});
+
 describe("chatToMarkdown", () => {
   const md = chatToMarkdown(
     snap([

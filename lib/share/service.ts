@@ -16,7 +16,11 @@ import {
   renderChatSnapshot,
 } from "./render";
 import { artifactToMarkdown, chatToMarkdown } from "./markdown";
-import { buildArtifactSnapshot, buildChatSnapshot } from "./snapshot";
+import {
+  RangeGone,
+  buildArtifactSnapshot,
+  buildChatSnapshot,
+} from "./snapshot";
 
 export interface ShareRequest {
   kind: "chat" | "artifact";
@@ -25,6 +29,9 @@ export interface ShareRequest {
   includeTools: boolean;
   /** Messages the reader left out in the preview. */
   dropIds?: string[];
+  /** The part of the chat shared: from this message to that one, ends included. */
+  fromId?: string;
+  toId?: string;
   follow?: "latest";
   sharedAt: string;
 }
@@ -34,6 +41,7 @@ export interface ItemRow {
   type: string;
   tools: boolean;
   excerpt: string;
+  createdAt?: number;
 }
 
 export interface Page {
@@ -87,6 +95,15 @@ export function parseRequest(raw: unknown, sharedAt?: unknown): ShareRequest {
       throw new BadShare("dropIds must be a list of ids", 400);
     dropIds = b.dropIds as string[];
   }
+  const end = (key: "fromId" | "toId") => {
+    const v = b[key];
+    if (v === undefined) return undefined;
+    if (typeof v !== "string" || !v || v.length > 200)
+      throw new BadShare(`${key} must be a message id`, 400);
+    return v;
+  };
+  const fromId = end("fromId");
+  const toId = end("toId");
   if (b.follow !== undefined && b.follow !== "latest")
     throw new BadShare("follow must be latest", 400);
   if (b.follow && kind !== "artifact")
@@ -100,9 +117,39 @@ export function parseRequest(raw: unknown, sharedAt?: unknown): ShareRequest {
     artifactId,
     includeTools: b.includeTools === true,
     dropIds,
+    fromId,
+    toId,
     follow: b.follow === "latest" ? "latest" : undefined,
     sharedAt: at,
   };
+}
+
+const rowOf = ({ id, type, tools, excerpt, createdAt }: ItemRow): ItemRow => ({
+  id,
+  type,
+  tools,
+  excerpt,
+  createdAt,
+});
+
+function chatSession(sessionId: string) {
+  let session;
+  try {
+    session = getSession(sessionId);
+  } catch {
+    throw new BadShare("No such chat", 404);
+  }
+  if (session.view !== "chat")
+    throw new BadShare("Only chats can be shared", 400);
+}
+
+/** Every shareable message of a chat, tool rows included, in order. */
+export async function listChatItems(req: ShareRequest): Promise<ItemRow[]> {
+  chatSession(req.sessionId!);
+  const all = await buildChatSnapshot(req.sessionId!, shareContext(), {
+    includeTools: true,
+  });
+  return all.items.map(rowOf);
 }
 
 const sha256 = (s: string) => createHash("sha256").update(s).digest("hex");
@@ -120,29 +167,27 @@ export async function buildPage(req: ShareRequest): Promise<Page> {
   let items: ItemRow[] = [];
 
   if (req.kind === "chat") {
-    let session;
-    try {
-      session = getSession(req.sessionId!);
-    } catch {
-      throw new BadShare("No such chat", 404);
-    }
-    if (session.view !== "chat")
-      throw new BadShare("Only chats can be shared", 400);
+    chatSession(req.sessionId!);
     const all = await buildChatSnapshot(req.sessionId!, ctx, {
       includeTools: req.includeTools,
     });
-    items = all.items.map(({ id, type, tools, excerpt }) => ({
-      id,
-      type,
-      tools,
-      excerpt,
-    }));
-    const snap = req.dropIds?.length
-      ? await buildChatSnapshot(req.sessionId!, ctx, {
+    items = all.items.map(rowOf);
+    const narrowed =
+      req.dropIds?.length || req.fromId !== undefined || req.toId !== undefined;
+    let snap = all;
+    if (narrowed) {
+      try {
+        snap = await buildChatSnapshot(req.sessionId!, ctx, {
           includeTools: req.includeTools,
           dropIds: req.dropIds,
-        })
-      : all;
+          fromId: req.fromId,
+          toId: req.toId,
+        });
+      } catch (err) {
+        if (err instanceof RangeGone) throw new BadShare(err.message, 409);
+        throw err;
+      }
+    }
     if (!snap.items.length)
       throw new BadShare("Nothing to share: every message is left out", 400);
     html = renderChatSnapshot(snap, { sharedAt: req.sharedAt });

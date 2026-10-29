@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { useSnapshot } from "valtio";
 import { toast } from "sonner";
 import { Check, Copy, ExternalLink, Link2 } from "lucide-react";
@@ -19,12 +19,18 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { DownloadMenu } from "./DownloadMenu";
+import { MessageList } from "./MessageList";
+import { RangePicker } from "./RangePicker";
+import { useCoarsePointer } from "@/components/Chat/composer/useCoarsePointer";
 import { cn } from "@/lib/utils";
 import { Switch } from "@/components/ui/switch";
 import { writeClipboard } from "@/hooks/useCopyToClipboard";
 import {
   useCreateShare,
+  useShareMessages,
   useSharePreview,
+  type PreviewItem,
+  type PreviewRequest,
   type ShareExpiry,
   type SharePreview,
 } from "@/data/shares";
@@ -34,12 +40,21 @@ import {
   DEFAULT_EXPIRY,
   EXPIRIES,
   EXPIRY_LABEL,
-  TYPE_LABEL,
   formatBytes,
-  nothingLeft,
   redactionSummary,
   toggleDrop,
 } from "@/lib/share/view";
+import {
+  DEFAULT_PRESET,
+  activePreset,
+  clickRange,
+  inRange,
+  presetRange,
+  rangeFromHere,
+  rangeSummary,
+  type RangePreset,
+  type ShareRange,
+} from "@/lib/share/range";
 
 // Opened from a menu or an artifact: the redacted page exactly as it would be
 // uploaded, with what to leave out, then Create link or Download.
@@ -52,7 +67,7 @@ export function ShareDialog() {
     >
       {target && (
         <ShareBody
-          key={target.sessionId ?? target.artifactId}
+          key={`${target.sessionId ?? target.artifactId}:${target.fromId ?? ""}`}
           target={{ ...target }}
         />
       )}
@@ -69,6 +84,7 @@ function ShareBody({
     artifactId?: string;
     title: string;
     version?: number;
+    fromId?: string;
   };
 }) {
   const [tools, setTools] = useState(false);
@@ -80,22 +96,60 @@ function ShareBody({
   const [follow, setFollow] = useState(false);
   const [copied, setCopied] = useState(false);
   const [tab, setTab] = useState<"page" | "markdown">("page");
+  const [rows, setRows] = useState<PreviewItem[] | null>(null);
+  const [range, setRange] = useState<ShareRange | null>(null);
+  const [anchor, setAnchor] = useState<string | null>(null);
+  const [armed, setArmed] = useState(false);
   const previewReq = useSharePreview();
+  const listReq = useShareMessages();
   const create = useCreateShare();
+  const coarse = useCoarsePointer();
   const seq = useRef(0);
 
   const { kind, sessionId, artifactId } = target;
+  const chat = kind === "chat";
+
+  // A chat opens on its last exchange, or on the message it was shared from.
   useEffect(() => {
+    if (!chat) return;
+    let live = true;
+    listReq
+      .mutateAsync({ kind, sessionId, includeTools: true })
+      .then(({ items }) => {
+        if (!live) return;
+        const from = target.fromId ? rangeFromHere(items, target.fromId) : null;
+        setRows(items);
+        setRange(from ?? presetRange(items, DEFAULT_PRESET, new Date()));
+        setAnchor(from?.fromId ?? null);
+      })
+      .catch((err: Error) => live && setError(err.message));
+    return () => {
+      live = false;
+    };
+    // listReq is stable enough; re-running on it would loop.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [chat, kind, sessionId, target.fromId]);
+
+  const ready =
+    !chat || (rows !== null && range !== null) || rows?.length === 0;
+  const request: PreviewRequest = useMemo(
+    () => ({
+      kind,
+      sessionId,
+      artifactId,
+      includeTools: tools,
+      dropIds: dropped,
+      ...(range ?? {}),
+    }),
+    [kind, sessionId, artifactId, tools, dropped, range]
+  );
+
+  useEffect(() => {
+    if (!ready) return;
     const mine = ++seq.current;
     const timer = setTimeout(async () => {
       try {
-        const p = await previewReq.mutateAsync({
-          kind,
-          sessionId,
-          artifactId,
-          includeTools: tools,
-          dropIds: dropped,
-        });
+        const p = await previewReq.mutateAsync(request);
         if (mine === seq.current) {
           setPreview(p);
           setError(null);
@@ -107,7 +161,7 @@ function ShareBody({
     return () => clearTimeout(timer);
     // previewReq is stable enough; re-running on it would loop.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [kind, sessionId, artifactId, tools, dropped]);
+  }, [ready, request]);
 
   const toggle = (id: string) => setDropped((d) => toggleDrop(d, id));
 
@@ -115,11 +169,7 @@ function ShareBody({
     if (!preview) return;
     try {
       const res = await create.mutateAsync({
-        kind,
-        sessionId,
-        artifactId,
-        includeTools: tools,
-        dropIds: dropped,
+        ...request,
         sharedAt: preview.sharedAt,
         hash: preview.hash,
         expiresIn,
@@ -149,8 +199,33 @@ function ShareBody({
   };
 
   const linked = preview?.connectLinked ?? false;
-  const empty =
-    kind === "chat" && !!preview && nothingLeft(preview.items, dropped);
+  const visibleRows = useMemo(
+    () => (rows ?? []).filter((r) => tools || !r.tools),
+    [rows, tools]
+  );
+  const covered = useMemo(() => inRange(rows ?? [], range), [rows, range]);
+  const inside = useMemo(() => new Set(covered.map((r) => r.id)), [covered]);
+  const shared = visibleRows.filter(
+    (r) => inside.has(r.id) && !dropped.includes(r.id)
+  );
+  const empty = chat && !!rows && shared.length === 0;
+  const active = activePreset(rows ?? [], range, new Date());
+
+  const pickPreset = (preset: RangePreset) => {
+    const r = presetRange(rows ?? [], preset, new Date());
+    if (!r) return;
+    setRange(r);
+    setAnchor(r.fromId);
+    setArmed(false);
+  };
+  const pickRow = (id: string, shift: boolean) => {
+    const extend = shift || (coarse && armed);
+    setRange(
+      clickRange(rows ?? [], anchor ?? range?.fromId ?? null, id, extend)
+    );
+    if (!extend) setAnchor(id);
+    setArmed(coarse && !extend);
+  };
   const summary = preview ? redactionSummary(preview.hits) : "";
 
   return (
@@ -165,6 +240,15 @@ function ShareBody({
           masked. Nothing is uploaded until you create the link.
         </DialogDescription>
       </div>
+
+      {chat && rows && rows.length > 0 && (
+        <RangePicker
+          rows={rows}
+          active={active}
+          summary={rangeSummary(visibleRows.length, shared)}
+          onPick={pickPreset}
+        />
+      )}
 
       <div className="flex min-h-0 flex-1 flex-col gap-3 overflow-y-auto md:flex-row md:overflow-hidden">
         <div className="flex min-h-[45vh] flex-1 flex-col gap-2 md:min-h-0">
@@ -210,31 +294,14 @@ function ShareBody({
                 <span>Include tool calls and thinking</span>
                 <Switch checked={tools} onCheckedChange={setTools} />
               </label>
-              <div className="min-h-0">
-                <div className="text-muted-foreground mb-1 text-xs font-medium">
-                  Messages
-                </div>
-                <ul className="max-h-64 divide-y overflow-y-auto rounded-lg border">
-                  {preview?.items.map((item) => (
-                    <li key={item.id}>
-                      <label className="flex min-h-11 cursor-pointer items-center gap-3 px-3 py-1.5 text-sm">
-                        <input
-                          type="checkbox"
-                          className="h-4 w-4 shrink-0"
-                          checked={!dropped.includes(item.id)}
-                          onChange={() => toggle(item.id)}
-                        />
-                        <span className="text-muted-foreground w-12 shrink-0 text-xs">
-                          {TYPE_LABEL[item.type] ?? item.type}
-                        </span>
-                        <span className="min-w-0 flex-1 truncate">
-                          {item.excerpt || "(empty)"}
-                        </span>
-                      </label>
-                    </li>
-                  ))}
-                </ul>
-              </div>
+              <MessageList
+                rows={visibleRows}
+                inside={inside}
+                dropped={dropped}
+                touch={coarse}
+                onPick={pickRow}
+                onToggle={toggle}
+              />
             </>
           )}
 
@@ -372,15 +439,9 @@ function ShareBody({
           <div className="flex gap-2">
             <DownloadMenu
               preview={preview}
-              title={target.title}
+              title={target.title || preview?.title || ""}
               disabled={!preview || preview.tooBig || empty}
-              request={{
-                kind,
-                sessionId,
-                artifactId,
-                includeTools: tools,
-                dropIds: dropped,
-              }}
+              request={request}
             />
             {linked && (
               <Button

@@ -15,6 +15,7 @@ import {
   type Hits,
   type ShareContext,
 } from "./redact";
+import { windowOf } from "./range";
 
 export type SnapshotType =
   "user" | "assistant" | "plan" | "error" | "divider" | "artifact" | "detail";
@@ -32,6 +33,7 @@ export interface SnapshotItem {
   excerpt: string;
   /** Hidden unless "include tool calls and thinking" is on. */
   tools: boolean;
+  createdAt?: number;
 }
 
 export interface Snapshot {
@@ -39,7 +41,17 @@ export interface Snapshot {
   items: SnapshotItem[];
   /** Whether the tools group was left out, to say so on the page. */
   toolsHidden: boolean;
+  /** Messages before / after the shared range were left out, to say so. */
+  cutBefore?: boolean;
+  cutAfter?: boolean;
   hits: Hits;
+}
+
+/** The range names a message that is no longer in the chat. */
+export class RangeGone extends Error {
+  constructor() {
+    super("That part of the chat changed; pick the range again.");
+  }
 }
 
 export const MAX_TOOL_INPUT = 4_000;
@@ -189,7 +201,12 @@ export function toRaw(item: ChatItem): Raw | null {
 export async function buildChatSnapshot(
   sessionId: string,
   ctx: ShareContext,
-  opts: { includeTools: boolean; dropIds?: string[] }
+  opts: {
+    includeTools: boolean;
+    dropIds?: string[];
+    fromId?: string;
+    toId?: string;
+  }
 ): Promise<Snapshot> {
   const session = getSession(sessionId);
   const dropped = new Set(opts.dropIds ?? []);
@@ -201,13 +218,31 @@ export async function buildChatSnapshot(
   };
 
   const items: SnapshotItem[] = [];
-  for (const item of visible(listItems(sessionId))) {
+  const all = visible(listItems(sessionId));
+  let window: { start: number; end: number } | null = null;
+  if (opts.fromId !== undefined || opts.toId !== undefined) {
+    window = windowOf(
+      all.map((i) => i.id),
+      opts.fromId,
+      opts.toId
+    );
+    if (!window) throw new RangeGone();
+  }
+  let cutBefore = false;
+  let cutAfter = false;
+  for (const [at, item] of all.entries()) {
     const raw = toRaw(item);
     if (!raw) continue;
     if (raw.tools && !opts.includeTools) continue;
+    if (window && (at < window.start || at > window.end)) {
+      if (at < window.start) cutBefore = true;
+      else cutAfter = true;
+      continue;
+    }
     if (dropped.has(raw.id)) continue;
     const row: SnapshotItem = {
       ...raw,
+      createdAt: item.createdAt,
       label: raw.label === undefined ? undefined : take(raw.label),
       text: take(raw.text),
       excerpt: "",
@@ -225,6 +260,8 @@ export async function buildChatSnapshot(
     title: take(session.name).slice(0, 120) || "Chat",
     items,
     toolsHidden: !opts.includeTools,
+    cutBefore,
+    cutAfter,
     hits,
   };
 }
