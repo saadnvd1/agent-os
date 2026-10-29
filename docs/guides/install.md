@@ -114,7 +114,7 @@ WSL, a Linux box such as an NVIDIA DGX Spark (arm64), a Mac. You don't need a
 Mac. Linked machines take tasks, and AgentOS Connect works from each of them
 (`agent-os connect`, with cloudflared pinned for Linux x64 and arm64).
 
-### With AgentOS Connect (any network, Pro)
+### With AgentOS Connect (any network; Free for one machine, Pro to link several)
 
 This is the default. Neither machine needs Tailscale, sshd or an open port.
 On the machine to be linked (the WSL distro or the Linux box):
@@ -285,7 +285,7 @@ By default AgentOS answers on the computer itself. Open **Settings → Devices &
 
 - **Same Wi-Fi.** Turn on **Allow devices on this Wi-Fi**. Only do this on a network you trust.
 - **Tailscale.** Install [Tailscale](https://tailscale.com) on the computer and the other device, and sign in to the same account on both. `agent-os status` then shows a Tailscale address, and AgentOS trusts your tailnet by default.
-- **AgentOS Connect.** Gives your machine a private address at runagentos.com that works from any network, with nothing to open on your router. It is still in development. Link it with `agent-os connect`.
+- **AgentOS Connect.** Gives your machine a private address at runagentos.com that works from any network, with nothing to open on your router. Free for one machine; linking several machines is Pro. Link it with `agent-os connect`.
 
 To add a phone, tablet or another computer, choose **Add a device** in Devices, or run `agent-os pair` to print a QR code. The [phone guide](phone.md) walks through pairing, Connect and notifications in full.
 

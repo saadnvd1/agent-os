@@ -13,7 +13,11 @@ import {
   useNetworkQuery,
   useUpdateNetwork,
 } from "@/data/devices";
-import { CONNECT_SITE, CONNECT_STATE, connectView } from "@/lib/connect/view";
+import {
+  CONNECT_SIGN_UP,
+  CONNECT_STATE,
+  connectView,
+} from "@/lib/connect/view";
 import { Block } from "./Block";
 
 const COMMAND = "agent-os connect";
@@ -40,7 +44,7 @@ export function LinkForm() {
       <p className="text-muted-foreground text-xs">
         Get a code at{" "}
         <a
-          href={CONNECT_SITE}
+          href={CONNECT_SIGN_UP}
           target="_blank"
           rel="noopener noreferrer"
           className="text-foreground inline-flex items-center gap-1 underline underline-offset-2"
@@ -48,7 +52,7 @@ export function LinkForm() {
           runagentos.com
           <ExternalLink className="size-3" />
         </a>{" "}
-        (Connect a machine), then paste it here.
+        (free account, then Connect a machine), then paste it here.
       </p>
       <form
         className="flex gap-2"
@@ -104,7 +108,7 @@ export function ConnectBlock() {
     <Block
       icon={Globe}
       title="Use it away from home"
-      detail="Connect gives this machine a private address at runagentos.com, so your phone reaches it from anywhere. Nothing to open on your router."
+      detail="Connect is free for one machine. It gives this machine a private address at runagentos.com, so your phone reaches it from anywhere. Nothing to open on your router."
     >
       {network.isPending ? (
         <div className="bg-muted/40 h-12 animate-pulse rounded-lg" />

@@ -28,7 +28,7 @@ const STEPS: Record<
   agents: {
     label: "Agents",
     title: "Connect your agents",
-    hint: "Install and sign in the coding agents you want to use. You need one.",
+    hint: "Install and sign in the coding agents you want to use. You need one, with an account such as Claude or Codex.",
   },
   project: {
     label: "Project",

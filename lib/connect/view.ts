@@ -1,6 +1,7 @@
 import type { ConnectStatus } from "./serve";
 
 export const CONNECT_SITE = "https://runagentos.com";
+export const CONNECT_SIGN_UP = `${CONNECT_SITE}/sign-in?mode=sign-up`;
 
 export const CONNECT_STATE: Record<ConnectStatus["state"], string> = {
   up: "Connected",

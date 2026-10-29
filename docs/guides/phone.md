@@ -63,7 +63,7 @@ working. `AGENTOS_TAILNET_HTTPS=0` turns it off, and
 
 ## From anywhere with Connect
 
-Connect gives your machine a private address at runagentos.com, like `https://m-0123456789abcdef.runagentos.com`. It works from any network, and you don't open anything on your router or install a VPN. Connect is still in development.
+Connect gives your machine a private address at runagentos.com, like `https://m-0123456789abcdef.runagentos.com`. It works from any network, and you don't open anything on your router or install a VPN. Connect is free for one machine; linking several machines is Pro.
 
 ### Link the machine
 

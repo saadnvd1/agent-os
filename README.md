@@ -50,7 +50,7 @@ and check on all of it from your phone.
 
 The iPhone app, [AgentOS: Coding Agents](https://apps.apple.com/us/app/agentos-coding-agents/id6820980797), is on the App Store.
 
-You need Node.js 22+, tmux, and at least one agent CLI (the installer offers to set up what's missing).
+You need Node.js 22+, git, tmux, and at least one agent CLI (the installer offers to set up what's missing).
 
 ```bash
 npm install -g @saadnvd1/agent-os
@@ -69,11 +69,12 @@ Then open AgentOS, add a project from ⌘K, and press ⌥N. The [install guide](
 
 ## Connect
 
-Connect (in development) lets you reach AgentOS from anywhere, without a tailnet or opening a port. Sign in at [runagentos.com](https://runagentos.com), get a code, and run:
+AgentOS Connect is live. It gives your machine a private address at runagentos.com, so your phone reaches it from any network with nothing to open on your router and no VPN.
 
-```bash
-agent-os connect   # links this machine with the code from runagentos.com
-```
+- **Free ($0):** Connect for one machine, including phone access from anywhere, on up to 3 devices.
+- **Pro ($4/mo billed yearly, or $6 monthly):** link up to 10 machines, with unlimited devices and 100 GB of traffic a month.
+
+[Sign up](https://runagentos.com/sign-in?mode=sign-up), then run `agent-os connect` on the machine and enter the code. The [phone guide](docs/guides/phone.md) has the steps.
 
 Reach it from your phone with the [AgentOS iPhone app](https://apps.apple.com/us/app/agentos-coding-agents/id6820980797), now on the App Store.
 
