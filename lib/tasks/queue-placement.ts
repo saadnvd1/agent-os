@@ -90,10 +90,14 @@ async function peerOptions(
   return out;
 }
 
-// A start that plans first goes by its plan phase: it needs no Mac or
-// simulator, and a plan-only one that no machine can take starts here
+// A start that plans first goes by its plan phase: it needs no simulator, and a plan-only one that no machine can take starts here
 // as ever (it never waits on load).
 const plansFirst = (r: QueueRow) => !!(r.plan || r.plan_only);
+
+// Planning needs no simulator or Xcode, but a Mac pin holds for the plan too:
+// the work is Mac-only (often because the other machine can't reach what it
+// touches), and the plan-to-implement hand-off doesn't carry the pin.
+const macOnly = (needs: Need[]): Need[] => needs.filter((n) => n === "mac");
 
 // Marks each start the home machine's load rules out as remote and returns
 // where it goes. "stale": the line moved while the machines were asked, so
@@ -143,7 +147,7 @@ export async function placeCandidates(
       asked(c),
       home,
       options,
-      plan ? [] : (needsOf.get(c.id) ?? []),
+      plan ? macOnly(needsOf.get(c.id) ?? []) : (needsOf.get(c.id) ?? []),
       now
     );
     if (!spot) continue;
