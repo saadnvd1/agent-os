@@ -22,10 +22,12 @@ function deps(opts: {
   history?: Record<string, string[]>;
   healthy?: boolean;
   committedAt?: number;
+  restartedAt?: number;
 }): DeployDeps & { asked: string[] } {
   const asked: string[] = [];
   return {
     asked,
+    restartedAt: () => opts.restartedAt ?? null,
     readSha: (file) => {
       const f = opts.files?.[file];
       return f ? { sha: f.sha, at: f.at ?? NOW - HEALTH_GRACE_MS * 2 } : null;
@@ -111,6 +113,36 @@ describe("checking a merge's deploy", () => {
       state: "failed",
       detail: "aaaaaaa not deployed 30 minutes after the merge",
     });
+  });
+
+  it("waits, not fails, while the head is held in the restart gap", async () => {
+    const d = deps({
+      files: { [config.deployed]: { sha: OTHER } },
+      restartedAt: NOW - 20 * 60 * 1000,
+    });
+    const late = input({ mergedAt: NOW - 31 * 60 * 1000 });
+    expect(await checkDeploy(late, d)).toEqual({
+      state: "pending",
+      detail: "deploy waiting: restart gap, ~40 min left",
+    });
+    // Still undeployed past the gap plus the margin: now it's late.
+    const after = deps({
+      files: { [config.deployed]: { sha: OTHER } },
+      restartedAt: NOW - 60 * 60 * 1000 - 11 * 60 * 1000,
+    });
+    expect((await checkDeploy(late, after)).state).toBe("failed");
+  });
+
+  it("fails an alerted head even inside the gap", async () => {
+    const d = deps({
+      files: {
+        [config.deployed]: { sha: OTHER },
+        [config.failed]: { sha: LATER },
+      },
+      history: { [LATER]: [MERGE] },
+      restartedAt: NOW - 60 * 1000,
+    });
+    expect((await checkDeploy(input(), d)).state).toBe("failed");
   });
 
   it("doesn't check a project without a deploy config, or a machine that doesn't deploy", async () => {
