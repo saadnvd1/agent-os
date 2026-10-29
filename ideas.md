@@ -354,3 +354,4 @@
 - Nest an analyst's row under its coder in the sidebar.
 - Analyst on any model: a manual "can call tools" override per model in Settings (for servers that can't be asked); the same full-catalog composer list for the other agent roles; carrying a conversation between Claude Code and Pi.
 - Analyst loop: carry a running loop across a task move to a linked machine (today the Loop button is hidden for tasks that run elsewhere), and a loop for terminal tasks that reads the coder's reply for blockers.
+- Readable session links: a setting that falls back to the opaque `/s/<id8>` (no name in history or screenshots), and a longer short id if sessions ever pass ~50k (8 hex clashes rarely; the slug breaks a clash).

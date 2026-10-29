@@ -103,7 +103,7 @@ export function PaneMenu({
                 </div>
               )}
             </DropdownMenuLabel>
-            <DropdownMenuItem onSelect={() => copySessionLink(session.id)}>
+            <DropdownMenuItem onSelect={() => copySessionLink(session)}>
               <Link className="h-4 w-4" />
               Copy link
             </DropdownMenuItem>

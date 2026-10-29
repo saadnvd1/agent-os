@@ -13,6 +13,10 @@ const nextConfig: NextConfig = {
   experimental: {
     agentUpgrade: false,
   },
+  // A session's readable address (lib/session-url) is the same one page.
+  async rewrites() {
+    return { beforeFiles: [{ source: "/s/:ref", destination: "/" }] };
+  },
   turbopack: {
     root: resolve(import.meta.dirname),
   },

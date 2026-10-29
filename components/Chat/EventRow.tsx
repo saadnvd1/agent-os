@@ -12,7 +12,7 @@ import {
 } from "lucide-react";
 import type { ChatItem, ChatOrigin, ChatOriginKind } from "@/lib/chat/events";
 import { eventParts, originOf } from "@/lib/chat/origin";
-import { hrefWithSession } from "@/lib/session-url";
+import { SessionAnchor } from "./SessionAnchor";
 import { cn } from "@/lib/utils";
 import { UserMessage } from "./Messages";
 import { openSessionLink as openSession } from "./session-link";
@@ -45,8 +45,8 @@ function Source({ origin }: { origin: ChatOrigin }) {
   if (!origin.sessionId) return name;
   const id = origin.sessionId;
   return (
-    <a
-      href={hrefWithSession("/", id)}
+    <SessionAnchor
+      sessionId={id}
       onClick={(e) => {
         e.stopPropagation();
         openSession(e, id);
@@ -54,7 +54,7 @@ function Source({ origin }: { origin: ChatOrigin }) {
       className="hover:text-foreground relative min-w-0 underline-offset-2 before:absolute before:-inset-x-1 before:-inset-y-3.5 hover:underline"
     >
       {name}
-    </a>
+    </SessionAnchor>
   );
 }
 

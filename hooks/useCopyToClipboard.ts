@@ -65,9 +65,12 @@ export async function writeClipboard(text: string): Promise<void> {
 }
 
 // A session's own address (lib/session-url), for a bookmark or another device.
-export async function copySessionLink(sessionId: string): Promise<void> {
+export async function copySessionLink(session: {
+  id: string;
+  name: string;
+}): Promise<void> {
   try {
-    await writeClipboard(sessionLink(window.location.origin, sessionId));
+    await writeClipboard(sessionLink(window.location.origin, session));
     toast.success("Link copied");
   } catch {
     toast.error("Could not copy to clipboard");

@@ -6,6 +6,7 @@
 
 import type { PatternStat, Summary } from "./aggregate";
 import type { AuditFindings } from "./store";
+import { sessionPath } from "../session-url";
 
 export const fmt = (n: number) =>
   n >= 1e9
@@ -245,7 +246,7 @@ export function renderSummary(
         "biggest output (est.)",
       ],
       s.sessions.slice(0, 30).map((x) => [
-        `[${x.id.slice(0, 8)}](/?session=${x.id})`,
+        `[${x.id.slice(0, 8)}](${sessionPath(x)})`,
         x.kind,
         x.name.slice(0, 40),
         x.turns,

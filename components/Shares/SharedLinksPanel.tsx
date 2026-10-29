@@ -10,6 +10,7 @@ import {
   type SharedLinkRow,
 } from "@/data/shares";
 import { cn } from "@/lib/utils";
+import { SessionAnchor } from "@/components/Chat/SessionAnchor";
 
 const when = (iso: string) =>
   new Date(iso).toLocaleDateString(undefined, {
@@ -44,12 +45,9 @@ function Row({ share }: { share: SharedLinkRow }) {
 
   const title =
     share.kind === "chat" && share.sessionId ? (
-      <a
-        href={`/?session=${encodeURIComponent(share.sessionId)}`}
-        className="hover:underline"
-      >
+      <SessionAnchor sessionId={share.sessionId} className="hover:underline">
         {share.title}
-      </a>
+      </SessionAnchor>
     ) : (
       share.title
     );

@@ -1,6 +1,6 @@
 // Settings has its own address: `/?settings=<section>`, or a bare
 // `?settings` for the list (a phone) or the first section. It sits beside
-// `?session=`, so a link can name both.
+// a session's address (`/s/<name>-<id8>`), so a link can name both.
 
 export const SETTINGS_PARAM = "settings";
 

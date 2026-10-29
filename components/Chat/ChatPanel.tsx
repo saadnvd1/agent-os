@@ -66,7 +66,7 @@ import { useGoToItem } from "./useGoToItem";
 import { NeedsYouStrip } from "@/components/Orchestrator/NeedsYouStrip";
 import { useResolveQuestion } from "@/data/orchestrators";
 import { needsYouFocus, needsYouFocusActions } from "@/stores/needsYouFocus";
-import { hrefWithSession } from "@/lib/session-url";
+import { openSessionById } from "./session-link";
 import { questionSource } from "@/lib/chat/turns";
 import { useViewport } from "@/hooks/useViewport";
 import { useChatCommands } from "./useChatCommands";
@@ -767,15 +767,9 @@ export function ChatPanel({
               if (item.kind === "ask") needsYouFocusActions.ask(item.ask.id);
               else if (item.kind === "chat") toEnd();
               else if (item.kind === "task" || item.kind === "card") {
-                window.history.pushState(
-                  null,
-                  "",
-                  hrefWithSession(
-                    location.href,
-                    item.kind === "task" ? item.sessionId : item.card.sessionId
-                  )
+                openSessionById(
+                  item.kind === "task" ? item.sessionId : item.card.sessionId
                 );
-                window.dispatchEvent(new PopStateEvent("popstate"));
               } else goTo((all) => questionSource(all, item.question.text));
             }}
             onReply={(item) => {

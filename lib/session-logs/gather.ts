@@ -18,7 +18,7 @@ import { getWorkspace } from "../workspaces";
 import { amendmentsOf } from "../orchestrator/amendments";
 import { PLAN_FILE } from "../models/plan-step";
 import { estimateCost, rowModel } from "../usage/cost";
-import { sessionLink } from "../session-url";
+import { sessionPath } from "../session-url";
 import type { LogData, LogEvent, LogUsageRow } from "./build";
 
 const expandHome = (p: string) => p.replace(/^~/, os.homedir());
@@ -296,6 +296,6 @@ export function gatherLogData(s: Session, opts: GatherOpts = {}): LogData {
     timeline,
     usage: usageRows(s.id),
     outcome: finalMessage(s.id),
-    sessionPath: sessionLink("", s.id),
+    sessionPath: sessionPath(s),
   };
 }
