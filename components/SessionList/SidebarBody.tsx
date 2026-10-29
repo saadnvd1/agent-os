@@ -3,6 +3,7 @@
 import { AlertCircle, FolderPlus, Plus, X } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { ShimmeringLoader } from "@/components/ui/skeleton";
+import { chordHint } from "@/lib/keybindings/chord";
 import { sidebarUiActions } from "@/stores/sidebarUi";
 import type { SidebarData } from "./useSidebarData";
 import { MachineShelves, SessionShelves } from "./SessionShelves";
@@ -99,10 +100,19 @@ export function SidebarBody({
           <Empty
             text="Create a project to start your first session"
             action={
-              <Button onClick={onNewProject} className="h-11 gap-2 md:h-9">
-                <FolderPlus className="h-4 w-4" />
-                Add project
-              </Button>
+              <div className="flex flex-col items-center gap-3">
+                <Button onClick={onNewProject} className="h-11 gap-2 md:h-9">
+                  <FolderPlus className="h-4 w-4" />
+                  Add project
+                </Button>
+                <p className="text-muted-foreground/70 text-xs">
+                  Then press{" "}
+                  <kbd className="bg-muted text-foreground rounded px-1.5 py-0.5 font-mono">
+                    {chordHint("alt+n")}
+                  </kbd>{" "}
+                  to start a session
+                </p>
+              </div>
             }
           />
         ) : (

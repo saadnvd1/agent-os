@@ -73,7 +73,7 @@ export function ProviderCard({
   const builtIn = provider.id === ANTHROPIC;
   const [open, setOpen] = useState(false);
   const [kind, setKind] = useState<SecretRef["kind"]>(
-    provider.auth?.kind ?? "tokenvault"
+    provider.auth?.kind ?? "env"
   );
   const [a0, b0] = refFields(provider.auth);
   const [a, setA] = useState(a0);

@@ -3,7 +3,11 @@
 import { Cloud } from "lucide-react";
 import { Switch } from "@/components/ui/switch";
 import type { ConnectStatus } from "@/lib/connect/serve";
-import { CONNECT_STATE as STATE, connectView } from "@/lib/connect/view";
+import {
+  CONNECT_SIGN_UP,
+  CONNECT_STATE as STATE,
+  connectView,
+} from "@/lib/connect/view";
 
 export function ConnectCard({
   connect,
@@ -38,7 +42,21 @@ export function ConnectCard({
           ) : enrolled ? (
             <>Linked. The address appears once the tunnel starts.</>
           ) : (
-            <>Not set up on this machine. Run agent-os connect in a terminal.</>
+            <>
+              Not set up on this machine. Run{" "}
+              <code className="text-foreground font-mono">
+                agent-os connect
+              </code>{" "}
+              in a terminal.{" "}
+              <a
+                href={CONNECT_SIGN_UP}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="text-foreground flex min-h-11 w-fit items-center underline underline-offset-2 sm:min-h-6"
+              >
+                Set up Connect (free)
+              </a>
+            </>
           )}
           {connect.reason && connect.state !== "off"
             ? ` ${connect.reason.replace(/\.$/, "")}.`

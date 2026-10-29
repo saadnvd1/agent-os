@@ -51,7 +51,7 @@ other than these needs that name in `AGENTOS_ALLOWED_HOSTS`.
 
 ## Connect
 
-Connect (in development) reaches this machine from anywhere at
+Connect reaches this machine from anywhere at
 `https://m-<16 hex>.runagentos.com`. `agent-os connect` links the machine with
 a code from runagentos.com: it makes an Ed25519 key in `~/.agent-os/connect`
 that never leaves the machine, and the Connect service makes the machine a
@@ -84,7 +84,7 @@ device. It answers only the machine's own host name and drops
 `X-Forwarded-Host`, `Forwarded` and `X-Original-Host` before anything reads
 them.
 
-### Linked machines over Connect (in development)
+### Linked machines over Connect
 
 Two machines on the same Connect account can link without a tailnet
 (`lib/peer`, Connect Pro only; calls between linked machines are still being

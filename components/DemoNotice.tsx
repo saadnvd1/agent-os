@@ -1,4 +1,8 @@
 import { Info } from "lucide-react";
+import { Button } from "@/components/ui/button";
+import { CONNECT_SIGN_UP } from "@/lib/connect/view";
+
+const INSTALL_URL = "https://github.com/saadnvd1/agent-os#install";
 
 // Where a terminal or a new session would be, in a demo: what this is and
 // what to look at instead. Fixed text; nothing runs.
@@ -18,6 +22,18 @@ export function DemoNotice() {
           Open a session from the sidebar to read its chat, its changes and its
           pull request; its terminal stays closed.
         </p>
+        <div className="flex flex-wrap gap-2 pt-1">
+          <Button asChild className="min-h-11 sm:min-h-9">
+            <a href={INSTALL_URL} target="_blank" rel="noopener noreferrer">
+              Install AgentOS
+            </a>
+          </Button>
+          <Button asChild variant="outline" className="min-h-11 sm:min-h-9">
+            <a href={CONNECT_SIGN_UP} target="_blank" rel="noopener noreferrer">
+              Get Connect
+            </a>
+          </Button>
+        </div>
       </div>
     </div>
   );
