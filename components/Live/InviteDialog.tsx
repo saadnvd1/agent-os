@@ -1,0 +1,225 @@
+"use client";
+
+import { useEffect, useState } from "react";
+import { useSnapshot } from "valtio";
+import { Check, Copy, ExternalLink, Share, Users } from "lucide-react";
+import { Button } from "@/components/ui/button";
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogTitle,
+} from "@/components/ui/dialog";
+import { Notice } from "@/components/ui/notice";
+import { Segmented } from "@/components/ui/segmented";
+import { ShimmeringLoader as Skeleton } from "@/components/ui/skeleton";
+import { useCopyToClipboard } from "@/hooks/useCopyToClipboard";
+import {
+  useCreateLive,
+  useEndLive,
+  useLiveShare,
+  type LiveExpiry,
+  type LiveView,
+} from "@/data/live";
+import { EXPIRY_LABEL } from "@/lib/live/types";
+import { liveUi, liveUiActions } from "@/stores/liveUi";
+
+// "Invite to watch live" on a chat: a link for one guest-facing page, with
+// the host deciding who comes in and what reaches the agent.
+export function InviteDialog() {
+  const { target } = useSnapshot(liveUi);
+  return (
+    <Dialog
+      open={!!target}
+      onOpenChange={(open) => !open && liveUiActions.close()}
+    >
+      {target && <InviteBody sessionId={target.sessionId} />}
+    </Dialog>
+  );
+}
+
+function InviteBody({ sessionId }: { sessionId: string }) {
+  const query = useLiveShare(sessionId);
+  const share = query.data?.share;
+  return (
+    <DialogContent className="flex max-h-[100dvh] w-screen max-w-none flex-col gap-4 overflow-y-auto rounded-none p-4 sm:max-w-md sm:rounded-lg">
+      <div>
+        <DialogTitle>Invite to watch live</DialogTitle>
+        <DialogDescription>
+          A guest opens the link, types a name and waits for you to let them in.
+          They see this chat as it happens, with secrets masked, and can suggest
+          a prompt. Nothing they type reaches the agent unless you tap Send.
+        </DialogDescription>
+      </div>
+      {query.isPending ? (
+        <Skeleton className="h-24 w-full" />
+      ) : !query.data?.linked ? (
+        <Notice tone="warning">
+          Link this machine in Settings → Devices &amp; access to invite people.
+        </Notice>
+      ) : share ? (
+        <Link share={share} />
+      ) : (
+        <Create sessionId={sessionId} />
+      )}
+    </DialogContent>
+  );
+}
+
+function Create({ sessionId }: { sessionId: string }) {
+  const [expiresIn, setExpiresIn] = useState<LiveExpiry>("1h");
+  const create = useCreateLive();
+  return (
+    <>
+      <div className="flex flex-col gap-1.5">
+        <span className="text-muted-foreground text-xs font-medium">
+          What guests can do
+        </span>
+        <Segmented
+          label="Access"
+          value="watch"
+          onChange={() => {}}
+          options={[
+            { value: "watch", label: "Watch + suggest" },
+            { value: "drive", label: "Drive (later)" },
+          ]}
+          disabled
+        />
+        <p className="text-muted-foreground text-xs">
+          Driving the agent from a guest link isn&apos;t available yet.
+        </p>
+      </div>
+      <div className="flex flex-col gap-1.5">
+        <span className="text-muted-foreground text-xs font-medium">
+          The link works for
+        </span>
+        <Segmented
+          label="Expiry"
+          value={expiresIn}
+          onChange={setExpiresIn}
+          options={(["1h", "session"] as const).map((v) => ({
+            value: v,
+            label: EXPIRY_LABEL[v],
+          }))}
+        />
+      </div>
+      {create.error && (
+        <p className="text-destructive text-sm">{create.error.message}</p>
+      )}
+      <Button
+        className="min-h-11"
+        disabled={create.isPending}
+        onClick={() => create.mutate({ sessionId, expiresIn })}
+      >
+        <Users className="h-4 w-4" />
+        {create.isPending ? "Creating…" : "Create invite link"}
+      </Button>
+    </>
+  );
+}
+
+function Link({ share }: { share: LiveView }) {
+  const { copied, copy } = useCopyToClipboard();
+  const end = useEndLive(share.id);
+  const qr = useQr(share.url);
+  const canShare = typeof navigator !== "undefined" && "share" in navigator;
+  return (
+    <>
+      <div className="flex flex-col items-center gap-3">
+        {qr ? (
+          // eslint-disable-next-line @next/next/no-img-element
+          <img
+            src={qr}
+            alt="QR code for the invite link"
+            className="size-40 rounded-lg bg-white p-2"
+          />
+        ) : (
+          <Skeleton className="size-40" />
+        )}
+        <input
+          readOnly
+          value={share.url}
+          onFocus={(e) => e.currentTarget.select()}
+          aria-label="Invite link"
+          className="bg-muted min-h-11 w-full rounded-lg px-3 font-mono text-xs"
+        />
+      </div>
+      <div className="flex flex-wrap gap-2">
+        <Button
+          variant="outline"
+          className="min-h-11 flex-1"
+          onClick={() => copy(share.url)}
+        >
+          {copied ? (
+            <Check className="h-4 w-4" />
+          ) : (
+            <Copy className="h-4 w-4" />
+          )}
+          Copy
+        </Button>
+        {canShare && (
+          <Button
+            variant="outline"
+            className="min-h-11 flex-1"
+            onClick={() =>
+              navigator
+                .share({ title: share.title, url: share.url })
+                .catch(() => {})
+            }
+          >
+            <Share className="h-4 w-4" />
+            Share
+          </Button>
+        )}
+        <Button variant="outline" className="min-h-11 flex-1" asChild>
+          <a href={share.url} target="_blank" rel="noopener noreferrer">
+            <ExternalLink className="h-4 w-4" />
+            Open
+          </a>
+        </Button>
+      </div>
+      <p className="text-muted-foreground text-xs">
+        {share.endsWithSession
+          ? "Works until you end access or the session ends."
+          : share.expiresAt
+            ? `Works until ${new Date(share.expiresAt).toLocaleTimeString([], { hour: "numeric", minute: "2-digit" })}.`
+            : ""}{" "}
+        Requests and suggestions show above the message box.
+      </p>
+      {end.error && (
+        <p className="text-destructive text-sm">{end.error.message}</p>
+      )}
+      <div className="flex gap-2">
+        <Button
+          variant="outline"
+          className="text-destructive min-h-11 flex-1"
+          disabled={end.isPending}
+          onClick={() => end.mutate()}
+        >
+          End access
+        </Button>
+        <Button className="min-h-11 flex-1" onClick={liveUiActions.close}>
+          Done
+        </Button>
+      </div>
+    </>
+  );
+}
+
+// The code is drawn here, in the browser: the link goes to no outside service.
+function useQr(url: string): string | null {
+  const [src, setSrc] = useState<string | null>(null);
+  useEffect(() => {
+    let live = true;
+    import("qrcode")
+      .then((m) =>
+        m.toDataURL(url, { margin: 0, width: 256, errorCorrectionLevel: "M" })
+      )
+      .then((data) => live && setSrc(data))
+      .catch(() => {});
+    return () => {
+      live = false;
+    };
+  }, [url]);
+  return src;
+}

@@ -24,6 +24,7 @@ import {
   Search,
   Star,
   Share2,
+  Users,
   Download,
   TextSearch,
   Eye,
@@ -36,6 +37,7 @@ import { HostBadge } from "@/components/Hosts/HostBadge";
 import { RolePill } from "@/components/Sessions/RolePill";
 import { bookmarksUiActions } from "@/stores/bookmarksUi";
 import { shareUiActions } from "@/stores/shareUi";
+import { liveUiActions } from "@/stores/liveUi";
 import { exportUiActions } from "@/stores/exportUi";
 import { analystUiActions } from "@/stores/analystUi";
 import { useCanAddAnalyst } from "@/components/Analyst/pair";
@@ -227,6 +229,12 @@ export function MobileTabBar({
                 >
                   <Share2 className="h-4 w-4" />
                   Share…
+                </DropdownMenuItem>
+                <DropdownMenuItem
+                  onSelect={() => liveUiActions.open(session.id, session.name)}
+                >
+                  <Users className="h-4 w-4" />
+                  Invite to watch live…
                 </DropdownMenuItem>
                 <DropdownMenuItem
                   onSelect={() =>

@@ -40,7 +40,10 @@ describe("rowMenu", () => {
       ["rename", "pin", "select"],
       [
         "open-tab",
-        { group: "share", items: ["copy-link", "share", "export"] },
+        {
+          group: "share",
+          items: ["copy-link", "share", "invite-live", "export"],
+        },
         { group: "restart", items: ["fork", "fresh-start"] },
         { group: "move", items: ["move-project", "move-group"] },
         {
@@ -117,7 +120,10 @@ describe("rowMenu", () => {
       ["rename", "pin", "select"],
       [
         "open-tab",
-        { group: "share", items: ["copy-link", "share", "export"] },
+        {
+          group: "share",
+          items: ["copy-link", "share", "invite-live", "export"],
+        },
         "new-conversation",
       ],
     ]);

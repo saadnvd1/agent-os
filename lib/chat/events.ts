@@ -81,7 +81,10 @@ export type ChatOriginKind =
   // The reader's own decision, made outside the composer (a plan carried out).
   | "decision"
   // The reader's phone: a shake report or something shared to AgentOS.
-  | "device";
+  | "device"
+  // A suggestion from a guest on a live link, sent by the reader after
+  // reading it. Its label is the guest's name.
+  | "guest";
 
 export interface ChatOrigin {
   kind: ChatOriginKind;

@@ -6,8 +6,10 @@ import {
   clean,
   listShares,
   replaceShare,
+  createLiveShare,
   revokeShare,
   uploadShare,
+  type LiveExpiry,
   type RemoteShare,
   type ShareExpiry,
 } from "@/lib/connect/control-api";
@@ -39,6 +41,16 @@ function explain(err: unknown): never {
       throw new ShareError(
         `Connect refused it as too big or over your quota: ${clean(err.message, 120)}`,
         413
+      );
+    if (err.status === 402)
+      throw new ShareError(
+        clean(
+          typeof err.body.error === "string"
+            ? err.body.error
+            : "Your plan's live share limit is reached.",
+          160
+        ),
+        402
       );
     if (err.status === 429)
       throw new ShareError(
@@ -92,6 +104,18 @@ export async function revokeRemote(id: string): Promise<void> {
     await revokeShare(config, machineKey, id);
   } catch (err) {
     if (err instanceof ApiError && err.status === 404) return;
+    explain(err);
+  }
+}
+
+export async function createLiveRemote(share: {
+  title: string;
+  expiresIn: LiveExpiry;
+}) {
+  const { config, machineKey } = files();
+  try {
+    return await createLiveShare(config, machineKey, share);
+  } catch (err) {
     explain(err);
   }
 }

@@ -7,6 +7,7 @@ import {
   Info,
   Smartphone,
   UserCheck,
+  Users,
   Zap,
   type LucideIcon,
 } from "lucide-react";
@@ -27,6 +28,7 @@ export const ICON: Record<ChatOriginKind, LucideIcon> = {
   system: Info,
   decision: UserCheck,
   device: Smartphone,
+  guest: Users,
 };
 
 // Longer than this (what fits beside a source on a phone), or more than one line,
@@ -177,6 +179,10 @@ export function EventRow({
           head={
             decision ? (
               <span className="truncate font-medium">Saad decided</span>
+            ) : origin.kind === "guest" ? (
+              <span className="truncate font-medium">
+                Suggested by {origin.label}
+              </span>
             ) : (
               <Source origin={origin} />
             )

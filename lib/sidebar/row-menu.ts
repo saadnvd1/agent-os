@@ -17,6 +17,7 @@ export type RowMenuItem =
   | "copy-link"
   | "share"
   | "export"
+  | "invite-live"
   | "fork"
   | "fresh-start"
   | "new-conversation"
@@ -127,6 +128,7 @@ export function rowMenu(input: RowMenuInput): RowMenuPlan {
     ...group("share", [
       "copy-link",
       s.view === "chat" && "share",
+      s.view === "chat" && "invite-live",
       s.view === "chat" && "export",
     ]),
     ...group("restart", [

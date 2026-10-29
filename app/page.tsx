@@ -134,6 +134,10 @@ const MoveDialog = dynamic(
   () => import("@/components/Tasks/MoveDialog").then((m) => m.MoveDialog),
   { ssr: false }
 );
+const InviteDialog = dynamic(
+  () => import("@/components/Live/InviteDialog").then((m) => m.InviteDialog),
+  { ssr: false }
+);
 const ShareDialog = dynamic(
   () => import("@/components/Share/ShareDialog").then((m) => m.ShareDialog),
   { ssr: false }
@@ -177,6 +181,7 @@ const AppDialogs = memo(function AppDialogs({
       <ClaimsSheet />
       <MoveDialog />
       <ShareDialog />
+      <InviteDialog />
       <ExportSheet />
       <StartAnalystSheet />
       <AwayReport />

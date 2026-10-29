@@ -40,6 +40,7 @@ import { SubagentCard } from "./Subagent";
 import { UndoDialog, UndoneBlock } from "./Undo";
 import { Composer } from "./Composer";
 import { Queue } from "./Queue";
+import { LivePanel } from "@/components/Live/LivePanel";
 import { StaleChip } from "./StaleChip";
 import { LearningCardsHost } from "@/components/LearningCards/LearningCard";
 import { composerCompacts } from "@/lib/chat/stale";
@@ -834,6 +835,11 @@ export function ChatPanel({
           onAsIs={setAsIs}
         />
         <LearningCardsHost sessionId={sessionId} />
+        <LivePanel
+          sessionId={sessionId}
+          title={sessionName}
+          onEdit={(text) => setPrefill({ text, at: Date.now() })}
+        />
         <Composer
           draftKey={sessionId}
           attachScope={sessionId}

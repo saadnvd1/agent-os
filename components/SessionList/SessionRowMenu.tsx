@@ -15,6 +15,7 @@ import {
   KanbanSquare,
   Link,
   Share2,
+  Users,
   Download,
   Loader2,
   Pencil,
@@ -57,6 +58,7 @@ import { copySessionLink } from "@/hooks/useCopyToClipboard";
 import { useLinkedHostNames } from "@/data/hosts";
 import { remoteBlocks, remoteNote } from "@/lib/hosts/remote-menu";
 import { movableSession } from "@/lib/tasks/move-targets";
+import { liveUiActions } from "@/stores/liveUi";
 import { useMoveTargets } from "@/data/tasks/move";
 import {
   rowMenu,
@@ -199,6 +201,10 @@ export function SessionRowMenu({
             sessionId: session.id,
             title: session.name,
           })
+        );
+      case "invite-live":
+        return item("Invite to watch live…", Users, () =>
+          liveUiActions.open(session.id, session.name)
         );
       case "export":
         return item("Export for AI…", Download, () =>
