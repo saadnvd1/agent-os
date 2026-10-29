@@ -5,7 +5,12 @@ import type { ShareTarget } from "@/data/shares";
 // menu, the pane or the artifact card.
 // A page's version, when it has more than one, is named in the title; the
 // share is of that exact version.
-export type ShareUiTarget = ShareTarget & { title: string; version?: number };
+// A chat share can start from one message ("Share from here").
+export type ShareUiTarget = ShareTarget & {
+  title: string;
+  version?: number;
+  fromId?: string;
+};
 
 export const shareUi = proxy<{
   target: ShareUiTarget | null;

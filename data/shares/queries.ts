@@ -1,6 +1,7 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import type {
   CreatedShare,
+  MessageList,
   PreviewRequest,
   SharePreview,
   SharesResponse,
@@ -37,6 +38,16 @@ export function useSharePreview() {
   return useMutation({
     mutationFn: async (req: PreviewRequest) =>
       json<SharePreview>(await post("/api/shares/preview", req)),
+  });
+}
+
+/** Every message of a chat, for picking the part to share. */
+export function useShareMessages() {
+  return useMutation({
+    mutationFn: async (req: PreviewRequest) =>
+      json<MessageList>(
+        await post("/api/shares/preview", { ...req, listOnly: true })
+      ),
   });
 }
 

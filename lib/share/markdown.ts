@@ -12,6 +12,7 @@ import { toMarkdown } from "mdast-util-to-markdown";
 import type { Nodes as HastNodes } from "hast";
 import type { Nodes, Parents, RootContent } from "mdast";
 import type { Snapshot, SnapshotItem } from "./snapshot";
+import { EARLIER_NOT_SHARED, LATER_NOT_SHARED } from "./range";
 
 const DROP_TAGS = new Set([
   "script",
@@ -119,7 +120,9 @@ export function chatToMarkdown(
 ): string {
   const parts = [
     agentHeader(snap.title, opts.sharedAt),
+    ...(snap.cutBefore ? [`*${EARLIER_NOT_SHARED}.*`] : []),
     ...snap.items.map(itemToMarkdown),
+    ...(snap.cutAfter ? [`*${LATER_NOT_SHARED}.*`] : []),
   ];
   if (snap.toolsHidden) parts.push("*Tool calls and thinking were left out.*");
   return parts.join("\n\n") + "\n";

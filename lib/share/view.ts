@@ -15,6 +15,11 @@ export interface PreviewRequest extends ShareTarget {
   includeTools: boolean;
   /** Messages left out of the share. */
   dropIds?: string[];
+  /** Only the messages from this one to `toId`, both included; either end open when absent. */
+  fromId?: string;
+  toId?: string;
+  /** Just the list of messages, no page: what the range picker needs first. */
+  listOnly?: boolean;
 }
 
 export interface PreviewItem {
@@ -22,10 +27,16 @@ export interface PreviewItem {
   type: string;
   tools: boolean;
   excerpt: string;
+  createdAt?: number;
 }
 
 /** Download formats a server can make; the client lists what it is told. */
 export type ShareFormat = "pdf" | "html" | "md";
+
+export interface MessageList {
+  /** Every shareable message in order, tool rows included. */
+  items: PreviewItem[];
+}
 
 export interface SharePreview {
   html: string;

@@ -29,6 +29,7 @@ import { Markdown } from "./Markdown";
 import { openSessionLink } from "./session-link";
 import { TurnCopy } from "./TurnCopy";
 import { UndoButton } from "./Undo";
+import { ShareFromHere } from "./ShareFromHere";
 import { useRowState } from "./rowState";
 import { useBookmarkChat } from "@/components/Bookmarks/context";
 import { ChatItemContext } from "./itemContext";
@@ -280,6 +281,7 @@ export function UserMessage({
         <div className="-mr-1.5 flex items-center">
           {onUndo && <UndoButton onClick={onUndo} />}
           <ExportFromHere itemId={item.id} />
+          <ShareFromHere itemId={item.id} />
           <BookmarkButton itemId={item.id} />
         </div>
       )}
@@ -325,6 +327,10 @@ export function AssistantMessage({
                   <Quote className="h-3.5 w-3.5" />
                 </button>
               )}
+              <ShareFromHere
+                itemId={item.id}
+                className="text-muted-foreground hover:text-foreground hover:bg-foreground/[0.06] flex h-9 w-9 items-center justify-center rounded-md md:h-7 md:w-7"
+              />
             </div>
             <BookmarkButton itemId={item.id} />
           </div>

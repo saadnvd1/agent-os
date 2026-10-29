@@ -14,6 +14,7 @@ import remarkGfm from "remark-gfm";
 import { Prism as Highlighter } from "react-syntax-highlighter";
 import type { Snapshot, SnapshotItem } from "./snapshot";
 import { STYLES } from "./styles";
+import { EARLIER_NOT_SHARED, LATER_NOT_SHARED } from "./range";
 
 export const MAX_SHARE_BYTES = 5 * 1024 * 1024;
 
@@ -123,9 +124,11 @@ export function renderChatSnapshot(
 ): string {
   const body = renderToStaticMarkup(
     <>
+      {snapshot.cutBefore && <div className="cut">{EARLIER_NOT_SHARED}</div>}
       {snapshot.items.map((item) => (
         <Item key={item.id} item={item} />
       ))}
+      {snapshot.cutAfter && <div className="cut">{LATER_NOT_SHARED}</div>}
     </>
   );
   const date = opts.sharedAt.slice(0, 10);

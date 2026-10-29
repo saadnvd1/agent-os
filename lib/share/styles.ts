@@ -56,6 +56,8 @@ h1.title{margin:0 0 4px;font-size:20px;line-height:1.3}
 .plan>.kicker{margin-top:12px}
 .kicker{font-size:12px;font-weight:600;color:hsl(var(--muted-foreground));text-transform:uppercase;letter-spacing:.04em}
 .error{color:hsl(var(--destructive));border:1px solid hsl(var(--destructive)/.4);border-radius:10px;padding:8px 14px;white-space:pre-wrap;overflow-wrap:anywhere}
+.cut{display:flex;align-items:center;gap:12px;color:hsl(var(--muted-foreground));font-size:12px;font-style:italic}
+.cut::before,.cut::after{content:"";flex:1;border-top:1px dashed hsl(var(--border))}
 .divider{display:flex;align-items:center;gap:12px;color:hsl(var(--muted-foreground));font-size:12px}
 .divider::before,.divider::after{content:"";flex:1;border-top:1px solid hsl(var(--border))}
 details.tool{border:1px solid hsl(var(--border));border-radius:10px;background:hsl(var(--card))}

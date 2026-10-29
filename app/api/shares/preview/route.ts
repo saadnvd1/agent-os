@@ -3,7 +3,7 @@ import { pdfAvailable } from "@/lib/share/pdf";
 import { linked } from "@/lib/share/connect";
 import { readJson, refuseDemo, toResponse } from "@/lib/share/route";
 import type { ShareFormat } from "@/lib/share/view";
-import { buildPage, parseRequest } from "@/lib/share/service";
+import { buildPage, listChatItems, parseRequest } from "@/lib/share/service";
 
 // POST /api/shares/preview - exactly what a share would upload, redacted.
 // Local work only: nothing goes to Connect until a share is created.
@@ -14,6 +14,11 @@ export async function POST(request: Request) {
   if ("refused" in read) return read.refused;
   try {
     const req = parseRequest(read.body);
+    if (
+      req.kind === "chat" &&
+      (read.body as { listOnly?: unknown }).listOnly === true
+    )
+      return NextResponse.json({ items: await listChatItems(req) });
     const page = await buildPage(req);
     const formats: ShareFormat[] = ["html", "md"];
     if (await pdfAvailable()) formats.unshift("pdf");

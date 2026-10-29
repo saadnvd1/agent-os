@@ -33,6 +33,32 @@ const render = (s: Snapshot) =>
 const outsideFrames = (html: string) =>
   html.replace(/srcDoc="[^"]*"|srcdoc="[^"]*"/g, "");
 
+describe("excerpt markers", () => {
+  const items = [item({ id: "1", type: "user", text: "hi" })];
+  it("says so at the top and bottom when the range was cut", () => {
+    const html = render({ ...snap(items), cutBefore: true, cutAfter: true });
+    const body = html.slice(html.indexOf("<main>"));
+    expect(body.indexOf("Earlier messages not shared")).toBeLessThan(
+      body.indexOf("hi")
+    );
+    expect(body.indexOf("Later messages not shared")).toBeGreaterThan(
+      body.indexOf("hi")
+    );
+  });
+
+  it("adds nothing for a whole chat", () => {
+    const html = render({ ...snap(items), cutBefore: false, cutAfter: false });
+    expect(html).not.toContain("messages not shared</div>");
+    expect(render(snap(items))).not.toContain("not shared</div>");
+  });
+
+  it("shows only the side that was cut", () => {
+    const html = render({ ...snap(items), cutAfter: true });
+    expect(html).toContain("Later messages not shared");
+    expect(html).not.toContain("Earlier messages not shared");
+  });
+});
+
 describe("renderChatSnapshot", () => {
   const s = snap([
     item({ id: "1", type: "user", text: "<script>alert(1)</script> hello" }),

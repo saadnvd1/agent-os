@@ -316,6 +316,57 @@ describe("create", () => {
     expect(JSON.parse(seen[0].body).expires_in).toBe("never");
   });
 
+  it("uploads exactly the previewed range, and refuses another range's hash", async () => {
+    const id = chat();
+    const range = { fromId: "a1", toId: "a1" };
+    const p = await previewOf(id, range);
+    expect(p.html).not.toContain("[secret]");
+    expect(p.html).toContain("Earlier messages not shared");
+    expect(p.markdown).toContain("Earlier messages not shared");
+    const body = {
+      kind: "chat",
+      sessionId: id,
+      includeTools: false,
+      sharedAt: p.sharedAt,
+      hash: p.hash,
+      expiresIn: "7d",
+    };
+    const other = await shares.POST(
+      post("/api/shares", { ...body, fromId: "u1", toId: "a1" })
+    );
+    expect(other.status).toBe(409);
+    expect(seen).toHaveLength(0);
+    const res = await shares.POST(post("/api/shares", { ...body, ...range }));
+    expect(res.status).toBe(201);
+    expect(JSON.parse(seen[0].body).html).toContain(
+      "Earlier messages not shared"
+    );
+  });
+
+  it("lists every message with its time, and refuses a range that's gone", async () => {
+    const id = chat();
+    const res = await preview.POST(
+      post("/api/shares/preview", {
+        kind: "chat",
+        sessionId: id,
+        includeTools: false,
+        listOnly: true,
+      })
+    );
+    const { items } = await res.json();
+    expect(items.map((i: { id: string }) => i.id)).toEqual(["u1", "a1"]);
+    expect(items[0].createdAt).toBeGreaterThan(0);
+    const gone = await preview.POST(
+      post("/api/shares/preview", {
+        kind: "chat",
+        sessionId: id,
+        includeTools: false,
+        fromId: "nope",
+      })
+    );
+    expect(gone.status).toBe(409);
+  });
+
   it("shares an artifact", async () => {
     const id = chat();
     const art = createArtifact(
