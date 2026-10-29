@@ -101,7 +101,7 @@ describe("touchActive", () => {
     expect(row(id).active_at).toBe(ago(5).t);
   });
 
-  it("writes within the minute when it wakes a snooze or un-settles", () => {
+  it("writes within the minute when it wakes a snooze, never for a settled session", () => {
     const id = insertSession();
     set(id, "active_at", ago(30).t);
     set(id, "snoozed_at", ago(10).t);
@@ -112,7 +112,7 @@ describe("touchActive", () => {
     set(other, "active_at", ago(30).t);
     set(other, "settled_at", ago(10).t);
     touchActive(other);
-    expect(row(other).active_at).not.toBe(ago(30).t);
+    expect(row(other).active_at).toBe(ago(30).t);
   });
 });
 

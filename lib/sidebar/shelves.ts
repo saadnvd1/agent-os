@@ -220,7 +220,10 @@ export function settledHow(
   now: number
 ): "manual" | "auto" | null {
   const active = activeMs(session, now);
-  if (session.settled_at && active <= ms(session.settled_at)) return "manual";
+  // A settled session's own row is the clock: updated_at moves with
+  // bookkeeping, so it never takes a done session off the shelf.
+  const own = session.peer_mirror || session.active_at ? active : 0;
+  if (session.settled_at && own <= ms(session.settled_at)) return "manual";
   return now - active >= SETTLE_AFTER_MS ? "auto" : null;
 }
 
