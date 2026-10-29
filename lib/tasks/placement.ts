@@ -79,6 +79,28 @@ export function inferNeeds(projectPath: string): Need[] {
   return [];
 }
 
+// Whether the starter asked for a Mac outright: the request's `machine`
+// (stored on the queue row, which shares the task's id), a recipe's, or the
+// project's own machine setting. A need read from the brief or the files
+// doesn't count: that one a plan can ignore.
+export function pinnedToMac(
+  stored: string | null,
+  projectPath: string
+): boolean {
+  const asked = parseNeeds(stored);
+  if (asked) return asked.includes("mac");
+  return !!loadProjectConfig(projectPath).config.machine?.needs?.includes(
+    "mac"
+  );
+}
+
+export function taskPinnedToMac(taskId: string, projectPath: string): boolean {
+  const row = db
+    .prepare(`SELECT machine_needs FROM task_queue WHERE id = ?`)
+    .get(taskId) as { machine_needs: string | null } | undefined;
+  return pinnedToMac(row?.machine_needs ?? null, projectPath);
+}
+
 export function needsOf(input: {
   projectId: string;
   projectPath: string;
