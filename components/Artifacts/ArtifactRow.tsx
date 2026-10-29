@@ -106,6 +106,11 @@ export function ArtifactRow({
           )}
         >
           {artifact.name}
+          {(artifact.versionCount ?? 1) > 1 && (
+            <span className="bg-primary/15 text-primary ml-1.5 rounded-full px-1.5 py-px align-[1px] font-sans text-[10.5px]">
+              v{artifact.version}
+            </span>
+          )}
         </span>
         <span
           className={cn(

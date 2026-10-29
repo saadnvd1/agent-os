@@ -7,26 +7,38 @@ import {
   Copy,
   ExternalLink,
   FolderOpen,
+  History,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Markdown } from "@/components/Chat/Markdown";
 import { ArtifactFrame } from "@/components/Chat/ArtifactFrame";
-import { artifactContentUrl, useArtifactText } from "@/data/session-artifacts";
+import {
+  artifactContentUrl,
+  useArtifactText,
+  useArtifactVersions,
+} from "@/data/session-artifacts";
+import { artifactActions, type ArtifactAction } from "@/lib/artifacts/actions";
 import { formatBytes } from "@/lib/share/view";
 import { relativeTime } from "@/lib/schedules/when";
 import { openable, type SessionArtifact } from "@/lib/session-artifacts/types";
 import { cn } from "@/lib/utils";
 import { ArtifactIcon } from "./ArtifactRow";
 import { stateLabel } from "./helpers";
+import { ArtifactActions } from "./ArtifactActions";
+import { ArtifactFullscreen } from "./ArtifactFullscreen";
+import { VersionSwitcher } from "./VersionSwitcher";
 
 function Body({
   sessionId,
   artifact,
   pr,
+  versionId,
 }: {
   sessionId: string;
   artifact: SessionArtifact;
   pr: string | null;
+  // A page's version to show, served by its own id.
+  versionId?: string;
 }) {
   const url = artifactContentUrl(sessionId, artifact.id);
   const textual =
@@ -50,8 +62,8 @@ function Body({
   if (artifact.preview === "html")
     return (
       <ArtifactFrame
-        artifactId={artifact.id}
-        src={url}
+        artifactId={versionId ?? artifact.id}
+        src={versionId ? undefined : url}
         title={artifact.name}
         fill
         className="bg-background"
@@ -103,6 +115,7 @@ export function ArtifactPreview({
   artifact,
   pr,
   mobile,
+  remote = false,
   onBack,
   onOpenInFiles,
 }: {
@@ -110,10 +123,34 @@ export function ArtifactPreview({
   artifact: SessionArtifact;
   pr: string | null;
   mobile: boolean;
+  // On a linked machine: its pages are read through the session, one
+  // version only.
+  remote?: boolean;
   onBack?: () => void;
   onOpenInFiles?: (path: string) => void;
 }) {
   const [copied, setCopied] = useState(false);
+  const [full, setFull] = useState(false);
+  // The version picked; none means the latest, which follows new versions.
+  const [picked, setPicked] = useState<string | null>(null);
+  const page =
+    artifact.kind === "page" && !!artifact.artifactId && !remote
+      ? artifact.artifactId
+      : null;
+  // Keyed by the latest version, so a new one refetches.
+  const versionsQuery = useArtifactVersions(
+    page ?? "",
+    page ?? "",
+    !!page && openable(artifact)
+  );
+  const versions = versionsQuery.data?.versions ?? [];
+  const shownId =
+    (picked && versions.some((v) => v.id === picked) && picked) || page;
+  const shown = versions.find((v) => v.id === shownId);
+  const latest = versions[versions.length - 1];
+  const many = versions.length > 1;
+  const older = many && !!shown && shown.id !== latest?.id;
+
   const label = stateLabel(artifact, pr);
   // Inside the worktree, the path from its top; the full one is copied.
   const where =
@@ -125,8 +162,13 @@ export function ArtifactPreview({
   const meta = [
     where,
     label,
-    artifact.size !== undefined ? formatBytes(artifact.size) : null,
-    mobile && artifact.at ? relativeTime(artifact.at) : null,
+    many && shown && `v${shown.version} of ${versions.length}`,
+    shown?.turn && `turn ${shown.turn.index}`,
+    !shown && artifact.size !== undefined ? formatBytes(artifact.size) : null,
+    shown?.bytes !== undefined ? formatBytes(shown.bytes) : null,
+    (mobile || shown) &&
+      (shown?.createdAt || artifact.at) &&
+      relativeTime(shown?.createdAt || artifact.at),
   ]
     .filter(Boolean)
     .join(" · ");
@@ -137,14 +179,16 @@ export function ArtifactPreview({
       setTimeout(() => setCopied(false), 1500);
     });
   };
-  const canOpenInFiles =
-    !!onOpenInFiles &&
-    !!artifact.path &&
-    artifact.state === "live" &&
-    (artifact.kind === "file" || artifact.kind === "plan");
-  const actions = (
+  const list = artifact.actions ?? artifactActions(artifact, { pdf: false });
+  const can = (id: ArtifactAction["id"]) => list.some((a) => a.id === id);
+  // A linked machine's page is read through the session: only full screen.
+  const pageList = page
+    ? (versionsQuery.data?.actions ?? list)
+    : list.filter((a) => a.id === "fullscreen");
+  const canOpenInFiles = !!onOpenInFiles && can("open-in-files");
+  const fileActions = (
     <>
-      {artifact.url && (
+      {artifact.url && can("open-pr") && (
         <Button
           variant="outline"
           size="sm"
@@ -162,7 +206,7 @@ export function ArtifactPreview({
           </a>
         </Button>
       )}
-      {artifact.path && (
+      {artifact.path && can("copy-path") && (
         <Button
           variant="outline"
           size="sm"
@@ -178,7 +222,7 @@ export function ArtifactPreview({
           <span className={cn(!mobile && "hidden @lg:inline")}>Copy path</span>
         </Button>
       )}
-      {canOpenInFiles && (
+      {canOpenInFiles && artifact.path && (
         <Button
           variant="outline"
           size="sm"
@@ -194,7 +238,31 @@ export function ArtifactPreview({
       )}
     </>
   );
-  const hasActions = !!(artifact.url || artifact.path);
+  const isPage = artifact.kind === "page" && openable(artifact);
+  const pageActionsFor = (variant: "labelled" | "bar") => (
+    <ArtifactActions
+      artifactId={shownId ?? artifact.id}
+      title={shown?.title ?? artifact.name}
+      version={many ? shown?.version : undefined}
+      actions={pageList}
+      variant={variant}
+      onFull={() => setFull(true)}
+    />
+  );
+  const actions = isPage
+    ? pageActionsFor(mobile ? "bar" : "labelled")
+    : fileActions;
+  const hasActions = isPage
+    ? pageList.length > 0
+    : list.some((a) => a.id !== "open-in-files" || canOpenInFiles);
+  const switcher = many && shownId && (
+    <VersionSwitcher
+      versions={versions}
+      currentId={shownId}
+      onPick={(id) => setPicked(id === latest?.id ? null : id)}
+      mobile={mobile}
+    />
+  );
 
   return (
     <div className="@container flex h-full min-w-0 flex-col">
@@ -214,7 +282,7 @@ export function ArtifactPreview({
         )}
         <div className="min-w-0 flex-1">
           <div className="truncate text-[13px] font-medium">
-            {artifact.name}
+            {shown?.title ?? artifact.name}
           </div>
           {meta && (
             <div className="text-muted-foreground truncate font-mono text-[11px]">
@@ -222,17 +290,72 @@ export function ArtifactPreview({
             </div>
           )}
         </div>
+        {!mobile && switcher && (
+          <div className="hidden @3xl:flex">{switcher}</div>
+        )}
         {!mobile && hasActions && (
           <div className="flex shrink-0 gap-1.5">{actions}</div>
         )}
       </div>
+      {mobile && switcher && (
+        <div className="bg-card border-b px-1">{switcher}</div>
+      )}
+      {!mobile && switcher && (
+        <div className="flex border-b px-3 py-1.5 sm:px-4 @3xl:hidden">
+          {switcher}
+        </div>
+      )}
+      {older && latest && (
+        <div className="flex min-h-11 items-center gap-2 border-b border-amber-500/25 bg-amber-500/[0.08] px-3 text-[12.5px] sm:px-4">
+          <History className="h-3.5 w-3.5 shrink-0 text-amber-600 dark:text-amber-400" />
+          <span className="min-w-0 flex-1 truncate">
+            Older version
+            <span className="hidden @md:inline">
+              . The agent changed this page since.
+            </span>
+          </span>
+          <Button
+            variant="ghost"
+            size="sm"
+            className="h-11 shrink-0 md:h-7"
+            onClick={() => setPicked(null)}
+          >
+            Go to latest (v{latest.version})
+          </Button>
+        </div>
+      )}
       <div className="min-h-0 flex-1 overflow-auto">
-        <Body sessionId={sessionId} artifact={artifact} pr={pr} />
+        <Body
+          sessionId={sessionId}
+          artifact={artifact}
+          pr={pr}
+          versionId={shownId ?? undefined}
+        />
       </div>
       {mobile && hasActions && (
         <div className="flex gap-2 border-t px-3 pt-2.5 pb-[max(0.75rem,env(safe-area-inset-bottom))]">
-          {actions}
+          {isPage ? <div className="flex-1">{actions}</div> : actions}
         </div>
+      )}
+      {isPage && (
+        <ArtifactFullscreen
+          open={full}
+          onOpenChange={setFull}
+          artifactId={shownId ?? artifact.id}
+          src={shownId ? undefined : artifactContentUrl(sessionId, artifact.id)}
+          title={shown?.title ?? artifact.name}
+          actions={
+            page ? (
+              <ArtifactActions
+                artifactId={shownId ?? artifact.id}
+                title={shown?.title ?? artifact.name}
+                version={many ? shown?.version : undefined}
+                actions={pageList.filter((a) => a.id !== "fullscreen")}
+                variant="icons"
+              />
+            ) : undefined
+          }
+        />
       )}
     </div>
   );

@@ -3,12 +3,16 @@ import type { ShareTarget } from "@/data/shares";
 
 // What the share dialog is open on: a chat or an artifact, started from a
 // menu, the pane or the artifact card.
+// A page's version, when it has more than one, is named in the title; the
+// share is of that exact version.
+export type ShareUiTarget = ShareTarget & { title: string; version?: number };
+
 export const shareUi = proxy<{
-  target: (ShareTarget & { title: string }) | null;
+  target: ShareUiTarget | null;
 }>({ target: null });
 
 export const shareUiActions = {
-  open: (target: ShareTarget & { title: string }) => {
+  open: (target: ShareUiTarget) => {
     shareUi.target = target;
   },
   close: () => {

@@ -67,6 +67,7 @@ function ShareBody({
     sessionId?: string;
     artifactId?: string;
     title: string;
+    version?: number;
   };
 }) {
   const [tools, setTools] = useState(false);
@@ -154,6 +155,7 @@ function ShareBody({
       <div>
         <DialogTitle>
           Share {kind === "chat" ? "this chat" : "this page"}
+          {target.version ? ` · v${target.version}` : ""}
         </DialogTitle>
         <DialogDescription>
           A read-only snapshot, with secrets, home paths and machine names

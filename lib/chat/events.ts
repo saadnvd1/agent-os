@@ -254,6 +254,10 @@ export type ChatItem =
       kind: "artifact";
       artifactId: string;
       title: string;
+      // The page it's a version of, and which; absent before versions (v1 of
+      // its own page).
+      pageId?: string;
+      version?: number;
       // A cap on the frame's height; it fits the page otherwise.
       height?: number;
     })

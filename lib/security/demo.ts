@@ -124,6 +124,7 @@ const READS = [
   "usage",
   "vendor/mermaid",
   "artifacts/[id]",
+  "artifacts/[id]/versions",
   "git/status",
   "git/file-content",
   "git/history",

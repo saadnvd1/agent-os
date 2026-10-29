@@ -12,6 +12,7 @@ import { collectArtifacts, keepSessionFiles, getSession } from "./collect";
 import { sessionKeptDir } from "./keep";
 import type { SessionArtifact } from "./types";
 import { tempDir } from "@/lib/test-temp";
+import { createArtifact } from "@/lib/artifacts/store";
 
 const PNG = Buffer.from(
   "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNkYPhfDwAChwGA60e6kgAAAABJRU5ErkJggg==",
@@ -260,5 +261,46 @@ describe("session artifacts", () => {
 
   it("keeps nothing for a session without a worktree, and never throws", async () => {
     await expect(keepSessionFiles(randomUUID())).resolves.toBeUndefined();
+  });
+
+  it("lists a page once, as its newest version, with how many there are", async () => {
+    process.env.AGENTOS_ARTIFACTS_DIR ??= tempDir("aos-pages-");
+    const s = session(repo(), false);
+    const shown = (a: { id: string; page_id: string; version: number }) =>
+      s.add({
+        kind: "artifact",
+        artifactId: a.id,
+        pageId: a.page_id,
+        version: a.version,
+        title: "Signups",
+      });
+    const v1 = createArtifact(s.id, "Signups", "<p>1</p>");
+    // A card from before versions: no pageId in the item.
+    s.add({ kind: "artifact", artifactId: v1.id, title: "Signups" });
+    const v2 = createArtifact(s.id, "Signups", "<p>2</p>", { update: v1.id });
+    shown(v2);
+    const v3 = createArtifact(s.id, "Signups v3", "<p>3</p>", {
+      update: v1.id,
+    });
+    shown(v3);
+    const other = createArtifact(s.id, "Churn", "<p>c</p>");
+    shown(other);
+
+    const pages = (await list(s.id)).filter((a) => a.kind === "page");
+    expect(pages).toHaveLength(2);
+    const signups = pages.find((a) => a.artifactId === v3.id)!;
+    expect(signups).toMatchObject({
+      name: "Signups v3",
+      artifactId: v3.id,
+      version: 3,
+      versionCount: 3,
+      state: "live",
+    });
+    expect(signups.actions?.map((a) => a.id)).toContain("share");
+    expect(pages.find((a) => a.artifactId === other.id)).toMatchObject({
+      versionCount: 1,
+    });
+    const body = await one(s.id, signups.id);
+    expect(await body.text()).toContain("<p>3</p>");
   });
 });

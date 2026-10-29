@@ -1,112 +1,152 @@
 "use client";
 
-import { useState } from "react";
-import { ExternalLink, Maximize2, Share2, X } from "lucide-react";
+import { useEffect, useState } from "react";
+import { History } from "lucide-react";
 import type { ChatItem } from "@/lib/chat/events";
-import { Dialog, DialogContent, DialogTitle } from "@/components/ui/dialog";
-import { shareUiActions } from "@/stores/shareUi";
-import { ArtifactFrame, artifactUrl } from "./ArtifactFrame";
+import { pageActions } from "@/lib/artifacts/actions";
+import { useArtifactVersions } from "@/data/session-artifacts";
+import { useViewport } from "@/hooks/useViewport";
+import { cn } from "@/lib/utils";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
+import { ArtifactActions } from "@/components/Artifacts/ArtifactActions";
+import { ArtifactFullscreen } from "@/components/Artifacts/ArtifactFullscreen";
+import { versionDetail } from "@/components/Artifacts/VersionSwitcher";
+import { ArtifactFrame } from "./ArtifactFrame";
 
 type ArtifactItem = Extract<ChatItem, { kind: "artifact" }>;
 
-const ICON_BUTTON =
-  "text-muted-foreground hover:text-foreground hover:bg-foreground/[0.06] inline-flex h-11 w-11 items-center justify-center rounded-lg md:h-8 md:w-8";
+// Until the server answers: no PDF, which it may not be able to print.
+const FALLBACK_ACTIONS = pageActions({ pdf: false });
 
-function Actions({
-  item,
-  onFull,
-}: {
-  item: ArtifactItem;
-  onFull?: () => void;
-}) {
-  return (
-    <div className="flex shrink-0 items-center">
-      {onFull && (
-        <button
-          type="button"
-          onClick={onFull}
-          className={ICON_BUTTON}
-          aria-label="Full screen"
-          title="Full screen"
-        >
-          <Maximize2 className="h-4 w-4" />
-        </button>
-      )}
-      <button
-        type="button"
-        onClick={() =>
-          shareUiActions.open({
-            kind: "artifact",
-            artifactId: item.artifactId,
-            title: item.title,
-          })
-        }
-        className={ICON_BUTTON}
-        aria-label="Share"
-        title="Share"
-      >
-        <Share2 className="h-4 w-4" />
-      </button>
-      <a
-        href={artifactUrl(item.artifactId)}
-        target="_blank"
-        rel="noopener noreferrer"
-        className={ICON_BUTTON}
-        aria-label="Open in new tab"
-        title="Open in new tab"
-      >
-        <ExternalLink className="h-4 w-4" />
-      </a>
-    </div>
-  );
-}
-
-// A page the agent showed with html_render, live, in its own card.
+// A page the agent showed with html_render, live, in its own card. It shows
+// the version this turn made; a later one is a tap away.
 export function ArtifactCard({ item }: { item: ArtifactItem }) {
   const [full, setFull] = useState(false);
+  const [shownId, setShownId] = useState(item.artifactId);
+  const { isMobile } = useViewport();
+  const pageId = item.pageId ?? item.artifactId;
+  const { data, refetch } = useArtifactVersions(pageId, item.artifactId);
+  // A newer card for the same page: what's cached predates it.
+  const stale = !!data && !data.versions.some((v) => v.id === item.artifactId);
+  useEffect(() => {
+    if (stale) void refetch();
+  }, [stale, refetch]);
+
+  const versions = data?.versions ?? [];
+  const shown = versions.find((v) => v.id === shownId);
+  const latest = versions[versions.length - 1];
+  const many = versions.length > 1;
+  const title = shown?.title ?? item.title;
+  const actions = (
+    <ArtifactActions
+      artifactId={shownId}
+      title={title}
+      version={many ? shown?.version : undefined}
+      actions={data?.actions ?? FALLBACK_ACTIONS}
+      variant="icons"
+      onFull={() => setFull(true)}
+    />
+  );
+
   return (
     <div className="bg-foreground/[0.03] overflow-hidden rounded-xl shadow-sm">
       <div className="flex items-center gap-2 py-0.5 pr-1 pl-3.5">
         <span className="min-w-0 flex-1 truncate text-sm font-medium">
-          {item.title}
+          {title}
         </span>
-        <Actions item={item} onFull={() => setFull(true)} />
+        {many && shown && (
+          <DropdownMenu>
+            <DropdownMenuTrigger asChild>
+              <button
+                type="button"
+                className={cn(
+                  "inline-flex h-6 shrink-0 items-center rounded-full px-2 text-[11.5px]",
+                  shown.id === latest.id
+                    ? "bg-primary/15 text-primary"
+                    : "bg-muted text-muted-foreground"
+                )}
+                aria-label="Versions"
+              >
+                {shown.id === latest.id
+                  ? `v${shown.version} · latest`
+                  : isMobile
+                    ? `v${shown.version}/${versions.length}`
+                    : `v${shown.version} of ${versions.length}`}
+              </button>
+            </DropdownMenuTrigger>
+            <DropdownMenuContent align="end" className="w-80 max-w-[90vw]">
+              {[...versions].reverse().map((v) => (
+                <DropdownMenuItem
+                  key={v.id}
+                  className="min-h-11 flex-col items-start gap-0"
+                  onSelect={() => setShownId(v.id)}
+                >
+                  <span className="text-[13px]">
+                    v{v.version}
+                    {v.note ? ` · ${v.note}` : ""}
+                  </span>
+                  <span className="text-muted-foreground text-[11.5px]">
+                    {versionDetail(v, false)}
+                  </span>
+                </DropdownMenuItem>
+              ))}
+            </DropdownMenuContent>
+          </DropdownMenu>
+        )}
+        {actions}
       </div>
       <ArtifactFrame
-        artifactId={item.artifactId}
-        title={item.title}
+        artifactId={shownId}
+        title={title}
         maxHeight={item.height}
       />
-      <Dialog open={full} onOpenChange={setFull}>
-        <DialogContent
-          showCloseButton={false}
-          className="flex h-[100dvh] w-screen max-w-none flex-col gap-0 rounded-none p-0 sm:max-w-none"
+      {many && shown && latest && shown.id !== latest.id && (
+        <button
+          type="button"
+          className="text-muted-foreground flex min-h-11 w-full items-center gap-1.5 border-t px-3.5 text-left text-[12.5px] md:min-h-9"
+          onClick={() => setShownId(latest.id)}
         >
-          <div className="flex items-center gap-2 py-1 pt-[max(0.25rem,env(safe-area-inset-top))] pr-1 pl-4">
-            <DialogTitle className="min-w-0 flex-1 truncate text-sm font-medium">
-              {item.title}
-            </DialogTitle>
-            <Actions item={item} />
-            <button
-              type="button"
-              onClick={() => setFull(false)}
-              className={ICON_BUTTON}
-              aria-label="Close"
-            >
-              <X className="h-4 w-4" />
-            </button>
-          </div>
-          <div className="min-h-0 flex-1 pb-[env(safe-area-inset-bottom)]">
-            {full && (
-              <ArtifactFrame
-                artifactId={item.artifactId}
-                title={item.title}
-                fill
-              />
+          <History className="h-3.5 w-3.5" />
+          {latest.version - shown.version === 1
+            ? "Updated since."
+            : `Updated ${latest.version - shown.version} times since.`}
+          <span className="text-primary">See v{latest.version}</span>
+        </button>
+      )}
+      {many && shownId !== item.artifactId && shown?.id === latest?.id && (
+        <button
+          type="button"
+          className="text-muted-foreground flex min-h-11 w-full items-center gap-1.5 border-t px-3.5 text-left text-[12.5px] md:min-h-9"
+          onClick={() => setShownId(item.artifactId)}
+        >
+          <History className="h-3.5 w-3.5" />
+          <span className="text-primary">
+            Back to v{item.version ?? 1}, from this turn
+          </span>
+        </button>
+      )}
+      <ArtifactFullscreen
+        open={full}
+        onOpenChange={setFull}
+        artifactId={shownId}
+        title={title}
+        actions={
+          <ArtifactActions
+            artifactId={shownId}
+            title={title}
+            version={many ? shown?.version : undefined}
+            actions={(data?.actions ?? FALLBACK_ACTIONS).filter(
+              (a) => a.id !== "fullscreen"
             )}
-          </div>
-        </DialogContent>
-      </Dialog>
+            variant="icons"
+          />
+        }
+      />
     </div>
   );
 }
