@@ -1,19 +1,12 @@
 import { describe, it, expect, afterEach } from "vitest";
 import fs from "fs";
-import os from "os";
 import path from "path";
 import { tagSources } from "./skill-source";
+import { tempDir } from "../test-temp";
 
-const dirs: string[] = [];
-const tmp = () => {
-  const d = fs.mkdtempSync(path.join(os.tmpdir(), "aos-skills-"));
-  dirs.push(d);
-  return d;
-};
+const tmp = () => tempDir("aos-skills-");
 afterEach(() => {
   delete process.env.CLAUDE_CONFIG_DIR;
-  for (const d of dirs.splice(0))
-    fs.rmSync(d, { recursive: true, force: true });
 });
 
 const skill = (root: string, name: string, declared?: string) => {
