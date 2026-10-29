@@ -1,6 +1,6 @@
 ---
 name: debugging
-description: Debug and troubleshoot issues
+description: "Debug a failing behaviour: find the root cause before changing code."
 allowed-tools: Bash, Read, Grep
 ---
 

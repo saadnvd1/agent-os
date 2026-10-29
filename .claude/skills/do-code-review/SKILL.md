@@ -1,6 +1,6 @@
 ---
 name: do-code-review
-description: "Review a branch or PR by dispatching this repo's specialized review agents in parallel, verifying every finding, and reporting what survives by severity. Optional: merges need only AgentOS's own independent review of the PR's head, so run this when a change is risky enough to want a deeper look first. Use when: (1) the user asks for a PR or code review, (2) before opening a PR for a risky change (security, gates, durability)."
+description: "Deep review of a branch or PR with this repo's review agents, every finding verified. Optional, since merges need only AgentOS's own independent review; run it when a change is risky (security, gates, durability), or when the user asks for a PR or code review."
 user-invocable: true
 argument-hint: "[PR number] (defaults to the current branch vs main)"
 ---
