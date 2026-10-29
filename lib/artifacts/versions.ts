@@ -66,6 +66,7 @@ export function pageVersions(
   const versions = listVersions(a.page_id).map(toVersion);
   return {
     pageId: a.page_id,
+    title: versions[versions.length - 1]?.title ?? a.title,
     latestId: versions[versions.length - 1]?.id ?? a.id,
     versions,
     actions: pageActions(ctx),

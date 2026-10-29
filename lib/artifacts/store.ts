@@ -8,6 +8,7 @@ import fs from "fs";
 import path from "path";
 import { createHash, randomUUID } from "crypto";
 import { db } from "../db";
+import { findRevisionOf, MAX_CANDIDATES } from "./match";
 
 export interface Artifact {
   id: string;
@@ -29,6 +30,9 @@ export interface SaveOptions {
   update?: string;
   // With no update, the newest page in this session with the same title.
   sameTitle?: boolean;
+  // With no update and no title match, the page in this session whose latest
+  // version has clearly the same text (see match.ts).
+  matchContent?: boolean;
   note?: string;
 }
 
@@ -78,16 +82,18 @@ export function saveArtifact(
   if (bytes > MAX_HTML_BYTES)
     throw new Error("The page is over 2 MB; make it smaller.");
   const clean = oneLine(title, MAX_TITLE_CHARS) || "Untitled";
-  const note = opts.note ? oneLine(opts.note, MAX_NOTE_CHARS) || null : null;
+  let note = opts.note ? oneLine(opts.note, MAX_NOTE_CHARS) || null : null;
   const sha256 = createHash("sha256").update(html).digest("hex");
   const id = randomUUID();
   const dir = sessionDir(sessionId);
   const file = path.join(dir, `${id}.html`);
   return db.transaction((): Saved => {
-    const pageId = resolvePage(sessionId, clean, opts);
+    const { pageId, fuzzy } = resolvePage(sessionId, clean, html, opts);
     const latest = pageId ? latestVersion(pageId) : undefined;
     if (latest && latest.sha256 === sha256)
       return { artifact: latest, created: false };
+    if (fuzzy && latest && !note && latest.title !== clean)
+      note = oneLine(`Retitled from '${latest.title}'`, MAX_NOTE_CHARS);
     fs.mkdirSync(dir, { recursive: true, mode: 0o700 });
     fs.writeFileSync(file, html, { mode: 0o600 });
     db.prepare(
@@ -111,24 +117,47 @@ export function saveArtifact(
 function resolvePage(
   sessionId: string,
   title: string,
+  html: string,
   opts: SaveOptions
-): string | undefined {
+): { pageId?: string; fuzzy?: boolean } {
   if (opts.update) {
     const base = getArtifact(opts.update);
     if (!base || base.session_id !== sessionId)
       throw new Error(
         `No page ${opts.update} in this chat; leave out update to show a new page.`
       );
-    return base.page_id;
+    return { pageId: base.page_id };
   }
-  if (!opts.sameTitle) return undefined;
-  const row = db
+  if (!opts.sameTitle && !opts.matchContent) return {};
+  // A page is named by its latest version, so an older title no longer finds it.
+  const latest = latestPerPage(sessionId, MAX_CANDIDATES);
+  if (opts.sameTitle) {
+    const lower = title.toLowerCase();
+    const same = latest.find((a) => a.title.toLowerCase() === lower);
+    if (same) return { pageId: same.page_id };
+  }
+  if (!opts.matchContent) return {};
+  const candidates = latest.flatMap((a) => {
+    try {
+      return [{ key: a.page_id, html: fs.readFileSync(a.path, "utf8") }];
+    } catch {
+      return [];
+    }
+  });
+  const pageId = findRevisionOf(html, candidates);
+  return pageId ? { pageId, fuzzy: true } : {};
+}
+
+// The newest version of each page in a session, most recently shown first.
+function latestPerPage(sessionId: string, limit: number): Artifact[] {
+  return db
     .prepare(
-      `SELECT page_id FROM artifacts WHERE session_id = ? AND lower(title) = lower(?)
-       ORDER BY created_at DESC, rowid DESC LIMIT 1`
+      `SELECT a.* FROM artifacts a
+        WHERE a.session_id = ?
+          AND a.version = (SELECT MAX(version) FROM artifacts WHERE page_id = a.page_id)
+        ORDER BY a.created_at DESC, a.rowid DESC LIMIT ?`
     )
-    .get(sessionId, title) as { page_id: string } | undefined;
-  return row?.page_id;
+    .all(sessionId, limit) as Artifact[];
 }
 
 // Every version of a page, oldest first.
