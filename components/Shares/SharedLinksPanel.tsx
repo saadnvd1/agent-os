@@ -60,6 +60,13 @@ function Row({ share }: { share: SharedLinkRow }) {
         <div className="truncate text-sm font-medium">{title}</div>
         <div className="text-muted-foreground flex flex-wrap gap-x-3 text-xs">
           <span>{share.kind === "chat" ? "Chat" : "Page"}</span>
+          {share.kind === "artifact" && (
+            <span>
+              {share.follow
+                ? `Follows latest${share.version ? ` · now v${share.version}` : ""}`
+                : `pinned${share.version ? ` v${share.version}` : ""}`}
+            </span>
+          )}
           <span>Created {when(share.createdAt)}</span>
           <span>
             {share.status === "revoked"

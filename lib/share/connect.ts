@@ -5,6 +5,7 @@ import {
   ApiError,
   clean,
   listShares,
+  replaceShare,
   revokeShare,
   uploadShare,
   type RemoteShare,
@@ -68,6 +69,15 @@ export async function createRemote(share: {
   } catch (err) {
     explain(err);
   }
+}
+
+/** Puts new content under a live link. Throws the raw ApiError, so the caller can tell a dead link from a failed try. */
+export async function replaceRemote(
+  id: string,
+  content: { title: string; html: string; markdown: string }
+): Promise<void> {
+  const { config, machineKey } = files();
+  await replaceShare(config, machineKey, id, content);
 }
 
 export async function listRemote(): Promise<RemoteShare[]> {

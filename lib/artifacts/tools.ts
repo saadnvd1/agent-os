@@ -19,6 +19,7 @@ import {
   MAX_TITLE_CHARS,
   type Artifact,
 } from "./store";
+import { followLatest } from "../share/follow";
 import { previewHtml } from "./preview";
 
 export const VISUALS_SERVER = "visuals";
@@ -101,7 +102,10 @@ export async function renderPage(
       readSource(args, ctx.cwd),
       { update: args.update, note: args.note, sameTitle: true }
     );
-    if (created) ctx.onRender(artifact, args.height);
+    if (created) {
+      ctx.onRender(artifact, args.height);
+      if (artifact.version > 1) followLatest(artifact.page_id);
+    }
     const name = `"${artifact.title}"${artifact.version > 1 ? ` v${artifact.version}` : ""}`;
     return {
       content: [

@@ -19,6 +19,7 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { DownloadMenu } from "./DownloadMenu";
+import { cn } from "@/lib/utils";
 import { Switch } from "@/components/ui/switch";
 import { writeClipboard } from "@/hooks/useCopyToClipboard";
 import {
@@ -76,6 +77,7 @@ function ShareBody({
   const [preview, setPreview] = useState<SharePreview | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [created, setCreated] = useState<string | null>(null);
+  const [follow, setFollow] = useState(false);
   const [copied, setCopied] = useState(false);
   const [tab, setTab] = useState<"page" | "markdown">("page");
   const previewReq = useSharePreview();
@@ -121,6 +123,7 @@ function ShareBody({
         sharedAt: preview.sharedAt,
         hash: preview.hash,
         expiresIn,
+        follow: follow ? "latest" : undefined,
       });
       setCreated(res.url);
       try {
@@ -233,6 +236,48 @@ function ShareBody({
                 </ul>
               </div>
             </>
+          )}
+
+          {linked && kind === "artifact" && (
+            <fieldset className="space-y-2">
+              <legend className="text-muted-foreground mb-1 text-xs font-medium">
+                What the link shows
+              </legend>
+              {[
+                {
+                  value: false,
+                  title: `This version${target.version ? ` (v${target.version})` : ""}`,
+                  hint: "Never changes. You review it above before it goes out.",
+                },
+                {
+                  value: true,
+                  title: "Always the latest",
+                  hint: "Updates when the agent makes a new version. New versions are redacted the same way but publish without a fresh preview.",
+                },
+              ].map((o) => (
+                <label
+                  key={o.title}
+                  className={cn(
+                    "flex min-h-11 cursor-pointer items-start gap-3 rounded-lg border px-3 py-2 text-sm",
+                    follow === o.value && "border-primary bg-primary/5"
+                  )}
+                >
+                  <input
+                    type="radio"
+                    name="share-follow"
+                    className="mt-1 h-4 w-4 shrink-0"
+                    checked={follow === o.value}
+                    onChange={() => setFollow(o.value)}
+                  />
+                  <span className="min-w-0">
+                    <span className="block font-medium">{o.title}</span>
+                    <span className="text-muted-foreground block text-xs">
+                      {o.hint}
+                    </span>
+                  </span>
+                </label>
+              ))}
+            </fieldset>
           )}
 
           {linked && (

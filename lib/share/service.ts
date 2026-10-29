@@ -25,6 +25,7 @@ export interface ShareRequest {
   includeTools: boolean;
   /** Messages the reader left out in the preview. */
   dropIds?: string[];
+  follow?: "latest";
   sharedAt: string;
 }
 
@@ -86,6 +87,10 @@ export function parseRequest(raw: unknown, sharedAt?: unknown): ShareRequest {
       throw new BadShare("dropIds must be a list of ids", 400);
     dropIds = b.dropIds as string[];
   }
+  if (b.follow !== undefined && b.follow !== "latest")
+    throw new BadShare("follow must be latest", 400);
+  if (b.follow && kind !== "artifact")
+    throw new BadShare("Only a page can follow its latest version", 400);
   const at = typeof sharedAt === "string" ? sharedAt : new Date().toISOString();
   if (Number.isNaN(Date.parse(at)))
     throw new BadShare("sharedAt is not a date", 400);
@@ -95,6 +100,7 @@ export function parseRequest(raw: unknown, sharedAt?: unknown): ShareRequest {
     artifactId,
     includeTools: b.includeTools === true,
     dropIds,
+    follow: b.follow === "latest" ? "latest" : undefined,
     sharedAt: at,
   };
 }

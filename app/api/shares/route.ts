@@ -12,6 +12,7 @@ import {
   buildPage,
   parseRequest,
 } from "@/lib/share/service";
+import { getArtifact, latestVersion } from "@/lib/artifacts/store";
 import { insertSharedLink, listSharedLinks } from "@/lib/share/store";
 import type { ShareExpiry } from "@/lib/connect/control-api";
 
@@ -30,6 +31,16 @@ export async function POST(request: Request) {
     if (!EXPIRIES.includes(expiresIn)) return fail("Unknown expiry.", 400);
     if (typeof body?.hash !== "string") return fail("hash is required.", 400);
     if (!linked()) return fail(NOT_LINKED, 409);
+
+    const artifact = req.artifactId ? getArtifact(req.artifactId) : undefined;
+    if (req.follow && artifact) {
+      const latest = latestVersion(artifact.page_id);
+      if (latest && latest.id !== artifact.id)
+        return fail(
+          `v${artifact.version} isn't the latest; share v${latest.version} to follow the page.`,
+          409
+        );
+    }
 
     const page = await buildPage(req);
     if (page.tooBig) return fail(TOO_BIG, 413);
@@ -53,6 +64,8 @@ export async function POST(request: Request) {
       expires_at: share.expires_at,
       created_at: share.created_at,
       revoked_at: null,
+      follow_latest: req.follow ? 1 : 0,
+      version: artifact?.version ?? null,
     });
     return NextResponse.json(
       { id: share.id, url: share.url, expiresAt: share.expires_at },
@@ -96,6 +109,8 @@ export async function GET() {
         status,
         views: r ? r.view_count : null,
         lastViewedAt: r?.last_viewed_at ?? null,
+        follow: l.follow_latest === 1,
+        version: l.version,
       };
     }),
   });

@@ -428,6 +428,21 @@ export async function uploadShare(
   return { ...shareFrom(r), url };
 }
 
+/** Replaces a live share's content under the same link. */
+export async function replaceShare(
+  config: ConnectConfig,
+  privateKey: string,
+  id: string,
+  share: { title: string; html: string; markdown: string }
+): Promise<void> {
+  if (!/^[a-z0-9]{12}$/.test(id)) throw new Error("not a share id");
+  await signed(config, privateKey)(
+    "PUT",
+    `/api/v1/machines/${config.machineId}/shares/${id}`,
+    { title: share.title, html: share.html, markdown: share.markdown }
+  );
+}
+
 export async function listShares(
   config: ConnectConfig,
   privateKey: string
