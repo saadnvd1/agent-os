@@ -8,6 +8,7 @@
  */
 
 import fs from "fs";
+import path from "path";
 import type { ProjectConfig } from "../project-config";
 import { gitFetch, isAncestor } from "../git-exec";
 import { expandHome } from "../tasks/session";
@@ -19,14 +20,22 @@ export type DeployConfig = NonNullable<ProjectConfig["deploy"]>;
 export type DeployVerdict =
   | { state: "ok"; detail: string }
   | { state: "failed"; detail: string }
-  | { state: "pending" }
+  | { state: "pending"; detail?: string }
   | { state: "unchecked"; detail: string };
 
 export const DEPLOY_WITHIN_MIN = 30;
 // After the deploy lands, the server gets this long to answer healthy.
 export const HEALTH_GRACE_MS = 3 * 60 * 1000;
 
+// scripts/autodeploy holds a new head AGENTOS_MIN_GAP seconds after the last
+// restart (`restarted`, next to `deployed`), so a merge isn't late until the
+// gap is over plus this margin.
+export const GAP_MARGIN_MS = 10 * 60 * 1000;
+const DEFAULT_GAP_S = 3600;
+
 export interface DeployDeps {
+  // When the deploy last restarted the server, in ms; null when unknown.
+  restartedAt: (file: string) => number | null;
   // The commit a state file names, or null when there's no such file.
   readSha: (file: string) => { sha: string; at: number } | null;
   // Whether `sha` is in the history of `tip` (fetching it if need be);
@@ -89,7 +98,22 @@ async function health(
   }
 }
 
+function restartedAt(file: string): number | null {
+  try {
+    const s = Number(fs.readFileSync(expandHome(file), "utf-8").trim());
+    return Number.isFinite(s) && s > 0 ? s * 1000 : null;
+  } catch {
+    return null;
+  }
+}
+
+const gapMs = () => {
+  const s = Number(process.env.AGENTOS_MIN_GAP ?? DEFAULT_GAP_S);
+  return (Number.isFinite(s) && s >= 0 ? s : DEFAULT_GAP_S) * 1000;
+};
+
 export const DEFAULT_DEPS: DeployDeps = {
+  restartedAt,
   readSha,
   contains,
   health,
@@ -159,8 +183,21 @@ async function judge(
       state: "failed",
       detail: `the deploy of ${failed.sha.slice(0, 7)} (which has ${short}) failed; see the deploy's log`,
     };
+  // The state files sit together; `restarted` is beside `deployed`.
+  const restarted = deps.restartedAt(
+    path.join(path.dirname(config.deployed), "restarted")
+  );
+  const gapEnd = restarted === null ? 0 : restarted + gapMs();
+  if (gapEnd > input.now)
+    return {
+      state: "pending",
+      detail: `deploy waiting: restart gap, ~${Math.ceil((gapEnd - input.now) / 60000)} min left`,
+    };
   const within = (config.within_minutes ?? DEPLOY_WITHIN_MIN) * 60 * 1000;
-  if (input.now - input.mergedAt >= within)
+  if (
+    input.now - input.mergedAt >= within &&
+    input.now >= gapEnd + GAP_MARGIN_MS
+  )
     return {
       state: "failed",
       detail: `${short} not deployed ${Math.round(within / 60000)} minutes after the merge`,
