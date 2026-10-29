@@ -12,6 +12,7 @@ describe("dompurify (via mermaid)", () => {
   const purify = createDOMPurify(new JSDOM("").window);
 
   it("is at or past the patched version", () => {
+    const [major, minor, patch] = purify.version.split(".").map(Number);
     expect(
       major > 3 || (major === 3 && (minor > 4 || (minor === 4 && patch >= 17)))
     ).toBe(true);
