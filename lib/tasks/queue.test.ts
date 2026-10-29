@@ -1161,6 +1161,17 @@ describe("placement on a linked machine", () => {
     expect(statusOf(q.id)).toBe("started");
   });
 
+  it("plans a task whose Mac need only comes from its brief on the green linked machine", async () => {
+    const t = setup(null);
+    const q = queue(t, "plan first\nmachine: mac", { plan: true });
+    finish(t.task);
+    redHome();
+    peers = { box: { level: "green", plans: true } };
+    await tick();
+    expect(startedOn.get("plan first\nmachine: mac")).toBe("box");
+    expect(statusOf(q.id)).toBe("started");
+  });
+
   it("still places an unpinned plan-first task in the same state", async () => {
     const t = setup(null);
     queue(t, "plan first", { plan: true, machine: "any" });

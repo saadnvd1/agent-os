@@ -25,7 +25,7 @@ import { getProject } from "../../projects";
 import { planFor, splitOf } from "../../plans/features";
 import { moveTask } from "../move-flow";
 import * as client from "./client";
-import { meetsNeeds, needsOf } from "../placement";
+import { meetsNeeds, needsOf, taskPinnedToMac } from "../placement";
 import { remotePlanPath } from "./plan-path";
 import { DEFAULT_PRIORITY, isPriority } from "../schedule-types";
 import { localHolds } from "../hold-checks";
@@ -55,6 +55,9 @@ function checkedSplit(s: Session, text: string | null) {
   }
 }
 
+const pinned = (s: Session, project: { working_directory: string }) =>
+  taskPinnedToMac(s.id, expandHome(project.working_directory));
+
 /**
  * Where a written plan is built: "there" (approved on the machine that
  * planned it) or "home" (moved here first). Pieces are checked against this
@@ -70,6 +73,9 @@ export function implementTarget(
   // The project lives there: nothing here to build it in.
   if (!project || isRemoteHost(project.host_id)) return "there";
   if (split) return "home";
+  // An explicit Mac pin builds on the Mac, wherever the plan ran.
+  if (pinned(s, project))
+    return meetsNeeds(["mac"], machineCapabilities()) ? "home" : "there";
   const { needs } = needsOf({
     projectId: project.id,
     projectPath: expandHome(project.working_directory),
@@ -229,6 +235,7 @@ export async function handoffHome(
     projectPath: expandHome(project.working_directory),
     prompt: s.task_prompt ?? "",
   });
+  if (pinned(s, project) && !needs.includes("mac")) needs.push("mac");
   const holds = localHolds(
     {
       needs,

@@ -274,6 +274,23 @@ describe("a plan written on a linked machine", () => {
     expect(approvals()).toEqual([]);
   });
 
+  it("comes home for a task pinned to a Mac though nothing in its files says so", async () => {
+    const id = mirror();
+    db.prepare(
+      `INSERT INTO task_queue (id, project_id, prompt, status, machine_needs, position)
+       VALUES (?, ?, 'do x', 'started', '["mac"]', 0)`
+    ).run(id, f.projectId);
+    listing([id]);
+    machine = { ...greenView(), level: "red", settled: false };
+    await syncRemotePlans();
+    expect(row(id).plan_phase).toBe("handoff");
+    expect(approvals()).toEqual([]);
+    machine = greenView();
+    await syncRemotePlans();
+    await vi.waitFor(() => expect(implemented).toHaveLength(1));
+    expect(moved).toEqual([{ id, to: "local" }]);
+  });
+
   it("never moves home while this machine can't take the work", async () => {
     fs.mkdirSync(path.join(f.repo, "ios", "App.xcodeproj"), {
       recursive: true,

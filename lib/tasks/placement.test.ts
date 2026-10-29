@@ -10,6 +10,7 @@ import {
   needsFromBrief,
   needsFromSetting,
   needsOf,
+  pinnedToMac,
   place,
   unplaceable,
   type PeerOption,
@@ -257,5 +258,13 @@ describe("the plan phase of a start", () => {
       needsUnmet: false,
       planOnly: false,
     });
+  });
+});
+
+describe("an explicit Mac pin", () => {
+  it("is what the request stored, not what the brief or files say", () => {
+    expect(pinnedToMac('["mac"]', "/nowhere")).toBe(true);
+    expect(pinnedToMac("[]", "/nowhere")).toBe(false);
+    expect(pinnedToMac(null, "/nowhere")).toBe(false);
   });
 });
