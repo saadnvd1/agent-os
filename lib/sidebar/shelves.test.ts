@@ -502,6 +502,17 @@ describe("Ongoing, Snoozed and settled", () => {
     expect(s.ongoing).toEqual(["legacy"]);
   });
 
+  it("bookkeeping on updated_at doesn't take a done session off the shelf", () => {
+    const s = shelves([
+      session("a", {
+        active_at: null,
+        updated_at: ago(60_000),
+        settled_at: ago(3600_000),
+      }),
+    ]);
+    expect(s.done).toEqual(["a"]);
+  });
+
   it("Mark done puts it in Done until it does something", () => {
     const settled = quiet("a", DAY, { settled_at: ago(3600_000) });
     const s = shelves([

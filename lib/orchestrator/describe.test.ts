@@ -51,3 +51,28 @@ describe("sessions that wait on each other", () => {
     expect(text).toContain("waiting on it");
   });
 });
+
+describe("done and idle sessions", () => {
+  const idle = (name: string, over: Partial<SessionFacts> = {}) => ({
+    ...facts(null),
+    id: `${name}-0000-aaaa`,
+    name,
+    status: "idle" as const,
+    task: null,
+    ...over,
+  });
+
+  it("lists done sessions as done, and plain idle ones compactly, after the rest", () => {
+    const text = describeSessions("ws", [
+      idle("finished", { done: true }),
+      idle("resting"),
+      facts(null),
+    ]);
+    const lines = text.split("\n");
+    expect(lines[0]).toContain("3 sessions");
+    expect(lines[1]).toContain("fix flag");
+    expect(lines[2]).toMatch(/^Idle: resting \(app, id resting-\)/);
+    expect(lines[3]).toMatch(/^Done \(on Saad's Done shelf\): finished/);
+    expect(text).not.toMatch(/- finished/);
+  });
+});

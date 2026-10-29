@@ -1339,4 +1339,42 @@ describe("the 30-day auto-archive", () => {
     expect(await archiveStaleDone(now)).not.toContain(s.id);
     expect(row(s.id).archived_at).toBeNull();
   });
+
+  it("a plain chat session stays done through the stop's late events and a status refresh", async () => {
+    const { touchActive } = await import("@/lib/session-activity");
+    const { settledHow } = await import("@/lib/sidebar/shelves");
+    const proj = createProject({
+      name: "done-sticks",
+      workingDirectory: makeRepo().repo,
+    });
+    const id = seedSession({
+      projectId: proj.id,
+      name: "plain chat",
+      view: "chat",
+    });
+    db.prepare(
+      `UPDATE sessions SET active_at = datetime('now', '-1 hour'),
+         updated_at = datetime('now', '-1 hour') WHERE id = ?`
+    ).run(id);
+    await doneSession(id, { by: "direct" });
+    const how = () =>
+      settledHow(
+        db
+          .prepare(`SELECT * FROM session_rows WHERE id = ?`)
+          .get(id) as Session,
+        Date.now()
+      );
+    expect(how()).toBe("manual");
+    // The worker's last events, and the status detector, arrive after.
+    touchActive(id);
+    db.prepare(
+      `UPDATE sessions SET updated_at = datetime('now', '+1 second') WHERE id = ?`
+    ).run(id);
+    expect(how()).toBe("manual");
+    // A new prompt writes active_at: it leaves Done.
+    db.prepare(
+      `UPDATE sessions SET active_at = datetime('now', '+5 seconds') WHERE id = ?`
+    ).run(id);
+    expect(how()).toBeNull();
+  });
 });

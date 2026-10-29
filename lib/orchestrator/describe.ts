@@ -64,15 +64,35 @@ function sessionLine(f: SessionFacts): string {
   return parts.join(" | ");
 }
 
-// The sessions tool's answer: one line per session, busiest news first.
+const compactLine = (f: SessionFacts) =>
+  `${f.name} (${f.project ?? "no project"}, id ${shortId(f.id)})`;
+
+// Nothing to say about it beyond that it is idle.
+const plainIdle = (f: SessionFacts) =>
+  f.status === "idle" &&
+  !f.activity &&
+  !f.task &&
+  !f.plan &&
+  !f.group &&
+  !f.stack &&
+  !f.compacting &&
+  !f.waits?.on.length &&
+  !f.waits?.by.length;
+
+// The sessions tool's answer: one line per live session, busiest news first;
+// then the done and plain idle ones, compactly, so a done can be seen to have
+// worked.
 export function describeSessions(
   workspace: string,
   facts: SessionFacts[],
   groups: readonly string[] = []
 ): string {
   if (!facts.length) return `No sessions are running in ${workspace}.`;
+  const done = facts.filter((f) => f.done && f.status !== "running");
+  const idle = facts.filter((f) => !f.done && plainIdle(f));
+  const shown = facts.filter((f) => !done.includes(f) && !idle.includes(f));
   const rank = { waiting: 0, running: 1, idle: 2, dead: 3 };
-  const sorted = [...facts].sort((a, b) => rank[a.status] - rank[b.status]);
+  const sorted = [...shown].sort((a, b) => rank[a.status] - rank[b.status]);
   const counts = (["running", "waiting"] as const)
     .map((s) => {
       const n = facts.filter((f) => f.status === s).length;
@@ -84,6 +104,10 @@ export function describeSessions(
   return [
     `${facts.length} ${noun} in ${workspace}${summary}:`,
     ...sorted.map(sessionLine),
+    ...(idle.length ? [`Idle: ${idle.map(compactLine).join("; ")}.`] : []),
+    ...(done.length
+      ? [`Done (on Saad's Done shelf): ${done.map(compactLine).join("; ")}.`]
+      : []),
     ...(groups.length
       ? [`Saad's groups here: ${groups.map((g) => `"${g}"`).join(", ")}.`]
       : []),

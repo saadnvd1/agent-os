@@ -27,6 +27,7 @@ import { commitTime, repoOf } from "./repo";
 import { CHECKLESS_MS, checklessFor, ciSettleIn } from "./task-state";
 import { repoHasCI } from "./repo-ci";
 import { markStatusDirty } from "../status/dirty";
+import { settledHow } from "../sidebar/shelves";
 
 export type FactStatus = "running" | "waiting" | "idle" | "dead";
 
@@ -46,6 +47,8 @@ export interface SessionFacts {
   compacting?: boolean;
   // Saad's group it sits in, when it is in one.
   group?: string | null;
+  // On Saad's Done shelf: marked done (or quiet for days) and not woken since.
+  done?: boolean;
   // Last sign of life, in ms.
   lastActive: number;
   // Open waits (aos send --await, aos wait): who it waits on, and who waits on it.
@@ -346,6 +349,7 @@ export async function sessionFacts(
         compacting:
           s.view === "chat" && !hostLink(s.host_id) && !!chatCompacting(s.id),
         group: groups.get(s.session_group_id ?? "") ?? null,
+        done: settledHow(s, Date.now()) !== null,
         lastActive: await lastActiveFor(s),
         branch: s.branch_name,
         quick: !!s.quick_of,
