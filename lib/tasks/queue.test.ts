@@ -1111,12 +1111,13 @@ describe("placement on a linked machine", () => {
 
   it("never places a Mac task, however red the Mac is", async () => {
     const t = setup(null);
-    queue(t, "ios", { machine: "mac" });
+    const q = queue(t, "ios", { machine: "mac" });
     finish(t.task);
     redHome();
     peers = { box: { level: "green" } };
     await tick();
     expect(started).toEqual([]);
+    expect(waitOf(q.id).wait_code).toBe("load_red");
   });
 
   it("starts a plan-only task at home under red load when no machine can plan it", async () => {
@@ -1143,18 +1144,31 @@ describe("placement on a linked machine", () => {
     expect(startedPlanOnly.get("plan it")).toBe(true);
   });
 
-  it("places a plan-first task of Mac-only work on the box: planning needs no Mac", async () => {
+  it("keeps a Mac-pinned plan-first task queued while the Mac is red, then starts it here", async () => {
     const t = setup(null);
     const q = queue(t, "plan first", { plan: true, machine: "mac" });
     finish(t.task);
     redHome();
     peers = { box: { level: "green", plans: true } };
     await tick();
-    expect(startedOn.get("plan first")).toBe("box");
+    expect(started).toEqual([]);
+    expect(statusOf(q.id)).toBe("queued");
+    expect(waitOf(q.id).wait_code).toBe("load_red");
+    machine = greenView();
+    await tick();
+    expect(startedOn.get("plan first")).toBeUndefined();
+    expect(started.map((x) => x.prompt)).toEqual(["plan first"]);
     expect(statusOf(q.id)).toBe("started");
-    expect(
-      db.prepare(`SELECT placed_note FROM session_rows WHERE id = ?`).get(q.id)
-    ).toEqual({ placed_note: "Started on box · this machine load red" });
+  });
+
+  it("still places an unpinned plan-first task in the same state", async () => {
+    const t = setup(null);
+    queue(t, "plan first", { plan: true, machine: "any" });
+    finish(t.task);
+    redHome();
+    peers = { box: { level: "green", plans: true } };
+    await tick();
+    expect(startedOn.get("plan first")).toBe("box");
   });
 
   it("holds a plan-first task when the only linked machine can't run plans", async () => {
