@@ -4,6 +4,10 @@ import { randomUUID } from "crypto";
 import { beforeAll, describe, expect, it } from "vitest";
 import { NextRequest } from "next/server";
 import { GET } from "@/app/api/artifacts/[id]/route";
+import { GET as getVersions } from "@/app/api/artifacts/[id]/versions/route";
+import { saveItem } from "@/lib/chat/store";
+import type { ChatItem } from "@/lib/chat/events";
+import type { PageVersions } from "./actions";
 import { GET as getImage } from "@/app/api/files/image/route";
 import { artifactHeight } from "@/components/Chat/ArtifactFrame";
 import { createArtifact } from "./store";
@@ -13,8 +17,13 @@ beforeAll(() => {
   process.env.AGENTOS_ARTIFACTS_DIR = tempDir("agentos-artifacts-");
 });
 
-const get = (id: string) =>
-  GET(new Request(`http://x/api/artifacts/${id}`), {
+const get = (id: string, query = "") =>
+  GET(new Request(`http://x/api/artifacts/${id}${query}`), {
+    params: Promise.resolve({ id }),
+  });
+
+const versions = (id: string) =>
+  getVersions(new Request(`http://x/api/artifacts/${id}/versions`), {
     params: Promise.resolve({ id }),
   });
 
@@ -34,6 +43,79 @@ describe("GET /api/artifacts/[id]", () => {
   it("answers 404 for an unknown or malformed id", async () => {
     expect((await get(randomUUID())).status).toBe(404);
     expect((await get("..%2F..%2Fetc")).status).toBe(404);
+  });
+});
+
+describe("a page's versions", () => {
+  it("serves each version by its id, and the newest with ?v=latest", async () => {
+    const session = randomUUID();
+    const v1 = createArtifact(session, "t", "<p>one</p>");
+    const v2 = createArtifact(session, "t", "<p>two</p>", { update: v1.id });
+    expect(await (await get(v1.id)).text()).toContain("one");
+    expect(await (await get(v1.id, "?v=latest")).text()).toContain("two");
+    expect(await (await get(v2.id, "?v=latest")).text()).toContain("two");
+  });
+
+  it("lists every version with its note, size, turn and actions", async () => {
+    const session = randomUUID();
+    let seq = 0;
+    const add = (item: object) =>
+      saveItem(session, {
+        id: randomUUID(),
+        createdAt: ++seq,
+        ...item,
+      } as ChatItem);
+    add({ kind: "user", text: "chart weekly signups" });
+    const v1 = createArtifact(session, "Signups", "<p>1</p>");
+    add({
+      kind: "artifact",
+      id: `artifact-${v1.id}`,
+      artifactId: v1.id,
+      title: "Signups",
+    });
+    add({ kind: "user", text: "split it by plan" });
+    const v2 = createArtifact(session, "Signups", "<p>22</p>", {
+      update: v1.id,
+      note: "Split by plan",
+    });
+    add({
+      kind: "artifact",
+      id: `artifact-${v2.id}`,
+      artifactId: v2.id,
+      title: "Signups",
+    });
+
+    const res = await versions(v1.id);
+    expect(res.status).toBe(200);
+    const page = (await res.json()) as PageVersions;
+    expect(page.pageId).toBe(v1.id);
+    expect(page.latestId).toBe(v2.id);
+    expect(page.versions).toMatchObject([
+      {
+        id: v1.id,
+        version: 1,
+        bytes: 8,
+        turn: { index: 1, prompt: "chart weekly signups" },
+      },
+      {
+        id: v2.id,
+        version: 2,
+        note: "Split by plan",
+        bytes: 9,
+        turn: { index: 2, prompt: "split it by plan" },
+      },
+    ]);
+    expect(page.versions[0].createdAt).toBeGreaterThan(0);
+    expect(page.actions.map((a) => a.id)).toEqual([
+      "fullscreen",
+      "share",
+      "open",
+      "download",
+    ]);
+  });
+
+  it("answers 404 for an unknown page", async () => {
+    expect((await versions(randomUUID())).status).toBe(404);
   });
 });
 

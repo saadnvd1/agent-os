@@ -215,6 +215,8 @@ export class ChatHost {
                 kind: "artifact",
                 artifactId: artifact.id,
                 title: artifact.title,
+                pageId: artifact.page_id,
+                version: artifact.version,
                 height,
                 createdAt: Date.now(),
               }),

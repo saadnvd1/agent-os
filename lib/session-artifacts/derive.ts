@@ -29,6 +29,7 @@ export interface ItemRow {
   file_path_camel?: string | null;
   changes?: string | null;
   artifact_id?: string | null;
+  page_id?: string | null;
   title?: string | null;
   task_id?: string | null;
   output_file?: string | null;
@@ -177,7 +178,8 @@ export function fromItems(
           });
       }
     } else if (row.kind === "artifact" && row.artifact_id) {
-      const key = `page:${row.artifact_id}`;
+      // One row per page: a later version replaces an earlier one.
+      const key = `page:${row.page_id || row.artifact_id}`;
       out.set(key, {
         key,
         kind: "page",

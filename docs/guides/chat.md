@@ -204,7 +204,13 @@ its own work, and `html_render` shows the finished page (a chart, a table, a
 mockup) inline as its own card, with full screen and "open in new tab". An orchestrator has them too (with a shorter brief), so it can make a page, such as instructions or a report, for you to share. Pages
 are kept under `~/.agent-os/artifacts/<session>/` with a row in SQLite, so
 they survive reloads and restarts (`GET /api/sessions/<id>/artifacts` lists
-them). They're served behind the same device gate with a CSP sandbox and no
+them). Re-rendering a page (`update: <artifact id>`, or the same title in
+the same chat) adds a version instead of replacing it: every version is kept,
+each card shows the one its turn made with a "v1 of 3" chip and a way to the
+latest, and the Artifacts view lists the page once with a version switcher
+(`GET /api/artifacts/<id>/versions`) and the same actions as the card (full
+screen, share, open, download), each acting on the version on screen. A
+share link is a snapshot of that version. They're served behind the same device gate with a CSP sandbox and no
 same-origin access, so a page can't read AgentOS cookies or call its API; the
 preview browser gets an empty profile and a proxy that only reaches public
 addresses. An image or SVG file the agent writes shows inline when its reply

@@ -1,5 +1,7 @@
 // What a session produced, as the Artifacts view lists it. Client-safe.
 
+import type { ArtifactAction } from "../artifacts/actions";
+
 export type ArtifactKind =
   "plan" | "file" | "page" | "image" | "log" | "pr" | "run" | "session-log";
 
@@ -30,6 +32,13 @@ export interface SessionArtifact {
   folder?: string;
   // A link out (the PR on GitHub).
   url?: string;
+  // A page: its latest version's artifact id, which version that is, and
+  // how many there are.
+  artifactId?: string;
+  version?: number;
+  versionCount?: number;
+  // What the viewer can do with it; set by the server.
+  actions?: ArtifactAction[];
 }
 
 export const openable = (a: Pick<SessionArtifact, "state" | "preview">) =>

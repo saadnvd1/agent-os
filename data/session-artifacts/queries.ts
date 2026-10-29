@@ -1,5 +1,6 @@
 import { useQuery } from "@tanstack/react-query";
 import type { SessionArtifact } from "@/lib/session-artifacts/types";
+import type { PageVersions } from "@/lib/artifacts/actions";
 import { sessionArtifactKeys } from "./keys";
 
 export type { SessionArtifact } from "@/lib/session-artifacts/types";
@@ -49,5 +50,29 @@ export function useArtifactText(url: string | null) {
     },
     enabled: !!url,
     staleTime: 5_000,
+  });
+}
+
+/**
+ * Every version of a page, with its note and the message that asked for it.
+ * Keyed by page, so any version's card shares one fetch.
+ */
+export function useArtifactVersions(
+  pageId: string,
+  artifactId: string,
+  enabled = true
+) {
+  return useQuery({
+    queryKey: sessionArtifactKeys.versions(pageId),
+    queryFn: async (): Promise<PageVersions> => {
+      const res = await fetch(
+        `/api/artifacts/${encodeURIComponent(artifactId)}/versions`
+      );
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) throw new Error(data.error || "Couldn't load versions");
+      return data;
+    },
+    enabled,
+    staleTime: 30_000,
   });
 }

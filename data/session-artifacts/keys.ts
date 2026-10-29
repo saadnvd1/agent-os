@@ -4,4 +4,7 @@ export const sessionArtifactKeys = {
     [...sessionArtifactKeys.all, sessionId] as const,
   content: (url: string) =>
     [...sessionArtifactKeys.all, "content", url] as const,
+  // A page's versions, by any version's id; pageId keys the invalidation.
+  versions: (pageId: string) =>
+    [...sessionArtifactKeys.all, "versions", pageId] as const,
 };

@@ -121,6 +121,7 @@ export function ArtifactsPanel({
         artifact={selected}
         pr={pr}
         mobile
+        remote={!!data?.host}
         onBack={() => setSelectedId(null)}
         onOpenInFiles={onOpenInFiles}
       />
@@ -231,6 +232,7 @@ export function ArtifactsPanel({
             artifact={selected}
             pr={pr}
             mobile={false}
+            remote={!!data?.host}
             onOpenInFiles={onOpenInFiles}
           />
         ) : (

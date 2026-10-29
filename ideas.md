@@ -12,6 +12,9 @@
 - [ ] Conversation search: filter by project in the UI (the API takes `project`), date and `from:` filters
 - [ ] Conversation search in the mobile app
 - [ ] Export conversations - Export to Markdown/JSON
+- [ ] Artifact share links that follow the latest version (needs Connect to replace a share's content; pinned stays the default)
+- [ ] Artifact versions: a visual diff between two versions of a page
+- [ ] Artifact versions and server-driven actions in the mobile app
 - [ ] Keyboard shortcuts - Quick navigation and actions
 - [x] Mobile responsive - Better mobile layout
 - [ ] Dark/light theme toggle

@@ -13,8 +13,9 @@ import {
   type McpSdkServerConfigWithInstance,
 } from "@anthropic-ai/claude-agent-sdk";
 import {
-  createArtifact,
+  saveArtifact,
   MAX_HTML_BYTES,
+  MAX_NOTE_CHARS,
   MAX_TITLE_CHARS,
   type Artifact,
 } from "./store";
@@ -84,20 +85,31 @@ export interface VisualsContext {
 // Saves the page and shows it in the conversation.
 export async function renderPage(
   ctx: VisualsContext,
-  args: { html?: string; path?: string; title: string; height?: number }
+  args: {
+    html?: string;
+    path?: string;
+    title: string;
+    height?: number;
+    update?: string;
+    note?: string;
+  }
 ): Promise<CallToolResult> {
   try {
-    const artifact = createArtifact(
+    const { artifact, created } = saveArtifact(
       ctx.sessionId,
       args.title,
-      readSource(args, ctx.cwd)
+      readSource(args, ctx.cwd),
+      { update: args.update, note: args.note, sameTitle: true }
     );
-    ctx.onRender(artifact, args.height);
+    if (created) ctx.onRender(artifact, args.height);
+    const name = `"${artifact.title}"${artifact.version > 1 ? ` v${artifact.version}` : ""}`;
     return {
       content: [
         {
           type: "text",
-          text: `Shown in the chat as "${artifact.title}" (artifact ${artifact.id}).`,
+          text: created
+            ? `Shown in the chat as ${name} (artifact ${artifact.id}). To change it, call html_render again with update: "${artifact.id}"; every version is kept.`
+            : `Unchanged: the page is the same as ${name} (artifact ${artifact.id}), already in the chat.`,
         },
       ],
     };
@@ -171,6 +183,17 @@ export function visualsTools(
             .describe(
               "Cap on the frame's height in CSS pixels; longer pages scroll inside it. Defaults to fitting the page."
             ),
+          update: z
+            .string()
+            .optional()
+            .describe(
+              "The artifact id of a page you already showed in this chat, to show a new version of it. A page with the same title is updated too. Every version is kept."
+            ),
+          note: z
+            .string()
+            .max(MAX_NOTE_CHARS)
+            .optional()
+            .describe("For a new version: one line on what changed."),
         },
         (args) => renderPage(ctx, args)
       ),

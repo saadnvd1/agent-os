@@ -12,7 +12,7 @@ import { db, queries, type Session } from "../db";
 import { flushItems } from "../chat/store";
 import { git } from "../git-exec";
 import { PLAN_FILE } from "../models/plan-step";
-import { listArtifacts } from "../artifacts/store";
+import { listArtifacts, type Artifact } from "../artifacts/store";
 import { allowedRoots, within } from "./access";
 import { SCREENSHOT_DIR } from "../tasks/ui-brief";
 import {
@@ -51,6 +51,7 @@ const ITEMS_SQL = `
          json_extract(data, '$.input.filePath') AS file_path_camel,
          json_extract(data, '$.input.changes') AS changes,
          json_extract(data, '$.artifactId') AS artifact_id,
+         json_extract(data, '$.pageId') AS page_id,
          json_extract(data, '$.title') AS title,
          json_extract(data, '$.taskId') AS task_id,
          json_extract(data, '$.outputFile') AS output_file,
@@ -202,16 +203,37 @@ async function build(session: Session): Promise<Entry[]> {
   const keptBase = sessionKeptDir(session.id);
   const tracked = new Set(manifest?.tracked);
   const kept = new Set(manifest?.kept);
-  const pages = new Map(listArtifacts(session.id).map((a) => [a.id, a.path]));
+  const saved = listArtifacts(session.id);
+  const byId = new Map(saved.map((a) => [a.id, a]));
+  // Each page's newest version and how many it has.
+  const newest = new Map<string, Artifact>();
+  const count = new Map<string, number>();
+  for (const a of saved) {
+    count.set(a.page_id, (count.get(a.page_id) ?? 0) + 1);
+    if ((newest.get(a.page_id)?.version ?? 0) < a.version)
+      newest.set(a.page_id, a);
+  }
   const entries = await Promise.all(
     candidates.map(async (c): Promise<Entry> => {
       if (c.source.type === "page") {
-        const page = pages.get(c.source.artifactId);
-        const size = page ? await sizeOf(page) : undefined;
-        return toArtifact(
-          c,
+        const seen = byId.get(c.source.artifactId);
+        const page = seen && (newest.get(seen.page_id) ?? seen);
+        const size = page ? await sizeOf(page.path) : undefined;
+        const c2 = page
+          ? { ...c, source: { type: "page" as const, artifactId: page.id } }
+          : c;
+        const entry = toArtifact(
+          c2,
           size === undefined ? { state: "gone" } : { state: "live", size }
         );
+        if (page)
+          Object.assign(entry.artifact, {
+            name: page.title,
+            artifactId: page.id,
+            version: page.version,
+            versionCount: count.get(page.page_id) ?? 1,
+          });
+        return entry;
       }
       const file = filePathOf(c);
       if (!file) return toArtifact(c, null);

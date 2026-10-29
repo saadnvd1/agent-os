@@ -1,4 +1,6 @@
 import { NextResponse } from "next/server";
+import { artifactActions } from "@/lib/artifacts/actions";
+import { pdfAvailable } from "@/lib/share/pdf";
 import { peerLinkOf } from "@/lib/hosts/peer-actions";
 import { collectArtifacts, getSession } from "@/lib/session-artifacts/collect";
 import { peerArtifacts } from "@/lib/session-artifacts/peer";
@@ -29,5 +31,11 @@ export async function GET(
     }
   }
   const entries = await collectArtifacts(session);
-  return NextResponse.json({ artifacts: entries.map((e) => e.artifact) });
+  const ctx = { pdf: await pdfAvailable() };
+  return NextResponse.json({
+    artifacts: entries.map((e) => ({
+      ...e.artifact,
+      actions: artifactActions(e.artifact, ctx),
+    })),
+  });
 }
