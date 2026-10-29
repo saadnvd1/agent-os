@@ -9,6 +9,7 @@ import {
   useSharesQuery,
   type SharedLinkRow,
 } from "@/data/shares";
+import { useAllLiveShares, useEndLive, type LiveView } from "@/data/live";
 import { cn } from "@/lib/utils";
 import { SessionAnchor } from "@/components/Chat/SessionAnchor";
 
@@ -108,11 +109,61 @@ function Row({ share }: { share: SharedLinkRow }) {
   );
 }
 
+function LiveRow({ share }: { share: LiveView }) {
+  const end = useEndLive(share.id);
+  const watching = share.guests.filter((g) => g.status === "admitted").length;
+  return (
+    <li className="bg-muted/40 flex flex-col gap-2 rounded-lg px-3 py-2.5 sm:flex-row sm:items-center">
+      <div className="min-w-0 flex-1">
+        <div className="truncate text-sm font-medium">
+          <SessionAnchor
+            sessionId={share.sessionId}
+            className="hover:underline"
+          >
+            {share.title}
+          </SessionAnchor>
+        </div>
+        <div className="text-muted-foreground flex flex-wrap gap-x-3 text-xs">
+          <span>Live</span>
+          <span>{watching} joined</span>
+          <span>
+            {share.endsWithSession
+              ? "Until the session ends"
+              : share.expiresAt
+                ? `Ends ${new Date(share.expiresAt).toLocaleTimeString([], { hour: "numeric", minute: "2-digit" })}`
+                : ""}
+          </span>
+        </div>
+      </div>
+      <Button
+        variant="outline"
+        className="text-destructive min-h-11 shrink-0 sm:min-h-8"
+        disabled={end.isPending}
+        onClick={() =>
+          end.mutate(undefined, {
+            onError: (err) => toast.error((err as Error).message),
+          })
+        }
+      >
+        End access
+      </Button>
+    </li>
+  );
+}
+
 // Every snapshot link made from this machine, with views from Connect.
 export function SharedLinksPanel() {
   const { data, isLoading, error } = useSharesQuery();
+  const liveNow = useAllLiveShares().data?.shares ?? [];
   return (
     <div className="space-y-3">
+      {liveNow.length > 0 && (
+        <ul className="space-y-2">
+          {liveNow.map((s) => (
+            <LiveRow key={s.id} share={s} />
+          ))}
+        </ul>
+      )}
       <p className="text-muted-foreground text-sm">
         Read-only snapshots you shared from a chat or a page. Revoking one
         deletes it from Connect straight away.

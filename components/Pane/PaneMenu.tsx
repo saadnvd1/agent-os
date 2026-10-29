@@ -8,6 +8,7 @@ import {
   Link,
   MoreHorizontal,
   Share2,
+  Users,
   Download,
   SplitSquareHorizontal,
   SplitSquareVertical,
@@ -29,6 +30,7 @@ import {
 import { copySessionLink, writeClipboard } from "@/hooks/useCopyToClipboard";
 import type { Session } from "@/lib/db";
 import { shareUiActions } from "@/stores/shareUi";
+import { liveUiActions } from "@/stores/liveUi";
 import { exportUiActions } from "@/stores/exportUi";
 import { analystUiActions } from "@/stores/analystUi";
 import { useCanAddAnalyst } from "@/components/Analyst/pair";
@@ -123,6 +125,14 @@ export function PaneMenu({
               >
                 <Share2 className="h-4 w-4" />
                 Share…
+              </DropdownMenuItem>
+            )}
+            {session.view === "chat" && (
+              <DropdownMenuItem
+                onSelect={() => liveUiActions.open(session.id, session.name)}
+              >
+                <Users className="h-4 w-4" />
+                Invite to watch live…
               </DropdownMenuItem>
             )}
             {session.view === "chat" && (

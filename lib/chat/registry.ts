@@ -85,6 +85,8 @@ interface Registry {
   caps: Map<string, Capabilities>;
   // Told of every finished turn (lib/analyst), set by the server.
   turnEndHook?: TurnEndHook;
+  // Read-only taps on every message of every conversation (lib/live).
+  taps?: Set<(sessionId: string, m: ChatServerMessage) => void>;
 }
 
 export type TurnEndHook = (
@@ -94,6 +96,13 @@ export type TurnEndHook = (
 
 export function setTurnEndHook(fn: TurnEndHook): void {
   registry.turnEndHook = fn;
+}
+
+export function addTap(
+  fn: (sessionId: string, m: ChatServerMessage) => void
+): () => void {
+  (registry.taps ??= new Set()).add(fn);
+  return () => registry.taps?.delete(fn);
 }
 
 // Shared across every module instance in the process (custom server and the
@@ -120,6 +129,7 @@ export function emit(sessionId: string, m: ChatServerMessage): void {
     touchActive(sessionId);
   if (m.type === "item" && m.item.kind === "turn_end")
     registry.turnEndHook?.(sessionId, m.item);
+  registry.taps?.forEach((tap) => tap(sessionId, m));
   registry.listeners.get(sessionId)?.forEach((fn) => fn(m));
   // Idle, running, waiting and back, and a finished turn (unread): the
   // sidebar hears at once.

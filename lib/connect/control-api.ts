@@ -471,3 +471,47 @@ export async function revokeShare(
   );
   return shareFrom(await res.json().catch(() => null));
 }
+
+export type LiveExpiry = "1h" | "session";
+
+export interface LiveShare {
+  id: string;
+  url: string;
+  title: string;
+  status: ShareStatus;
+  expires_at: string | null;
+  ends_with_session: boolean;
+  max_guests: number;
+}
+
+/** Mints a live link for one session; the answer carries the link, once. */
+export async function createLiveShare(
+  config: ConnectConfig,
+  privateKey: string,
+  share: { title: string; expiresIn: LiveExpiry }
+): Promise<LiveShare> {
+  const res = await signed(config, privateKey)(
+    "POST",
+    `/api/v1/machines/${config.machineId}/live-shares`,
+    { title: share.title, expires_in: share.expiresIn }
+  );
+  const r = (await res.json().catch(() => null)) as Record<
+    string,
+    unknown
+  > | null;
+  if (
+    typeof r?.id !== "string" ||
+    typeof r.url !== "string" ||
+    !/^https:\/\//.test(r.url)
+  )
+    throw new Error("the Connect service sent no link");
+  return {
+    id: r.id,
+    url: r.url,
+    title: typeof r.title === "string" ? r.title : share.title,
+    status: (r.status as ShareStatus) ?? "active",
+    expires_at: typeof r.expires_at === "string" ? r.expires_at : null,
+    ends_with_session: r.ends_with_session === true,
+    max_guests: typeof r.max_guests === "number" ? r.max_guests : 0,
+  };
+}

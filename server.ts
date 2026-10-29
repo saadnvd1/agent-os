@@ -54,6 +54,7 @@ import {
 import { lanEnabled } from "./lib/security/network-settings";
 import { handlePeerRpc, isPeerRpc, rpcDeps } from "./lib/peer/rpc-server";
 import { startConnect } from "./lib/connect/serve";
+import { startLive } from "./lib/live/service";
 import { serverPort } from "./lib/connect/config";
 import { startUpdateChecks, updateChecksEnabled } from "./lib/updates/check";
 import {
@@ -399,6 +400,7 @@ app.prepare().then(async () => {
     ? { hostname: () => null }
     : startConnect({ onRequest, onUpgrade }, port);
   policy.machineHost = () => connect.hostname();
+  if (!demo) startLive();
   // HTTPS on the tailnet (its own port) for passkeys and other secure-origin APIs.
   if (
     !demo &&
