@@ -8,14 +8,16 @@ import { MIN_QUERY, useConversationSearch } from "@/data/search";
 import { useDebouncedValue } from "@/hooks/useDebouncedValue";
 import { useSelectedWorkspace } from "@/hooks/useSelectedWorkspace";
 import { useViewport } from "@/hooks/useViewport";
+import { cycleTab } from "@/lib/palette/tabs";
 import { paletteActions, paletteUi } from "@/stores/palette";
+import { PaletteTabs } from "../PaletteTabs";
 import { NoResults, Recent, Skeleton } from "./EmptyState";
 import { Preview } from "./Preview";
 import { ResultList, flatten } from "./ResultList";
 import { loadRecent, saveRecent, withRecent } from "./recent";
 import { useOpenHit } from "./useOpenHit";
 
-// ⌘K's second mode: what was said in any chat, found as you type. Results on
+// ⌘K's Conversations tab: what was said in any chat, found as you type. Results on
 // the left, the selected message in its conversation on the right; a phone
 // shows the list, and a tap shows the message.
 export function ConversationSearch() {
@@ -97,7 +99,10 @@ export function ConversationSearch() {
                   openHit(highlighted);
                 } else if (e.key === "Tab") {
                   e.preventDefault();
-                  paletteActions.setMode("commands", text);
+                  paletteActions.setTab(
+                    cycleTab("conversations", e.shiftKey ? -1 : 1),
+                    text
+                  );
                 }
               }}
               placeholder="Search every conversation…"
@@ -111,8 +116,12 @@ export function ConversationSearch() {
               esc
             </kbd>
           </div>
+          <PaletteTabs
+            tab="conversations"
+            onSelect={(tab) => paletteActions.setTab(tab, text)}
+          />
           {workspace && (
-            <div className="flex items-center gap-2 px-3 pb-2">
+            <div className="flex items-center gap-2 px-3 py-2">
               <div className="flex overflow-hidden rounded-md border text-xs">
                 {(
                   [
@@ -222,19 +231,12 @@ export function ConversationSearch() {
             <kbd className="font-mono">↵</kbd> open
           </span>
           <span>
-            <kbd className="font-mono">tab</kbd> commands
+            <kbd className="font-mono">tab</kbd> next tab
           </span>
           <span>
             <kbd className="font-mono">esc</kbd> close
           </span>
         </span>
-        <button
-          type="button"
-          onClick={() => paletteActions.setMode("commands", text)}
-          className="h-8 sm:hidden"
-        >
-          Commands
-        </button>
         <span className="ml-auto font-mono">
           {searching && data
             ? `${groups.length} ${groups.length === 1 ? "chat" : "chats"} · ${data.tookMs} ms`

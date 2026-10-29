@@ -2,84 +2,84 @@
 
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useSnapshot } from "valtio";
-import { MessagesSquare, Search, type LucideIcon } from "lucide-react";
-import { matchCommands, type PaletteCommand } from "@/lib/palette/registry";
-import { cn } from "@/lib/utils";
-import { MIN_QUERY, useConversationSearch } from "@/data/search";
-import { useDebouncedValue } from "@/hooks/useDebouncedValue";
+import { ArrowRight, Search } from "lucide-react";
+import { type PaletteCommand, type PaletteTab } from "@/lib/palette/registry";
+import {
+  allSections,
+  emptySections,
+  withSeeAll,
+  tabItems,
+  type Section,
+} from "@/lib/palette/sections";
+import { cycleTab, parsePrefix } from "@/lib/palette/tabs";
+import { loadUsage, noteUse } from "@/lib/palette/usage";
 import { usePaletteList } from "@/hooks/usePaletteCommands";
-import { useSelectedWorkspace } from "@/hooks/useSelectedWorkspace";
 import { paletteActions, paletteUi } from "@/stores/palette";
-import { plain } from "./conversations/format";
-import { useOpenHit } from "./conversations/useOpenHit";
+import { PaletteRows } from "./PaletteRows";
+import { PaletteTabs } from "./PaletteTabs";
+import { useConversationRows } from "./useConversationRows";
 
-// How many of a long group (sessions) show before a query narrows it.
-const GROUP_PREVIEW = 8;
-// Conversation matches offered beside the commands.
-const CONVERSATIONS = 3;
+const PLACEHOLDER: Record<PaletteTab, string> = {
+  all: "Search everything…",
+  sessions: "Search sessions…",
+  commands: "Search commands…",
+  settings: "Search settings…",
+  conversations: "",
+};
+// A tab's rows are cut here, so a long list stays quick to draw.
+const TAB_LIMIT = 100;
 
 export function CommandsBody() {
   const commands = usePaletteList();
   // Subscribed for changes, read raw: its items are held by ref.
   useSnapshot(paletteUi);
   const picker = paletteUi.picker;
+  const tab = paletteUi.tab;
   const all = picker?.items ?? commands;
   const [query, setQuery] = useState(paletteUi.query);
   const [active, setActive] = useState(0);
+  // The tab a `>` or `@` chose, which Backspace on an empty query undoes.
+  const [prefixTab, setPrefixTab] = useState<PaletteTab | null>(null);
+  const [usage, setUsage] = useState(loadUsage);
+  const [now] = useState(Date.now);
   const listRef = useRef<HTMLDivElement>(null);
+  const q = query.trim();
 
-  // Conversations that match, under the commands (never in a picker).
-  const { workspace } = useSelectedWorkspace();
-  const debounced = useDebouncedValue(query.trim(), 150);
-  const openHit = useOpenHit();
-  const { data: found } = useConversationSearch(
-    debounced,
-    workspace?.id ?? "all",
-    {
-      limit: CONVERSATIONS,
-      enabled: !picker,
-    }
-  );
-  const conversations = useMemo<PaletteCommand[]>(() => {
-    const q = query.trim();
-    if (picker || q.length < MIN_QUERY || q !== debounced) return [];
-    const hits = (found?.groups ?? []).flatMap((group) =>
-      group.hits.slice(0, 1).map((hit) => ({
-        id: `conversation:${group.sessionId}:${hit.itemId}`,
-        title: group.name,
-        detail: plain(hit.snippet),
-        group: "Conversations",
-        icon: MessagesSquare,
-        run: () => openHit(group, hit),
-        keepOpen: true,
-      }))
-    );
-    return [
-      ...hits,
-      {
-        id: "conversation:all",
-        title: `Search all conversations for “${q}”`,
-        group: "Conversations",
-        icon: Search,
-        hint: "tab",
-        keepOpen: true,
-        run: () => paletteActions.setMode("conversations", q),
-      },
-    ];
-  }, [found, query, debounced, picker, openHit]);
+  const conversations = useConversationRows(query, !picker && tab === "all");
 
-  const results = useMemo(() => {
-    if (query.trim()) return [...matchCommands(all, query), ...conversations];
+  const sections = useMemo<Section[]>(() => {
     // A picker shows every choice; it's the whole list.
-    if (picker) return all;
-    // With no query, long groups are cut short so every group shows.
-    const seen = new Map<string, number>();
-    return all.filter((c) => {
-      const n = (seen.get(c.group) ?? 0) + 1;
-      seen.set(c.group, n);
-      return n <= GROUP_PREVIEW;
-    });
-  }, [all, query, picker, conversations]);
+    if (picker) return [{ name: "", items: all }];
+    if (tab === "all") {
+      if (!q) return emptySections(all, usage);
+      const found = withSeeAll(
+        allSections(all, query, usage, now),
+        (to) => paletteActions.setTab(to, query),
+        ArrowRight
+      );
+      return conversations.length
+        ? [...found, { name: "Conversations", items: conversations }]
+        : found;
+    }
+    const items = tabItems(all, tab, query, usage, now).slice(0, TAB_LIMIT);
+    if (q) return [{ name: "", items }];
+    // Without a query, a long tab reads better under its own headings.
+    const groups: Section[] = [];
+    for (const c of items) {
+      let g = groups.find((x) => x.name === c.group);
+      if (!g) groups.push((g = { name: c.group, items: [] }));
+      g.items.push(c);
+    }
+    return groups;
+  }, [all, tab, q, query, usage, now, picker, conversations]);
+  const results = useMemo(() => sections.flatMap((s) => s.items), [sections]);
+
+  // A new tab starts at its top.
+  const [shownTab, setShownTab] = useState(tab);
+  if (shownTab !== tab) {
+    setShownTab(tab);
+    setActive(0);
+  }
   const highlighted = Math.min(active, Math.max(results.length - 1, 0));
 
   useEffect(() => {
@@ -88,23 +88,29 @@ export function CommandsBody() {
       ?.scrollIntoView({ block: "nearest" });
   }, [highlighted]);
 
+  const goTo = (next: PaletteTab) => {
+    setPrefixTab(null);
+    paletteActions.setTab(next, query);
+  };
+
   const run = (c: PaletteCommand | undefined) => {
     if (!c) return;
     if (c.keepOpen) return c.run();
+    if (!picker && !c.id.startsWith("conversation:")) setUsage(noteUse(c.id));
     paletteActions.setOpen(false);
     // After the dialog lets go of focus, so what it opens can take it.
     setTimeout(() => c.run(), 0);
   };
 
-  // Under their headings with no query; one ranked list with one.
-  const groups: { name: string; items: { c: PaletteCommand; i: number }[] }[] =
-    [];
-  results.forEach((c, i) => {
-    const name = query.trim() && c.group !== "Conversations" ? "" : c.group;
-    let g = groups.find((x) => x.name === name);
-    if (!g) groups.push((g = { name, items: [] }));
-    g.items.push({ c, i });
-  });
+  const onChange = (value: string) => {
+    const prefix = !picker && !query ? parsePrefix(value) : null;
+    setActive(0);
+    if (prefix) {
+      setQuery(prefix.text);
+      setPrefixTab(prefix.tab);
+      paletteActions.setTab(prefix.tab, prefix.text);
+    } else setQuery(value);
+  };
 
   return (
     <>
@@ -113,10 +119,7 @@ export function CommandsBody() {
         <input
           autoFocus
           value={query}
-          onChange={(e) => {
-            setQuery(e.target.value);
-            setActive(0);
-          }}
+          onChange={(e) => onChange(e.target.value)}
           onKeyDown={(e) => {
             if (e.key === "ArrowDown" || e.key === "ArrowUp") {
               e.preventDefault();
@@ -126,10 +129,18 @@ export function CommandsBody() {
               );
             } else if (e.key === "Tab" && !picker) {
               e.preventDefault();
-              paletteActions.setMode("conversations", query);
+              goTo(cycleTab(tab, e.shiftKey ? -1 : 1));
             } else if (e.key === "Enter") {
               e.preventDefault();
               run(results[highlighted]);
+            } else if (
+              e.key === "Backspace" &&
+              !query &&
+              prefixTab &&
+              tab === prefixTab
+            ) {
+              e.preventDefault();
+              goTo("all");
             } else if (
               picker &&
               (e.metaKey || e.ctrlKey) &&
@@ -139,21 +150,19 @@ export function CommandsBody() {
               run(picker.items[Number(e.key) - 1]);
             }
           }}
-          placeholder={
-            picker?.placeholder ?? "Search actions, sessions and conversations…"
-          }
-          aria-label={
-            picker?.placeholder ?? "Search actions, sessions and conversations"
-          }
+          placeholder={picker?.placeholder ?? PLACEHOLDER[tab]}
+          aria-label={picker?.placeholder ?? PLACEHOLDER[tab].replace("…", "")}
           className="placeholder:text-muted-foreground h-12 min-w-0 flex-1 bg-transparent text-base outline-none sm:text-sm"
         />
         <kbd className="text-muted-foreground hidden font-mono text-[10px] sm:inline">
           esc
         </kbd>
       </div>
+      {!picker && <PaletteTabs tab={tab} onSelect={goTo} />}
       <div
         ref={listRef}
         role="listbox"
+        aria-labelledby={picker ? undefined : `palette-tab-${tab}`}
         className="min-h-0 flex-1 overflow-y-auto overscroll-contain p-1.5"
       >
         {results.length === 0 && (
@@ -161,55 +170,12 @@ export function CommandsBody() {
             Nothing matches.
           </p>
         )}
-        {groups.map((g) => (
-          <div key={g.name || "results"} className="mb-1">
-            {g.name && (
-              <p className="text-muted-foreground px-2 pt-2 pb-1 text-[11px] font-medium">
-                {g.name}
-              </p>
-            )}
-            {g.items.map(({ c, i }) => {
-              const Icon = c.icon as LucideIcon | undefined;
-              return (
-                <button
-                  key={c.id}
-                  type="button"
-                  role="option"
-                  aria-selected={i === highlighted}
-                  data-index={i}
-                  onMouseMove={() => i !== highlighted && setActive(i)}
-                  onClick={() => run(c)}
-                  className={cn(
-                    "flex min-h-11 w-full items-center gap-2.5 rounded-lg px-2 text-left text-sm md:min-h-9",
-                    i === highlighted && "bg-primary/10"
-                  )}
-                >
-                  {Icon && (
-                    <Icon className="text-muted-foreground h-4 w-4 shrink-0" />
-                  )}
-                  <span className="min-w-0 flex-1">
-                    <span className="block truncate">{c.title}</span>
-                    {c.detail && (
-                      <span className="text-muted-foreground block truncate text-xs">
-                        {c.detail}
-                      </span>
-                    )}
-                  </span>
-                  {query.trim() && c.group !== "Conversations" && (
-                    <span className="text-muted-foreground shrink-0 text-xs">
-                      {c.group}
-                    </span>
-                  )}
-                  {c.hint && (
-                    <kbd className="text-muted-foreground hidden shrink-0 font-mono text-[11px] sm:inline">
-                      {c.hint}
-                    </kbd>
-                  )}
-                </button>
-              );
-            })}
-          </div>
-        ))}
+        <PaletteRows
+          sections={sections}
+          highlighted={highlighted}
+          onHover={setActive}
+          onRun={run}
+        />
       </div>
     </>
   );

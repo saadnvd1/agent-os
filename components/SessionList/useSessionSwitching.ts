@@ -36,7 +36,7 @@ export function useSessionSwitching(
     {
       id: "session.previous",
       title: "Previous session",
-      group: "Sessions",
+      group: "Actions",
       hint: chordHint(PREVIOUS),
       keywords: ["switch", "up"],
       icon: MessageSquare,
@@ -45,7 +45,7 @@ export function useSessionSwitching(
     {
       id: "session.next",
       title: "Next session",
-      group: "Sessions",
+      group: "Actions",
       hint: chordHint(NEXT),
       keywords: ["switch", "down"],
       icon: MessageSquare,

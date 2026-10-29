@@ -23,6 +23,7 @@ import {
   Scale,
 } from "lucide-react";
 import type { Session } from "@/lib/db";
+import type { SessionStatus } from "@/components/views/types";
 import type { PaletteCommand } from "@/lib/palette/registry";
 import { useWorkspacesQuery } from "@/data/workspaces";
 import { useRecipesQuery } from "@/data/recipes";
@@ -57,13 +58,25 @@ function switchMode(current: string | undefined, to: "light" | "dark"): string {
   }
 }
 
+const STATE: Record<string, { status: "running" | "waiting"; detail: string }> =
+  {
+    waiting: { status: "waiting", detail: "Waiting on you" },
+    running: { status: "running", detail: "Working" },
+  };
+
+function sessionState(s: SessionStatus | undefined) {
+  return s?.need || (s?.asks ?? 0) > 0 ? STATE.waiting : STATE[s?.status ?? ""];
+}
+
 // The palette's app-wide commands and its session search.
 export function useAppCommands({
   sessions,
+  statuses,
   onSelectSession,
   onSearchCode,
 }: {
   sessions: Session[];
+  statuses: Record<string, SessionStatus>;
   onSelectSession: (session: Session) => void;
   onSearchCode: () => void;
 }) {
@@ -260,6 +273,7 @@ export function useAppCommands({
         group: "Sessions",
         keywords: [s.working_directory, s.branch_name ?? ""].filter(Boolean),
         icon: MessageSquare,
+        ...sessionState(statuses[s.id]),
         run: () => onSelectSession(s),
       }))
   );

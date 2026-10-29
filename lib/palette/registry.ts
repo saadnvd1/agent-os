@@ -3,6 +3,36 @@
  * take them back the same way, so the palette itself knows no feature.
  */
 
+export type PaletteTab =
+  "all" | "sessions" | "commands" | "settings" | "conversations";
+
+export const PALETTE_TABS: { id: PaletteTab; label: string }[] = [
+  { id: "all", label: "All" },
+  { id: "sessions", label: "Sessions" },
+  { id: "commands", label: "Commands" },
+  { id: "settings", label: "Settings" },
+  { id: "conversations", label: "Conversations" },
+];
+
+// Which tab each heading's commands are found under; a heading not listed is
+// a command. A command can name its own tab instead.
+const GROUP_TAB: Record<string, PaletteTab> = {
+  Sessions: "sessions",
+  Settings: "settings",
+  Conversations: "conversations",
+};
+
+// Headings whose commands act on the focused session.
+const SESSION_GROUPS = new Set(["Chat", "Task"]);
+
+export function tabOf(c: PaletteCommand): PaletteTab {
+  return c.tab ?? GROUP_TAB[c.group] ?? "commands";
+}
+
+export function actsOnFocusedSession(c: PaletteCommand): boolean {
+  return SESSION_GROUPS.has(c.group);
+}
+
 export interface PaletteCommand {
   id: string;
   title: string;
@@ -14,6 +44,10 @@ export interface PaletteCommand {
   hint?: string;
   // A line under the title (what a conversation hit said).
   detail?: string;
+  // Overrides the tab its group maps to.
+  tab?: PaletteTab;
+  // A session that is working or waiting on the user.
+  status?: "running" | "waiting";
   // Running it leaves the palette open (it changes the palette itself).
   keepOpen?: boolean;
   icon?: unknown;
@@ -84,25 +118,45 @@ export function fuzzyScore(query: string, text: string): number | null {
   return score;
 }
 
-// The commands a query finds, best first; all of them, in order, for none.
+export interface Scored {
+  c: PaletteCommand;
+  score: number;
+}
+
+// The commands a query finds, best first, with their scores. `boost` (0 to 1,
+// e.g. how much it's used) scales a match up by at most half: it can break a
+// close call, never rescue a non-match or outrank a far better match. With no
+// query the boost alone orders them, registry order breaking ties.
+export function scoreCommands(
+  commands: PaletteCommand[],
+  query: string,
+  boost: (c: PaletteCommand) => number = () => 0
+): Scored[] {
+  const empty = !query.trim();
+  return commands
+    .map((c, i) => {
+      let base = 0;
+      if (!empty) {
+        const scores = [c.title, ...(c.keywords ?? []), c.group].map(
+          (text, j) => {
+            const s = fuzzyScore(query, text);
+            // A title match counts most.
+            return s === null ? null : j === 0 ? s * 1.5 : s;
+          }
+        );
+        base = Math.max(...scores.map((s) => s ?? -Infinity));
+      }
+      const b = boost(c);
+      return { c, i, base, score: empty ? b : base + Math.abs(base) * 0.5 * b };
+    })
+    .filter((m) => m.base > -Infinity)
+    .sort((a, b) => b.score - a.score || a.i - b.i)
+    .map(({ c, score }) => ({ c, score }));
+}
+
 export function matchCommands(
   commands: PaletteCommand[],
   query: string
 ): PaletteCommand[] {
-  if (!query.trim()) return commands;
-  return commands
-    .map((c, i) => {
-      const scores = [c.title, ...(c.keywords ?? []), c.group].map(
-        (text, j) => {
-          const s = fuzzyScore(query, text);
-          // A title match counts most.
-          return s === null ? null : j === 0 ? s * 1.5 : s;
-        }
-      );
-      const best = Math.max(...scores.map((s) => s ?? -Infinity));
-      return { c, i, best };
-    })
-    .filter((m) => m.best > -Infinity)
-    .sort((a, b) => b.best - a.best || a.i - b.i)
-    .map((m) => m.c);
+  return scoreCommands(commands, query).map((m) => m.c);
 }
