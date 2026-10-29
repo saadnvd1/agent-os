@@ -18,6 +18,15 @@ import {
   BASE64_RUN,
   looksRandom,
 } from "@/lib/orchestrator/untrusted";
+import {
+  BASIC_AUTH,
+  CLI_FLAG,
+  DATA_URI,
+  KEY_VALUE,
+  MYSQL_P,
+  TOKEN_RUN,
+  isHighEntropyToken,
+} from "./secret-patterns";
 import { HOME } from "@/lib/session-audit/normalize";
 
 export type Kind = "secret" | "path" | "ip" | "host" | "email";
@@ -59,7 +68,8 @@ const SECRET = "[secret]";
 const BEARER = /(\bbearer\s+)(?!\[secret\])[A-Za-z0-9._~+/=-]{8,}/gi;
 const INLINE_ASSIGNMENT =
   /(\b[A-Z][A-Z0-9_]*(?:KEY|TOKEN|SECRET|PASSWORD|PASS|PWD|CREDENTIALS?|AUTH)[A-Z0-9_]*=)(?!\[secret\])[^\s'"]+/g;
-const LONG_HEX = /\b[a-fA-F0-9]{40,}\b/g;
+// Up to 64 hex characters is a git sha or a hash, not a key.
+const LONG_HEX = /\b[a-fA-F0-9]{65,}\b/g;
 
 const IPV4 =
   /(?<![\w.])(?:(?:25[0-5]|2[0-4]\d|1?\d?\d)\.){3}(?:25[0-5]|2[0-4]\d|1?\d?\d)(?![\w.]*\w)/g;
@@ -104,6 +114,10 @@ export function redactForShare(
   let t = input;
   const on = (k: Kind) => !opts.only || opts.only.includes(k);
 
+  // Inline base64 (images) is content, not a credential: set aside, put back.
+  const uris: string[] = [];
+  t = t.replace(DATA_URI, (m) => `\u0000${uris.push(m) - 1}\u0000`);
+
   // 1. Credentials by shape.
   t = sub(t, PRIVATE_KEY_BLOCK, SECRET, hits, "secret");
   t = sub(
@@ -132,9 +146,16 @@ export function redactForShare(
     "secret",
     (m) => m.endsWith(SECRET)
   );
+  const keepValue = (_m: string, k: string, v: string) =>
+    `${k}${/^["']/.test(v) ? v[0] + SECRET + v[0] : SECRET}`;
+  t = sub(t, KEY_VALUE, keepValue, hits, "secret");
+  t = sub(t, CLI_FLAG, keepValue, hits, "secret");
+  t = sub(t, MYSQL_P, (_m, k) => `${k}${SECRET}`, hits, "secret");
+  t = sub(t, BASIC_AUTH, (_m, k) => `${k}${SECRET}`, hits, "secret");
   for (const re of SECRET_TOKENS) t = sub(t, re, SECRET, hits, "secret");
   t = sub(t, LONG_HEX, SECRET, hits, "secret");
   t = sub(t, BASE64_RUN, SECRET, hits, "secret", (m) => !looksRandom(m));
+  t = sub(t, TOKEN_RUN, SECRET, hits, "secret", (m) => !isHighEntropyToken(m));
 
   // 2. This machine's own secrets, wherever they appear.
   for (const value of ctx.secrets) {
@@ -192,5 +213,6 @@ export function redactForShare(
   // 6. Email addresses.
   if (on("email")) t = sub(t, EMAIL, "[email]", hits, "email");
 
+  t = t.replace(/\u0000(\d+)\u0000/g, (_m, i) => uris[Number(i)]);
   return { text: t, hits };
 }
