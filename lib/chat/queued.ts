@@ -98,7 +98,12 @@ export function enqueue(
   } & SentBy
 ): void {
   const images = m.images?.length ? JSON.stringify(m.images) : null;
-  const sentBy: SentBy = { from: m.from, peer: m.peer, origin: m.origin };
+  const sentBy: SentBy = {
+    from: m.from,
+    peer: m.peer,
+    origin: m.origin,
+    host: m.host,
+  };
   if (m.text.length > MAX_QUEUED_TEXT)
     throw new Error("That message is too long to queue");
   if (images && images.length > MAX_QUEUED_IMAGES)
@@ -119,7 +124,7 @@ export function enqueue(
     images,
     m.images?.length ?? 0,
     m.files?.length ? JSON.stringify(m.files) : null,
-    m.from || m.peer || m.origin ? JSON.stringify(sentBy) : null,
+    m.from || m.peer || m.origin || m.host ? JSON.stringify(sentBy) : null,
     Date.now()
   );
 }

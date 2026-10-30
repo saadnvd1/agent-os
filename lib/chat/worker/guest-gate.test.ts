@@ -1,6 +1,7 @@
 import fs from "fs";
 import os from "os";
 import path from "path";
+import { execFileSync } from "child_process";
 import { randomBytes, randomUUID } from "crypto";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { getDb, type Session } from "@/lib/db";
@@ -9,7 +10,13 @@ import { tempDir } from "@/lib/test-temp";
 import type { ChatOrigin, DriverEvent } from "../events";
 import { enqueue, listQueue } from "../queued";
 import { gatedHost, tick } from "./gate-testing";
-import { GUEST_MAX_TOOL_CALLS, worktreeRead } from "./guest-gate";
+import { recordPlaced } from "@/lib/worktree-placed";
+import {
+  GUEST_MAX_TOOL_CALLS,
+  GUEST_TURN_MS,
+  GuestGate,
+  worktreeRead,
+} from "./guest-gate";
 
 // A worktree with a secret in it, a folder beside it, and a link out.
 const root = tempDir("agentos-gate-");
@@ -24,6 +31,19 @@ fs.writeFileSync(path.join(wt, "src", "a.ts"), "export const a = 1;\n");
 fs.writeFileSync(path.join(wt, ".git", "config"), "[core]\n");
 fs.writeFileSync(path.join(outside, "notes.txt"), "outside\n");
 fs.symlinkSync(path.join(outside, "notes.txt"), path.join(wt, "link.txt"));
+// Secret by name, though isSecretPath alone misses some of them.
+const SECRET_FILES = [
+  ".envrc",
+  ".env.local",
+  ".dev.vars",
+  "terraform.tfstate",
+  "terraform.tfstate.backup",
+  "service-account.json",
+  "credentials.json",
+];
+for (const f of SECRET_FILES) fs.writeFileSync(path.join(wt, f), `${KEY}\n`);
+fs.mkdirSync(path.join(wt, "config"));
+fs.writeFileSync(path.join(wt, "config", "app.json"), `{"key":"${KEY}"}\n`);
 
 vi.mock("../drivers", async () => (await import("./gate-testing")).drivers);
 
@@ -38,11 +58,10 @@ const guest = (wheel = "w1", share = "live00000001"): ChatOrigin => ({
 
 // A worker for a chat at full access, with the guest gate's hook driven as
 // the SDK would, over real approval cards that flow through the worker.
-async function worker() {
-  const id = randomUUID();
+async function worker(id = randomUUID()) {
   getDb()
     .prepare(
-      `INSERT INTO sessions (id, name, tmux_name, working_directory, chat_access) VALUES (?, 'chat', ?, ?, 'full')`
+      `INSERT OR IGNORE INTO sessions (id, name, tmux_name, working_directory, chat_access) VALUES (?, 'chat', ?, ?, 'full')`
     )
     .run(id, `claude-${id}`, wt);
   const session = getDb()
@@ -79,7 +98,8 @@ describe("the guest gate", () => {
       ["Read", { file_path: path.join(wt, "src", "a.ts") }],
       ["Read", { file_path: "src/a.ts" }],
       ["Glob", { pattern: "**/*.ts" }],
-      ["Grep", { pattern: "a", type: "ts" }],
+      ["Grep", { pattern: "a", path: ".", type: "ts" }],
+      ["Grep", { pattern: "a", path: "src", type: "ts" }],
       ["Grep", { pattern: "a", path: "src/a.ts" }],
       ["TodoWrite", { todos: [] }],
     ] as const) {
@@ -105,6 +125,7 @@ describe("the guest gate", () => {
       { file_path: "~/.ssh/id_ed25519" },
       { file_path: ".git/config" },
       { file_path: path.join(wt, "src") },
+      ...SECRET_FILES.map((f) => ({ file_path: f })),
     ]) {
       const c = w.call("Read", input);
       expect(await w.decision(c.useId), JSON.stringify(input)).toBe("pending");
@@ -117,11 +138,18 @@ describe("the guest gate", () => {
     // A search that could reach the env file, or patterns that climb out.
     for (const [tool, input] of [
       ["Grep", { pattern: "sk-ant" }],
-      ["Grep", { pattern: "sk-ant", glob: "*" }],
+      ["Grep", { pattern: "sk-ant", type: "ts" }],
+      ["Grep", { pattern: "sk-ant", path: ".", glob: "*" }],
+      ["Grep", { pattern: "sk-ant", path: ".", glob: "*.ts" }],
+      ["Grep", { pattern: "sk-ant", path: ".", glob: ".env", type: "ts" }],
       ["Grep", { pattern: "sk-ant", glob: "*.env" }],
       ["Grep", { pattern: "x", path: ".env" }],
-      ["Grep", { pattern: "x", type: "all" }],
+      ["Grep", { pattern: "x", path: ".envrc" }],
+      ["Grep", { pattern: "x", path: ".", type: "all" }],
+      ["Grep", { pattern: "x", path: outside, type: "txt" }],
       ["Glob", { pattern: "../**/*" }],
+      ["Glob", { pattern: "src/../../outside/*" }],
+      ["Glob", { pattern: "{src,..}/*" }],
       ["Glob", { pattern: "/etc/*" }],
       ["Glob", { pattern: "*", path: outside }],
     ] as const) {
@@ -228,11 +256,17 @@ describe("the guest gate", () => {
     w.host.close();
   });
 
-  it("is cleared by the host's next message, not by one joining the turn", async () => {
+  it("is cleared when the host's next message starts its turn, not by one joining the turn", async () => {
     const w = await worker();
     await w.steer();
+    turnStart(w);
     // Mid-turn the host's message joins the guest's turn: still gated.
-    await w.host.handle({ type: "send", id: "host-mid", text: "also this" });
+    await w.host.handle({
+      type: "send",
+      id: "host-mid",
+      text: "also this",
+      host: true,
+    });
     expect(w.gate.steer).not.toBeNull();
     await w.idle();
     // An agent's message starting a turn isn't the host speaking.
@@ -242,12 +276,133 @@ describe("the guest gate", () => {
       text: "from another agent",
       origin: { kind: "peer", label: "x" },
     });
+    turnStart(w);
     expect(w.gate.steer).not.toBeNull();
     await w.idle();
-    await w.host.handle({ type: "send", id: "host-1", text: "carry on" });
+    await w.host.handle({
+      type: "send",
+      id: "host-1",
+      text: "carry on",
+      host: true,
+    });
+    // Sent, but its turn hasn't started: what runs till then is gated.
+    expect(w.gate.steer).not.toBeNull();
+    turnStart(w);
+    await tick();
     expect(w.gate.steer).toBeNull();
     const c = w.call("Bash", { command: "ls" });
     expect(await w.decision(c.useId)).toBe("none");
+    w.host.close();
+  });
+
+  it("★ keeps the steer through automated messages AgentOS sends with a host-like origin", async () => {
+    const w = await worker();
+    await w.steer();
+    turnStart(w);
+    for (const [id, origin] of [
+      ["resume", { kind: "decision", label: "Resumed on opus" }],
+      ["plan-step", { kind: "decision", label: "Plan step" }],
+      ["analyst", { kind: "decision", label: "Analyst" }],
+      ["device", { kind: "device", label: "Phone" }],
+      ["event", { kind: "event", label: "AgentOS" }],
+    ] as const) {
+      await w.idle();
+      await w.host.handle({ type: "send", id, text: "go on", origin });
+      turnStart(w);
+      expect(w.gate.steer, id).not.toBeNull();
+    }
+    // Nor does a host flag on another agent's message.
+    await w.idle();
+    await w.host.handle({
+      type: "send",
+      id: "peer-host",
+      text: "x",
+      from: "other",
+      host: true,
+    });
+    turnStart(w);
+    expect(w.gate.steer).not.toBeNull();
+    const c = w.call("Bash", { command: "ls" });
+    expect(await w.decision(c.useId)).toBe("pending");
+    w.host.close();
+  });
+
+  it("★ keeps a stopped guest turn's wind-down gated after Send now: cleared only at the host's turn", () => {
+    const gate = new GuestGate(() => {});
+    gate.onSend({ origin: guest() }, false);
+    gate.onTurnStart();
+    // Send now: the guest's turn is still winding down.
+    gate.onSend({ host: true }, false, 0);
+    expect(gate.steer).not.toBeNull();
+    gate.onTurnStart();
+    expect(gate.steer).toBeNull();
+    // Sent before the guest's turn even started: that turn comes first.
+    gate.onSend({ origin: guest() }, false);
+    gate.onSend({ host: true }, false, 1);
+    gate.onTurnStart();
+    expect(gate.steer).not.toBeNull();
+    gate.onTurnStart();
+    expect(gate.steer).toBeNull();
+    gate.close();
+  });
+
+  it("★ keeps its steer across a worker restart", async () => {
+    const w = await worker();
+    await w.steer();
+    w.host.close();
+    const again = await worker(w.id);
+    expect(again.gate.steer).toMatchObject({
+      shareId: "live00000001",
+      wheel: "w1",
+      guestId: "g1",
+      name: "Ahmed",
+    });
+    const c = again.call("Bash", { command: "cat .env" });
+    expect(await again.decision(c.useId)).toBe("pending");
+    expect(again.card(c.useId)?.guest).toEqual({ name: "Ahmed" });
+    // The host's own turn ends it, for the next worker too.
+    await again.idle();
+    await again.host.handle({
+      type: "send",
+      id: "host-x",
+      text: "mine",
+      host: true,
+    });
+    turnStart(again);
+    await tick();
+    expect(again.gate.steer).toBeNull();
+    again.host.close();
+    expect((await worker(w.id)).gate.steer).toBeNull();
+  });
+
+  it("★ denies when the gate throws", async () => {
+    const w = await worker();
+    await w.steer();
+    vi.spyOn(w.approvals, "askGuest").mockRejectedValue(new Error("boom"));
+    const c = w.call("Bash", { command: "cat .env" });
+    expect(await w.decision(c.useId)).toBe("deny");
+    vi.spyOn(w.gate, "placedFiles").mockImplementation(() => {
+      throw new Error("boom");
+    });
+    const r = w.call("Read", { file_path: "src/a.ts" });
+    expect(await w.decision(r.useId)).toBe("deny");
+    w.host.close();
+  });
+
+  it("★ denies a guest card once the guest's 20 minutes are up, before the SDK's hook timeout", async () => {
+    const w = await worker();
+    await w.steer();
+    w.gate.steer!.startedAt = Date.now() - GUEST_TURN_MS - 1;
+    const late = w.call("Bash", { command: "ls" });
+    expect(await w.decision(late.useId)).toBe("deny");
+    // One asked just before the limit expires at it.
+    w.gate.steer!.startedAt = Date.now() - GUEST_TURN_MS + 80;
+    const c = w.call("Bash", { command: "ls" });
+    expect(await w.decision(c.useId)).toBe("pending");
+    await vi.waitFor(async () =>
+      expect(await w.decision(c.useId)).toBe("deny")
+    );
+    expect(w.card(c.useId)?.status).toBe("expired");
     w.host.close();
   });
 
@@ -343,7 +498,42 @@ describe("the guest gate", () => {
   });
 });
 
+function turnStart(w: {
+  conversation: { events: { push(e: DriverEvent): void } };
+}) {
+  w.conversation.events.push({ type: "turn_start" } as DriverEvent);
+}
+
 describe("worktreeRead", () => {
+  it("★ refuses files AgentOS copied into the worktree, and searches over them", () => {
+    const placed = new Set([path.join("config", "app.json")]);
+    const read = (tool: string, input: Record<string, unknown>) =>
+      worktreeRead(tool, input, wt, placed);
+    expect(read("Read", { file_path: "config/app.json" })).toBe(false);
+    expect(read("Grep", { pattern: "key", path: "config/app.json" })).toBe(
+      false
+    );
+    expect(read("Grep", { pattern: "key", path: "config", type: "json" })).toBe(
+      false
+    );
+    expect(read("Grep", { pattern: "key", path: ".", type: "json" })).toBe(
+      false
+    );
+    expect(read("Grep", { pattern: "a", path: "src", type: "ts" })).toBe(true);
+    expect(read("Read", { file_path: "src/a.ts" })).toBe(true);
+  });
+
+  it("reads what env setup recorded as placed", async () => {
+    const repo = tempDir("agentos-gate-repo-");
+    const src = tempDir("agentos-gate-src-");
+    execFileSync("git", ["init", "-q", repo]);
+    for (const dir of [repo, src])
+      fs.writeFileSync(path.join(dir, ".dev.vars"), `${KEY}\n`);
+    await recordPlaced(repo, src, [".dev.vars"]);
+    const gate = new GuestGate(() => {});
+    expect([...(await gate.placedFiles(repo))]).toEqual([".dev.vars"]);
+  });
+
   it("is false for anything but the four read tools", () => {
     expect(worktreeRead("Bash", { command: "cat src/a.ts" }, wt)).toBe(false);
     expect(

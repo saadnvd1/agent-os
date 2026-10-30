@@ -343,6 +343,7 @@ export async function sendSuggestion(
     await sendChatConfirmed(rt.share.session_id, {
       text,
       origin: { kind: "guest", label: card.guestName },
+      host: true,
     });
     logLive({
       share_id: id,

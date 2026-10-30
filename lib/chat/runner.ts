@@ -120,6 +120,7 @@ export async function carryOutPlan(
       id: `user-carry-${planId}`,
       text: CARRY_OUT,
       origin: { kind: "decision", label: "Saad" },
+      host: true,
     },
     timeoutMs
   );
@@ -405,10 +406,11 @@ function queuedIfHeld(
   return true;
 }
 
-const sentBy = ({ from, peer, origin }: SentBy): SentBy => ({
+const sentBy = ({ from, peer, origin, host }: SentBy): SentBy => ({
   from,
   peer,
   origin,
+  host,
 });
 
 // Already a message in the chat or its queue.

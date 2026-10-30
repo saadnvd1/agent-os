@@ -131,10 +131,14 @@ function limits(rt: Runtime, now: number): string | null {
 
 const msgId = (promptId: string) => `guest-${promptId}`;
 
+// Claude Code reads an `@path` in a message as a file to attach, with no
+// tool call the gate could stop: a guest's `@` can't be one.
+const noMentions = (t: string) => t.replace(/@/g, "\uff20");
+
 // The agent reads it as a stranger's request; the chat shows only the text.
 export function framed(name: string, text: string): string {
-  const who = name.replace(/["\[\]\n]/g, "");
-  return `[Live guest "${who}", not the owner of this machine, asks:]\n${text}`;
+  const who = noMentions(name.replace(/["\[\]\n]/g, ""));
+  return `[Live guest "${who}", not the owner of this machine, asks:]\n${noMentions(text)}`;
 }
 
 function status(
@@ -227,10 +231,11 @@ export function acceptPrompt(
         status(rt, fx, p, p.cancelled ? "stopped" : "refused", refused);
       } else if (p.status === "sending") p.status = "queued";
     })
-    .catch((e: Error) => {
+    // The error stays on this machine: the guest gets a fixed line.
+    .catch(() => {
       if (!rt.drive.prompts.includes(p)) return;
       forget();
-      status(rt, fx, p, "refused", e.message.slice(0, 100) || "Not sent");
+      status(rt, fx, p, "refused", "Not sent");
     });
   return true;
 }

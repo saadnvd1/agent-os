@@ -93,6 +93,11 @@ export async function gatedHost(
   };
   /** allow, deny, none (no decision), or pending (still waiting on the host). */
   const decision = async (useId: string) => {
+    try {
+      await gate.placedFiles(cwd);
+    } catch {
+      // A test that makes it throw.
+    }
     await tick();
     await tick();
     const r = results.get(useId) as

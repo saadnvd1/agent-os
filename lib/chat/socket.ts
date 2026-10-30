@@ -150,15 +150,18 @@ function onChatMessage(
     const id = send.id;
     // Taken in now: a new worker can take seconds to start.
     if (id) reply({ type: "accepted", id });
-    void sendChat(sessionId, { ...send, queue: true }).catch((err) => {
-      if (id)
-        reply({
-          type: "send_failed",
-          id,
-          message: err instanceof Error ? err.message : String(err),
-        });
-      fail(err);
-    });
+    // Typed in the host's own composer (this socket is theirs).
+    void sendChat(sessionId, { ...send, queue: true, host: true }).catch(
+      (err) => {
+        if (id)
+          reply({
+            type: "send_failed",
+            id,
+            message: err instanceof Error ? err.message : String(err),
+          });
+        fail(err);
+      }
+    );
     // "Session 4" is named after its first message.
     run(titleChatFromMessage(sessionId, send.text));
   } else if (msg.type === "queue_edit" && typeof msg.text === "string")

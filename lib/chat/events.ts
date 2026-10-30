@@ -119,6 +119,10 @@ export interface SentBy {
   from?: string;
   peer?: PeerMessage;
   origin?: ChatOrigin;
+  // The host sent it themselves: set only by their own composer and taps
+  // (never by an agent, event or schedule). Only such a message ends a live
+  // guest's steer (lib/chat/worker/guest-gate).
+  host?: true;
 }
 
 export interface McpServerView {

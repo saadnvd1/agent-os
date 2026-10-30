@@ -153,11 +153,7 @@ export class ChatHost {
   private waitingCards = new Map<string, string>();
   private autoAllowed = new Set<string>();
   // Holds a live guest's turn to the host's taps (./guest-gate).
-  private gate = new GuestGate((note) => {
-    if (!this.busy()) return;
-    this.record(note);
-    void this.handle({ type: "interrupt", hard: true });
-  });
+  private gate: GuestGate;
   // Whether its driver says when that is (lib/chat/driver atRest).
   private atRest = true;
   private restartedNote = false;
@@ -201,6 +197,11 @@ export class ChatHost {
     // What a session's role adds: its brief and its own tools.
     extras: RoleExtras = {}
   ) {
+    this.gate = new GuestGate((note) => {
+      if (!this.busy()) return;
+      this.record(note);
+      void this.handle({ type: "interrupt", hard: true });
+    }, session.id);
     this.usage = startingTotals(session.id, !!session.claude_session_id);
     const driver = chatDriverFor(session.agent_type);
     if (!driver)
@@ -446,6 +447,7 @@ export class ChatHost {
           // short, so what's sent next isn't queued behind it.
           if (this.hardStopped()) void this.conversation.interrupt();
           this.turnsStarted++;
+          this.gate.onTurnStart();
           this.turnStartedAt ??= Date.now();
           if (this.behind) this.behind--;
           clearTimeout(this.restTimer);
@@ -592,7 +594,11 @@ export class ChatHost {
     this.hardStopAt = 0;
     // A message sent now stops the turn and is read next: nothing waits.
     const midTurn = this.busy() && !now;
-    this.gate.onSend(m, midTurn);
+    this.gate.onSend(
+      m,
+      midTurn,
+      this.busy() && this.turnsStarted <= this.turnsEnded ? 1 : 0
+    );
     if (this.busy()) this.behind++;
     // Sent now, it stops the running turn, which still ends after this.
     if (!this.busy()) now = false;

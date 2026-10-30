@@ -407,6 +407,8 @@ describe("suggestions", () => {
     expect(sent.calls[0][1]).toEqual({
       text: "run the tests please",
       origin: { kind: "guest", label: "Ahmed" },
+      // The host's own tap: it ends a guest's steer, as their typing would.
+      host: true,
     });
     expect(actions().at(-1)).toMatchObject({ status: "sent" });
     const log = listLog(SHARE).find((l) => l.kind === "sent")!;

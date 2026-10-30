@@ -41,6 +41,7 @@ export type WorkerCommand =
       from?: string;
       peer?: PeerMessage;
       origin?: ChatOrigin;
+      host?: true;
       // From the composer: waits its turn behind a running one, in the
       // queue, rather than joining it.
       queue?: boolean;
