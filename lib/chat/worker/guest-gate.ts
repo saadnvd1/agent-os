@@ -27,6 +27,8 @@ import { deleteQueuedWhere } from "../queued";
 
 export const GUEST_MAX_TOOL_CALLS = 40;
 export const GUEST_TURN_MS = 20 * 60_000;
+// host.ts's HARD_STOP_MS: how long a hard stop's aftermath can run.
+const WIND_DOWN_MS = 30_000;
 
 const NOT_ALLOWED = "The host didn't allow this step.";
 const FAILED = "The guest gate failed, so this step didn't run.";
@@ -39,6 +41,8 @@ export interface GuestSteer {
   name: string;
   toolCalls: number;
   startedAt: number;
+  // Its Drive ended (downgrade, take-back, kick, end) while its turn ran.
+  endedAt?: number;
 }
 
 /** What the gate needs of the approval cards (lib/chat/drivers/claude-approvals). */
@@ -70,6 +74,7 @@ type SteerRow = {
   name: string;
   tool_calls: number;
   started_at: number;
+  ended_at: number | null;
 };
 
 function loadSteer(sessionId: string): GuestSteer | null {
@@ -84,6 +89,7 @@ function loadSteer(sessionId: string): GuestSteer | null {
         name: r.name,
         toolCalls: r.tool_calls,
         startedAt: r.started_at,
+        ...(r.ended_at ? { endedAt: r.ended_at } : {}),
       }
     : null;
 }
@@ -96,8 +102,8 @@ function saveSteer(sessionId: string, s: GuestSteer | null): void {
     return;
   }
   db.prepare(
-    `INSERT OR REPLACE INTO chat_guest_steers (session_id, share_id, wheel, guest_id, name, tool_calls, started_at)
-     VALUES (?, ?, ?, ?, ?, ?, ?)`
+    `INSERT OR REPLACE INTO chat_guest_steers (session_id, share_id, wheel, guest_id, name, tool_calls, started_at, ended_at)
+     VALUES (?, ?, ?, ?, ?, ?, ?, ?)`
   ).run(
     sessionId,
     s.shareId,
@@ -105,7 +111,8 @@ function saveSteer(sessionId: string, s: GuestSteer | null): void {
     s.guestId,
     s.name,
     s.toolCalls,
-    s.startedAt
+    s.startedAt,
+    s.endedAt ?? null
   );
 }
 
@@ -120,6 +127,8 @@ export class GuestGate {
   private starts = 0;
   private clearAt = 0;
   private placed?: Promise<Set<string>>;
+  private running = false;
+  private endTimer?: NodeJS.Timeout;
 
   constructor(
     // Stops the running turn, with a line for the host saying why.
@@ -127,13 +136,29 @@ export class GuestGate {
     private sessionId?: string
   ) {
     this.steer = sessionId ? loadSteer(sessionId) : null;
+    // A restarted worker has no turn left from a Drive that ended.
+    if (this.steer?.endedAt) this.set(null);
     if (this.steer) this.arm(this.steer);
   }
 
   private set(s: GuestSteer | null): void {
     this.steer = s;
-    if (!s) clearTimeout(this.timer);
+    if (!s) {
+      clearTimeout(this.timer);
+      clearTimeout(this.endTimer);
+    }
     if (this.sessionId) saveSteer(this.sessionId, s);
+  }
+
+  /**
+   * A steer whose Drive ended goes once its stopped turn is over: no turn
+   * running and the hard stop's wind-down (a turn the CLI starts to reply
+   * to the interruption, which the host cuts short) past.
+   */
+  private endIfOver(): void {
+    const s = this.steer;
+    if (s?.endedAt && !this.running && Date.now() >= s.endedAt + WIND_DOWN_MS)
+      this.set(null);
   }
 
   private arm(s: GuestSteer): void {
@@ -169,11 +194,19 @@ export class GuestGate {
 
   /** The agent started a turn: the host's own message's turn ends a steer. */
   onTurnStart(): void {
+    this.endIfOver();
+    this.running = true;
     this.starts++;
     if (this.clearAt && this.starts >= this.clearAt) {
       this.clearAt = 0;
       this.set(null);
     }
+  }
+
+  /** A turn ended (or was stopped). */
+  onIdle(): void {
+    this.running = false;
+    this.endIfOver();
   }
 
   /** Where a guest card stops waiting: the guest's 20 minutes are up. */
@@ -200,12 +233,15 @@ export class GuestGate {
   /**
    * Ends a Drive: its queued prompts go, its pending cards expire as
    * denied, and later messages under that wheel are refused. A steer it
-   * holds stays on (still gated) until the host's next message.
+   * holds goes now if no turn runs, else once the stopped turn is over
+   * (gated till then), so later turns of the agent's own run by the
+   * host's settings, not the guest's.
    */
   release(
     sessionId: string,
     share: string,
-    wheel: string
+    wheel: string,
+    busy = false
   ): { purged: boolean; steered: boolean } {
     if (wheel) this.released.add(wheel);
     const purged =
@@ -218,8 +254,15 @@ export class GuestGate {
       clearTimeout(this.timer);
       this.clearAt = 0;
       this.expire();
+      if (!busy) this.set(null);
+      else if (!this.steer!.endedAt) {
+        const s = { ...this.steer!, endedAt: Date.now() };
+        this.set(s);
+        this.endTimer = setTimeout(() => this.endIfOver(), WIND_DOWN_MS + 1);
+        this.endTimer.unref?.();
+      }
     }
-    return { purged, steered };
+    return { purged, steered: steered && busy };
   }
 
   steeredBy(share: string, wheel?: string): boolean {
@@ -234,11 +277,20 @@ export class GuestGate {
   command(
     cmd: { type: "guest_release" | "guest_stop"; share: string; wheel: string },
     sessionId: string,
-    fx: { queueChanged: () => void; stopTurn: () => Promise<void> | void }
+    fx: {
+      queueChanged: () => void;
+      stopTurn: () => Promise<void> | void;
+      busy: () => boolean;
+    }
   ): Promise<void> | void {
     if (cmd.type === "guest_stop")
       return this.steeredBy(cmd.share, cmd.wheel) ? fx.stopTurn() : undefined;
-    const { purged, steered } = this.release(sessionId, cmd.share, cmd.wheel);
+    const { purged, steered } = this.release(
+      sessionId,
+      cmd.share,
+      cmd.wheel,
+      fx.busy()
+    );
     if (purged) fx.queueChanged();
     return steered ? fx.stopTurn() : undefined;
   }
@@ -381,7 +433,7 @@ export function worktreeRead(
   if (name !== "Read" && name !== "Glob" && name !== "Grep") return false;
   let root: string;
   try {
-    root = fs.realpathSync(cwd);
+    root = fs.realpathSync.native(cwd);
   } catch {
     return false;
   }
@@ -391,9 +443,14 @@ export function worktreeRead(
   if (typeof target !== "string" || !target) return false;
   const real = inside(root, cwd, target);
   if (!real) return false;
+  // Lowercase: macOS folders are case-insensitive, so CONFIG/APP.YML is
+  // config/app.yml.
+  const rel = real.rel.toLowerCase();
   const copied = real.file
-    ? placed.has(real.rel)
-    : [...placed].some((f) => !real.rel || f.startsWith(real.rel + path.sep));
+    ? [...placed].some((f) => f.toLowerCase() === rel)
+    : [...placed].some(
+        (f) => !rel || f.toLowerCase().startsWith(rel + path.sep)
+      );
   if (name === "Read") return real.file && !copied;
   if (name === "Glob") return safePattern(args.pattern);
   if (copied) return false;
@@ -413,7 +470,7 @@ function inside(
   let real: string;
   let stat: fs.Stats;
   try {
-    real = fs.realpathSync(path.resolve(cwd, target));
+    real = fs.realpathSync.native(path.resolve(cwd, target));
     stat = fs.statSync(real);
   } catch {
     return null;
@@ -421,7 +478,7 @@ function inside(
   const rel = path.relative(root, real);
   if (rel.startsWith("..") || path.isAbsolute(rel)) return null;
   const parts = rel.split(path.sep);
-  if (parts.includes(".git")) return null;
+  if (parts.some((p) => p.toLowerCase() === ".git")) return null;
   if (parts.some((p) => SECRET_NAME.test(p))) return null;
   if ((rel && isSecretPath(rel)) || isSecretPath(real)) return null;
   if (!stat.isFile() && !stat.isDirectory()) return null;

@@ -438,7 +438,7 @@ describe("the guest gate", () => {
     expect(w.card(c.useId)?.status).toBe("expired");
     expect(listQueue(w.id).map((q) => q.id)).toEqual(["host-q"]);
     expect(w.conversation.interrupt).toHaveBeenCalled();
-    // Still gated until the host speaks.
+    // Still gated while the stopped turn winds down.
     expect(w.gate.steer).not.toBeNull();
     await w.idle();
     w.conversation.send.mockClear();
@@ -456,6 +456,63 @@ describe("the guest gate", () => {
     await w.steer(guest("w2"));
     expect(listQueue(w.id).map((q) => q.guest?.name)).toEqual(["Ahmed"]);
     w.host.close();
+  });
+
+  it("★ ends the steer with its Drive: a later turn of the agent's own runs ungated", async () => {
+    const w = await worker();
+    await w.steer();
+    await w.host.handle({
+      type: "guest_release",
+      share: "live00000001",
+      wheel: "w1",
+    });
+    // The stopped turn's wind-down (the CLI's reply to the interruption).
+    await w.idle();
+    turnStart(w);
+    await tick();
+    const c = w.call("Bash", { command: "rm -rf build" });
+    expect(await w.decision(c.useId)).toBe("pending");
+    // Its 30 seconds pass, and it's over.
+    w.gate.steer!.endedAt = Date.now() - 31_000;
+    await w.idle();
+    expect(w.gate.steer).toBeNull();
+    // A turn of the agent's own, as long after as you like: not flat-denied.
+    turnStart(w);
+    await tick();
+    const late = w.call("Bash", { command: "npm test" });
+    // Not the gate's: the host's own settings decide.
+    expect(await w.decision(late.useId)).toBe("none");
+    w.host.close();
+    expect((await worker(w.id)).gate.steer).toBeNull();
+  });
+
+  it("★ ends an idle steer at once on release, and a restart after a release restores none", async () => {
+    const w = await worker();
+    await w.steer();
+    await w.idle();
+    await w.host.handle({
+      type: "guest_release",
+      share: "live00000001",
+      wheel: "w1",
+    });
+    expect(w.gate.steer).toBeNull();
+    turnStart(w);
+    await tick();
+    const c = w.call("Bash", { command: "npm test" });
+    expect(await w.decision(c.useId)).toBe("none");
+    w.host.close();
+
+    // Released mid-turn, then the worker restarts before it's over.
+    const b = await worker();
+    await b.steer();
+    await b.host.handle({
+      type: "guest_release",
+      share: "live00000001",
+      wheel: "w1",
+    });
+    expect(b.gate.steer?.endedAt).toBeGreaterThan(0);
+    b.host.close();
+    expect((await worker(b.id)).gate.steer).toBeNull();
   });
 
   it("refuses a guest message that names no wheel", async () => {
@@ -521,6 +578,23 @@ describe("worktreeRead", () => {
     );
     expect(read("Grep", { pattern: "a", path: "src", type: "ts" })).toBe(true);
     expect(read("Read", { file_path: "src/a.ts" })).toBe(true);
+  });
+
+  it("★ refuses a copied file or .git named in another case (macOS folders ignore it)", () => {
+    const placed = new Set([path.join("config", "app.json")]);
+    const read = (tool: string, input: Record<string, unknown>) =>
+      worktreeRead(tool, input, wt, placed);
+    // On a case-sensitive disk these don't exist, which refuses them too.
+    expect(read("Read", { file_path: "CONFIG/APP.JSON" })).toBe(false);
+    expect(read("Read", { file_path: "Config/app.json" })).toBe(false);
+    expect(read("Grep", { pattern: "key", path: "CONFIG", type: "json" })).toBe(
+      false
+    );
+    expect(read("Read", { file_path: ".GIT/config" })).toBe(false);
+    expect(read("Grep", { pattern: "core", path: ".Git/config" })).toBe(false);
+    expect(read("Read", { file_path: "SRC/a.ts" })).toBe(
+      fs.existsSync(path.join(wt, "SRC"))
+    );
   });
 
   it("reads what env setup recorded as placed", async () => {

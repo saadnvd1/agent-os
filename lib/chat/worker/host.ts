@@ -467,8 +467,10 @@ export class ChatHost {
           this.setCompacting(e.active);
         } else if (e.type === "state") {
           // A stop, an error or the end of the turn ends a compaction too.
-          if (e.state === "idle" || e.state === "error")
+          if (e.state === "idle" || e.state === "error") {
             this.setCompacting(false);
+            this.gate.onIdle();
+          }
           if (e.state === "idle") {
             flushItems();
             // A turn cut off mid-sentence (Esc, Stop) keeps what it streamed.
@@ -870,6 +872,7 @@ export class ChatHost {
       case "guest_stop":
         return this.gate.command(cmd, this.session.id, {
           queueChanged: () => this.emit({ type: "queue" }),
+          busy: () => this.busy(),
           stopTurn: () =>
             this.busy()
               ? this.handle({ type: "interrupt", hard: true })

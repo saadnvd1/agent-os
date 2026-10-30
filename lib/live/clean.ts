@@ -38,6 +38,12 @@ export function cleanName(input: unknown): string | null {
   return s;
 }
 
+/**
+ * Claude Code reads an `@path` in a message as a file to attach, with no
+ * tool call a gate could stop: a guest's `@` can't be one.
+ */
+export const noMentions = (t: string) => t.replace(/@/g, "\uff20");
+
 /** A block of text (a suggestion): newlines and tabs kept, or null. */
 export function cleanBody(input: unknown, max = MAX_SUGGESTION): string | null {
   if (typeof input !== "string" || !wellFormed(input)) return null;

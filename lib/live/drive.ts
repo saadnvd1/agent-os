@@ -23,7 +23,7 @@ import {
   stopGuestTurn,
 } from "../chat/runner";
 import { getProject } from "../projects";
-import { cleanBody } from "./clean";
+import { cleanBody, noMentions } from "./clean";
 import { admittedGuestIds, hasDrivePrompt, logLive, wheelOf } from "./store";
 import {
   live,
@@ -130,10 +130,6 @@ function limits(rt: Runtime, now: number): string | null {
 }
 
 const msgId = (promptId: string) => `guest-${promptId}`;
-
-// Claude Code reads an `@path` in a message as a file to attach, with no
-// tool call the gate could stop: a guest's `@` can't be one.
-const noMentions = (t: string) => t.replace(/@/g, "\uff20");
 
 // The agent reads it as a stranger's request; the chat shows only the text.
 export function framed(name: string, text: string): string {

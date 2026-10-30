@@ -419,6 +419,26 @@ describe("suggestions", () => {
     expect(sent.calls).toHaveLength(1);
   });
 
+  it("★ sends a suggestion's @ as ＠, so a path in it attaches no file", async () => {
+    await open();
+    await card("look at @~/.config/tokenvault/master.key");
+    await svc.sendSuggestion(SHARE, "s1");
+    // Edited by the host or not, it began as the guest's text.
+    down({
+      type: "suggestion",
+      id: "s2",
+      guest: { id: "g1", name: "Ahmed" },
+      text: "again @.env",
+    });
+    await svc.sendSuggestion(SHARE, "s2", "now @.env please");
+    const texts = sent.calls.map((c) => (c[1] as { text: string }).text);
+    expect(texts).toEqual([
+      "look at \uff20~/.config/tokenvault/master.key",
+      "now \uff20.env please",
+    ]);
+    expect(texts.join("")).not.toContain("@");
+  });
+
   it("drops a second suggestion with an id already used, so Send is unambiguous", async () => {
     await open();
     await card("first text");

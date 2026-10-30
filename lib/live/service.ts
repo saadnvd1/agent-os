@@ -30,7 +30,7 @@ import {
 import type { Session } from "../db";
 import { listItems } from "../chat/store";
 import { visible } from "../share/snapshot";
-import { cleanBody } from "./clean";
+import { cleanBody, noMentions } from "./clean";
 import { itemMapper } from "./frames";
 import { handleFrame } from "./inbox";
 import { onMessage, seed, flush } from "./publisher";
@@ -334,8 +334,10 @@ export async function sendSuggestion(
   const rt = runtimeFor(id);
   const card = openSuggestions(id).find((s) => s.id === suggestionId);
   if (!card) throw new ShareError("That suggestion is gone.", 404);
-  const text = cleanBody(edited ?? card.text);
-  if (!text) throw new ShareError("The message is empty.", 400);
+  const body = cleanBody(edited ?? card.text);
+  if (!body) throw new ShareError("The message is empty.", 400);
+  // It started as a guest's text, edited or not.
+  const text = noMentions(body);
   const key = `${id}:${suggestionId}`;
   if (sending.has(key)) throw new ShareError("Already sending.", 409);
   sending.add(key);
