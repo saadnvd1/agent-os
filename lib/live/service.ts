@@ -10,7 +10,12 @@ import { addTap, getSession, registry } from "../chat/registry";
 import { sendChatConfirmed } from "../chat/runner";
 import { shareContext } from "../share/context";
 import { redactForShare } from "../share/redact";
-import { ShareError, createLiveRemote, revokeRemote } from "../share/connect";
+import {
+  ShareError,
+  createLiveRemote,
+  revokeRemote,
+  setAccessCodeRemote,
+} from "../share/connect";
 import type { LiveExpiry } from "../connect/control-api";
 import {
   LEVELS,
@@ -19,6 +24,8 @@ import {
   type LiveView,
 } from "./types";
 import { driveView, guestActions, levelOptions } from "./levels";
+import { codeView, inviteCode } from "./code-view";
+import { codeRefusal, generateCode, normalizeCode } from "./code";
 import {
   driveRefusal,
   newDrive,
@@ -45,6 +52,7 @@ import {
   logLive,
   markLiveEnded,
   openSuggestions,
+  setAccessCode,
   setLevel,
   type LiveShareRow,
 } from "./store";
@@ -108,6 +116,7 @@ function attach(row: LiveShareRow): Runtime {
     flushTimer: null,
     slowUntil: 0,
     notice: null,
+    codeLockedUntil: null,
     drops: 0,
     drive: newDrive(row.id),
   };
@@ -162,7 +171,8 @@ export async function createLive(
   sessionId: string,
   expiresIn: LiveExpiry,
   level: LiveLevel = "suggest",
-  history = true
+  history = true,
+  codeOpt?: { custom?: string } | null
 ): Promise<LiveView> {
   startLive();
   const session = getSession(sessionId);
@@ -170,13 +180,36 @@ export async function createLive(
     throw new ShareError(`Drive: ${driveRefusal(session)}.`, 400);
   if (activeLiveShareFor(sessionId))
     throw new ShareError("This session already has a live link.", 409);
+  let accessCode: string | null = null;
+  if (codeOpt) {
+    if (codeOpt.custom) {
+      const why = codeRefusal(codeOpt.custom);
+      if (why) throw new ShareError(why, 400);
+    }
+    accessCode = codeOpt.custom
+      ? normalizeCode(codeOpt.custom)
+      : generateCode();
+  }
   const ctx = shareContext();
   const title =
     redactForShare(session.name, ctx)
       .text.replace(/\s+/g, " ")
       .trim()
       .slice(0, 120) || "Chat";
-  const made = await createLiveRemote({ title, expiresIn, access: level });
+  const made = await createLiveRemote({
+    title,
+    expiresIn,
+    access: level,
+    ...(accessCode ? { accessCode } : {}),
+  });
+  // An old Connect ignores the code and would let anyone reach the lobby.
+  if (accessCode && !made.access_code) {
+    await revokeRemote(made.id).catch(() => {});
+    throw new ShareError(
+      "Connect doesn't support access codes yet. Try again without one.",
+      502
+    );
+  }
   const row: LiveShareRow = {
     id: made.id,
     session_id: sessionId,
@@ -189,6 +222,7 @@ export async function createLive(
     ended_at: null,
     level,
     history: history ? 1 : 0,
+    access_code: accessCode,
   };
   insertLiveShare(row);
   attach(row);
@@ -214,6 +248,30 @@ export function changeLevel(id: string, level: LiveLevel): void {
   if (level !== "drive") setWheel(rt, null, "downgraded", fx);
   rt.notice = null;
   live.socket?.send(id, "access", { level });
+}
+
+/**
+ * Turns the access code on (generate, or the host's own), changes it, or turns
+ * it off (null). Connect first: if it doesn't confirm, nothing changes here.
+ * Guests already in or waiting keep their seat; only new joins need the code.
+ */
+export async function changeCode(
+  id: string,
+  next: { generate: true } | { code: string } | null
+): Promise<void> {
+  const rt = runtimeFor(id);
+  let code: string | null = null;
+  if (next && "code" in next) {
+    const why = codeRefusal(next.code);
+    if (why) throw new ShareError(why, 400);
+    code = normalizeCode(next.code);
+  } else if (next) code = generateCode();
+  await setAccessCodeRemote(id, code);
+  const now = live.runtimes.get(id);
+  if (!now || now.share.ended_at) return;
+  now.share = { ...now.share, access_code: code };
+  setAccessCode(id, code);
+  now.codeLockedUntil = null;
 }
 
 /** Gives the wheel to an admitted guest of a Drive share, or takes it back (null). */
@@ -253,6 +311,7 @@ export function inviteFor(sessionId: string): LiveInvite {
       default: true,
       count,
     },
+    code: inviteCode(),
   };
 }
 
@@ -413,6 +472,7 @@ export function viewOf(id: string, now = Date.now()): LiveView | null {
     notice: rt.notice,
     level: rt.share.level,
     levels,
+    code: codeView(rt, now),
     history: rt.share.history === 1,
     ...driveView(rt),
     guests: shown

@@ -20,11 +20,23 @@ const keys = crypto.generateKeyPairSync("ed25519");
 const MACHINE = "abcd1234";
 const seen: { method: string; url: string; body: string }[] = [];
 let mintStatus = 201;
+let connectCodes = true;
+let putStatus = 200;
 const server = http.createServer((req, res) => {
   let body = "";
   req.on("data", (c) => (body += c));
   req.on("end", () => {
     seen.push({ method: req.method!, url: req.url!, body });
+    if (req.method === "PUT" && req.url!.endsWith("/access-code")) {
+      const c = JSON.parse(body).access_code;
+      return res
+        .writeHead(putStatus, { "Content-Type": "application/json" })
+        .end(
+          JSON.stringify(
+            putStatus === 200 ? { access_code: c !== null } : { error: "no" }
+          )
+        );
+    }
     if (req.method === "POST" && req.url!.endsWith("/live-shares"))
       return res
         .writeHead(mintStatus, { "Content-Type": "application/json" })
@@ -39,6 +51,9 @@ const server = http.createServer((req, res) => {
                   expires_at: new Date(Date.now() + 3600_000).toISOString(),
                   ends_with_session: false,
                   max_guests: 5,
+                  ...(connectCodes && JSON.parse(body).access_code
+                    ? { access_code: true }
+                    : {}),
                 }
               : { error: "Free plans get 1 live share at a time." }
           )
@@ -160,6 +175,8 @@ beforeEach(() => {
   seen.length = 0;
   sent.calls = [];
   mintStatus = 201;
+  connectCodes = true;
+  putStatus = 200;
   getDb().prepare(`DELETE FROM live_shares`).run();
   getDb().prepare(`DELETE FROM live_share_log`).run();
 });
@@ -592,5 +609,141 @@ describe("access levels", () => {
       ["suggest", true],
       ["drive", false],
     ]);
+  });
+});
+
+describe("the access code", () => {
+  async function openWith(code: { custom?: string } | null) {
+    session = chat();
+    await svc.createLive(session, "1h", "suggest", true, code);
+    const f = fakes.at(-1)!;
+    f.handlers.message(JSON.stringify({ type: "welcome" }));
+    f.handlers.message(
+      JSON.stringify({ type: "confirm_subscription", identifier: ident })
+    );
+  }
+  const view = () => svc.viewOf(SHARE)!;
+
+  it("is off by default: nothing sent to Connect, only Turn on offered", async () => {
+    await openWith(null);
+    expect(JSON.parse(seen[0].body)).not.toHaveProperty("access_code");
+    expect(view().code.on).toBe(false);
+    expect(view().code.actions.map((a) => a.kind)).toEqual(["code_on"]);
+    expect(svc.inviteFor(session).code.default).toBe(false);
+  });
+
+  it("generates a six-digit code at create and sends it with the mint", async () => {
+    await openWith({});
+    const sentCode = JSON.parse(seen[0].body).access_code;
+    expect(sentCode).toMatch(/^\d{6}$/);
+    const c = view().code;
+    expect(c.on).toBe(true);
+    expect(c.display).toBe(`${sentCode.slice(0, 3)}-${sentCode.slice(3)}`);
+    expect(c.copyText).toBe(
+      `https://runagentos.com/s/tok\nAccess code: ${c.display}`
+    );
+    expect(c.actions.map((a) => a.kind)).toEqual([
+      "copy",
+      "copy_link",
+      "new_code",
+      "set_code",
+      "code_off",
+    ]);
+  });
+
+  it("uses the host's own code, and refuses a bad one before calling Connect", async () => {
+    await openWith({ custom: "blue-42x" });
+    expect(JSON.parse(seen[0].body).access_code).toBe("BLUE42X");
+    expect(view().code.display).toBe("BLUE42X");
+    seen.length = 0;
+    await expect(
+      svc.createLive(chat(), "1h", "suggest", true, { custom: "abc" })
+    ).rejects.toMatchObject({ status: 400 });
+    expect(seen).toHaveLength(0);
+  });
+
+  it("an old Connect leaves no share and throws", async () => {
+    connectCodes = false;
+    await expect(
+      svc.createLive(chat(), "1h", "suggest", true, {})
+    ).rejects.toThrow(/doesn't support access codes/);
+    expect(seen.at(-1)).toMatchObject({ method: "DELETE" });
+    expect(getDb().prepare(`SELECT * FROM live_shares`).all()).toHaveLength(0);
+    expect(live.runtimes.size).toBe(0);
+  });
+
+  it("turns on, changes, sets its own and turns off, via Connect first", async () => {
+    await openWith(null);
+    await svc.changeCode(SHARE, { generate: true });
+    const put = JSON.parse(seen.at(-1)!.body).access_code;
+    expect(seen.at(-1)!.method).toBe("PUT");
+    expect(put).toMatch(/^\d{6}$/);
+    expect(view().code.on).toBe(true);
+    await svc.changeCode(SHARE, { code: "my own 99" });
+    expect(JSON.parse(seen.at(-1)!.body).access_code).toBe("MYOWN99");
+    expect(view().code.display).toBe("MYOWN99");
+    await svc.changeCode(SHARE, null);
+    expect(JSON.parse(seen.at(-1)!.body).access_code).toBeNull();
+    expect(view().code.on).toBe(false);
+  });
+
+  it("a failed PUT keeps the old code and says so", async () => {
+    await openWith({ custom: "keep123" });
+    putStatus = 500;
+    await expect(svc.changeCode(SHARE, { generate: true })).rejects.toThrow(
+      /didn't confirm/
+    );
+    expect(view().code.display).toBe("KEEP123");
+    await expect(svc.changeCode(SHARE, { code: "x" })).rejects.toMatchObject({
+      status: 400,
+    });
+  });
+
+  it("a code change keeps admitted and lobby guests and kicks no one", async () => {
+    await openWith({});
+    await joinAndAdmit("g1", "Ahmed");
+    down({ type: "join_request", guest: { id: "g2", name: "Sara" } });
+    const before = fakes.at(-1)!.out.length;
+    await svc.changeCode(SHARE, { generate: true });
+    expect(view().guests.map((g) => [g.id, g.status])).toEqual([
+      ["g1", "admitted"],
+      ["g2", "pending"],
+    ]);
+    const frames = fakes
+      .at(-1)!
+      .out.slice(before)
+      .map((m) => String(m.data));
+    expect(frames.some((d) => /kick|deny/.test(d))).toBe(false);
+  });
+
+  it("code_locked sets the notice and a code change clears it", async () => {
+    await openWith({});
+    down({
+      type: "code_locked",
+      until: new Date(Date.now() + 600_000).toISOString(),
+    });
+    expect(view().code.notice).toMatch(/Too many wrong codes/);
+    await svc.changeCode(SHARE, { generate: true });
+    expect(view().code.notice).toBeNull();
+  });
+
+  it("never writes the code to the console or the log", async () => {
+    const spies = (["log", "info", "warn", "error", "debug"] as const).map(
+      (m) => vi.spyOn(console, m)
+    );
+    await openWith({ custom: "secret77" });
+    await svc.changeCode(SHARE, { code: "another88" });
+    putStatus = 500;
+    await svc.changeCode(SHARE, { code: "failed99" }).catch(() => {});
+    const printed = JSON.stringify(spies.flatMap((s) => s.mock.calls));
+    const log = JSON.stringify(listLog(SHARE));
+    for (const c of ["SECRET77", "ANOTHER88", "FAILED99"]) {
+      expect(printed).not.toContain(c);
+      expect(log).not.toContain(c);
+    }
+    expect(
+      listLog(SHARE).filter((l) => l.kind === "code_changed")
+    ).toHaveLength(1);
+    spies.forEach((s) => s.mockRestore());
   });
 });

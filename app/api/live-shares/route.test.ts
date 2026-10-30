@@ -43,6 +43,20 @@ describe("live-shares routes", () => {
     );
   });
 
+  it("validate the access code shape (400) and accept the code actions", async () => {
+    expect(
+      (await POST(req({ sessionId: "s", code: { custom: 5 } }))).status
+    ).toBe(400);
+    expect((await POST(req({ sessionId: "s", code: {} }))).status).toBe(409);
+    expect((await POST(req({ sessionId: "s", code: null }))).status).toBe(409);
+    // A bad own code on a share this machine holds nothing of: 404, so it validated.
+    expect((await act(req({ action: "code", code: "ab" }), ctx)).status).toBe(
+      404
+    );
+    expect((await act(req({ action: "code", code: 5 }), ctx)).status).toBe(400);
+    expect((await act(req({ action: "new_code" }), ctx)).status).toBe(404);
+  });
+
   it("accept watch, suggest and drive, and history as a boolean", async () => {
     // Past validation: not linked to Connect here, so 409, never 400.
     expect((await POST(req({ sessionId: "s", level: "drive" }))).status).toBe(

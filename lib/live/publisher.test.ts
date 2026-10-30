@@ -21,6 +21,7 @@ function runtime(): Runtime {
     flushTimer: null,
     slowUntil: 0,
     notice: null,
+    codeLockedUntil: null,
     drops: 0,
     drive: { wheel: null, prompts: [], accepted: [], epoch: 0 },
   };

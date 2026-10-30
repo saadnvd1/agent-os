@@ -1,11 +1,12 @@
 "use client";
 
 import { useState } from "react";
-import { ChevronDown, Radio, UserMinus } from "lucide-react";
+import { Check, ChevronDown, Copy, Radio, UserMinus } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Segmented } from "@/components/ui/segmented";
 import { StatusPill } from "@/components/ui/status-pill";
 import type { LiveLevel, LiveView } from "@/data/live";
+import { useCopyToClipboard } from "@/hooks/useCopyToClipboard";
 import { cn } from "@/lib/utils";
 
 export function presenceText(guests: LiveView["guests"]): string {
@@ -21,6 +22,7 @@ export function LiveChip({
   busy,
   onAction,
   onLevel,
+  onCode,
   onEnd,
   onInvite,
 }: {
@@ -28,6 +30,7 @@ export function LiveChip({
   busy: boolean;
   onAction: (guestId: string, kind: string) => void;
   onLevel: (level: LiveLevel) => void;
+  onCode: (kind: string, own?: string) => void;
   onEnd: () => void;
   onInvite: () => void;
 }) {
@@ -76,6 +79,7 @@ export function LiveChip({
           <p className="text-muted-foreground px-2 text-xs">
             {share.levels.find((o) => o.value === share.level)?.hint}
           </p>
+          <CodeRow share={share} busy={busy} onCode={onCode} />
           {admitted.length === 0 && (
             <p className="text-muted-foreground px-2 py-1 text-xs">
               No one has joined yet.
@@ -125,6 +129,69 @@ export function LiveChip({
           </div>
         </div>
       )}
+    </div>
+  );
+}
+
+function CodeRow({
+  share,
+  busy,
+  onCode,
+}: {
+  share: LiveView;
+  busy: boolean;
+  onCode: (kind: string, own?: string) => void;
+}) {
+  const { copied, copy } = useCopyToClipboard();
+  const { code } = share;
+  const change = (kind: string) => {
+    if (kind === "copy") copy(code.copyText ?? share.url);
+    else if (kind === "copy_link") copy(share.url);
+    else if (kind === "set_code") {
+      const own = window.prompt(`${code.prompt.title}\n${code.prompt.message}`);
+      if (own?.trim()) onCode(kind, own.trim());
+    } else onCode(kind);
+  };
+  return (
+    <div className="flex flex-col gap-1 px-2 py-1">
+      <div className="flex min-h-11 items-center gap-2">
+        <span className="text-muted-foreground text-xs">{code.label}</span>
+        <span className="min-w-0 flex-1 truncate font-mono text-sm font-semibold tracking-wider">
+          {code.on ? code.display : "Off"}
+        </span>
+        {code.on && code.copyText && (
+          <Button
+            variant="ghost"
+            className="min-h-11"
+            onClick={() => copy(code.copyText!)}
+            aria-label="Copy link and code"
+          >
+            {copied ? (
+              <Check className="h-4 w-4" />
+            ) : (
+              <Copy className="h-4 w-4" />
+            )}
+          </Button>
+        )}
+      </div>
+      {code.notice && (
+        <p className="text-muted-foreground text-xs">{code.notice}</p>
+      )}
+      <div className="flex flex-wrap gap-1">
+        {code.actions
+          .filter((a) => a.kind !== "copy" && a.kind !== "copy_link")
+          .map((a) => (
+            <Button
+              key={a.kind}
+              variant="ghost"
+              className="min-h-11"
+              disabled={busy}
+              onClick={() => change(a.kind)}
+            >
+              {a.label}
+            </Button>
+          ))}
+      </div>
     </div>
   );
 }

@@ -78,10 +78,13 @@ function Create({
   const [expiresIn, setExpiresIn] = useState<LiveExpiry>("1h");
   const [level, setLevel] = useState<LiveLevel>("suggest");
   const [history, setHistory] = useState<boolean | null>(null);
+  const [codeOn, setCodeOn] = useState<boolean | null>(null);
+  const [custom, setCustom] = useState("");
   const create = useCreateLive();
   const options = invite?.levels ?? [];
   const chosen = options.find((o) => o.value === level);
   const withHistory = history ?? invite?.history.default ?? true;
+  const withCode = codeOn ?? invite?.code.default ?? false;
   return (
     <>
       <div className="flex flex-col gap-1.5">
@@ -118,6 +121,36 @@ function Create({
           {invite.history.label}
         </label>
       )}
+      {invite && (
+        <div className="flex flex-col gap-1.5">
+          <label className="flex min-h-11 items-center gap-3 text-sm">
+            <input
+              type="checkbox"
+              className="size-5"
+              checked={withCode}
+              onChange={(e) => setCodeOn(e.target.checked)}
+            />
+            {invite.code.label}
+          </label>
+          {withCode && (
+            <>
+              <input
+                value={custom}
+                onChange={(e) => setCustom(e.target.value)}
+                maxLength={40}
+                autoComplete="off"
+                spellCheck={false}
+                placeholder={invite.code.customLabel}
+                aria-label={invite.code.customLabel}
+                className="bg-muted min-h-11 rounded-lg px-3 font-mono text-sm"
+              />
+              <p className="text-muted-foreground text-xs">
+                {invite.code.hint} {invite.code.rules}
+              </p>
+            </>
+          )}
+        </div>
+      )}
       <div className="flex flex-col gap-1.5">
         <span className="text-muted-foreground text-xs font-medium">
           The link works for
@@ -139,7 +172,17 @@ function Create({
         className="min-h-11"
         disabled={create.isPending}
         onClick={() =>
-          create.mutate({ sessionId, expiresIn, level, history: withHistory })
+          create.mutate({
+            sessionId,
+            expiresIn,
+            level,
+            history: withHistory,
+            code: withCode
+              ? custom.trim()
+                ? { custom: custom.trim() }
+                : {}
+              : null,
+          })
         }
       >
         <Users className="h-4 w-4" />
@@ -153,6 +196,7 @@ function Link({ share }: { share: LiveView }) {
   const { copied, copy } = useCopyToClipboard();
   const end = useEndLive(share.id);
   const qr = useQr(share.url);
+  const code = share.code;
   const canShare = typeof navigator !== "undefined" && "share" in navigator;
   return (
     <>
@@ -175,6 +219,33 @@ function Link({ share }: { share: LiveView }) {
           className="bg-muted min-h-11 w-full rounded-lg px-3 font-mono text-xs"
         />
       </div>
+      {code.on && code.copyText && (
+        <div className="flex flex-col items-center gap-2">
+          <span className="text-muted-foreground text-xs font-medium">
+            {code.label}
+          </span>
+          <span
+            className="font-mono text-3xl font-semibold tracking-widest"
+            aria-label={code.label}
+          >
+            {code.display}
+          </span>
+          <Button
+            className="min-h-11 w-full"
+            onClick={() => copy(code.copyText!)}
+          >
+            {copied ? (
+              <Check className="h-4 w-4" />
+            ) : (
+              <Copy className="h-4 w-4" />
+            )}
+            Copy link and code
+          </Button>
+          <p className="text-muted-foreground text-center text-xs">
+            {code.hint}
+          </p>
+        </div>
+      )}
       <div className="flex flex-wrap gap-2">
         <Button
           variant="outline"
@@ -186,7 +257,7 @@ function Link({ share }: { share: LiveView }) {
           ) : (
             <Copy className="h-4 w-4" />
           )}
-          Copy
+          Copy link
         </Button>
         {canShare && (
           <Button

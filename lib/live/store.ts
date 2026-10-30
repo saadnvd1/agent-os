@@ -14,6 +14,8 @@ export interface LiveShareRow {
   level: LiveLevel;
   /** 1: guests get the chat from before the link was made. */
   history: number;
+  /** The access code in plain text, or null when off. Never logged. */
+  access_code: string | null;
 }
 
 export type LogKind =
@@ -25,6 +27,8 @@ export type LogKind =
   | "sent"
   | "dismissed"
   | "level"
+  // The code was turned on, off or changed; the log never holds the code.
+  | "code_changed"
   // Drive: who holds the wheel (guest_id, ref = the wheel's own id; both
   // null when taken back), a prompt they sent (ref = its id), and why a
   // Drive's turn or queue was stopped (ref = the reason).
@@ -47,8 +51,8 @@ export interface LogRow {
 export function insertLiveShare(row: LiveShareRow): void {
   db.prepare(
     `INSERT INTO live_shares
-       (id, session_id, title, url, ends_with_session, max_guests, created_at, expires_at, ended_at, level, history)
-     VALUES (@id, @session_id, @title, @url, @ends_with_session, @max_guests, @created_at, @expires_at, @ended_at, @level, @history)`
+       (id, session_id, title, url, ends_with_session, max_guests, created_at, expires_at, ended_at, level, history, access_code)
+     VALUES (@id, @session_id, @title, @url, @ends_with_session, @max_guests, @created_at, @expires_at, @ended_at, @level, @history, @access_code)`
   ).run(row);
 }
 
@@ -89,6 +93,22 @@ export function setLevel(id: string, level: LiveLevel): void {
     guest_id: null,
     guest_name: null,
     ref: level,
+    text: null,
+    sent_text: null,
+  });
+}
+
+export function setAccessCode(id: string, code: string | null): void {
+  db.prepare(`UPDATE live_shares SET access_code = ? WHERE id = ?`).run(
+    code,
+    id
+  );
+  logLive({
+    share_id: id,
+    kind: "code_changed",
+    guest_id: null,
+    guest_name: null,
+    ref: code ? "on" : "off",
     text: null,
     sent_text: null,
   });

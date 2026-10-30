@@ -35,6 +35,7 @@ export const DOWNWARD = [
   "access_failed",
   "drive_prompt",
   "drive_stop",
+  "code_locked",
 ] as const;
 
 const id = z.string().min(1).max(64);
@@ -55,6 +56,7 @@ const SCHEMAS = {
   access_failed: z.object({ reason: z.string().max(200).optional() }),
   drive_prompt: z.object({ id, guest, text: z.string().max(16000) }),
   drive_stop: z.object({ id, guest }),
+  code_locked: z.object({ until: z.string().max(40) }),
 } satisfies Record<(typeof DOWNWARD)[number], z.ZodType>;
 
 export interface InboxEffects {
@@ -223,6 +225,13 @@ export function handleFrame(
         setLevel(shareId, "suggest");
         fx.send(shareId, "access", { level: "suggest" });
       }
+      return true;
+    }
+    case "code_locked": {
+      const until = Date.parse(
+        (parsed.data as z.infer<typeof SCHEMAS.code_locked>).until
+      );
+      rt.codeLockedUntil = Number.isFinite(until) ? until : null;
       return true;
     }
     case "drive_prompt":
