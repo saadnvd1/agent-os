@@ -7,6 +7,7 @@ import {
   listShares,
   replaceShare,
   createLiveShare,
+  setLiveAccessCode,
   revokeShare,
   uploadShare,
   type LiveExpiry,
@@ -112,11 +113,30 @@ export async function createLiveRemote(share: {
   title: string;
   expiresIn: LiveExpiry;
   access?: string;
+  accessCode?: string;
 }) {
   const { config, machineKey } = files();
   try {
     return await createLiveShare(config, machineKey, share);
   } catch (err) {
     explain(err);
+  }
+}
+
+/** Puts a new access code on Connect (null turns it off). Throws if Connect doesn't confirm. */
+export async function setAccessCodeRemote(
+  id: string,
+  code: string | null
+): Promise<void> {
+  const { config, machineKey } = files();
+  try {
+    await setLiveAccessCode(config, machineKey, id, code);
+  } catch (err) {
+    if (err instanceof ApiError && (err.status === 404 || err.status === 410))
+      throw new ShareError("This link has ended.", 404);
+    throw new ShareError(
+      "Connect didn't confirm the access code, so it is unchanged. Try again.",
+      502
+    );
   }
 }

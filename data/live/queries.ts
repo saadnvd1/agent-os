@@ -57,6 +57,7 @@ export function useCreateLive() {
       expiresIn: LiveExpiry;
       level: LiveLevel;
       history: boolean;
+      code?: { custom?: string } | null;
     }) => json<LiveView>(await send("/api/live-shares", "POST", req)),
     onSuccess: () => qc.invalidateQueries({ queryKey: liveKeys.all }),
   });
@@ -67,6 +68,8 @@ export type LiveAction =
   | { action: "deny" | "kick"; guestId: string }
   | { action: "wheel"; guestId: string | null }
   | { action: "level"; level: LiveLevel }
+  | { action: "code"; code: string | null }
+  | { action: "new_code" }
   | { action: "send"; suggestionId: string; text?: string }
   | { action: "dismiss"; suggestionId: string };
 

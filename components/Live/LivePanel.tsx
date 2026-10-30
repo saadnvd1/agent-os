@@ -47,6 +47,14 @@ export function LivePanel({
         onLevel={(level) =>
           act.mutate({ action: "level", level }, { onError: fail })
         }
+        onCode={(kind, own) => {
+          if (kind === "code_off")
+            act.mutate({ action: "code", code: null }, { onError: fail });
+          else if (kind === "set_code" && own)
+            act.mutate({ action: "code", code: own }, { onError: fail });
+          else if (kind === "new_code" || kind === "code_on")
+            act.mutate({ action: "new_code" }, { onError: fail });
+        }}
         onEnd={() => end.mutate(undefined, { onError: fail })}
         onInvite={() => liveUiActions.open(sessionId, title)}
       />

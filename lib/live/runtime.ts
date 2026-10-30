@@ -48,6 +48,8 @@ export interface Runtime {
   flushTimer: ReturnType<typeof setTimeout> | null;
   slowUntil: number;
   notice: string | null;
+  /** Connect locked the lobby until this time (ms) after wrong access codes. */
+  codeLockedUntil: number | null;
   drops: number;
   drive: DriveState;
 }

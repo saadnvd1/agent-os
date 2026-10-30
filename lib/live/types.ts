@@ -29,6 +29,25 @@ export interface GuestAction {
   label: string;
 }
 
+export type CodeActionKind =
+  "copy" | "copy_link" | "new_code" | "set_code" | "code_off" | "code_on";
+
+/** The access code as the host's screens show it; built on the machine. */
+export interface LiveCodeView {
+  on: boolean;
+  /** "482-917", or the host's own code in capitals. Null when off. */
+  display: string | null;
+  /** The link and the code on two lines, for one paste. Null when off. */
+  copyText: string | null;
+  label: string;
+  hint: string;
+  /** Set after too many wrong tries; a code change clears it. */
+  notice: string | null;
+  /** For "Use my own". */
+  prompt: { title: string; message: string; placeholder: string };
+  actions: { kind: CodeActionKind; label: string }[];
+}
+
 export type DriverState = "idle" | "queued" | "working" | "waiting_on_host";
 
 // What the host's screens show of a live share (served by /api/live-shares).
@@ -46,6 +65,7 @@ export interface LiveView {
   levels: LevelOption[];
   /** Whether the guests got the chat from before the link was made. */
   history: boolean;
+  code: LiveCodeView;
   /** The guest holding the wheel on a Drive share. */
   driver: { guestId: string; name: string; state: DriverState } | null;
   /** Shown above the composer while a guest drives. */
@@ -81,6 +101,13 @@ export const EXPIRY_LABEL: Record<LiveExpiry, string> = {
 export interface LiveInvite {
   levels: LevelOption[];
   history: { label: string; default: boolean; count: number };
+  code: {
+    default: boolean;
+    label: string;
+    hint: string;
+    customLabel: string;
+    rules: string;
+  };
 }
 
 export interface LiveResponse {

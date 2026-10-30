@@ -9,6 +9,11 @@ const Create = z.object({
   expiresIn: z.enum(["1h", "session"]).default("1h"),
   level: z.enum(["watch", "suggest", "drive"]).default("suggest"),
   history: z.boolean().default(true),
+  // Absent or null: no code. {} generates one; { custom } uses the host's.
+  code: z
+    .object({ custom: z.string().max(40).optional() })
+    .nullable()
+    .optional(),
 });
 
 // POST /api/live-shares - mint a live link for one chat and start publishing.
@@ -25,7 +30,8 @@ export async function POST(request: Request) {
       body.data.sessionId,
       body.data.expiresIn,
       body.data.level,
-      body.data.history
+      body.data.history,
+      body.data.code
     );
     return NextResponse.json(view, { status: 201 });
   } catch (err) {

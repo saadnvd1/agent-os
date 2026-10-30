@@ -482,13 +482,20 @@ export interface LiveShare {
   expires_at: string | null;
   ends_with_session: boolean;
   max_guests: number;
+  /** Connect confirmed it holds an access code for the share. */
+  access_code: boolean;
 }
 
 /** Mints a live link for one session; the answer carries the link, once. */
 export async function createLiveShare(
   config: ConnectConfig,
   privateKey: string,
-  share: { title: string; expiresIn: LiveExpiry; access?: string }
+  share: {
+    title: string;
+    expiresIn: LiveExpiry;
+    access?: string;
+    accessCode?: string;
+  }
 ): Promise<LiveShare> {
   const res = await signed(config, privateKey)(
     "POST",
@@ -497,6 +504,7 @@ export async function createLiveShare(
       title: share.title,
       expires_in: share.expiresIn,
       ...(share.access ? { access: share.access } : {}),
+      ...(share.accessCode ? { access_code: share.accessCode } : {}),
     }
   );
   const r = (await res.json().catch(() => null)) as Record<
@@ -517,5 +525,26 @@ export async function createLiveShare(
     expires_at: typeof r.expires_at === "string" ? r.expires_at : null,
     ends_with_session: r.ends_with_session === true,
     max_guests: typeof r.max_guests === "number" ? r.max_guests : 0,
+    access_code: r.access_code === true,
   };
+}
+
+/** Sets (a code) or clears (null) a live share's access code; Connect must say it did. */
+export async function setLiveAccessCode(
+  config: ConnectConfig,
+  privateKey: string,
+  id: string,
+  code: string | null
+): Promise<void> {
+  if (!/^[a-z0-9]{12}$/.test(id)) throw new Error("not a share id");
+  const res = await signed(config, privateKey)(
+    "PUT",
+    `/api/v1/machines/${config.machineId}/live-shares/${id}/access-code`,
+    { access_code: code }
+  );
+  const r = (await res.json().catch(() => null)) as {
+    access_code?: unknown;
+  } | null;
+  if (r?.access_code !== (code !== null))
+    throw new Error("the Connect service did not confirm the access code");
 }

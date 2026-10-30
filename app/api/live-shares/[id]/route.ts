@@ -3,6 +3,7 @@ import { z } from "zod";
 import { fail, readJson, refuseDemo, toResponse } from "@/lib/share/route";
 import {
   admit,
+  changeCode,
   changeLevel,
   deny,
   dismissSuggestion,
@@ -30,6 +31,13 @@ const Action = z.discriminatedUnion("action", [
     action: z.literal("wheel"),
     guestId: z.string().min(1).max(64).nullable(),
   }),
+  // Sets the access code to the host's own, or turns it off (null).
+  z.object({
+    action: z.literal("code"),
+    code: z.string().max(40).nullable(),
+  }),
+  // Turns the access code on, or changes it, to a generated one.
+  z.object({ action: z.literal("new_code") }),
   z.object({
     action: z.literal("send"),
     suggestionId: z.string().min(1).max(64),
@@ -63,6 +71,9 @@ export async function POST(
     else if (a.action === "kick") kick(id, a.guestId);
     else if (a.action === "level") changeLevel(id, a.level);
     else if (a.action === "wheel") giveWheel(id, a.guestId);
+    else if (a.action === "code")
+      await changeCode(id, a.code === null ? null : { code: a.code });
+    else if (a.action === "new_code") await changeCode(id, { generate: true });
     else if (a.action === "send")
       await sendSuggestion(id, a.suggestionId, a.text);
     else dismissSuggestion(id, a.suggestionId);
