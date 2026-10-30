@@ -10,13 +10,11 @@ type Guest = LiveView["guests"][number];
 export function LobbyCard({
   guest,
   busy,
-  onAdmit,
-  onDeny,
+  onAction,
 }: {
   guest: Guest;
   busy: boolean;
-  onAdmit: () => void;
-  onDeny: () => void;
+  onAction: (kind: string) => void;
 }) {
   return (
     <div
@@ -41,23 +39,22 @@ export function LobbyCard({
         </div>
       </div>
       <div className="flex gap-2">
-        <Button
-          className="min-h-11 flex-1 sm:flex-none"
-          disabled={busy}
-          onClick={onAdmit}
-        >
-          <Check className="h-4 w-4" />
-          Admit
-        </Button>
-        <Button
-          variant="outline"
-          className="min-h-11 flex-1 sm:flex-none"
-          disabled={busy}
-          onClick={onDeny}
-        >
-          <X className="h-4 w-4" />
-          Deny
-        </Button>
+        {guest.actions.map((a, i) => (
+          <Button
+            key={a.kind}
+            variant={i === 0 ? "default" : "outline"}
+            className="min-h-11 flex-1 sm:flex-none"
+            disabled={busy}
+            onClick={() => onAction(a.kind)}
+          >
+            {a.kind === "admit" ? (
+              <Check className="h-4 w-4" />
+            ) : a.kind === "deny" ? (
+              <X className="h-4 w-4" />
+            ) : null}
+            {a.label}
+          </Button>
+        ))}
       </div>
     </div>
   );

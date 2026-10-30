@@ -1,8 +1,20 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import type { LiveExpiry, LiveResponse, LiveView } from "@/lib/live/types";
+import type {
+  LiveExpiry,
+  LiveInvite,
+  LiveLevel,
+  LiveResponse,
+  LiveView,
+} from "@/lib/live/types";
 import { liveKeys } from "./keys";
 
-export type { LiveExpiry, LiveResponse, LiveView } from "@/lib/live/types";
+export type {
+  LiveExpiry,
+  LiveInvite,
+  LiveLevel,
+  LiveResponse,
+  LiveView,
+} from "@/lib/live/types";
 
 async function json<T>(res: Response): Promise<T> {
   const data = await res.json().catch(() => ({}));
@@ -31,6 +43,7 @@ export function useLiveShare(sessionId: string | undefined, enabled = true) {
     select: (r) => ({
       linked: r.linked,
       share: r.shares[0] as LiveView | undefined,
+      invite: r.invite as LiveInvite | undefined,
     }),
     refetchInterval: (q) => (q.state.data?.shares.length ? 2000 : 60_000),
   });
@@ -39,14 +52,19 @@ export function useLiveShare(sessionId: string | undefined, enabled = true) {
 export function useCreateLive() {
   const qc = useQueryClient();
   return useMutation({
-    mutationFn: async (req: { sessionId: string; expiresIn: LiveExpiry }) =>
-      json<LiveView>(await send("/api/live-shares", "POST", req)),
+    mutationFn: async (req: {
+      sessionId: string;
+      expiresIn: LiveExpiry;
+      level: LiveLevel;
+      history: boolean;
+    }) => json<LiveView>(await send("/api/live-shares", "POST", req)),
     onSuccess: () => qc.invalidateQueries({ queryKey: liveKeys.all }),
   });
 }
 
 export type LiveAction =
   | { action: "admit" | "deny" | "kick"; guestId: string }
+  | { action: "level"; level: LiveLevel }
   | { action: "send"; suggestionId: string; text?: string }
   | { action: "dismiss"; suggestionId: string };
 

@@ -27,6 +27,7 @@ export const DOWNWARD = [
   "slow_down",
   "invalid",
   "admit_failed",
+  "access_failed",
 ] as const;
 
 const id = z.string().min(1).max(64);
@@ -44,6 +45,7 @@ const SCHEMAS = {
   slow_down: z.object({}),
   invalid: z.object({}),
   admit_failed: z.object({ guest_id: id.optional(), reason: z.string() }),
+  access_failed: z.object({ reason: z.string().max(200).optional() }),
 } satisfies Record<(typeof DOWNWARD)[number], z.ZodType>;
 
 export interface InboxEffects {
@@ -143,6 +145,9 @@ export function handleFrame(
     }
     case "suggestion": {
       const s = parsed.data as z.infer<typeof SCHEMAS.suggestion>;
+      // Watch guests can't suggest. Connect refuses first; this is the machine's own check.
+      if (rt.share.level === "watch")
+        return (drop("suggestion on a watch-only share"), false);
       const known = rt.guests.get(s.guest.id);
       // Only a guest this machine let in can leave a card.
       if (!known || known.status !== "admitted")
@@ -196,6 +201,9 @@ export function handleFrame(
       rt.notice = "Your plan's guest limit is reached.";
       return true;
     }
+    case "access_failed":
+      rt.notice = "Connect refused that access level.";
+      return true;
     case "invalid":
       rt.drops++;
       return true;

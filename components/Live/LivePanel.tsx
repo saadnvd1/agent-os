@@ -25,14 +25,19 @@ export function LivePanel({
   if (!share) return null;
   const busy = act.isPending || end.isPending;
   const fail = (e: Error) => toast.error(e.message);
+  const doAction = (guestId: string, kind: string) => {
+    if (kind === "admit" || kind === "deny" || kind === "kick")
+      act.mutate({ action: kind, guestId }, { onError: fail });
+  };
   const lobby = share.guests.filter((g) => g.status === "pending");
   return (
     <div className="mx-auto flex w-full max-w-3xl flex-col gap-2 px-3 pb-2">
       <LiveChip
         share={share}
         busy={busy}
-        onKick={(guestId) =>
-          act.mutate({ action: "kick", guestId }, { onError: fail })
+        onAction={doAction}
+        onLevel={(level) =>
+          act.mutate({ action: "level", level }, { onError: fail })
         }
         onEnd={() => end.mutate(undefined, { onError: fail })}
         onInvite={() => liveUiActions.open(sessionId, title)}
@@ -42,12 +47,7 @@ export function LivePanel({
           key={g.id}
           guest={g}
           busy={busy}
-          onAdmit={() =>
-            act.mutate({ action: "admit", guestId: g.id }, { onError: fail })
-          }
-          onDeny={() =>
-            act.mutate({ action: "deny", guestId: g.id }, { onError: fail })
-          }
+          onAction={(kind) => doAction(g.id, kind)}
         />
       ))}
       {share.suggestions.map((s) => (

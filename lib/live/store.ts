@@ -1,4 +1,5 @@
 import { db } from "../db";
+import type { LiveLevel } from "./types";
 
 export interface LiveShareRow {
   id: string;
@@ -10,6 +11,9 @@ export interface LiveShareRow {
   created_at: string;
   expires_at: string | null;
   ended_at: string | null;
+  level: LiveLevel;
+  /** 1: guests get the chat from before the link was made. */
+  history: number;
 }
 
 export type LogKind =
@@ -19,7 +23,8 @@ export type LogKind =
   | "kick"
   | "suggestion"
   | "sent"
-  | "dismissed";
+  | "dismissed"
+  | "level";
 
 export interface LogRow {
   id: number;
@@ -36,8 +41,8 @@ export interface LogRow {
 export function insertLiveShare(row: LiveShareRow): void {
   db.prepare(
     `INSERT INTO live_shares
-       (id, session_id, title, url, ends_with_session, max_guests, created_at, expires_at, ended_at)
-     VALUES (@id, @session_id, @title, @url, @ends_with_session, @max_guests, @created_at, @expires_at, @ended_at)`
+       (id, session_id, title, url, ends_with_session, max_guests, created_at, expires_at, ended_at, level, history)
+     VALUES (@id, @session_id, @title, @url, @ends_with_session, @max_guests, @created_at, @expires_at, @ended_at, @level, @history)`
   ).run(row);
 }
 
@@ -68,6 +73,19 @@ export function markLiveEnded(id: string): void {
   db.prepare(
     `UPDATE live_shares SET ended_at = COALESCE(ended_at, ?) WHERE id = ?`
   ).run(new Date().toISOString(), id);
+}
+
+export function setLevel(id: string, level: LiveLevel): void {
+  db.prepare(`UPDATE live_shares SET level = ? WHERE id = ?`).run(level, id);
+  logLive({
+    share_id: id,
+    kind: "level",
+    guest_id: null,
+    guest_name: null,
+    ref: level,
+    text: null,
+    sent_text: null,
+  });
 }
 
 export function logLive(
