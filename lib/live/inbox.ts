@@ -1,7 +1,10 @@
 /**
  * What Connect sends down. Only the types below are accepted, and only for a
  * share this machine minted and still holds. Everything else is dropped and
- * counted: nothing downward is executed, interpreted or sent on to an agent.
+ * counted: nothing downward is executed or interpreted, and only a Drive
+ * prompt from the guest this machine gave the wheel reaches an agent
+ * (./drive decides). No type answers an approval, sets the level or moves
+ * the wheel: those come only from the host's own API.
  */
 
 import { z } from "zod";
@@ -14,8 +17,10 @@ import {
   logLive,
   markLiveEnded,
   openSuggestions,
+  setLevel,
 } from "./store";
 import { MAX_LOBBY, MAX_PENDING_CARDS, live, type Runtime } from "./runtime";
+import { acceptPrompt, setWheel, stopPrompt } from "./drive";
 
 export const DOWNWARD = [
   "roster",
@@ -28,6 +33,8 @@ export const DOWNWARD = [
   "invalid",
   "admit_failed",
   "access_failed",
+  "drive_prompt",
+  "drive_stop",
 ] as const;
 
 const id = z.string().min(1).max(64);
@@ -46,6 +53,8 @@ const SCHEMAS = {
   invalid: z.object({}),
   admit_failed: z.object({ guest_id: id.optional(), reason: z.string() }),
   access_failed: z.object({ reason: z.string().max(200).optional() }),
+  drive_prompt: z.object({ id, guest, text: z.string().max(16000) }),
+  drive_stop: z.object({ id, guest }),
 } satisfies Record<(typeof DOWNWARD)[number], z.ZodType>;
 
 export interface InboxEffects {
@@ -139,6 +148,7 @@ export function handleFrame(
       const g = (parsed.data as z.infer<typeof SCHEMAS.guest_left>).guest;
       const known = rt.guests.get(g.id);
       if (!known) return true;
+      if (rt.drive.wheel?.guestId === g.id) setWheel(rt, null, "left", fx);
       if (known.status === "pending") rt.guests.delete(g.id);
       else known.online = false;
       return true;
@@ -201,9 +211,37 @@ export function handleFrame(
       rt.notice = "Your plan's guest limit is reached.";
       return true;
     }
-    case "access_failed":
-      rt.notice = "Connect refused that access level.";
+    case "access_failed": {
+      const why = (parsed.data as z.infer<typeof SCHEMAS.access_failed>).reason;
+      rt.notice = why
+        ? why.replace(/\s+/g, " ").trim().slice(0, 160)
+        : "Connect refused that access level.";
+      // Connect didn't take it: this machine goes back to the safer side.
+      if (rt.drive.wheel) setWheel(rt, null, "taken_back", fx);
+      if (rt.share.level === "drive") {
+        rt.share = { ...rt.share, level: "suggest" };
+        setLevel(shareId, "suggest");
+        fx.send(shareId, "access", { level: "suggest" });
+      }
       return true;
+    }
+    case "drive_prompt":
+      return acceptPrompt(
+        rt,
+        parsed.data as z.infer<typeof SCHEMAS.drive_prompt>,
+        fx,
+        now
+      )
+        ? true
+        : (drop("duplicate drive prompt"), false);
+    case "drive_stop":
+      return stopPrompt(
+        rt,
+        parsed.data as z.infer<typeof SCHEMAS.drive_stop>,
+        fx
+      )
+        ? true
+        : (drop("stop from a guest not driving"), false);
     case "invalid":
       rt.drops++;
       return true;

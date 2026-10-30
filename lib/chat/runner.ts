@@ -21,6 +21,7 @@ import type {
   ApprovalDecision,
   ChatFile,
   ChatImage,
+  ChatOrigin,
   ChatServerMessage,
   ChatState,
   Compacting,
@@ -47,6 +48,7 @@ import {
 import { noteToolResult } from "../health/env/recordHit";
 import {
   deleteQueued,
+  deleteQueuedWhere,
   editQueued,
   enqueue,
   listQueue,
@@ -78,7 +80,7 @@ import {
   waitForExit,
 } from "./worker/client";
 import { buildId, isStaleWorker } from "../build";
-import type { WorkerEvent } from "./worker/protocol";
+import { GUEST_GATE_CAP, type WorkerEvent } from "./worker/protocol";
 import type { WorkerClient } from "./worker/client";
 import { DEMO_REFUSAL, demoMode } from "../security/demo";
 import { chatHold, chatRefusal } from "./hold";
@@ -348,6 +350,7 @@ async function ensureLive(sessionId: string, spawn = true): Promise<Live> {
       canFresh: !!hello.caps?.includes("fresh"),
       canBackground: !!hello.caps?.includes("background"),
       canMcpAuth: !!hello.caps?.includes("mcp_auth"),
+      canGuestGate: !!hello.caps?.includes(GUEST_GATE_CAP),
     };
     // From an older build and busy, or running background work: it goes at
     // its next turn boundary, by itself if it can. Messages meanwhile wait
@@ -458,6 +461,64 @@ export async function sendChat(
     queue: input.queue,
     compact: input.compact,
   });
+}
+
+export const GATE_MISSING = "Reopen this chat on the host to let guests drive";
+
+/**
+ * A live guest's Drive prompt (lib/live/drive): always its own turn, behind
+ * anything running. `check` runs again right before the worker gets it, in
+ * the same tick, so a Drive that ended meanwhile sends nothing. Returns why
+ * it wasn't sent, or null.
+ */
+export async function sendGuestPrompt(
+  sessionId: string,
+  m: { id: string; text: string; origin: ChatOrigin },
+  check: () => string | null
+): Promise<string | null> {
+  const held = () =>
+    chatRefusal(sessionId) ??
+    chatHold(sessionId) ??
+    (settingUp(sessionId) || launchPending(sessionId)
+      ? "The task isn't running yet"
+      : null);
+  if (held()) return held();
+  const live = await ensureLive(sessionId);
+  if (!live.canGuestGate) return GATE_MISSING;
+  const why = held() ?? check();
+  if (why) return why;
+  if (taken(sessionId, m.id)) return "Already sent";
+  live.worker.command({ type: "send", ...m, queue: true });
+  return null;
+}
+
+// A live share's Drive ended: its queued prompts go here and in the worker
+// (which also stops a turn it steers and refuses that wheel from now on).
+export function releaseGuestChat(
+  sessionId: string,
+  share: string,
+  wheel: string
+): void {
+  const gone = deleteQueuedWhere(
+    sessionId,
+    (by) => by.origin?.kind === "guest-drive" && by.origin.share === share
+  );
+  if (gone.length) emitQueue(sessionId);
+  registry.live
+    .get(sessionId)
+    ?.worker.command({ type: "guest_release", share, wheel });
+}
+
+// The driving guest's Stop: the worker ends the turn only if their wheel
+// steers it.
+export function stopGuestTurn(
+  sessionId: string,
+  share: string,
+  wheel: string
+): void {
+  registry.live
+    .get(sessionId)
+    ?.worker.command({ type: "guest_stop", share, wheel });
 }
 
 // The queue lives in SQLite, so it can be changed with no worker running;

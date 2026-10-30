@@ -33,7 +33,14 @@ import {
   settle,
 } from "../store";
 import { handleMcpAuth, stopMcpWatches } from "./mcp-auth";
-import { claimNext, enqueue, listQueue, moveToFront } from "../queued";
+import {
+  claimNext,
+  enqueue,
+  listQueue,
+  moveToFront,
+  peekNextSentBy,
+} from "../queued";
+import { GuestGate, isGuestDrive } from "./guest-gate";
 import { isHeld } from "../hold";
 import {
   recordCompaction,
@@ -145,6 +152,12 @@ export class ChatHost {
   // need words), and the ones No approvals mode allowed.
   private waitingCards = new Map<string, string>();
   private autoAllowed = new Set<string>();
+  // Holds a live guest's turn to the host's taps (./guest-gate).
+  private gate = new GuestGate((note) => {
+    if (!this.busy()) return;
+    this.record(note);
+    void this.handle({ type: "interrupt", hard: true });
+  });
   // Whether its driver says when that is (lib/chat/driver atRest).
   private atRest = true;
   private restartedNote = false;
@@ -251,6 +264,7 @@ export class ChatHost {
       disallowedTools: extras.disallowedTools,
       permissionMode: extras.permissionMode,
       toolGuard: extras.toolGuard,
+      guestGate: this.gate,
       // Not an orchestrator: it starts a fresh conversation instead.
       compactContext: orchestrator
         ? undefined
@@ -294,7 +308,7 @@ export class ChatHost {
   // No approvals mode: a tool-permission card is allowed as it appears, and
   // marks itself so the transcript shows who allowed it.
   private markAuto(item: ChatItem): ChatItem {
-    if (item.kind !== "approval" || item.questions) return item;
+    if (item.kind !== "approval" || item.questions || item.guest) return item;
     if (item.status === "pending") {
       this.waitingCards.set(item.id, item.title);
       return item;
@@ -553,7 +567,12 @@ export class ChatHost {
       this.compactingNow
     )
       return;
-    for (let next; (next = claimNext(this.session.id));) {
+    // A guest's message is always its own turn: it waits for this one's end.
+    for (
+      let next;
+      !isGuestDrive(peekNextSentBy(this.session.id) ?? {}) &&
+      (next = claimNext(this.session.id));
+    ) {
       this.emit({ type: "queue" });
       this.sendUser(next);
     }
@@ -573,6 +592,7 @@ export class ChatHost {
     this.hardStopAt = 0;
     // A message sent now stops the turn and is read next: nothing waits.
     const midTurn = this.busy() && !now;
+    this.gate.onSend(m, midTurn);
     if (this.busy()) this.behind++;
     // Sent now, it stops the running turn, which still ends after this.
     if (!this.busy()) now = false;
@@ -650,7 +670,7 @@ export class ChatHost {
   async handle(cmd: WorkerCommand): Promise<void> {
     switch (cmd.type) {
       case "send": {
-        if (this.sent.has(cmd.id)) return;
+        if (this.sent.has(cmd.id) || this.gate.refuses(cmd)) return;
         // Sent just as a move or Land took hold (lib/chat/hold): it waits
         // in the queue rather than start a turn the stop would cut short.
         // Or for the current worker that takes over from a retiring one.
@@ -669,6 +689,7 @@ export class ChatHost {
         }
         this.sent.add(cmd.id);
         await this.modeChange.catch(() => {});
+        if (this.gate.refuses(cmd)) return;
         const user = {
           id: cmd.id,
           kind: "user" as const,
@@ -703,6 +724,7 @@ export class ChatHost {
         // Another agent's message doesn't speak for the reader.
         if (
           this.stopping &&
+          !isGuestDrive(cmd) &&
           (this.hardStopped() || (!cmd.from && !cmd.peer && !cmd.origin)) &&
           this.busy() &&
           !listQueue(this.session.id).length
@@ -723,7 +745,10 @@ export class ChatHost {
         if (this.compactFirst(cmd)) return;
         // A compaction run for an earlier message takes nothing in: what's
         // sent meanwhile goes behind that message.
-        if ((cmd.queue || this.compacting) && (this.busy() || backlog)) {
+        if (
+          (cmd.queue || this.compacting || isGuestDrive(cmd)) &&
+          (this.busy() || backlog)
+        ) {
           // Behind the running turn, and behind anything queued before it.
           enqueue(this.session.id, cmd);
           this.emit({ type: "queue" });
@@ -835,6 +860,15 @@ export class ChatHost {
           });
         }
         return;
+      case "guest_release":
+      case "guest_stop":
+        return this.gate.command(cmd, this.session.id, {
+          queueChanged: () => this.emit({ type: "queue" }),
+          stopTurn: () =>
+            this.busy()
+              ? this.handle({ type: "interrupt", hard: true })
+              : undefined,
+        });
       case "retire":
         this.retiring = true;
         return this.retireIfDone();
@@ -1064,6 +1098,7 @@ export class ChatHost {
     clearTimeout(this.retireTimer);
     clearTimeout(this.restTimer);
     this.closed = true;
+    this.gate.close();
     this.setCompacting(false);
     flushItems();
     this.onClose();

@@ -56,11 +56,13 @@ export function stateOf(state: ChatState): LiveState {
 }
 
 // Messages that were not typed by the reader (the agent bus, schedules,
-// AgentOS itself) stay on this machine; a sent suggestion is the reader's.
+// AgentOS itself) stay on this machine; a sent suggestion is the reader's,
+// and a Drive prompt the driving guest's.
 function userFrom(item: Extract<ChatItem, { kind: "user" }>): string | null {
   const o = item.origin;
   if (!o) return item.peer || item.from ? null : "host";
   if (o.kind === "guest") return `guest:${o.label}`;
+  if (o.kind === "guest-drive") return `driver:${o.label}`;
   if (o.kind === "decision") return "host";
   return null;
 }
@@ -108,7 +110,12 @@ export function itemMapper(ctx: ShareContext): ItemMapper {
       if (!f) return null;
       from = f;
     }
-    const raw = toRaw(item);
+    // A Drive prompt shows as the guest typed it, not as framed for the agent.
+    const raw = toRaw(
+      item.kind === "user" && item.origin?.kind === "guest-drive"
+        ? { ...item, text: item.origin.body ?? "" }
+        : item
+    );
     if (!raw || raw.tools || raw.type === "artifact") return null;
     const body = clipBytes(take(text ?? raw.text), MAX_TEXT_BYTES);
     if (item.kind === "user")

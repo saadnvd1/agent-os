@@ -22,6 +22,7 @@ function runtime(): Runtime {
     slowUntil: 0,
     notice: null,
     drops: 0,
+    drive: { wheel: null, prompts: [], accepted: [], epoch: 0 },
   };
 }
 

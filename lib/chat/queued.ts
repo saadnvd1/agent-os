@@ -26,7 +26,7 @@ export function listQueue(sessionId: string): QueuedMessage[] {
   return (
     db
       .prepare(
-        `SELECT id, text, image_count, files, created_at
+        `SELECT id, text, image_count, files, sent_by, created_at
          FROM chat_queue WHERE session_id = ? ORDER BY position, created_at`
       )
       .all(sessionId) as {
@@ -34,15 +34,57 @@ export function listQueue(sessionId: string): QueuedMessage[] {
       text: string;
       image_count: number;
       files: string | null;
+      sent_by: string | null;
       created_at: number;
     }[]
-  ).map((r) => ({
-    id: r.id,
-    text: r.text,
-    imageCount: r.image_count || undefined,
-    fileCount: r.files ? (JSON.parse(r.files) as unknown[]).length : undefined,
-    createdAt: r.created_at,
-  }));
+  ).map((r) => {
+    const o = r.sent_by ? (JSON.parse(r.sent_by) as SentBy).origin : undefined;
+    return {
+      id: r.id,
+      text: r.text,
+      imageCount: r.image_count || undefined,
+      fileCount: r.files
+        ? (JSON.parse(r.files) as unknown[]).length
+        : undefined,
+      createdAt: r.created_at,
+      ...(o?.kind === "guest-drive"
+        ? { guest: { name: o.label, body: o.body ?? r.text } }
+        : {}),
+    };
+  });
+}
+
+// Who sent the message that goes next, without taking it.
+export function peekNextSentBy(sessionId: string): SentBy | null {
+  const row = db
+    .prepare(
+      `SELECT sent_by FROM chat_queue WHERE session_id = ? ORDER BY position, created_at LIMIT 1`
+    )
+    .get(sessionId) as { sent_by: string | null } | undefined;
+  if (!row) return null;
+  return row.sent_by ? (JSON.parse(row.sent_by) as SentBy) : {};
+}
+
+// Drops every queued message whose sender matches; returns the ids dropped.
+export function deleteQueuedWhere(
+  sessionId: string,
+  match: (by: SentBy) => boolean
+): string[] {
+  return db.transaction(() => {
+    const rows = db
+      .prepare(
+        `SELECT id, sent_by FROM chat_queue WHERE session_id = ? AND sent_by IS NOT NULL`
+      )
+      .all(sessionId) as { id: string; sent_by: string }[];
+    const ids = rows
+      .filter((r) => match(JSON.parse(r.sent_by) as SentBy))
+      .map((r) => r.id);
+    const del = db.prepare(
+      `DELETE FROM chat_queue WHERE session_id = ? AND id = ?`
+    );
+    for (const id of ids) del.run(sessionId, id);
+    return ids;
+  })();
 }
 
 // At the back. A retried send with the same id is only queued once.

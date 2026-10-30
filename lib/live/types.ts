@@ -25,9 +25,11 @@ export interface LevelOption {
 }
 
 export interface GuestAction {
-  kind: "kick" | "admit" | "deny";
+  kind: "kick" | "admit" | "admit_drive" | "deny" | "give_wheel" | "take_back";
   label: string;
 }
+
+export type DriverState = "idle" | "queued" | "working" | "waiting_on_host";
 
 // What the host's screens show of a live share (served by /api/live-shares).
 export interface LiveView {
@@ -44,6 +46,13 @@ export interface LiveView {
   levels: LevelOption[];
   /** Whether the guests got the chat from before the link was made. */
   history: boolean;
+  /** The guest holding the wheel on a Drive share. */
+  driver: { guestId: string; name: string; state: DriverState } | null;
+  /** Shown above the composer while a guest drives. */
+  banner: {
+    text: string;
+    action?: { kind: "take_back"; label: string };
+  } | null;
   guests: {
     id: string;
     name: string;

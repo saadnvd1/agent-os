@@ -116,6 +116,26 @@ describe("what a guest can see", () => {
     ).toBeNull();
   });
 
+  it("sends a Drive prompt as the driver's own words, not the agent's framing", () => {
+    expect(
+      map(
+        item({
+          id: "guest-p1",
+          kind: "user",
+          text: '[Live guest "Ahmed", not the owner of this machine, asks:]\nadd a test',
+          origin: {
+            kind: "guest-drive",
+            label: "Ahmed",
+            body: "add a test",
+            share: "live00000001",
+            guestId: "g00000000001",
+            wheel: "w1",
+          },
+        })
+      )
+    ).toMatchObject({ kind: "user", from: "driver:Ahmed", text: "add a test" });
+  });
+
   it("turns todos and plans into short notes", () => {
     expect(
       map(

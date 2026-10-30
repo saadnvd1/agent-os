@@ -9,7 +9,12 @@
 import fs from "fs";
 import net from "net";
 import { adoptServerEnv } from "./env";
-import { lineReader, PROTOCOL_VERSION, socketPath } from "./protocol";
+import {
+  GUEST_GATE_CAP,
+  lineReader,
+  PROTOCOL_VERSION,
+  socketPath,
+} from "./protocol";
 import { buildId } from "../../build";
 import type { WorkerCommand, WorkerEvent } from "./protocol";
 import type { Session } from "../../db";
@@ -76,7 +81,16 @@ async function main(sessionId: string) {
         state: host.state,
         compacting: host.compactingNow,
         streaming: [...host.streaming.values()],
-        caps: ["plan", "queue", "retire", "fresh", "background", "mcp_auth"],
+        caps: [
+          "plan",
+          "queue",
+          "retire",
+          "fresh",
+          "background",
+          "mcp_auth",
+          // Only the Claude driver runs the guest gate's hook.
+          ...(session.agent_type === "claude" ? [GUEST_GATE_CAP] : []),
+        ],
       } satisfies WorkerEvent)}\n`
     );
     client.on(

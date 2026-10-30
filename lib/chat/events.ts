@@ -84,7 +84,12 @@ export type ChatOriginKind =
   | "device"
   // A suggestion from a guest on a live link, sent by the reader after
   // reading it. Its label is the guest's name.
-  | "guest";
+  | "guest"
+  // A prompt from the guest holding the wheel on a Drive live link: it went
+  // in without the host's tap, so every step it takes past reading the
+  // task's files waits for one (lib/chat/worker/guest-gate). Its body is
+  // the guest's own text; the agent got it framed as a stranger's.
+  | "guest-drive";
 
 export interface ChatOrigin {
   kind: ChatOriginKind;
@@ -102,6 +107,11 @@ export interface ChatOrigin {
   // Only Away mode's own lines: the turn it starts isn't anyone's activity
   // (lib/away/activity).
   away?: true;
+  // A guest-drive message: the live share, the guest it came from, and the
+  // wheel it was sent under (a new one each time the host gives it).
+  share?: string;
+  guestId?: string;
+  wheel?: string;
 }
 
 // Who sent a message, carried with it through the queue and the worker.
@@ -285,6 +295,9 @@ export type ChatItem =
       status: "pending" | "allowed" | "denied" | "answered" | "expired";
       // Allowed by No approvals mode, not by the reader.
       auto?: boolean;
+      // Asked in a turn a live guest steered: only the reader's tap answers
+      // it (never No approvals mode), and it has no Always.
+      guest?: { name: string };
     })
   | (Base & {
       // Work the agent runs alongside the turn: a background shell, a
@@ -323,6 +336,9 @@ export interface QueuedMessage {
   imageCount?: number;
   fileCount?: number;
   createdAt: number;
+  // A live guest's Drive prompt: who it's from and what they typed (the
+  // text is what the agent gets, framed).
+  guest?: { name: string; body: string };
 }
 
 // A file or folder the agent would match for an @mention.

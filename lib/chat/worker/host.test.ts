@@ -1176,6 +1176,45 @@ describe("ChatHost background frees the queue", () => {
     host.close();
   });
 
+  it("never folds a live guest's Drive prompt into the running turn", async () => {
+    const { id, host, conversation } = await startHost();
+    await queueAll(host, ["a"]);
+    await host.handle({
+      type: "send",
+      id: "guest-p1",
+      text: "[Live guest]\nb",
+      origin: {
+        kind: "guest-drive",
+        label: "Ahmed",
+        body: "b",
+        share: "live00000001",
+        guestId: "g1",
+        wheel: "w1",
+      },
+      queue: true,
+    });
+    await host.handle({ type: "send", id: "q9", text: "c", queue: true });
+    await host.handle({
+      type: "background_task",
+      reqId: "b1",
+      toolUseId: "t1",
+    });
+    // "a" joins the turn; the guest's prompt and what's behind it wait.
+    expect(
+      (conversation.send.mock.calls as unknown[][]).map((c) => c[0])
+    ).toEqual(["long job", "a"]);
+    expect(listQueue(id).map((m) => m.id)).toEqual(["guest-p1", "q9"]);
+    // At the turn's end it goes as a turn of its own.
+    conversation.events.push({ type: "state", state: "idle" });
+    await tick();
+    expect(conversation.send).toHaveBeenLastCalledWith(
+      "[Live guest]\nb",
+      undefined
+    );
+    expect(listQueue(id).map((m) => m.id)).toEqual(["q9"]);
+    host.close();
+  });
+
   it("leaves the queue when nothing moved or it was refused", async () => {
     const { id, host, conversation } = await startHost();
     await queueAll(host, ["a"]);

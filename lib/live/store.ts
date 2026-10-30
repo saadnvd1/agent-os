@@ -24,7 +24,13 @@ export type LogKind =
   | "suggestion"
   | "sent"
   | "dismissed"
-  | "level";
+  | "level"
+  // Drive: who holds the wheel (guest_id, ref = the wheel's own id; both
+  // null when taken back), a prompt they sent (ref = its id), and why a
+  // Drive's turn or queue was stopped (ref = the reason).
+  | "wheel"
+  | "drive_prompt"
+  | "drive_stopped";
 
 export interface LogRow {
   id: number;
@@ -146,6 +152,33 @@ export function admittedGuestIds(shareId: string): Set<string> {
     else if (l.kind === "kick" || l.kind === "deny") out.delete(l.guest_id);
   }
   return out;
+}
+
+/** Who holds the wheel, from the log: a kick or a level other than Drive drops it. */
+export function wheelOf(
+  shareId: string
+): { guestId: string; wheel: string } | null {
+  let w: { guestId: string; wheel: string } | null = null;
+  for (const l of listLog(shareId)) {
+    if (l.kind === "wheel")
+      w = l.guest_id && l.ref ? { guestId: l.guest_id, wheel: l.ref } : null;
+    else if (l.kind === "level" && l.ref !== "drive") w = null;
+    else if (
+      (l.kind === "kick" || l.kind === "deny") &&
+      l.guest_id === w?.guestId
+    )
+      w = null;
+  }
+  return w;
+}
+
+/** Whether a Drive prompt with this id was ever logged for the share. */
+export function hasDrivePrompt(shareId: string, ref: string): boolean {
+  return !!db
+    .prepare(
+      `SELECT 1 FROM live_share_log WHERE share_id = ? AND kind = 'drive_prompt' AND ref = ? LIMIT 1`
+    )
+    .get(shareId, ref);
 }
 
 /** Whether a suggestion with this id was ever logged for the share. */

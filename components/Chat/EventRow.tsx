@@ -29,6 +29,7 @@ export const ICON: Record<ChatOriginKind, LucideIcon> = {
   decision: UserCheck,
   device: Smartphone,
   guest: Users,
+  "guest-drive": Users,
 };
 
 // Longer than this (what fits beside a source on a phone), or more than one line,
@@ -182,6 +183,10 @@ export function EventRow({
             ) : origin.kind === "guest" ? (
               <span className="truncate font-medium">
                 Suggested by {origin.label}
+              </span>
+            ) : origin.kind === "guest-drive" ? (
+              <span className="truncate font-medium">
+                Prompted by {origin.label}
               </span>
             ) : (
               <Source origin={origin} />

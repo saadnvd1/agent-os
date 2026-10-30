@@ -43,9 +43,10 @@ describe("live-shares routes", () => {
     );
   });
 
-  it("accept watch and suggest only, and history as a boolean", async () => {
+  it("accept watch, suggest and drive, and history as a boolean", async () => {
+    // Past validation: not linked to Connect here, so 409, never 400.
     expect((await POST(req({ sessionId: "s", level: "drive" }))).status).toBe(
-      400
+      409
     );
     expect((await POST(req({ sessionId: "s", level: "root" }))).status).toBe(
       400
@@ -53,8 +54,28 @@ describe("live-shares routes", () => {
     expect((await POST(req({ sessionId: "s", history: "yes" }))).status).toBe(
       400
     );
+    // A level for a share this machine doesn't hold: 404, so it validated.
     expect(
       (await act(req({ action: "level", level: "drive" }), ctx)).status
+    ).toBe(404);
+    expect(
+      (await act(req({ action: "level", level: "admin" }), ctx)).status
     ).toBe(400);
+  });
+
+  it("validate the wheel and admit-to-drive actions", async () => {
+    for (const body of [
+      { action: "wheel" },
+      { action: "wheel", guestId: 7 },
+      { action: "wheel", guestId: "" },
+      { action: "admit", guestId: "g", drive: "yes" },
+    ])
+      expect((await act(req(body), ctx)).status).toBe(400);
+    for (const body of [
+      { action: "wheel", guestId: "g1" },
+      { action: "wheel", guestId: null },
+      { action: "admit", guestId: "g", drive: true },
+    ])
+      expect((await act(req(body), ctx)).status).toBe(404);
   });
 });

@@ -7,16 +7,29 @@ import {
   deny,
   dismissSuggestion,
   endLive,
+  giveWheel,
   kick,
   sendSuggestion,
   startLive,
 } from "@/lib/live/service";
 
 const Action = z.discriminatedUnion("action", [
-  z.object({ action: z.literal("admit"), guestId: z.string().min(1).max(64) }),
+  z.object({
+    action: z.literal("admit"),
+    guestId: z.string().min(1).max(64),
+    drive: z.boolean().optional(),
+  }),
   z.object({ action: z.literal("deny"), guestId: z.string().min(1).max(64) }),
   z.object({ action: z.literal("kick"), guestId: z.string().min(1).max(64) }),
-  z.object({ action: z.literal("level"), level: z.enum(["watch", "suggest"]) }),
+  z.object({
+    action: z.literal("level"),
+    level: z.enum(["watch", "suggest", "drive"]),
+  }),
+  // Gives the wheel to an admitted guest of a Drive share; null takes it back.
+  z.object({
+    action: z.literal("wheel"),
+    guestId: z.string().min(1).max(64).nullable(),
+  }),
   z.object({
     action: z.literal("send"),
     suggestionId: z.string().min(1).max(64),
@@ -29,7 +42,8 @@ const Action = z.discriminatedUnion("action", [
 ]);
 
 // POST /api/live-shares/:id - the host's decisions: let a guest in, turn one
-// away, remove one, send a suggestion to the agent or dismiss it.
+// away, remove one, send a suggestion to the agent or dismiss it, change the
+// level, give or take back the wheel.
 export async function POST(
   request: Request,
   { params }: { params: Promise<{ id: string }> }
@@ -44,10 +58,11 @@ export async function POST(
   startLive();
   try {
     const a = body.data;
-    if (a.action === "admit") admit(id, a.guestId);
+    if (a.action === "admit") admit(id, a.guestId, { drive: a.drive });
     else if (a.action === "deny") deny(id, a.guestId);
     else if (a.action === "kick") kick(id, a.guestId);
     else if (a.action === "level") changeLevel(id, a.level);
+    else if (a.action === "wheel") giveWheel(id, a.guestId);
     else if (a.action === "send")
       await sendSuggestion(id, a.suggestionId, a.text);
     else dismissSuggestion(id, a.suggestionId);
