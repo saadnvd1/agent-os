@@ -63,7 +63,9 @@ export function useCreateLive() {
 }
 
 export type LiveAction =
-  | { action: "admit" | "deny" | "kick"; guestId: string }
+  | { action: "admit"; guestId: string; drive?: boolean }
+  | { action: "deny" | "kick"; guestId: string }
+  | { action: "wheel"; guestId: string | null }
   | { action: "level"; level: LiveLevel }
   | { action: "send"; suggestionId: string; text?: string }
   | { action: "dismiss"; suggestionId: string };

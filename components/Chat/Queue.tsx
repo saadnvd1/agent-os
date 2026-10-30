@@ -53,7 +53,15 @@ export function Queue({
             <span className="text-muted-foreground w-5 shrink-0 pt-3 text-center text-xs tabular-nums">
               {i + 1}
             </span>
-            {editing?.id === m.id ? (
+            {m.guest ? (
+              // A driving guest's prompt: theirs to word, the host's to remove.
+              <div className="min-h-11 min-w-0 flex-1 px-2 py-2.5 text-sm break-words whitespace-pre-wrap">
+                <span className="text-muted-foreground block text-xs">
+                  {m.guest.name} (guest)
+                </span>
+                <span className="line-clamp-3">{m.guest.body}</span>
+              </div>
+            ) : editing?.id === m.id ? (
               <textarea
                 autoFocus
                 value={editing.text}
@@ -99,20 +107,24 @@ export function Queue({
               </button>
             )}
             <div className="flex shrink-0 items-center">
-              <IconButton
-                label="Send now"
-                onClick={() => onSendNow(m.id)}
-                className="text-foreground"
-              >
-                <SendHorizontal className="h-4 w-4" />
-              </IconButton>
-              <IconButton
-                label="Edit"
-                onClick={() => setEditing({ id: m.id, text: m.text })}
-                className="max-md:hidden"
-              >
-                <Pencil className="h-3.5 w-3.5" />
-              </IconButton>
+              {!m.guest && (
+                <>
+                  <IconButton
+                    label="Send now"
+                    onClick={() => onSendNow(m.id)}
+                    className="text-foreground"
+                  >
+                    <SendHorizontal className="h-4 w-4" />
+                  </IconButton>
+                  <IconButton
+                    label="Edit"
+                    onClick={() => setEditing({ id: m.id, text: m.text })}
+                    className="max-md:hidden"
+                  >
+                    <Pencil className="h-3.5 w-3.5" />
+                  </IconButton>
+                </>
+              )}
               <IconButton
                 label="Move up"
                 disabled={i === 0}

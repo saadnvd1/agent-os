@@ -1,7 +1,7 @@
 "use client";
 
 import { useState } from "react";
-import { MessageCircleQuestion, ShieldQuestion } from "lucide-react";
+import { MessageCircleQuestion, ShieldQuestion, Users } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import type { ApprovalDecision, ChatItem } from "@/lib/chat/events";
 import { cn } from "@/lib/utils";
@@ -20,6 +20,17 @@ function AccessCard({
 }) {
   return (
     <div className="bg-primary/[0.06] space-y-3 rounded-xl p-3">
+      {item.guest && (
+        <p className="text-muted-foreground flex items-center gap-1.5 text-xs">
+          <Users className="h-3.5 w-3.5 shrink-0" aria-hidden />
+          <span className="min-w-0 truncate">
+            <span className="text-foreground font-medium">
+              {item.guest.name}&apos;s turn
+            </span>{" "}
+            · a live guest asked for this
+          </span>
+        </p>
+      )}
       <div className="flex items-start gap-2 text-sm">
         <ShieldQuestion className="text-primary mt-0.5 h-4 w-4 shrink-0" />
         <span className="min-w-0 break-words">{item.title}</span>
@@ -33,7 +44,7 @@ function AccessCard({
         >
           Deny
         </Button>
-        {item.canAlways && (
+        {item.canAlways && !item.guest && (
           <Button
             variant="secondary"
             className="h-11 md:h-9"
