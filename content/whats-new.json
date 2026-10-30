@@ -1777,6 +1777,14 @@
       "area": "AgentOS",
       "text": "What's New now sits as a small icon in the sidebar footer.",
       "url": "https://github.com/saadnvd1/agent-os/pull/528"
+    },
+    {
+      "id": 529,
+      "date": "2026-10-31",
+      "kind": "fixed",
+      "area": "Chat",
+      "text": "Large photos from your phone now attach to a chat instead of being refused.",
+      "url": "https://github.com/saadnvd1/agent-os/pull/529"
     }
   ]
 }
