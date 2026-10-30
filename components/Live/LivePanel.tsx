@@ -3,12 +3,14 @@
 import { toast } from "sonner";
 import { useEndLive, useLiveAction, useLiveShare } from "@/data/live";
 import { liveUiActions } from "@/stores/liveUi";
+import { DriveBanner } from "./DriveBanner";
 import { GuestPromptCard } from "./GuestPromptCard";
 import { LiveChip } from "./LiveChip";
 import { LobbyCard } from "./LobbyCard";
 
 // Above the composer while a session has a live link: the Live chip, who is
-// waiting to come in, and the suggestions to send, edit or dismiss.
+// driving, who is waiting to come in, and the suggestions to send, edit or
+// dismiss.
 export function LivePanel({
   sessionId,
   title,
@@ -28,6 +30,12 @@ export function LivePanel({
   const doAction = (guestId: string, kind: string) => {
     if (kind === "admit" || kind === "deny" || kind === "kick")
       act.mutate({ action: kind, guestId }, { onError: fail });
+    else if (kind === "admit_drive")
+      act.mutate({ action: "admit", guestId, drive: true }, { onError: fail });
+    else if (kind === "give_wheel")
+      act.mutate({ action: "wheel", guestId }, { onError: fail });
+    else if (kind === "take_back")
+      act.mutate({ action: "wheel", guestId: null }, { onError: fail });
   };
   const lobby = share.guests.filter((g) => g.status === "pending");
   return (
@@ -42,6 +50,15 @@ export function LivePanel({
         onEnd={() => end.mutate(undefined, { onError: fail })}
         onInvite={() => liveUiActions.open(sessionId, title)}
       />
+      {share.banner && share.driver && (
+        <DriveBanner
+          banner={share.banner}
+          busy={busy}
+          onTakeBack={() =>
+            act.mutate({ action: "wheel", guestId: null }, { onError: fail })
+          }
+        />
+      )}
       {lobby.map((g) => (
         <LobbyCard
           key={g.id}

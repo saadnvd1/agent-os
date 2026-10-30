@@ -2,6 +2,7 @@ import type {
   McpServerConfig,
   PermissionMode,
 } from "@anthropic-ai/claude-agent-sdk";
+import type { GuestGate } from "./worker/guest-gate";
 import type {
   ApprovalDecision,
   ChatAccess,
@@ -60,6 +61,9 @@ export interface ChatStartOptions {
   // refused, null to let it go on to them, or a warning the agent is shown
   // while the call still goes on.
   toolGuard?: ToolGuard;
+  // Holds a live guest's turn to the host's taps (./worker/guest-gate). A
+  // driver without it can't take Drive prompts (the worker's caps say so).
+  guestGate?: GuestGate;
   // The note handed back to the agent right after its context is compacted
   // (lib/chat/compact-context), empty for none. Only Claude Code has a hook
   // for it; other drivers ignore it.

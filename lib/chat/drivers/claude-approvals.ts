@@ -15,6 +15,7 @@ import type {
 } from "../events";
 import { toolDiff, toolTitle } from "../tools";
 import type { ToolGuard } from "../driver";
+import { guestGateHook, type GuestGate } from "../worker/guest-gate";
 
 type Approval = Extract<ChatItem, { kind: "approval" }>;
 
@@ -101,45 +102,94 @@ export class Approvals {
     private planFile: () => string | undefined = () => undefined
   ) {}
 
+  // Who steers the running turn, when a live guest does (lib/chat/worker/
+  // guest-gate): every card it raises is theirs, with no Always.
+  guestOf: () => { name: string } | null = () => null;
+  // Calls the guest gate let through, by tool use id: the permission prompt
+  // that may follow for one is already answered.
+  private gatePassed = new Set<string>();
+
   canUseTool: CanUseTool = (toolName, input, options) => {
     // Already answered on its card by the question hook.
     if (toolName === "AskUserQuestion" && "answers" in input)
+      return Promise.resolve({ behavior: "allow", updatedInput: input });
+    if (options.toolUseID && this.gatePassed.delete(options.toolUseID))
       return Promise.resolve({ behavior: "allow", updatedInput: input });
     const questions =
       toolName === "AskUserQuestion"
         ? ((input as { questions?: ChatQuestion[] }).questions ?? [])
         : undefined;
-    const item: Approval = {
-      id: `approval-${options.toolUseID}`,
-      kind: "approval",
-      toolName,
-      title: options.title ?? toolTitle(toolName, input),
-      input,
-      diff: toolDiff(toolName, input),
-      questions,
-      canAlways:
-        !questions &&
-        !!options.suggestions?.length &&
-        !options.suppressAlwaysAllowRule,
-      status: "pending",
-      createdAt: Date.now(),
-    };
+    const guest = this.guestOf() ?? undefined;
+    return this.ask(
+      {
+        id: `approval-${options.toolUseID}`,
+        kind: "approval",
+        toolName,
+        title: options.title ?? toolTitle(toolName, input),
+        input,
+        diff: toolDiff(toolName, input),
+        questions,
+        canAlways:
+          !guest &&
+          !questions &&
+          !!options.suggestions?.length &&
+          !options.suppressAlwaysAllowRule,
+        status: "pending",
+        createdAt: Date.now(),
+        ...(guest && { guest }),
+      },
+      options.signal,
+      guest ? undefined : options.suggestions
+    );
+  };
+
+  // A step of a guest-steered turn: the host's card, never Always.
+  askGuest(
+    toolName: string,
+    input: Record<string, unknown>,
+    toolUseID: string,
+    signal: AbortSignal,
+    guest: { name: string }
+  ): Promise<PermissionResult> {
+    return this.ask(
+      {
+        id: `approval-${toolUseID}`,
+        kind: "approval",
+        toolName,
+        title: toolTitle(toolName, input),
+        input,
+        diff: toolDiff(toolName, input),
+        canAlways: false,
+        status: "pending",
+        createdAt: Date.now(),
+        guest,
+      },
+      signal
+    );
+  }
+
+  passed(toolUseID: string): void {
+    if (toolUseID) this.gatePassed.add(toolUseID);
+  }
+
+  private ask(
+    item: Approval,
+    signal: AbortSignal,
+    suggestions?: Parameters<CanUseTool>[2]["suggestions"]
+  ): Promise<PermissionResult> {
     return new Promise<PermissionResult>((resolve) => {
-      this.pending.set(item.id, {
-        item,
-        suggestions: options.suggestions,
-        resolve,
-      });
-      options.signal.addEventListener("abort", () => {
+      this.pending.set(item.id, { item, suggestions, resolve });
+      const expire = () =>
         this.settle(item.id, "expired", {
           behavior: "deny",
           message: DENIED,
         });
-      });
+      if (signal.aborted) return queueMicrotask(expire);
+      signal.addEventListener("abort", expire);
       this.emit({ type: "item", item });
       this.emit({ type: "state", state: "waiting" });
     });
-  };
+  }
 
   // Full access approves every tool before canUseTool is asked, questions
   // included, so the agent's questions come through this hook instead.
@@ -209,11 +259,14 @@ export class Approvals {
     } else if (answer.decision === "deny") {
       this.settle(id, "denied", { behavior: "deny", message: DENIED });
     } else {
+      // A guest's card has no Always: an "always" answer is a plain allow.
       this.settle(id, "allowed", {
         behavior: "allow",
         updatedInput: input,
         updatedPermissions:
-          answer.decision === "always" ? p.suggestions : undefined,
+          answer.decision === "always" && !p.item.guest
+            ? p.suggestions
+            : undefined,
       });
     }
   }
@@ -270,9 +323,24 @@ export function guardHook(guard: ToolGuard): HookCallback {
 export function preToolUseHooks(
   approvals: Approvals,
   guard?: ToolGuard,
-  subagentModels?: HookCallback | null
+  subagentModels?: HookCallback | null,
+  // A live guest's turn: every call but a worktree read waits for the host.
+  guest?: { gate: GuestGate; cwd: string }
 ): HookCallbackMatcher[] {
+  if (guest)
+    approvals.guestOf = () =>
+      guest.gate.steer ? { name: guest.gate.steer.name } : null;
   return [
+    // First, and on every tool: no steer, no effect. It waits on the host
+    // for as long as the card is up (the turn's own cap ends it sooner).
+    ...(guest
+      ? [
+          {
+            hooks: [guestGateHook(approvals, guest.gate, guest.cwd)],
+            timeout: 24 * 60 * 60,
+          },
+        ]
+      : []),
     // Sets the model of a subagent call by its type. It only fills in the
     // input, so the guard and permissions below still see the call.
     ...(subagentModels

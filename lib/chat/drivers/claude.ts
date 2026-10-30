@@ -222,7 +222,8 @@ export const claudeDriver: ChatDriver = {
           PreToolUse: preToolUseHooks(
             approvals,
             options.toolGuard,
-            subagentHook(options.env)
+            subagentHook(options.env),
+            options.guestGate && { gate: options.guestGate, cwd: options.cwd }
           ),
           ...(options.compactContext && {
             SessionStart: compactedHooks(options.compactContext),

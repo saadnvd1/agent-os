@@ -15,6 +15,25 @@ export interface Guest {
   at: number;
 }
 
+/** A Drive prompt this machine took and hasn't seen finish. */
+export interface DrivePrompt {
+  id: string;
+  guestId: string;
+  // sending: on its way to the worker; queued: behind a turn; running.
+  status: "sending" | "queued" | "running";
+  // Why its turn was stopped, when it was (the guest's Stop, a cap).
+  stopWhy?: string;
+}
+
+export interface DriveState {
+  wheel: { guestId: string; wheel: string } | null;
+  prompts: DrivePrompt[];
+  // When prompts were taken, for the rate caps.
+  accepted: number[];
+  // Bumped whenever a Drive ends, so a send still on its way sends nothing.
+  epoch: number;
+}
+
 /** What one live share holds in memory; everything durable is in the log. */
 export interface Runtime {
   share: LiveShareRow;
@@ -30,6 +49,7 @@ export interface Runtime {
   slowUntil: number;
   notice: string | null;
   drops: number;
+  drive: DriveState;
 }
 
 export interface LiveGlobals {

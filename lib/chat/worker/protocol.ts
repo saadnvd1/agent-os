@@ -25,6 +25,10 @@ import type { CompactFirst } from "../stale";
 
 export const PROTOCOL_VERSION = 1;
 
+// In a worker's hello caps: it holds a live guest's turns to the host's taps
+// (./guest-gate). Without it no Drive prompt is sent to it.
+export const GUEST_GATE_CAP = "guest-gate";
+
 // Server -> worker. A send carries the id its user item gets, so a send
 // retried after a dropped connection is never run twice.
 export type WorkerCommand =
@@ -37,6 +41,7 @@ export type WorkerCommand =
       from?: string;
       peer?: PeerMessage;
       origin?: ChatOrigin;
+      host?: true;
       // From the composer: waits its turn behind a running one, in the
       // queue, rather than joining it.
       queue?: boolean;
@@ -79,6 +84,12 @@ export type WorkerCommand =
   // (now, if idle) the agent's conversation ends and the next worker
   // starts a new one with today's brief and permissions.
   | { type: "fresh" }
+  // A live share's Drive is over (downgrade, take-back, kick, end): its
+  // queued prompts go, a turn it steers stops, and nothing more from it is
+  // taken in (lib/chat/worker/guest-gate).
+  | { type: "guest_release"; share: string; wheel: string }
+  // The driving guest's Stop: ends a turn their wheel steers, never another.
+  | { type: "guest_stop"; share: string; wheel: string }
   | { type: "close" };
 
 // Worker -> server: what's live right now on connecting, then events.

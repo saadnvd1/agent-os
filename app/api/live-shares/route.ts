@@ -7,7 +7,7 @@ import { createLive, inviteFor, listLive, startLive } from "@/lib/live/service";
 const Create = z.object({
   sessionId: z.string().min(1).max(100),
   expiresIn: z.enum(["1h", "session"]).default("1h"),
-  level: z.enum(["watch", "suggest"]).default("suggest"),
+  level: z.enum(["watch", "suggest", "drive"]).default("suggest"),
   history: z.boolean().default(true),
 });
 

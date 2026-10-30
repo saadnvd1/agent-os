@@ -45,6 +45,8 @@ export interface Live {
   canBackground?: boolean;
   // Whether it takes "mcp_auth" (sign in to an MCP server).
   canMcpAuth?: boolean;
+  // Whether it holds a live guest's turns to the host's taps (Drive).
+  canGuestGate?: boolean;
   // From an older build and idle: retired once its guess at the next
   // message is in, or this fires.
   retiring?: NodeJS.Timeout;
