@@ -19,6 +19,8 @@ import {
   useEndLive,
   useLiveShare,
   type LiveExpiry,
+  type LiveInvite,
+  type LiveLevel,
   type LiveView,
 } from "@/data/live";
 import { EXPIRY_LABEL } from "@/lib/live/types";
@@ -47,8 +49,8 @@ function InviteBody({ sessionId }: { sessionId: string }) {
         <DialogTitle>Invite to watch live</DialogTitle>
         <DialogDescription>
           A guest opens the link, types a name and waits for you to let them in.
-          They see this chat as it happens, with secrets masked, and can suggest
-          a prompt. Nothing they type reaches the agent unless you tap Send.
+          They see this chat as it happens, with secrets masked. You choose what
+          else they can do.
         </DialogDescription>
       </div>
       {query.isPending ? (
@@ -60,15 +62,26 @@ function InviteBody({ sessionId }: { sessionId: string }) {
       ) : share ? (
         <Link share={share} />
       ) : (
-        <Create sessionId={sessionId} />
+        <Create sessionId={sessionId} invite={query.data.invite} />
       )}
     </DialogContent>
   );
 }
 
-function Create({ sessionId }: { sessionId: string }) {
+function Create({
+  sessionId,
+  invite,
+}: {
+  sessionId: string;
+  invite?: LiveInvite;
+}) {
   const [expiresIn, setExpiresIn] = useState<LiveExpiry>("1h");
+  const [level, setLevel] = useState<LiveLevel>("suggest");
+  const [history, setHistory] = useState<boolean | null>(null);
   const create = useCreateLive();
+  const options = invite?.levels ?? [];
+  const chosen = options.find((o) => o.value === level);
+  const withHistory = history ?? invite?.history.default ?? true;
   return (
     <>
       <div className="flex flex-col gap-1.5">
@@ -77,18 +90,34 @@ function Create({ sessionId }: { sessionId: string }) {
         </span>
         <Segmented
           label="Access"
-          value="watch"
-          onChange={() => {}}
-          options={[
-            { value: "watch", label: "Watch + suggest" },
-            { value: "drive", label: "Drive (later)" },
-          ]}
-          disabled
+          value={level}
+          onChange={setLevel}
+          options={options.map((o) => ({
+            value: o.value,
+            label: o.label,
+            hint: o.reason ?? o.hint,
+            disabled: !o.enabled,
+          }))}
         />
         <p className="text-muted-foreground text-xs">
-          Driving the agent from a guest link isn&apos;t available yet.
+          {chosen?.hint}
+          {options
+            .filter((o) => !o.enabled && o.reason)
+            .map((o) => ` ${o.label}: ${o.reason}.`)
+            .join("")}
         </p>
       </div>
+      {invite && (
+        <label className="flex min-h-11 items-center gap-3 text-sm">
+          <input
+            type="checkbox"
+            className="size-5"
+            checked={withHistory}
+            onChange={(e) => setHistory(e.target.checked)}
+          />
+          {invite.history.label}
+        </label>
+      )}
       <div className="flex flex-col gap-1.5">
         <span className="text-muted-foreground text-xs font-medium">
           The link works for
@@ -109,7 +138,9 @@ function Create({ sessionId }: { sessionId: string }) {
       <Button
         className="min-h-11"
         disabled={create.isPending}
-        onClick={() => create.mutate({ sessionId, expiresIn })}
+        onClick={() =>
+          create.mutate({ sessionId, expiresIn, level, history: withHistory })
+        }
       >
         <Users className="h-4 w-4" />
         {create.isPending ? "Creating…" : "Create invite link"}

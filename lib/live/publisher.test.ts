@@ -1,7 +1,7 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import type { ChatItem } from "@/lib/chat/events";
 import { itemMapper } from "./frames";
-import { onMessage, flush } from "./publisher";
+import { onMessage, flush, seed } from "./publisher";
 import { Ring } from "./ring";
 import { live, type Runtime } from "./runtime";
 
@@ -116,5 +116,50 @@ describe("publisher", () => {
     onMessage("sess", { type: "state", state: "running" });
     flush(rt);
     expect(sends).toEqual([]);
+  });
+
+  it("with earlier messages off, seeds and sends nothing from before the link", async () => {
+    const { saveItem } = await import("@/lib/chat/store");
+    const { seedSession } = await import("@/lib/orchestrator/testing");
+    const { createProject } = await import("@/lib/projects");
+    const project = createProject({
+      name: `p-${Math.random().toString(36).slice(2, 8)}`,
+      workingDirectory: "/tmp/p",
+    });
+    const id = seedSession({ projectId: project.id, name: "n", view: "chat" });
+    saveItem(id, {
+      id: "old",
+      kind: "user",
+      text: "before",
+      createdAt: 1000,
+    } as never);
+    saveItem(id, {
+      id: "new",
+      kind: "user",
+      text: "after",
+      createdAt: 3000,
+    } as never);
+    rt.share = {
+      ...rt.share,
+      session_id: id,
+      history: 0,
+      created_at: new Date(2000).toISOString(),
+    } as never;
+    seed(rt, id);
+    expect(rt.ring.list().map((f) => f.id)).toEqual(["new"]);
+    // A re-attach after a restart reads the same persisted flag.
+    const again = { ...runtime(), share: rt.share };
+    seed(again, id);
+    expect(again.ring.list().map((f) => f.id)).toEqual(["new"]);
+    live.runtimes.set("s1", rt);
+    onMessage(id, {
+      type: "item",
+      item: item({ id: "old", kind: "user", text: "before", createdAt: 1000 }),
+    });
+    onMessage(id, {
+      type: "item",
+      item: item({ id: "later", kind: "user", text: "x", createdAt: 4000 }),
+    });
+    expect(rt.ring.list().map((f) => f.id)).toEqual(["new", "later"]);
   });
 });

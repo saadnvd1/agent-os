@@ -6,6 +6,7 @@ export interface SegmentedOption<T extends string> {
   value: T;
   label: string;
   hint?: string;
+  disabled?: boolean;
 }
 
 /** One choice out of a few, side by side. Radio semantics, 44px targets. */
@@ -37,7 +38,7 @@ export function Segmented<T extends string>({
             role="radio"
             aria-checked={on}
             title={o.hint}
-            disabled={disabled}
+            disabled={disabled || o.disabled}
             onClick={() => !on && onChange(o.value)}
             className={cn(
               "min-h-11 rounded-md px-2 text-sm font-medium transition-colors disabled:opacity-50",

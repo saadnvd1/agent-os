@@ -42,4 +42,19 @@ describe("live-shares routes", () => {
       400
     );
   });
+
+  it("accept watch and suggest only, and history as a boolean", async () => {
+    expect((await POST(req({ sessionId: "s", level: "drive" }))).status).toBe(
+      400
+    );
+    expect((await POST(req({ sessionId: "s", level: "root" }))).status).toBe(
+      400
+    );
+    expect((await POST(req({ sessionId: "s", history: "yes" }))).status).toBe(
+      400
+    );
+    expect(
+      (await act(req({ action: "level", level: "drive" }), ctx)).status
+    ).toBe(400);
+  });
 });

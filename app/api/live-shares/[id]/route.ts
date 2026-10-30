@@ -3,6 +3,7 @@ import { z } from "zod";
 import { fail, readJson, refuseDemo, toResponse } from "@/lib/share/route";
 import {
   admit,
+  changeLevel,
   deny,
   dismissSuggestion,
   endLive,
@@ -15,6 +16,7 @@ const Action = z.discriminatedUnion("action", [
   z.object({ action: z.literal("admit"), guestId: z.string().min(1).max(64) }),
   z.object({ action: z.literal("deny"), guestId: z.string().min(1).max(64) }),
   z.object({ action: z.literal("kick"), guestId: z.string().min(1).max(64) }),
+  z.object({ action: z.literal("level"), level: z.enum(["watch", "suggest"]) }),
   z.object({
     action: z.literal("send"),
     suggestionId: z.string().min(1).max(64),
@@ -45,6 +47,7 @@ export async function POST(
     if (a.action === "admit") admit(id, a.guestId);
     else if (a.action === "deny") deny(id, a.guestId);
     else if (a.action === "kick") kick(id, a.guestId);
+    else if (a.action === "level") changeLevel(id, a.level);
     else if (a.action === "send")
       await sendSuggestion(id, a.suggestionId, a.text);
     else dismissSuggestion(id, a.suggestionId);

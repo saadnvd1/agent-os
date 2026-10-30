@@ -2,11 +2,13 @@ import { NextResponse } from "next/server";
 import { z } from "zod";
 import { linked, NOT_LINKED } from "@/lib/share/connect";
 import { fail, readJson, refuseDemo, toResponse } from "@/lib/share/route";
-import { createLive, listLive, startLive } from "@/lib/live/service";
+import { createLive, inviteFor, listLive, startLive } from "@/lib/live/service";
 
 const Create = z.object({
   sessionId: z.string().min(1).max(100),
   expiresIn: z.enum(["1h", "session"]).default("1h"),
+  level: z.enum(["watch", "suggest"]).default("suggest"),
+  history: z.boolean().default(true),
 });
 
 // POST /api/live-shares - mint a live link for one chat and start publishing.
@@ -19,7 +21,12 @@ export async function POST(request: Request) {
   if (!body.success) return fail("sessionId is required.", 400);
   if (!linked()) return fail(NOT_LINKED, 409);
   try {
-    const view = await createLive(body.data.sessionId, body.data.expiresIn);
+    const view = await createLive(
+      body.data.sessionId,
+      body.data.expiresIn,
+      body.data.level,
+      body.data.history
+    );
     return NextResponse.json(view, { status: 201 });
   } catch (err) {
     if ((err as Error).message === "Session not found")
@@ -36,5 +43,9 @@ export async function GET(request: Request) {
   startLive();
   const sessionId =
     new URL(request.url).searchParams.get("sessionId") ?? undefined;
-  return NextResponse.json({ linked: linked(), shares: listLive(sessionId) });
+  return NextResponse.json({
+    linked: linked(),
+    shares: listLive(sessionId),
+    ...(sessionId ? { invite: inviteFor(sessionId) } : {}),
+  });
 }

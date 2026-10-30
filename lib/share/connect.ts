@@ -111,6 +111,7 @@ export async function revokeRemote(id: string): Promise<void> {
 export async function createLiveRemote(share: {
   title: string;
   expiresIn: LiveExpiry;
+  access?: string;
 }) {
   const { config, machineKey } = files();
   try {

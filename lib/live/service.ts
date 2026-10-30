@@ -11,12 +11,20 @@ import { shareContext } from "../share/context";
 import { redactForShare } from "../share/redact";
 import { ShareError, createLiveRemote, revokeRemote } from "../share/connect";
 import type { LiveExpiry } from "../connect/control-api";
-import type { LiveView } from "./types";
+import {
+  LEVELS,
+  type LiveInvite,
+  type LiveLevel,
+  type LiveView,
+} from "./types";
+import { guestActions, levelOptions } from "./levels";
+import { listItems } from "../chat/store";
+import { visible } from "../share/snapshot";
 import { cleanBody } from "./clean";
 import { itemMapper } from "./frames";
 import { handleFrame } from "./inbox";
 import { onMessage, seed, flush } from "./publisher";
-import { Ring } from "./ring";
+import { RING_ITEMS, Ring } from "./ring";
 import { LOBBY_MS, live, type Guest, type Runtime } from "./runtime";
 import { LiveSocket, type WsFactory } from "./socket";
 import {
@@ -27,6 +35,7 @@ import {
   logLive,
   markLiveEnded,
   openSuggestions,
+  setLevel,
   type LiveShareRow,
 } from "./store";
 
@@ -126,7 +135,9 @@ function runtimeFor(id: string): Runtime {
 
 export async function createLive(
   sessionId: string,
-  expiresIn: LiveExpiry
+  expiresIn: LiveExpiry,
+  level: LiveLevel = "suggest",
+  history = true
 ): Promise<LiveView> {
   startLive();
   const session = getSession(sessionId);
@@ -138,7 +149,7 @@ export async function createLive(
       .text.replace(/\s+/g, " ")
       .trim()
       .slice(0, 120) || "Chat";
-  const made = await createLiveRemote({ title, expiresIn });
+  const made = await createLiveRemote({ title, expiresIn, access: level });
   const row: LiveShareRow = {
     id: made.id,
     session_id: sessionId,
@@ -149,10 +160,43 @@ export async function createLive(
     created_at: new Date().toISOString(),
     expires_at: made.expires_at,
     ended_at: null,
+    level,
+    history: history ? 1 : 0,
   };
   insertLiveShare(row);
   attach(row);
   return viewOf(row.id)!;
+}
+
+export function changeLevel(id: string, level: LiveLevel): void {
+  const rt = runtimeFor(id);
+  if (!(level in LEVELS)) throw new ShareError("Unknown level.", 400);
+  if (!levelOptions().find((o) => o.value === level)?.enabled)
+    throw new ShareError(`${LEVELS[level].label} isn't available.`, 400);
+  if (rt.share.level === level) return;
+  // Synchronous and first: from here the machine treats the share as `level`.
+  rt.share = { ...rt.share, level };
+  setLevel(id, level);
+  rt.notice = null;
+  live.socket?.send(id, "access", { level });
+}
+
+/** What the invite dialog offers for a session. */
+export function inviteFor(sessionId: string): LiveInvite {
+  const count = Math.min(
+    visible(listItems(sessionId)).filter(
+      (i) => i.kind === "user" || i.kind === "assistant"
+    ).length,
+    RING_ITEMS
+  );
+  return {
+    levels: levelOptions(),
+    history: {
+      label: `Include the ${count} earlier message${count === 1 ? "" : "s"}`,
+      default: true,
+      count,
+    },
+  };
 }
 
 /** Ends access: Connect disconnects every guest, then this machine lets go. */
@@ -293,6 +337,9 @@ export function viewOf(id: string, now = Date.now()): LiveView | null {
     maxGuests: rt.share.max_guests,
     connected: live.socket?.connected ?? false,
     notice: rt.notice,
+    level: rt.share.level,
+    levels: levelOptions(),
+    history: rt.share.history === 1,
     guests: shown
       .filter((g) => g.status === "pending" || admitted.has(g.id))
       .map((g) => ({
@@ -302,6 +349,7 @@ export function viewOf(id: string, now = Date.now()): LiveView | null {
         online: g.online,
         duplicateName:
           (names.get(g.name.normalize("NFKC").toLowerCase()) ?? 0) > 1,
+        actions: guestActions(rt, g),
       })),
     suggestions: openSuggestions(id),
   };

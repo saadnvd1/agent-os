@@ -488,12 +488,16 @@ export interface LiveShare {
 export async function createLiveShare(
   config: ConnectConfig,
   privateKey: string,
-  share: { title: string; expiresIn: LiveExpiry }
+  share: { title: string; expiresIn: LiveExpiry; access?: string }
 ): Promise<LiveShare> {
   const res = await signed(config, privateKey)(
     "POST",
     `/api/v1/machines/${config.machineId}/live-shares`,
-    { title: share.title, expires_in: share.expiresIn }
+    {
+      title: share.title,
+      expires_in: share.expiresIn,
+      ...(share.access ? { access: share.access } : {}),
+    }
   );
   const r = (await res.json().catch(() => null)) as Record<
     string,

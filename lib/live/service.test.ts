@@ -73,6 +73,7 @@ const { seedSession } = await import("@/lib/orchestrator/testing");
 const { createProject } = await import("@/lib/projects");
 const { getDb } = await import("@/lib/db");
 const { listLog } = await import("./store");
+const { droppedCount } = await import("./inbox");
 
 interface Fake {
   url: string;
@@ -134,9 +135,9 @@ function chat() {
 }
 
 let session = "";
-async function open() {
+async function open(level: "watch" | "suggest" = "suggest", history = true) {
   session = chat();
-  const view = await svc.createLive(session, "1h");
+  const view = await svc.createLive(session, "1h", level, history);
   const f = fakes.at(-1)!;
   f.handlers.message(JSON.stringify({ type: "welcome" }));
   f.handlers.message(
@@ -175,6 +176,7 @@ describe("starting a live share", () => {
     expect(JSON.parse(seen[0].body)).toEqual({
       title: "Pairing",
       expires_in: "1h",
+      access: "suggest",
     });
     const f = fakes[0];
     expect(f.url).toMatch(/^ws:\/\/127\.0\.0\.1:\d+\/cable$/);
@@ -497,5 +499,76 @@ describe("ending", () => {
     await open();
     down({ type: "ended" });
     expect(svc.viewOf(SHARE)).toBeNull();
+  });
+});
+
+describe("access levels", () => {
+  const suggestion = () =>
+    down({
+      type: "suggestion",
+      id: "s9",
+      guest: { id: "g1", name: "Ahmed" },
+      text: "run it",
+    });
+
+  it("forwards the level and history to Connect and stores them", async () => {
+    const view = await open("watch", false);
+    expect(JSON.parse(seen[0].body).access).toBe("watch");
+    expect(view).toMatchObject({ level: "watch", history: false });
+    expect(live.runtimes.get(SHARE)!.share).toMatchObject({
+      level: "watch",
+      history: 0,
+    });
+  });
+
+  it("drops a forged suggestion under Watch: no card, no log row, counted", async () => {
+    await open("watch");
+    await joinAndAdmit();
+    const before = droppedCount();
+    const rows = listLog(SHARE).length;
+    suggestion();
+    expect(svc.viewOf(SHARE)!.suggestions).toEqual([]);
+    expect(listLog(SHARE)).toHaveLength(rows);
+    expect(droppedCount()).toBe(before + 1);
+    expect(sent.calls).toHaveLength(0);
+  });
+
+  it("changeLevel logs, sends access up, and refuses unknown or unavailable levels", async () => {
+    await open();
+    svc.changeLevel(SHARE, "watch");
+    expect(listLog(SHARE).at(-1)).toMatchObject({
+      kind: "level",
+      ref: "watch",
+    });
+    expect(actions().at(-1)).toEqual({ action: "access", level: "watch" });
+    expect(svc.viewOf(SHARE)!.level).toBe("watch");
+    expect(() => svc.changeLevel(SHARE, "bogus" as never)).toThrow(/Unknown/);
+    expect(() => svc.changeLevel(SHARE, "drive")).toThrow(/isn't available/);
+    expect(svc.viewOf(SHARE)!.level).toBe("watch");
+  });
+
+  it("Suggest to Watch keeps the cards already on screen", async () => {
+    await open();
+    await joinAndAdmit();
+    suggestion();
+    svc.changeLevel(SHARE, "watch");
+    expect(svc.viewOf(SHARE)!.suggestions).toHaveLength(1);
+    await svc.sendSuggestion(SHARE, "s9");
+    expect(sent.calls).toHaveLength(1);
+  });
+
+  it("serves the invite options with the earlier-message count", async () => {
+    const id = chat();
+    const invite = svc.inviteFor(id);
+    expect(invite.history).toMatchObject({
+      default: true,
+      count: 2,
+      label: "Include the 2 earlier messages",
+    });
+    expect(invite.levels.map((l) => [l.value, l.enabled])).toEqual([
+      ["watch", true],
+      ["suggest", true],
+      ["drive", false],
+    ]);
   });
 });

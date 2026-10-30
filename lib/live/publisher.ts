@@ -13,8 +13,17 @@ import { live, type Runtime } from "./runtime";
 const FLUSH_MS = 1000;
 const SLOW_FLUSH_MS = 4000;
 
+/** With "earlier messages" off, nothing from before the link was made goes out. */
+function beforeLink(rt: Runtime, item: ChatItem): boolean {
+  return (
+    rt.share.history === 0 &&
+    (item.createdAt ?? Infinity) < Date.parse(rt.share.created_at)
+  );
+}
+
 export function seed(rt: Runtime, sessionId: string): void {
   for (const item of visible(listItems(sessionId))) {
+    if (beforeLink(rt, item)) continue;
     const frame = rt.map(item);
     if (frame) rt.ring.upsert(frame);
   }
@@ -55,6 +64,7 @@ export function onMessage(sessionId: string, m: ChatServerMessage): void {
       live.socket?.send(rt.share.id, "state", { state: stateOf(m.state) });
     } else if (m.type === "item") {
       const item = m.item;
+      if (beforeLink(rt, item)) continue;
       if (item.kind === "turn_end") {
         flush(rt);
         live.socket?.send(rt.share.id, "state", { state: "idle" });

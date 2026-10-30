@@ -3,8 +3,9 @@
 import { useState } from "react";
 import { ChevronDown, Radio, UserMinus } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import { Segmented } from "@/components/ui/segmented";
 import { StatusPill } from "@/components/ui/status-pill";
-import type { LiveView } from "@/data/live";
+import type { LiveLevel, LiveView } from "@/data/live";
 import { cn } from "@/lib/utils";
 
 export function presenceText(guests: LiveView["guests"]): string {
@@ -18,13 +19,15 @@ export function presenceText(guests: LiveView["guests"]): string {
 export function LiveChip({
   share,
   busy,
-  onKick,
+  onAction,
+  onLevel,
   onEnd,
   onInvite,
 }: {
   share: LiveView;
   busy: boolean;
-  onKick: (guestId: string) => void;
+  onAction: (guestId: string, kind: string) => void;
+  onLevel: (level: LiveLevel) => void;
   onEnd: () => void;
   onInvite: () => void;
 }) {
@@ -58,6 +61,21 @@ export function LiveChip({
           {share.notice && (
             <p className="text-muted-foreground px-2 text-xs">{share.notice}</p>
           )}
+          <Segmented
+            label="Access"
+            value={share.level}
+            onChange={onLevel}
+            disabled={busy}
+            options={share.levels.map((o) => ({
+              value: o.value,
+              label: o.label,
+              hint: o.reason ?? o.hint,
+              disabled: !o.enabled,
+            }))}
+          />
+          <p className="text-muted-foreground px-2 text-xs">
+            {share.levels.find((o) => o.value === share.level)?.hint}
+          </p>
           {admitted.length === 0 && (
             <p className="text-muted-foreground px-2 py-1 text-xs">
               No one has joined yet.
@@ -73,16 +91,19 @@ export function LiveChip({
                 aria-hidden
               />
               <span className="min-w-0 flex-1 truncate text-sm">{g.name}</span>
-              <Button
-                variant="ghost"
-                className="min-h-11"
-                disabled={busy}
-                onClick={() => onKick(g.id)}
-                aria-label={`Kick ${g.name}`}
-              >
-                <UserMinus className="h-4 w-4" />
-                Kick
-              </Button>
+              {g.actions.map((a) => (
+                <Button
+                  key={a.kind}
+                  variant="ghost"
+                  className="min-h-11"
+                  disabled={busy}
+                  onClick={() => onAction(g.id, a.kind)}
+                  aria-label={`${a.label} ${g.name}`}
+                >
+                  {a.kind === "kick" && <UserMinus className="h-4 w-4" />}
+                  {a.label}
+                </Button>
+              ))}
             </div>
           ))}
           <div className="flex gap-2 pt-1">
