@@ -63,6 +63,7 @@ import { ContextMeter } from "./ContextMeter";
 import { SetupCard } from "./SetupCard";
 import { UserTurn } from "./EventRow";
 import { EventGroup } from "./EventTurns";
+import { needsMoreHistory } from "./needs-more-history";
 import { useGoToItem } from "./useGoToItem";
 import { NeedsYouStrip } from "@/components/Orchestrator/NeedsYouStrip";
 import { useResolveQuestion } from "@/data/orchestrators";
@@ -525,6 +526,33 @@ export function ChatPanel({
     if (el && o.hasMore && !o.loadingOlder && el.scrollTop < el.clientHeight)
       o.loadOlder();
   }, []);
+  // Fill the screen on open: a page can fold into too few rows to scroll.
+  // One request per item count, so a page that fails or adds nothing stops it.
+  const filledAt = useRef({ sessionId, count: -1 });
+  useLayoutEffect(() => {
+    const el = listRef.current;
+    if (filledAt.current.sessionId !== sessionId)
+      filledAt.current = { sessionId, count: -1 };
+    if (!el || filledAt.current.count === items.length) return;
+    if (
+      needsMoreHistory({
+        hasMore,
+        loading: loadingOlder,
+        scrollHeight: el.scrollHeight,
+        clientHeight: el.clientHeight,
+      })
+    ) {
+      filledAt.current.count = items.length;
+      loadOlder();
+    }
+  }, [
+    sessionId,
+    items.length,
+    hasMore,
+    loadingOlder,
+    loadOlder,
+    blocks.length,
+  ]);
   const scrollToBlock = useCallback(async (key: string) => {
     // The row may only just have been added.
     await new Promise((r) => requestAnimationFrame(r));
