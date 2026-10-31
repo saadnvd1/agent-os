@@ -2,6 +2,7 @@
 
 import type { StepCounts } from "@/lib/chat/tool-outcome";
 import {
+  Fragment,
   memo,
   useCallback,
   useEffect,
@@ -52,7 +53,7 @@ import { RowState, RowStore } from "./rowState";
 import { useKeybindings } from "@/hooks/useKeybindings";
 import { Background, type BackgroundValue } from "./background";
 import { FindBar } from "./FindBar";
-import { FIND_EVENT, isFindKey, useFind } from "./useFind";
+import { useFind, useFindShortcut } from "./useFind";
 import { McpServers } from "./McpServers";
 import { ChatSessionId } from "./session";
 import { ArtifactCard } from "./Artifact";
@@ -65,6 +66,8 @@ import { UserTurn } from "./EventRow";
 import { EventGroup } from "./EventTurns";
 import { needsMoreHistory } from "./needs-more-history";
 import { useGoToItem } from "./useGoToItem";
+import { NewDivider } from "./NewDivider";
+import { usePosition } from "./usePosition";
 import { NeedsYouStrip } from "@/components/Orchestrator/NeedsYouStrip";
 import { useResolveQuestion } from "@/data/orchestrators";
 import { needsYouFocus, needsYouFocusActions } from "@/stores/needsYouFocus";
@@ -80,7 +83,6 @@ import {
   TurnStarts,
   type BookmarkChat,
 } from "@/components/Bookmarks/context";
-import { bookmarksUi, bookmarksUiActions } from "@/stores/bookmarksUi";
 import {
   AssistantMessage,
   CommandOutput,
@@ -236,18 +238,23 @@ const Block = memo(
 export function TimelineRows({
   blocks,
   actions,
+  newFrom,
 }: {
   blocks: TimelineBlock[];
   actions: ItemActions;
+  // The block the reader hasn't seen yet begins at, when they were away.
+  newFrom?: string | null;
 }) {
   return blocks.map((b) => (
-    <div
-      key={blockKey(b)}
-      data-block={blockKey(b)}
-      className="chat-row mx-auto w-full max-w-3xl px-4 pb-4"
-    >
-      <Block block={b} actions={actions} />
-    </div>
+    <Fragment key={blockKey(b)}>
+      {newFrom === blockKey(b) && <NewDivider />}
+      <div
+        data-block={blockKey(b)}
+        className="chat-row mx-auto w-full max-w-3xl px-4 pb-4"
+      >
+        <Block block={b} actions={actions} />
+      </div>
+    </Fragment>
   ));
 }
 
@@ -511,11 +518,7 @@ export function ChatPanel({
       copySelection(e, itemsByIdRef.current),
     []
   );
-  // Starts at the end; older pages load as the reader nears the top.
-  useLayoutEffect(() => {
-    const el = listRef.current;
-    if (el) el.scrollTop = el.scrollHeight;
-  }, [sessionId]);
+  // Older pages load as the reader nears the top.
   const olderRef = useRef({ hasMore, loadingOlder, loadOlder });
   useEffect(() => {
     olderRef.current = { hasMore, loadingOlder, loadOlder };
@@ -590,17 +593,20 @@ export function ChatPanel({
     () => ({ sessionId, turnStarts: turnStartStore }),
     [sessionId, turnStartStore]
   );
-  // A bookmark opened from a list: once this chat is the one showing.
-  const { jump } = useSnapshot(bookmarksUi);
-  useEffect(() => {
-    // Waits for this chat's first page: until it lands, the items are
-    // the last chat's, and every jump would miss.
-    if (!jump || jump.sessionId !== sessionId || loadedFor !== sessionId)
-      return;
-    const itemId = bookmarksUiActions.takeJump(sessionId);
-    if (itemId)
-      goTo((all) => (all.some((i) => i.id === itemId) ? itemId : null));
-  }, [jump, sessionId, goTo, loadedFor]);
+  const { newFrom } = usePosition({
+    sessionId,
+    active,
+    loadedFor,
+    items,
+    hasMore,
+    loadingOlder,
+    loadOlder,
+    listRef,
+    release,
+    toEnd,
+    foldEvents: !!orchestratorOf,
+    goTo,
+  });
   const resolveQuestion = useResolveQuestion(orchestratorOf ?? "");
   // The question the next message answers, resolved when it is sent.
   const [replyTo, setReplyTo] = useState<{ id: number; text: string } | null>(
@@ -626,39 +632,8 @@ export function ChatPanel({
     scrollToBlock,
     scroller: useCallback(() => listRef.current, []),
   });
-  const activeRef = useRef(active);
-  useEffect(() => {
-    activeRef.current = active;
-  });
-  // ⌘F (Ctrl+F off a Mac) in this chat, or the phone header's search
-  // button, opens the find bar; pressed again, the field takes the caret.
-  const [findFocus, setFindFocus] = useState(0);
-  const showFind = find.show;
+  const findFocus = useFindShortcut(sessionId, rootRef, active, find.show);
   const closeFind = find.close;
-  useEffect(() => {
-    const open = () => {
-      showFind();
-      setFindFocus((n) => n + 1);
-    };
-    const onKey = (e: KeyboardEvent) => {
-      const root = rootRef.current;
-      const here =
-        root?.contains(e.target as Node) ||
-        (activeRef.current && e.target === document.body);
-      if (!here || !isFindKey(e)) return;
-      e.preventDefault();
-      open();
-    };
-    const onFind = (e: Event) => {
-      if ((e as CustomEvent<string>).detail === sessionId) open();
-    };
-    window.addEventListener("keydown", onKey, true);
-    window.addEventListener(FIND_EVENT, onFind);
-    return () => {
-      window.removeEventListener("keydown", onKey, true);
-      window.removeEventListener(FIND_EVENT, onFind);
-    };
-  }, [sessionId, showFind]);
   // Another conversation starts without the last one's find.
   useEffect(() => closeFind, [sessionId, closeFind]);
   const idle = !running && connected;
@@ -728,7 +703,11 @@ export function ChatPanel({
                   <ChatSessionId.Provider value={sessionId}>
                     <ChatIdle.Provider value={idle}>
                       <RetryTurn.Provider value={retryTurn}>
-                        <TimelineRows blocks={blocks} actions={actions} />
+                        <TimelineRows
+                          blocks={blocks}
+                          actions={actions}
+                          newFrom={newFrom}
+                        />
                       </RetryTurn.Provider>
                     </ChatIdle.Provider>
                   </ChatSessionId.Provider>

@@ -7,6 +7,8 @@ import { subscribe } from "valtio";
 import { viewSwitchStore, viewSwitchActions } from "@/stores/viewSwitch";
 import { useOpenSession } from "@/hooks/useOpenSession";
 import { useSessionUrl } from "@/hooks/useSessionUrl";
+import { useChatViewsSync } from "@/hooks/useChatViewsSync";
+import { chatPositionsActions } from "@/stores/chatPositions";
 import { tmuxAttachStore, tmuxAttachActions } from "@/stores/tmuxAttach";
 import type { AttachSpec } from "@/lib/hosts/attach";
 import { memo, useState, useEffect, useCallback, useMemo, useRef } from "react";
@@ -530,9 +532,12 @@ function HomeContent() {
     isMobile,
   });
 
+  useChatViewsSync();
+
   // Notification click handler
   const handleNotificationClick = useCallback(
     (sessionId: string) => {
+      chatPositionsActions.wantLatest(sessionId);
       const session = sessions.find((s) => s.id === sessionId);
       if (session) {
         attachToSession(session);
@@ -674,6 +679,7 @@ function HomeContent() {
   // A workspace's orchestrator row opens its chat, made on first open.
   const handleOrchestratorOpened = useCallback(
     (sessionId: string) => {
+      chatPositionsActions.wantLatest(sessionId);
       if (isMobile) setSidebarOpen(false);
       void handleSessionCreated(sessionId);
     },

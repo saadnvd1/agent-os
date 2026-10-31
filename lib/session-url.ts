@@ -193,8 +193,11 @@ export function locateSession(
 
 export interface SessionUrlEnv {
   href(): string;
-  push(href: string): void;
-  replace(href: string): void;
+  // The session the address names goes along, for the entry's own record.
+  push(href: string, sessionId: string | null): void;
+  replace(href: string, sessionId: string | null): void;
+  /** The address already says it: the entry still learns which session. */
+  settle?(sessionId: string | null): void;
 }
 
 export interface SessionUrlDeps {
@@ -301,9 +304,12 @@ export class SessionUrlSync {
       id ? { id, name: this.deps.nameOf(id) ?? undefined } : null
     );
     const url = new URL(href, BASE);
-    if (next === url.pathname + url.search + url.hash) return;
-    if (mode === "push") this.env.push(next);
-    else this.env.replace(next);
+    if (next === url.pathname + url.search + url.hash) {
+      this.env.settle?.(id);
+      return;
+    }
+    if (mode === "push") this.env.push(next, id);
+    else this.env.replace(next, id);
   }
 }
 

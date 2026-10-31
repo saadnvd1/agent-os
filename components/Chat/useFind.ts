@@ -1,6 +1,13 @@
 "use client";
 
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import {
+  type RefObject,
+  useCallback,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+} from "react";
 import type { ChatItem } from "@/lib/chat/events";
 import {
   flattenHits,
@@ -252,4 +259,46 @@ export function useFind(deps: FindDeps) {
     next: useCallback(() => go(1), [go]),
     previous: useCallback(() => go(-1), [go]),
   };
+}
+
+/**
+ * ⌘F (Ctrl+F off a Mac) in this chat, or the phone header's search button,
+ * opens the find bar; pressed again, the field takes the caret. Returns a
+ * counter that changes each time, for the bar to focus on.
+ */
+export function useFindShortcut(
+  sessionId: string,
+  rootRef: RefObject<HTMLElement | null>,
+  active: boolean,
+  show: () => void
+): number {
+  const [focus, setFocus] = useState(0);
+  const activeRef = useRef(active);
+  useEffect(() => {
+    activeRef.current = active;
+  });
+  useEffect(() => {
+    const open = () => {
+      show();
+      setFocus((n) => n + 1);
+    };
+    const onKey = (e: KeyboardEvent) => {
+      const here =
+        rootRef.current?.contains(e.target as Node) ||
+        (activeRef.current && e.target === document.body);
+      if (!here || !isFindKey(e)) return;
+      e.preventDefault();
+      open();
+    };
+    const onFind = (e: Event) => {
+      if ((e as CustomEvent<string>).detail === sessionId) open();
+    };
+    window.addEventListener("keydown", onKey, true);
+    window.addEventListener(FIND_EVENT, onFind);
+    return () => {
+      window.removeEventListener("keydown", onKey, true);
+      window.removeEventListener(FIND_EVENT, onFind);
+    };
+  }, [sessionId, show, rootRef]);
+  return focus;
 }
