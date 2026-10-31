@@ -1849,6 +1849,22 @@
       "area": "Chat",
       "text": "Pressing Esc now takes you out of the message box when there is nothing else for it to do.",
       "url": "https://github.com/saadnvd1/agent-os/pull/541"
+    },
+    {
+      "id": 542,
+      "date": "2026-10-31",
+      "kind": "improved",
+      "area": "AgentOS",
+      "text": "Tip of the Day images are larger on desktop, and you can tap one to see it full screen.",
+      "url": "https://github.com/saadnvd1/agent-os/pull/542"
+    },
+    {
+      "id": 543,
+      "date": "2026-10-31",
+      "kind": "improved",
+      "area": "Updates",
+      "text": "Update notices now appear as a small pop-up instead of a bar across the top of the app.",
+      "url": "https://github.com/saadnvd1/agent-os/pull/543"
     }
   ]
 }
