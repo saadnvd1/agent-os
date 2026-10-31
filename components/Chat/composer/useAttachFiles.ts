@@ -16,6 +16,7 @@ import {
 import type { ChatFile, ChatImage } from "@/lib/chat/events";
 import { uploadFile } from "@/lib/file-upload";
 import { isImage } from "./paste";
+import { shrinkImage } from "./shrinkImage";
 
 export interface Upload {
   key: string;
@@ -79,9 +80,9 @@ export function useAttachFiles({
       if (held.current + images.length + others.length >= limits.max)
         error = `You can attach up to ${limits.max} files to one message.`;
       else if (isImage(f)) {
-        if (f.size > limits.maxImageBytes)
-          error = tooBigMessage(f.name, f.size, limits.maxImageBytes);
-        else images.push(f);
+        const shrunk = await shrinkImage(f, limits.maxImageBytes);
+        if (shrunk.ok) images.push(shrunk.file);
+        else error = tooBigMessage(f.name, f.size, limits.maxImageBytes);
       } else if (!typeFor(f.name, limits.types))
         error = unsupportedMessage(f.name);
       else if (f.size > limits.maxBytes)
