@@ -1769,6 +1769,14 @@
       "area": "AgentOS",
       "text": "A What's New list in the sidebar shows what changed in each update.",
       "url": "https://github.com/saadnvd1/agent-os/pull/525"
+    },
+    {
+      "id": 528,
+      "date": "2026-10-30",
+      "kind": "improved",
+      "area": "AgentOS",
+      "text": "What's New now sits as a small icon in the sidebar footer.",
+      "url": "https://github.com/saadnvd1/agent-os/pull/528"
     }
   ]
 }
