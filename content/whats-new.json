@@ -1680,6 +1680,94 @@
       "area": "Models",
       "text": "Agents sit on a rail, each with a searchable model list and a same-as-last-time choice, and it works on phones.",
       "url": "https://github.com/saadnvd1/agent-os/pull/523"
+    },
+    {
+      "id": 137,
+      "date": "2026-10-09",
+      "kind": "fixed",
+      "area": "Demo",
+      "text": "Status connections no longer pile up without limit when a client keeps opening them.",
+      "url": "https://github.com/saadnvd1/agent-os/pull/137"
+    },
+    {
+      "id": 184,
+      "date": "2026-10-10",
+      "kind": "new",
+      "area": "AgentOS",
+      "text": "You can run /competitor-audit to see how a competitor's latest changes compare with AgentOS.",
+      "url": "https://github.com/saadnvd1/agent-os/pull/184"
+    },
+    {
+      "id": 200,
+      "date": "2026-10-11",
+      "kind": "improved",
+      "area": "AgentOS",
+      "text": "Long sessions now compact their history at 150k tokens instead of later.",
+      "url": "https://github.com/saadnvd1/agent-os/pull/200"
+    },
+    {
+      "id": 221,
+      "date": "2026-10-11",
+      "kind": "improved",
+      "area": "Chat",
+      "text": "Streamed output is saved in batches every quarter second, which keeps long replies smoother.",
+      "url": "https://github.com/saadnvd1/agent-os/pull/221"
+    },
+    {
+      "id": 243,
+      "date": "2026-10-12",
+      "kind": "new",
+      "area": "Notifications",
+      "text": "Devices can now register for push notifications.",
+      "url": "https://github.com/saadnvd1/agent-os/pull/243"
+    },
+    {
+      "id": 392,
+      "date": "2026-10-18",
+      "kind": "fixed",
+      "area": "AgentOS",
+      "text": "Agent sessions no longer receive server-only settings in their environment.",
+      "url": "https://github.com/saadnvd1/agent-os/pull/392"
+    },
+    {
+      "id": 391,
+      "date": "2026-10-18",
+      "kind": "fixed",
+      "area": "AgentOS",
+      "text": "Older config settings are no longer ignored when the main AgentOS config is also present.",
+      "url": "https://github.com/saadnvd1/agent-os/pull/391"
+    },
+    {
+      "id": 403,
+      "date": "2026-10-19",
+      "kind": "fixed",
+      "area": "Chat",
+      "text": "Sending messages without files no longer goes wrong.",
+      "url": "https://github.com/saadnvd1/agent-os/pull/403"
+    },
+    {
+      "id": 475,
+      "date": "2026-10-23",
+      "kind": "new",
+      "area": "Chat",
+      "text": "OpenCode sessions can now produce a results summary.",
+      "url": "https://github.com/saadnvd1/agent-os/pull/475"
+    },
+    {
+      "id": 524,
+      "date": "2026-10-30",
+      "kind": "improved",
+      "area": "Models",
+      "text": "The chat now marks the current model, starts with an empty search, and keeps focus on the list after arrow keys.",
+      "url": "https://github.com/saadnvd1/agent-os/pull/524"
+    },
+    {
+      "id": 525,
+      "date": "2026-10-30",
+      "kind": "new",
+      "area": "AgentOS",
+      "text": "A What's New list in the sidebar shows what changed in each update.",
+      "url": "https://github.com/saadnvd1/agent-os/pull/525"
     }
   ]
 }
