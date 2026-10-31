@@ -14,6 +14,33 @@ import { cn } from "@/lib/utils";
 const chipClass =
   "border-border/70 bg-card text-muted-foreground hover:text-foreground hover:bg-foreground/[0.04] flex h-11 max-w-full min-w-0 items-center gap-1.5 rounded-lg border px-2.5 text-xs md:h-8 disabled:pointer-events-none disabled:opacity-60";
 
+// The button of a choice whose picker is its own dialog.
+export function ChipTrigger({
+  icon: Icon,
+  label,
+  name,
+  onClick,
+}: {
+  icon: LucideIcon;
+  label: string;
+  name: string;
+  onClick: () => void;
+}) {
+  return (
+    <button
+      type="button"
+      aria-label={`${name}: ${label}`}
+      aria-haspopup="dialog"
+      onClick={onClick}
+      className={chipClass}
+    >
+      <Icon className="h-3.5 w-3.5 shrink-0" />
+      <span className="truncate">{label}</span>
+      <ChevronDown className="h-3 w-3 shrink-0" />
+    </button>
+  );
+}
+
 // One of a draft's choices: what it is now, and a menu to change it.
 export function ChipMenu({
   icon: Icon,

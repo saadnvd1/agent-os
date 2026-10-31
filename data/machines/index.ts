@@ -6,13 +6,22 @@ import type { HostCatalogResponse } from "@/lib/machines/types";
 import type { BrowserMachine } from "@/lib/machines/browser";
 import { machineKeys } from "./keys";
 
-/** The agents and models a machine reports, for the new-session form. */
-export function useMachineCatalog(hostId: string) {
+/**
+ * The agents and models a machine reports, for the new-session form; with a
+ * project, also what that project last ran with.
+ */
+export function useMachineCatalog(
+  hostId: string,
+  projectId: string | null = null
+) {
   return useQuery({
-    queryKey: machineKeys.agents(hostId),
+    queryKey: machineKeys.agents(hostId, projectId),
     queryFn: async () => {
+      const query = projectId
+        ? `?project=${encodeURIComponent(projectId)}`
+        : "";
       const res = await fetch(
-        `/api/hosts/${encodeURIComponent(hostId)}/agents`
+        `/api/hosts/${encodeURIComponent(hostId)}/agents${query}`
       );
       const data = await res.json().catch(() => ({}));
       if (!res.ok) throw new Error(data.error || "Couldn't list its agents");

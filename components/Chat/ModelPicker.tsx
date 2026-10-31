@@ -1,13 +1,16 @@
 "use client";
 
-import { Check, ChevronDown } from "lucide-react";
-import {
-  DropdownMenu,
-  DropdownMenuContent,
-  DropdownMenuItem,
-  DropdownMenuTrigger,
-} from "@/components/ui/dropdown-menu";
+import { useRef } from "react";
+import { ChevronDown, Lock } from "lucide-react";
 import type { ChatModel } from "@/lib/chat/events";
+import { ModelList } from "@/components/Draft/picker/ModelList";
+import { PickerSheet } from "@/components/Draft/picker/PickerSheet";
+import { SearchField } from "@/components/Draft/picker/SearchField";
+import {
+  focusSelectedRow,
+  useListKeys,
+} from "@/components/Draft/picker/useListKeys";
+import { useModelSearch } from "@/components/Draft/picker/useModelSearch";
 
 export function modelLabel(
   models: ChatModel[],
@@ -33,43 +36,62 @@ export function ModelPicker({
   onOpenChange: (open: boolean) => void;
   onPick: (value: string) => void;
 }) {
+  const root = useRef<HTMLDivElement>(null);
+  const search = useRef<HTMLInputElement>(null);
+  const { query, setQuery, sections } = useModelSearch({
+    agent: { agent: "chat", label: "", models },
+  });
+  const onKeyDown = useListKeys(root, search);
   if (!model && models.length === 0) return null;
   return (
-    <DropdownMenu open={open} onOpenChange={onOpenChange}>
-      <DropdownMenuTrigger asChild>
-        <button
-          type="button"
-          aria-label="Model"
-          className="text-muted-foreground hover:text-foreground hover:bg-foreground/[0.05] flex h-10 max-w-36 min-w-0 items-center gap-1 rounded-lg px-2 text-xs"
-        >
-          <span className="truncate">
-            {modelLabel(models, model, label) || "Model"}
-          </span>
-          <ChevronDown className="h-3 w-3 shrink-0" />
-        </button>
-      </DropdownMenuTrigger>
-      <DropdownMenuContent align="start" side="top" className="max-w-80">
-        {models.map((m) => (
-          <DropdownMenuItem
-            key={m.value}
-            onSelect={() => onPick(m.value)}
-            disabled={!!m.disabled}
-            className="flex min-h-11 items-start gap-2 md:min-h-9"
-          >
-            <Check
-              className={`mt-0.5 h-3.5 w-3.5 shrink-0 ${m.value === model ? "opacity-100" : "opacity-0"}`}
+    <>
+      <button
+        type="button"
+        aria-label="Model"
+        aria-haspopup="dialog"
+        onClick={() => onOpenChange(true)}
+        className="text-muted-foreground hover:text-foreground hover:bg-foreground/[0.05] flex h-10 max-w-36 min-w-0 items-center gap-1 rounded-lg px-2 text-xs"
+      >
+        <span className="truncate">
+          {modelLabel(models, model, label) || "Model"}
+        </span>
+        <ChevronDown className="h-3 w-3 shrink-0" />
+      </button>
+      <PickerSheet
+        open={open}
+        onOpenChange={(o) => {
+          if (o) setQuery("");
+          onOpenChange(o);
+        }}
+        title="Model"
+        onKeyDown={onKeyDown}
+        onOpened={() => focusSelectedRow(root.current)}
+      >
+        <div ref={root} className="flex min-h-0 flex-1 flex-col">
+          <p className="text-muted-foreground bg-foreground/[0.03] mx-1.5 mt-1.5 flex shrink-0 items-center gap-2 rounded-lg px-3 py-2 text-xs">
+            <Lock className="h-3.5 w-3.5 shrink-0" />
+            Switching agent starts a new session
+          </p>
+          <SearchField
+            value={query}
+            onChange={setQuery}
+            placeholder="Search models"
+            inputRef={search}
+          />
+          <div className="min-h-0 flex-1 overflow-y-auto overscroll-contain">
+            <ModelList
+              sections={sections}
+              selected={model}
+              query={query}
+              agentLabel=""
+              onPick={(value) => {
+                onPick(value);
+                onOpenChange(false);
+              }}
             />
-            <span className="flex flex-col">
-              <span className="text-sm">{m.label}</span>
-              {(m.disabled || m.description) && (
-                <span className="text-muted-foreground line-clamp-2 text-xs">
-                  {m.disabled ?? m.description}
-                </span>
-              )}
-            </span>
-          </DropdownMenuItem>
-        ))}
-      </DropdownMenuContent>
-    </DropdownMenu>
+          </div>
+        </div>
+      </PickerSheet>
+    </>
   );
 }

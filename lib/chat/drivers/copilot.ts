@@ -37,7 +37,7 @@ export function copilotArgs(
 }
 
 // The models a new ACP session offers (`models.availableModels`), with
-// Copilot's premium-request multiplier as the description when it gives one.
+// Copilot's premium-request multiplier as the note when it gives one.
 export function copilotModels(session: P | undefined): ChatModel[] {
   const list = ((session?.models as P | undefined)?.availableModels ??
     []) as P[];
@@ -46,17 +46,20 @@ export function copilotModels(session: P | undefined): ChatModel[] {
     .map((m) => {
       const meta = (m._meta ?? {}) as P;
       const usage = meta.copilotUsage ?? m.copilotUsage;
-      const description =
+      const note =
         typeof usage === "number"
-          ? `${usage}x usage`
+          ? usage === 0
+            ? "Included"
+            : `${usage}x usage`
           : typeof usage === "string"
             ? usage
-            : typeof m.description === "string"
-              ? m.description
-              : undefined;
+            : undefined;
+      const description =
+        typeof m.description === "string" ? m.description : undefined;
       return {
         value: String(m.modelId),
         label: String(m.name ?? m.modelId),
+        ...(note ? { note } : {}),
         ...(description ? { description } : {}),
       };
     });

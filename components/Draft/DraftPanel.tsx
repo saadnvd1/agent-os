@@ -8,8 +8,6 @@ import { Button } from "@/components/ui/button";
 import type { ChatFile, ChatImage } from "@/lib/chat/events";
 import type { Project } from "@/lib/db";
 import { draftComposerKey, type Draft } from "@/lib/drafts";
-import { discoversModels } from "@/lib/model-catalog";
-import { useDiscoveredModels } from "@/data/agents";
 import { useHostsQuery } from "@/data/hosts";
 import { useGitCheck } from "@/data/git/queries";
 import { useSelectedWorkspace } from "@/hooks/useSelectedWorkspace";
@@ -27,8 +25,6 @@ import { useStartAnalystBeside } from "@/components/Analyst/pair";
 import { DraftChips } from "./DraftChips";
 import { DraftHeading } from "./DraftHeading";
 import { ModelUnavailableDialog } from "./ModelUnavailableDialog";
-import { useMachineCatalog } from "@/data/machines";
-import { draftModels } from "./draftModels";
 
 // A new session before its first send: choices on top, a composer below.
 // Sending makes the session (and its worktree) and turns this tab into it.
@@ -52,14 +48,6 @@ export function DraftPanel({
   const { data: git } = useGitCheck(
     project && draft?.hostId === "local" ? project.working_directory : ""
   );
-  const discovers = !!draft && discoversModels(draft.agentType);
-  const found = useDiscoveredModels(
-    draft?.agentType ?? "",
-    draft?.projectId ?? null,
-    discovers
-  );
-  // On another machine the models are the ones it reports, not this one's.
-  const there = useMachineCatalog(draft?.hostId ?? "local");
   const launch = useLaunchSession();
   const startAnalyst = useStartAnalystBeside();
   const { workspace } = useSelectedWorkspace();
@@ -262,15 +250,6 @@ export function DraftPanel({
           }
           onSend={(text, images, files) => void send(text, images, files)}
           onStop={() => {}}
-          models={
-            (draft.hostId !== "local" &&
-              there.data?.catalog?.agents.find(
-                (a) => a.agent === draft.agentType
-              )?.models) ||
-            draftModels(draft.agentType, found)
-          }
-          model={draft.model}
-          onSetModel={(model) => draftsActions.update(draft.id, { model })}
           access={draft.openPr ? undefined : draft.access}
           onSetAccess={(access) => draftsActions.update(draft.id, { access })}
           prefill={prefill}

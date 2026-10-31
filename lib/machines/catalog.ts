@@ -16,6 +16,7 @@ import {
 } from "../model-catalog";
 import type { ChatModel } from "../chat/events";
 import { ollamaModels } from "./ollama";
+import { recentPicks } from "./recent";
 import type { CatalogAgent, MachineCatalog, OllamaEntry } from "./types";
 
 const DISCOVER_MS = 6000;
@@ -55,7 +56,9 @@ async function discover(agent: string): Promise<ChatModel[]> {
   ]);
 }
 
-export async function machineCatalog(): Promise<MachineCatalog> {
+export async function machineCatalog(
+  projectId: string | null = null
+): Promise<MachineCatalog> {
   const [probes, tags] = await Promise.all([probeAgents(), ollamaModels()]);
   const found: Record<string, ChatModel[]> = {};
   const errors: Record<string, string> = {};
@@ -93,5 +96,6 @@ export async function machineCatalog(): Promise<MachineCatalog> {
   return {
     agents,
     ollama: tags.map((name) => ({ name, runsWith: ollamaRunner(name, found) })),
+    recent: recentPicks(projectId),
   };
 }

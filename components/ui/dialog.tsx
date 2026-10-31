@@ -46,13 +46,23 @@ function DialogOverlay({
   );
 }
 
+const PLACEMENT = {
+  center:
+    "top-[50%] left-[50%] grid w-full max-w-[calc(100%-2rem)] translate-x-[-50%] translate-y-[-50%] gap-4 rounded-2xl p-6 data-[state=closed]:zoom-out-95 data-[state=open]:zoom-in-95 sm:max-w-lg",
+  // Rises from the bottom edge on a phone; the caller sets its height.
+  sheet:
+    "inset-x-0 bottom-0 flex w-full flex-col rounded-t-2xl pb-[env(safe-area-inset-bottom)] data-[state=closed]:slide-out-to-bottom data-[state=open]:slide-in-from-bottom",
+} as const;
+
 function DialogContent({
   className,
   children,
   showCloseButton = true,
+  placement = "center",
   ...props
 }: React.ComponentProps<typeof DialogPrimitive.Content> & {
   showCloseButton?: boolean;
+  placement?: keyof typeof PLACEMENT;
 }) {
   return (
     <DialogPortal data-slot="dialog-portal">
@@ -60,7 +70,8 @@ function DialogContent({
       <DialogPrimitive.Content
         data-slot="dialog-content"
         className={cn(
-          "popover-surface data-[state=open]:animate-in data-[state=closed]:animate-out data-[state=closed]:fade-out-0 data-[state=open]:fade-in-0 data-[state=closed]:zoom-out-95 data-[state=open]:zoom-in-95 fixed top-[50%] left-[50%] z-50 grid w-full max-w-[calc(100%-2rem)] translate-x-[-50%] translate-y-[-50%] gap-4 rounded-2xl p-6 duration-200 outline-none sm:max-w-lg",
+          "popover-surface data-[state=open]:animate-in data-[state=closed]:animate-out data-[state=closed]:fade-out-0 data-[state=open]:fade-in-0 fixed z-50 duration-200 outline-none",
+          PLACEMENT[placement],
           className
         )}
         {...props}
