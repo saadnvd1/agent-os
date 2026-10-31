@@ -16,6 +16,11 @@ describe("buildTaskBrief", () => {
     expect(brief).not.toMatch(/Reviewed:/);
   });
 
+  it("asks for the What's New line at the end of the PR body", () => {
+    expect(brief).toContain("Whats-new: New|Improved|Fixed");
+    expect(brief).toContain("Whats-new: skip");
+  });
+
   it("defines the blocked signal the state detector looks for", () => {
     expect(brief).toContain('"BLOCKED:"');
   });

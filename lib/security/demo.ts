@@ -148,6 +148,8 @@ const READS = [
   "devices/network",
   // Whether this is a demo, for the UI.
   "demo",
+  // The changelog: a static file, no agent.
+  "whats-new",
 ].map(route);
 
 // The only writes, each a database write and nothing more in demo mode:

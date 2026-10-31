@@ -8,6 +8,7 @@
   "files": [
     "app/",
     "components/",
+    "content/",
     "contexts/",
     "data/",
     "hooks/",

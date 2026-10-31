@@ -13,6 +13,11 @@
 #   HELD <sha> <seconds> left in the restart gap (since <last restart sha>)
 # Another machine (a server) runs it with AGENTOS_PUBLISH=0: deploy
 # only, and its own AGENTOS_RESTART. Only one machine publishes to npm.
+# The machine that publishes also writes the What's New entries for what
+# merged (scripts/whats-new, before the publish, so the package carries them)
+# and pushes them as a commit that touches only content/whats-new.json. Such a
+# commit is pulled but never rebuilt or restarted for, and the generator
+# ignores it, so it can't loop. AGENTOS_WHATS_NEW=0 turns the step off.
 set -euo pipefail
 cd "$(dirname "$0")/.."
 
@@ -41,6 +46,18 @@ published=$(cat "$state/published" 2>/dev/null || true)
 [ "${AGENTOS_PUBLISH:-1}" = 0 ] && published=$head
 [ "$head" = "$deployed" ] && [ "$head" = "$published" ] && exit 0
 log() { echo "$(date '+%Y-%m-%d %-I:%M %p') $*"; }
+
+# A head that differs from the deployed one only in the changelog file needs
+# a pull, not a build or a restart: the file is read from disk when asked.
+changelog=content/whats-new.json
+if [ "$head" != "$deployed" ] && [ -n "$deployed" ] &&
+  [ "$(git diff --name-only "$deployed" "$head" 2>/dev/null)" = "$changelog" ] &&
+  [ -z "$(git status --porcelain --untracked-files=no)" ] &&
+  git merge -q --ff-only "$head" 2>/dev/null; then
+  deployed=$head
+  git rev-parse HEAD > "$state/deployed"
+  [ "$head" = "$published" ] && exit 0
+fi
 
 # Merges land in bursts: one that's under AGENTOS_SETTLE seconds old (2
 # minutes) waits for the next run, so a burst is one build and one restart.
@@ -102,6 +119,17 @@ if [ "$head" != "$deployed" ]; then
   date +%s > "$state/restarted"
   # A link into an older clone would run an old aos on this machine.
   scripts/sync-cli-links || log "CLI link sync failed"
+fi
+
+# The changelog is written before the publish, from the same checkout, so the
+# package carries it. Best effort: a failure here never holds up the publish.
+if [ "${AGENTOS_PUBLISH:-1}" != 0 ] && [ "${AGENTOS_WHATS_NEW:-1}" != 0 ] &&
+  [ "$head" != "$published" ] && [ "$head" = "$(git rev-parse HEAD)" ]; then
+  if ! node --import tsx scripts/whats-new.ts --commit \
+    --through-file "$state/whats-new-through" >> "$state/whats-new.log" 2>&1; then
+    log "What's New step failed; see $state/whats-new.log"
+  fi
+  head=$(git rev-parse HEAD)
 fi
 
 # Publishing waits minutes for npm to serve a version, so it runs on its own
