@@ -33,3 +33,24 @@ chat or bookmark you came from, and it returns you to the spot you were at.
 - The browser's own keys work too, and AgentOS binds none of them: ⌘[ and ⌘]
   or ⌘← and ⌘→ on a Mac, Alt+← and Alt+→ elsewhere, a mouse's side buttons, and
   the swipe from the edge on iPhone and iPad.
+
+## Switching chats
+
+- **⌘P** (Ctrl+P elsewhere), or **O** then **C**, opens the palette's Sessions tab
+  with the chats you opened most recently first. It starts on the one before this
+  one, so Enter flips back.
+- **G** then **P** flips to the previous chat without opening anything. Press it
+  again to flip back.
+- **⌘↑ / ⌘↓** move through the sidebar, as before.
+- **⌘K** is the command palette; it lists your recent chats first.
+
+## Shortcuts
+
+Press **?** (or use the keyboard icon at the bottom of the sidebar, which is the
+way in on a phone) for the list, with a search box.
+
+Letters work like Linear's: **C** starts a chat, **G** then **I** / **B** / **M** /
+**S** goes to the Inbox, Bookmarks, Messages or Settings. They only act when you
+are not typing in a field, a terminal or a dialog. If they get in your way, turn
+them off with the switch at the bottom of the shortcuts panel (per browser), or
+with "Turn off single-key shortcuts" in the palette. ⌘K, ⌘P and ⌘↑/⌘↓ stay on.

@@ -5,6 +5,15 @@ import type { Position } from "@/lib/nav/position";
 // A place asked for and not taken this soon is stale.
 const TARGET_MS = 10_000;
 
+// When each chat was last opened, apart from `views` so that a reader moving
+// through a chat doesn't redraw everything that lists chats by recency.
+export const chatOpened = proxy<Record<string, number>>({});
+
+const noteOpened = (v: ChatView) => {
+  if (chatOpened[v.sessionId] !== v.viewedAt)
+    chatOpened[v.sessionId] = v.viewedAt;
+};
+
 // What the page knows of where each chat was last read (the server's copy,
 // kept current as the reader moves), a place a history entry asks a chat to
 // open at, and the chats to open at their latest message.
@@ -22,6 +31,7 @@ export const chatPositionsActions = {
       const mine = chatPositions.views[v.sessionId];
       if (!mine || mine.viewedAt < v.viewedAt)
         chatPositions.views[v.sessionId] = v;
+      noteOpened(chatPositions.views[v.sessionId]);
     }
     chatPositions.loaded = true;
   },
@@ -31,6 +41,7 @@ export const chatPositionsActions = {
   },
   record: (view: ChatView) => {
     chatPositions.views[view.sessionId] = view;
+    noteOpened(view);
   },
   setTarget: (sessionId: string, pos: Position) => {
     chatPositions.target = { sessionId, pos, at: Date.now() };
