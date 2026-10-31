@@ -46,8 +46,9 @@ export function useListKeys(
   };
 }
 
-/** Focus the ticked row, else the first, so the arrows work at once. */
+/** Focus the ticked model, else the first, so the arrows work at once. */
 export function focusSelectedRow(root: HTMLElement | null): void {
-  const rows = root?.querySelectorAll<HTMLElement>(ROWS);
-  (root?.querySelector<HTMLElement>("[data-selected]") ?? rows?.[0])?.focus();
+  const list = root?.querySelector("[data-model-list]") ?? root;
+  const rows = list?.querySelectorAll<HTMLElement>(ROWS);
+  (list?.querySelector<HTMLElement>("[data-selected]") ?? rows?.[0])?.focus();
 }

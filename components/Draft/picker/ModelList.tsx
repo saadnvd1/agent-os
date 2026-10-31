@@ -110,7 +110,7 @@ export function ModelList({
       </p>
     );
   return (
-    <div className="flex flex-col gap-0.5 p-1.5">
+    <div data-model-list className="flex flex-col gap-0.5 p-1.5">
       {sections.map((s) => (
         <div key={s.key} className="flex flex-col gap-0.5">
           <div className="text-muted-foreground flex items-center justify-between px-2 pt-2 pb-1 text-[11px] font-medium">

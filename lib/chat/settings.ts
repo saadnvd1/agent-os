@@ -5,6 +5,7 @@
 
 import { effectiveChatAccess, noApprovalsOn } from "../approvals/no-approvals";
 import os from "os";
+import { agentLabel } from "../agent-options";
 import { db, type Session } from "../db";
 import { agentEnv } from "../agents/launch";
 import { modelDisplayName, resolveModelForAgent } from "../model-catalog";
@@ -85,6 +86,7 @@ export function emitCapabilities(session: Session, listener?: Listener): void {
     commands: visibleCommands(caps),
     models,
     model,
+    agentLabel: agentLabel(session.agent_type),
     modelLabel:
       models.find((o) => o.value === model)?.label ??
       modelDisplayName(chatModel(session)),
