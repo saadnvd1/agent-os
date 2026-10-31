@@ -46,7 +46,9 @@ import {
   reapTunnel,
   superviseTunnel,
   type ReapDeps,
+  atStage,
   type Spawn,
+  type Stage,
   type TunnelState,
 } from "./supervise";
 
@@ -61,6 +63,10 @@ export interface ConnectStatus {
   enrolled?: boolean;
   hostname?: string;
   reason?: string;
+  /** Where the last failure came from: getting the connector, or the service. */
+  stage?: Stage;
+  /** While not up: when it went down or started trying (ms since epoch). */
+  downSince?: number;
 }
 
 const g = globalThis as unknown as { __agentosConnect?: () => ConnectStatus };
@@ -160,6 +166,8 @@ interface Running {
   supervisor: ReturnType<typeof superviseTunnel> | null;
   heartbeat: ReturnType<typeof startHeartbeat>;
   release: () => void;
+  /** When this run started, for how long it has been trying. */
+  since: number;
 }
 
 export function startConnect(
@@ -188,6 +196,8 @@ export function startConnect(
       hostname: hostname || base.hostname,
       state: bindError ? "error" : s === "stopped" ? "off" : s,
       reason: bindError ?? running.supervisor?.reason(),
+      stage: bindError ? undefined : running.supervisor?.stage(),
+      downSince: running.supervisor?.downSince() ?? running.since,
     };
   };
 
@@ -281,9 +291,12 @@ export function startConnect(
         spawn: deps.spawn,
         delays: deps.delays,
         prepare: async () => {
-          const bin = await ensure(dir);
+          const bin = await atStage("connector", ensure(dir));
           // Fresh every start; the token lives only in this call and the child's env.
-          const tunnel = await ask(config, machineKey, tunnelPort);
+          const tunnel = await atStage(
+            "service",
+            ask(config, machineKey, tunnelPort)
+          );
           if (tunnel.hostname !== hostname) {
             hostname = tunnel.hostname;
             saveConnect({ ...config, hostname }, dir);
@@ -350,6 +363,7 @@ export function startConnect(
       supervisor: null,
       heartbeat,
       release: lock.release,
+      since: Date.now(),
     };
     server.listen(tunnelPort, "127.0.0.1");
   };

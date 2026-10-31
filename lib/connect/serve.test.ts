@@ -355,6 +355,23 @@ describe("startConnect", () => {
     await expect(get(tunnelPort, { host: HOST })).rejects.toThrow();
   }, 15_000);
 
+  it.each([
+    [
+      "connector",
+      { ensureBinary: () => Promise.reject(new Error("download failed")) },
+    ],
+    [
+      "service",
+      { requestTunnel: () => Promise.reject(new Error("fetch failed")) },
+    ],
+  ] as const)("says a failure came from the %s", async (stage, extra) => {
+    const m = await machine();
+    start(m, await freePort(), undefined, extra);
+    await until(() => connectStatus().state === "error");
+    expect(connectStatus()).toMatchObject({ stage });
+    expect(connectStatus().downSince).toBeLessThanOrEqual(Date.now());
+  });
+
   it("stops the tunnel when the heartbeat says the account disabled it, and stays off", async () => {
     const m = await machine();
     const tunnelPort = await freePort();

@@ -3,6 +3,7 @@ import type { ListedDevice } from "@/lib/security/devices";
 import type { NetworkState } from "@/lib/security/network-state";
 import type { PairingOffer } from "@/lib/security/pair-qr";
 import { deviceKeys } from "./keys";
+import { reachKeys } from "../reach";
 import { provePresence } from "../presence";
 
 async function json<T>(res: Response): Promise<T> {
@@ -77,7 +78,11 @@ export function useUpdateNetwork() {
           }),
         })
       ),
-    onSuccess: (data) => queryClient.setQueryData(deviceKeys.network(), data),
+    onSuccess: (data) => {
+      queryClient.setQueryData(deviceKeys.network(), data);
+      // Wi-Fi access or Connect changed: whether devices get in did too.
+      void queryClient.invalidateQueries({ queryKey: reachKeys.all });
+    },
   });
 }
 

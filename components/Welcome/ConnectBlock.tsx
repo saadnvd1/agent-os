@@ -18,6 +18,7 @@ import {
   CONNECT_STATE,
   connectView,
 } from "@/lib/connect/view";
+import { ReachRow } from "@/components/Reach/ReachRow";
 import { Block } from "./Block";
 
 const COMMAND = "agent-os connect";
@@ -155,6 +156,7 @@ export function ConnectBlock() {
             {update.error && (
               <p className="text-destructive text-xs">{update.error.message}</p>
             )}
+            <ReachRow className="mt-2 px-0" />
           </div>
           <Switch
             checked={wanted ?? view.on}

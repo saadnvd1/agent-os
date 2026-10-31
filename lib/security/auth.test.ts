@@ -258,6 +258,7 @@ describe("isPublicPath", () => {
     "/pair",
     "/pair?x=1",
     "/api/pair/claim",
+    "/api/reach/probe",
     "/_next/static/chunks/a.js",
     "/icon.svg",
   ])("%s is reachable before pairing", (p) =>
@@ -267,6 +268,8 @@ describe("isPublicPath", () => {
     "/",
     "/api/sessions",
     "/api/pair/start",
+    "/api/reach",
+    "/api/reach/probe/x",
     "/pairing-evil",
     "/pair/x",
     "/api/exec",
