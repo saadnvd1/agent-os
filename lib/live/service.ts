@@ -259,7 +259,7 @@ export async function changeCode(
   id: string,
   next: { generate: true } | { code: string } | null
 ): Promise<void> {
-  const rt = runtimeFor(id);
+  runtimeFor(id);
   let code: string | null = null;
   if (next && "code" in next) {
     const why = codeRefusal(next.code);
