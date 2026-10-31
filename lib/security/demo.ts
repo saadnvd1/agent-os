@@ -150,6 +150,8 @@ const READS = [
   "demo",
   // The changelog: a static file, no agent.
   "whats-new",
+  // Tip of the Day: reading is a static file plus two settings.
+  "tips",
 ].map(route);
 
 // The only writes, each a database write and nothing more in demo mode:

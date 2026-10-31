@@ -12,6 +12,7 @@ import {
   type UpdateView,
 } from "@/lib/updates/banner";
 import { cn } from "@/lib/utils";
+import { TipHost } from "@/components/Tips";
 import { WhatsNewHost } from "@/components/WhatsNew";
 import { whatsNewActions } from "@/stores/whatsNew";
 import { UpdateActions } from "./UpdateActions";
@@ -224,10 +225,17 @@ export function UpdateBanner() {
     dismissedVersion: dismissed.version,
     dismissedRun: dismissed.run,
   });
-  if (state === "hidden" || !view) return <WhatsNewHost />;
+  if (state === "hidden" || !view)
+    return (
+      <>
+        <WhatsNewHost />
+        <TipHost />
+      </>
+    );
   return (
     <>
       <WhatsNewHost />
+      <TipHost />
       <UpdateBannerView
         state={state}
         view={view}
