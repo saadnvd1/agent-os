@@ -32,6 +32,7 @@ const root = await import("./route");
 const runRoute = await import("./run/route");
 const checkRoute = await import("./check/route");
 const settingsRoute = await import("./settings/route");
+const healthRoute = await import("./health/route");
 
 const req = (
   path: string,
@@ -65,6 +66,7 @@ beforeEach(() => {
   throttled = undefined;
   refreshed = null;
   delete process.env.AGENTOS_UPDATE_BANNER;
+  delete process.env.AGENTOS_AUTO_UPDATE;
   process.env.AGENTOS_DEV = "1";
   db.prepare(`DELETE FROM settings WHERE key LIKE 'updates.%'`).run();
 });
@@ -203,5 +205,56 @@ describe("PUT /api/updates/settings", () => {
         )
       ).status
     ).toBe(409);
+  });
+});
+
+describe("automatic updates settings", () => {
+  it("are on by default, and turn off and back on, with an idle time", async () => {
+    const first = await (await root.GET(req("", "GET", loopback))).json();
+    expect(first.auto).toMatchObject({
+      enabled: true,
+      locked: false,
+      idleMinutes: 10,
+    });
+    let view = await (
+      await settingsRoute.PUT(
+        req("/settings", "PUT", loopback, { auto: false, idleMinutes: 30 })
+      )
+    ).json();
+    expect(view.auto).toMatchObject({ enabled: false, idleMinutes: 30 });
+    view = await (
+      await settingsRoute.PUT(req("/settings", "PUT", loopback, { auto: true }))
+    ).json();
+    expect(view.auto.enabled).toBe(true);
+  });
+
+  it("refuses an idle time it doesn't offer, and a pinned switch", async () => {
+    expect(
+      (
+        await settingsRoute.PUT(
+          req("/settings", "PUT", loopback, { idleMinutes: 7 })
+        )
+      ).status
+    ).toBe(400);
+    process.env.AGENTOS_AUTO_UPDATE = "off";
+    expect(
+      (
+        await settingsRoute.PUT(
+          req("/settings", "PUT", loopback, { auto: true })
+        )
+      ).status
+    ).toBe(409);
+    const view = await (await root.GET(req("", "GET", loopback))).json();
+    expect(view.auto).toMatchObject({ enabled: false, locked: true });
+  });
+});
+
+describe("GET /api/updates/health", () => {
+  it("says which build runs and that every migration applied", async () => {
+    const body = await healthRoute.GET().json();
+    expect(body.ok).toBe(true);
+    expect(body.build).toBeTruthy();
+    expect(body.migrations.known).toBeGreaterThan(0);
+    expect(body.migrations.applied).toBe(body.migrations.known);
   });
 });

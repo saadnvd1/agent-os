@@ -31,6 +31,8 @@ describe("inFlight", () => {
       reviews: before.reviews + 1,
       setups: before.setups + 1,
       simulatorStarts: before.simulatorStarts,
+      merges: before.merges,
+      landings: before.landings,
     });
     db.prepare(
       `UPDATE orchestrator_checks SET created_at = datetime('now', '-31 minutes') WHERE session_id = ?`
@@ -55,5 +57,26 @@ describe("inFlight simulator starts", () => {
     expect(inFlight().simulatorStarts).toBe(before + 1);
     await done;
     expect(inFlight().simulatorStarts).toBe(before);
+  });
+});
+
+describe("inFlight merges", () => {
+  it("counts a sign-off and the tidying after a merge once per task", async () => {
+    const { signingOff } = await import("./tasks/finish");
+    const g = globalThis as unknown as {
+      __agentosAfterMerge?: Map<string, Promise<void>>;
+    };
+    const before = inFlight().merges;
+    signingOff.add("merge-a");
+    g.__agentosAfterMerge!.set("merge-a", Promise.resolve());
+    g.__agentosAfterMerge!.set("merge-b", Promise.resolve());
+    try {
+      expect(inFlight().merges).toBe(before + 2);
+    } finally {
+      signingOff.delete("merge-a");
+      g.__agentosAfterMerge!.delete("merge-a");
+      g.__agentosAfterMerge!.delete("merge-b");
+    }
+    expect(inFlight().merges).toBe(before);
   });
 });

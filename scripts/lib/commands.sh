@@ -120,7 +120,20 @@ wsl_next_steps() {
     echo "  aren't noticed."
 }
 
+# True when the systemd user unit `agent-os enable` writes is running
+# AgentOS: then start, stop and restart go through systemd, or a restart
+# would leave a second server outside the unit for systemd to fight.
+systemd_unit_active() {
+    has_systemd && systemctl --user is-active --quiet agent-os 2>/dev/null
+}
+
 cmd_start() {
+    if ! is_running && has_systemd &&
+        systemctl --user is-enabled --quiet agent-os 2>/dev/null; then
+        systemctl --user start agent-os
+        log_success "AgentOS started (systemd)"
+        return 0
+    fi
     if is_running; then
         local pid
         pid=$(get_pid)
@@ -173,6 +186,13 @@ cmd_start() {
 }
 
 cmd_stop() {
+    if systemd_unit_active; then
+        log_info "Stopping AgentOS (systemd)..."
+        systemctl --user stop agent-os
+        rm -f "$PID_FILE"
+        log_success "AgentOS stopped"
+        return 0
+    fi
     if ! is_running; then
         log_warn "AgentOS is not running"
         return 0
@@ -206,6 +226,11 @@ cmd_stop() {
 }
 
 cmd_restart() {
+    if systemd_unit_active; then
+        systemctl --user restart agent-os
+        log_success "AgentOS restarted (systemd)"
+        return 0
+    fi
     cmd_stop
     sleep 1
     cmd_start
@@ -417,6 +442,9 @@ Type=simple
 ExecStart=$script_path start-foreground
 Restart=on-failure
 RestartSec=10
+# Only the server is stopped on a restart: terminals (tmux), chat workers and
+# an update in progress outlive it, as they do under launchd.
+KillMode=process
 Environment=PATH=/usr/local/bin:/usr/bin:/bin
 
 [Install]
@@ -542,7 +570,10 @@ cmd_start_foreground() {
     # Create PID file before exec (PID stays the same after exec)
     echo "$$" > "$PID_FILE"
 
-    exec npm start
+    # The server itself is the service's main process, not an npm wrapper:
+    # with KillMode=process a wrapper's stop left the old server on the port.
+    npm run --silent prestart || exit 1
+    exec env NODE_ENV=production AGENTOS_SERVER=live node --import tsx server.ts
 }
 
 cmd_help() {

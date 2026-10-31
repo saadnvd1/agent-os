@@ -173,7 +173,7 @@ describe("UpdateBanner", () => {
       },
     });
     await render();
-    expect(text()).toContain("Building… step 3 of 4");
+    expect(text()).toContain("Building… step 3 of 5");
     expect(button("Dismiss")).toBeUndefined();
   });
 
@@ -195,5 +195,43 @@ describe("UpdateBanner", () => {
     await act(async () => button("Dismiss")!.click());
     expect(text()).toBe("");
     expect(localStorage.getItem("agentos.update.dismissedRun")).toBe("r9");
+  });
+
+  it("says an automatic update happened, with What's New", async () => {
+    view = make({
+      available: false,
+      run: {
+        id: "a1",
+        phase: "done",
+        auto: true,
+        from: "a",
+        fromVersion: "0.3.1",
+        toVersion: "0.3.5",
+        startedAt: Date.now() - 60_000,
+        finishedAt: Date.now(),
+      },
+    });
+    await render();
+    expect(text()).toContain("updated itself to 0.3.5");
+    expect(button("See what's new")).toBeDefined();
+  });
+
+  it("says calmly when an automatic update was rolled back", async () => {
+    view = make({
+      available: false,
+      run: {
+        id: "a2",
+        phase: "rolled_back",
+        auto: true,
+        from: "a",
+        fromVersion: "0.3.1",
+        toVersion: "0.3.5",
+        startedAt: 1,
+        finishedAt: 2,
+      },
+    });
+    await render();
+    expect(text()).toContain("went back to 0.3.1");
+    expect(document.querySelector('[role="alert"]')).toBeNull();
   });
 });

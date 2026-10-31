@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-import { inFlight } from "@/lib/busy";
+import { inFlight, inFlightTotal } from "@/lib/busy";
 import { requireLocalTrust } from "@/lib/security/route-guard";
 
 // GET /api/busy - work a restart would cut off; scripts/redeploy waits
@@ -8,6 +8,6 @@ export async function GET(request: NextRequest) {
   const refused = requireLocalTrust(request);
   if (refused) return refused;
   const work = inFlight();
-  const busy = work.reviews + work.setups + work.simulatorStarts > 0;
+  const busy = inFlightTotal(work) > 0;
   return NextResponse.json({ ...work, busy });
 }

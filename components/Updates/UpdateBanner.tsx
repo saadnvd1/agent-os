@@ -16,12 +16,19 @@ import { WhatsNewHost } from "@/components/WhatsNew";
 import { whatsNewActions } from "@/stores/whatsNew";
 import { UpdateActions } from "./UpdateActions";
 
-const STEPS = ["pulling", "installing", "building", "restarting"] as const;
+const STEPS = [
+  "pulling",
+  "installing",
+  "building",
+  "restarting",
+  "verifying",
+] as const;
 const LABEL: Record<(typeof STEPS)[number], string> = {
   pulling: "Pulling the new version",
   installing: "Installing dependencies",
   building: "Building",
   restarting: "Restarting",
+  verifying: "Checking the new version",
 };
 const SLOW_MS = 10 * 60_000;
 
@@ -79,13 +86,24 @@ export function UpdateBannerView({
   else if (state === "built")
     text = <>Built {run?.toVersion}. Restart AgentOS to finish updating.</>;
   else if (failed) text = <>The update didn&apos;t finish. {run?.error}</>;
+  else if (state === "updated")
+    text = <>AgentOS updated itself to {run?.toVersion}</>;
+  else if (state === "rolled_back")
+    text = (
+      <>
+        An update to {run?.toVersion} didn&apos;t start cleanly, so AgentOS went
+        back to {run?.fromVersion}. It won&apos;t try that version again.
+      </>
+    );
   else {
     const step = Math.max(
       0,
       STEPS.indexOf(run!.phase as (typeof STEPS)[number])
     );
     text =
-      elapsed > SLOW_MS ? (
+      run?.phase === "rolling_back" ? (
+        <>The new version didn&apos;t start cleanly; going back…</>
+      ) : elapsed > SLOW_MS ? (
         <>Taking longer than expected. Check the update log, then reload.</>
       ) : (
         <>
@@ -99,7 +117,7 @@ export function UpdateBannerView({
       {state === "available" && !view.canUpdate.ok && view.canUpdate.reason && (
         <p className="text-muted-foreground text-xs">{view.canUpdate.reason}</p>
       )}
-      {failed && <Log lines={run?.log ?? []} />}
+      {(failed || state === "rolled_back") && <Log lines={run?.log ?? []} />}
       {notesOpen && latest && (
         <ul className="text-muted-foreground list-disc space-y-0.5 pl-4 text-xs">
           {latest.notes.map((n, i) => (
@@ -149,7 +167,7 @@ export function UpdateBannerView({
               />
             </button>
           )}
-          {state === "available" && (
+          {(state === "available" || state === "updated") && (
             <button
               type="button"
               className="text-muted-foreground hover:text-foreground inline-flex min-h-11 items-center text-xs underline md:min-h-0"

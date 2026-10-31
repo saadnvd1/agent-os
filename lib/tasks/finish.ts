@@ -88,17 +88,17 @@ async function cleanup(
   forgetPR(session.id);
 }
 
-// Sign-offs between `gh pr merge` and the database knowing it, so the
-// watcher doesn't read our own merge as one done on GitHub.
-export const signingOff = new Set<string>();
-
 // What happens after a merge: restack anything stacked on it, then remove the
 // session, worktree and branch. Kept per task so Land and done can wait for
 // it; on globalThis because the watcher's merges run in server.ts and done in
-// a route bundle, which load this module separately.
+// a route bundle, which load this module separately. lib/busy.ts counts both.
 const g = globalThis as unknown as {
   __agentosAfterMerge?: Map<string, Promise<void>>;
+  __agentosSigningOff?: Set<string>;
 };
+// Sign-offs between `gh pr merge` and the database knowing it, so the
+// watcher doesn't read our own merge as one done on GitHub.
+export const signingOff: Set<string> = (g.__agentosSigningOff ??= new Set());
 const afterMerge: Map<string, Promise<void>> = (g.__agentosAfterMerge ??=
   new Map());
 

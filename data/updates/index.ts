@@ -61,3 +61,8 @@ export const useUpdateBannerSetting = () =>
   useUpdateMutation<boolean>((banner) =>
     send("PUT", "/api/updates/settings", { banner })
   );
+
+export const useAutoUpdateSetting = () =>
+  useUpdateMutation<{ auto?: boolean; idleMinutes?: number }>((patch) =>
+    send("PUT", "/api/updates/settings", patch)
+  );

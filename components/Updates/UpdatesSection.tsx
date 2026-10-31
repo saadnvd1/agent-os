@@ -10,6 +10,7 @@ import {
   useUpdates,
 } from "@/data/updates";
 import { isActivePhase } from "@/lib/updates/banner";
+import { AutoUpdates } from "./AutoUpdates";
 import { UpdateActions } from "./UpdateActions";
 
 function ago(at: number | null): string {
@@ -32,7 +33,8 @@ function Row({ label, value }: { label: string; value: React.ReactNode }) {
   );
 }
 
-// Settings > Updates: what's installed, what's out, and the switch for the banner.
+// Settings > Updates: what's installed, what's out, automatic updates, and
+// the switch for the banner.
 export function UpdatesSection() {
   const { data: view, isLoading, error } = useUpdates();
   const check = useCheckForUpdates();
@@ -93,7 +95,7 @@ export function UpdatesSection() {
           The last check failed: {view.checkError}
         </p>
       )}
-      {view.run?.phase === "failed" && (
+      {view.run?.phase === "failed" && !view.run.auto && (
         <p className="text-destructive text-sm" role="alert">
           The last update failed. {view.run.error}
         </p>
@@ -136,9 +138,11 @@ export function UpdatesSection() {
         )}
       </div>
 
+      {view.auto && <AutoUpdates auto={view.auto} />}
+
       <SettingToggle
         title="Show update banner"
-        detail="Tell everyone using this AgentOS when a newer version is out. Nothing updates unless someone chooses to."
+        detail="Tell everyone using this AgentOS when a newer version is out, and when it updated itself."
         checked={view.bannerEnabled}
         locked={view.bannerLocked}
         onChange={(on) =>

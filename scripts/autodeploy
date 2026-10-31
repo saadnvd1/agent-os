@@ -29,6 +29,10 @@ fi
 
 state="$HOME/.agent-os/autodeploy"
 mkdir -p "$state"
+# Tells the server this checkout is deployed from here, so its own automatic
+# updates stand aside (lib/updates/run.ts managedByAutodeploy). Before the
+# lock: a long deploy still counts as managing it.
+touch "$state/heartbeat"
 # A lock older than 30 minutes is from a run that died.
 for lock in lock publish.lock; do
   if [ -d "$state/$lock" ] && [ -n "$(find "$state/$lock" -maxdepth 0 -mmin +30)" ]; then

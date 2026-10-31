@@ -1,14 +1,16 @@
-// The /api/updates payload: the cached check, the run, what's pending, and
-// whether the caller may start an update.
+// The /api/updates payload: the cached check, the run, what's pending,
+// whether the caller may start an update, and what automatic updates are doing.
 
 import { isActivePhase, type UpdateView } from "./banner";
 import { cachedCheck, checkForUpdate, reconcile } from "./check";
 import {
+  autoView,
   preflight,
   readLog,
   readPending,
   readRun,
   realRunDeps,
+  recordFinishedRun,
   type RunDeps,
 } from "./run";
 import { bannerEnabled, bannerLocked } from "./settings";
@@ -28,6 +30,7 @@ export async function updateView(
   { mayUpdate }: { mayUpdate: boolean },
   deps: RunDeps = realRunDeps()
 ): Promise<UpdateView> {
+  recordFinishedRun(deps);
   const stored = readRun(deps);
   let check = cachedCheck(deps.check);
   // An answer from before the update that just finished says the new version
@@ -43,7 +46,10 @@ export async function updateView(
   check = await reconcile(check, deps.check);
   // The log can carry paths and remote URLs; only a device that may update sees it.
   const run =
-    stored && (stored.phase === "failed" || stored.phase === "built")
+    stored &&
+    (stored.phase === "failed" ||
+      stored.phase === "built" ||
+      stored.phase === "rolled_back")
       ? {
           ...stored,
           log: mayUpdate
@@ -74,6 +80,11 @@ export async function updateView(
         : { ok: true },
     run,
     pending,
+    auto: await autoView(deps, check, refusal).then((auto) =>
+      mayUpdate
+        ? auto
+        : { ...auto, attempts: auto.attempts.map(({ error: _, ...a }) => a) }
+    ),
     working: wantsWorking
       ? await deps
           .working()

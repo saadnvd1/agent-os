@@ -87,6 +87,18 @@ function setup() {
   return { root, home, clone, commit, run, restarts, deployed, state };
 }
 
+describe("autodeploy heartbeat", () => {
+  it("touches it on every run, even one with nothing to deploy", () => {
+    const t = setup();
+    t.commit("a");
+    t.run();
+    const beat = path.join(t.state, "heartbeat");
+    fs.utimesSync(beat, new Date(0), new Date(0));
+    expect(t.run()).toBe("");
+    expect(Date.now() - fs.statSync(beat).mtimeMs).toBeLessThan(60_000);
+  });
+});
+
 describe("autodeploy restart gap", () => {
   it("holds a second deploy inside the gap, then deploys the newest head once it ends", () => {
     const t = setup();
