@@ -1,6 +1,7 @@
 import type { ChatAccess, DriverEvent, FileDiff } from "../events";
 import { unifiedToDiff } from "../diff";
 import { toolTitle } from "../tools";
+import { isAskUserCall } from "./copilot-ask";
 import { PendingApprovals } from "./pending-approvals";
 
 type P = Record<string, unknown>;
@@ -71,6 +72,7 @@ export class CopilotApprovals {
         : { outcome: { outcome: "cancelled" } };
 
     if (
+      isAskUserCall(call) ||
       this.access === "full" ||
       (this.access === "edits" && EDITS_KINDS.has(kind))
     )

@@ -64,4 +64,14 @@ describe("CopilotApprovals", () => {
       optionId: "allow_once",
     });
   });
+
+  it("never asks about its own ask_user tool", async () => {
+    const { approvals, events } = setup("ask");
+    const r = await approvals.handle({
+      ...ask("other"),
+      toolCall: { toolCallId: "q", title: "agentos-ask_user", kind: "other" },
+    });
+    expect(picked(r)).toEqual({ outcome: "selected", optionId: "allow_once" });
+    expect(events).toEqual([]);
+  });
 });

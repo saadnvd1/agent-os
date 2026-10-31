@@ -3,6 +3,7 @@ import { AGENT_DEFAULT_MODEL } from "../../providers/registry";
 import type { ChatStartOptions } from "../driver";
 import { copilotArgs, copilotDefaultModel, copilotModels } from "./copilot";
 
+const ALLOW = "--allow-tool=agentos(ask_user)";
 const start = (model?: string) => ({ model }) as unknown as ChatStartOptions;
 
 describe("copilotDefaultModel", () => {
@@ -30,19 +31,24 @@ describe("copilotDefaultModel", () => {
 
 describe("copilotArgs", () => {
   it("passes a chosen model", () => {
-    expect(copilotArgs(start("gpt-6"), "haiku")).toEqual(["--model", "gpt-6"]);
+    expect(copilotArgs(start("gpt-6"), "haiku")).toEqual([
+      "--model",
+      "gpt-6",
+      ALLOW,
+    ]);
   });
 
   it("falls back to the user's default for the agent default", () => {
     expect(copilotArgs(start(AGENT_DEFAULT_MODEL), "haiku")).toEqual([
       "--model",
       "haiku",
+      ALLOW,
     ]);
-    expect(copilotArgs(start(), "haiku")).toEqual(["--model", "haiku"]);
+    expect(copilotArgs(start(), "haiku")).toEqual(["--model", "haiku", ALLOW]);
   });
 
   it("passes nothing with no model anywhere", () => {
-    expect(copilotArgs(start(), undefined)).toEqual([]);
+    expect(copilotArgs(start(), undefined)).toEqual([ALLOW]);
   });
 });
 

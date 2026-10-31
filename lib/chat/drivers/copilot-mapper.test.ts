@@ -153,4 +153,30 @@ describe("toolStart", () => {
       toolStart({ kind: "read", rawInput: { path: "/w/a.ts" } }).name
     ).toBe("Read");
   });
+
+  it("hides the ask_user tool call, whose card is the question", () => {
+    const { mapper, items } = run([
+      {
+        sessionUpdate: "tool_call",
+        toolCallId: "q1",
+        title: "agentos-ask_user",
+        kind: "other",
+        rawInput: { question: "Which?" },
+      },
+      {
+        sessionUpdate: "tool_call_update",
+        toolCallId: "q1",
+        status: "completed",
+      },
+      {
+        sessionUpdate: "tool_call",
+        toolCallId: "t2",
+        title: "ls",
+        kind: "execute",
+        rawInput: { command: "ls" },
+      },
+    ]);
+    mapper.endTurn({});
+    expect(items().filter((i) => i.kind === "tool")).toHaveLength(1);
+  });
 });
