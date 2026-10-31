@@ -229,6 +229,9 @@ export function usePosition(d: Deps) {
           row.getBoundingClientRect().top -
           el.getBoundingClientRect().top -
           offsetPx;
+        // The view held its anchors from before the jump: take new ones, or
+        // the next layout change would carry the view back to them.
+        latest.current.release();
         st.current.settled = true;
         st.current.pos = null;
         el.dispatchEvent(new Event("scroll"));
@@ -328,6 +331,7 @@ export function usePosition(d: Deps) {
       )?.scrollIntoView({
         block: "start",
       });
+      latest.current.release();
       st.current.settled = true;
       el.dispatchEvent(new Event("scroll"));
     });
