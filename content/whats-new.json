@@ -1817,6 +1817,38 @@
       "area": "Chat",
       "text": "Chats now fill the screen with earlier messages on open instead of showing a nearly empty view with a \"Show earlier messages\" button.",
       "url": "https://github.com/saadnvd1/agent-os/pull/533"
+    },
+    {
+      "id": 536,
+      "date": "2026-10-31",
+      "kind": "new",
+      "area": "AgentOS",
+      "text": "Tip of the Day now shows pictures and short clips that demonstrate each tip.",
+      "url": "https://github.com/saadnvd1/agent-os/pull/536"
+    },
+    {
+      "id": 537,
+      "date": "2026-10-31",
+      "kind": "new",
+      "area": "AgentOS",
+      "text": "Chats now reopen where you left off, with back and forward buttons, a quick chat switcher and a keyboard shortcuts list.",
+      "url": "https://github.com/saadnvd1/agent-os/pull/537"
+    },
+    {
+      "id": 539,
+      "date": "2026-10-31",
+      "kind": "fixed",
+      "area": "AgentOS",
+      "text": "Holding Shift with a letter no longer triggers the shortcut meant for that letter on its own.",
+      "url": "https://github.com/saadnvd1/agent-os/pull/539"
+    },
+    {
+      "id": 541,
+      "date": "2026-10-31",
+      "kind": "new",
+      "area": "Chat",
+      "text": "Pressing Esc now takes you out of the message box when there is nothing else for it to do.",
+      "url": "https://github.com/saadnvd1/agent-os/pull/541"
     }
   ]
 }
