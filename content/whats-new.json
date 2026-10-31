@@ -1785,6 +1785,14 @@
       "area": "Chat",
       "text": "Large photos from your phone now attach to a chat instead of being refused.",
       "url": "https://github.com/saadnvd1/agent-os/pull/529"
+    },
+    {
+      "id": 530,
+      "date": "2026-10-31",
+      "kind": "new",
+      "area": "Chat",
+      "text": "GitHub Copilot chats can now ask you questions with clickable answer cards, like Claude chats do.",
+      "url": "https://github.com/saadnvd1/agent-os/pull/530"
     }
   ]
 }
