@@ -4,7 +4,7 @@ import { SessionList } from "@/components/SessionList";
 import { SidebarFooter } from "@/components/SidebarFooter";
 import { PaneLayout } from "@/components/PaneLayout";
 import { SwipeSidebar } from "@/components/mobile/SwipeSidebar";
-import { UpdateBanner } from "@/components/Updates";
+import { UpdateToast } from "@/components/Updates";
 import type { ViewProps } from "./types";
 import { CodeSearchDialog, StartServerDialog } from "./lazy";
 import { fileOpenActions } from "@/stores/fileOpen";
@@ -30,7 +30,7 @@ export function MobileView({
 }: ViewProps) {
   return (
     <main className="app-backdrop h-app fixed inset-x-0 top-[var(--app-top,0px)] flex flex-col overflow-hidden pb-[env(safe-area-inset-bottom)]">
-      <UpdateBanner />
+      <UpdateToast />
       {/* Swipe sidebar */}
       <SwipeSidebar isOpen={sidebarOpen} onClose={() => setSidebarOpen(false)}>
         <div className="flex h-full flex-col">

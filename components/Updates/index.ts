@@ -1,2 +1,2 @@
-export { UpdateBanner } from "./UpdateBanner";
+export { UpdateToast } from "./UpdateToast";
 export { UpdatesSection } from "./UpdatesSection";
