@@ -80,7 +80,9 @@ export function usePosition(d: Deps) {
     pos: null as Position | null,
     idle: undefined as ReturnType<typeof setTimeout> | undefined,
   });
-  const [job, setJob] = useState<Job | null>(null);
+  // The placement under way; moved on by `advance` below.
+  const jobRef = useRef<Job | null>(null);
+  const advanceRef = useRef<() => void>(() => {});
   const [divider, setDivider] = useState<{
     sessionId: string;
     block: string;
@@ -149,8 +151,7 @@ export function usePosition(d: Deps) {
       dirty: false,
       pos: null,
     });
-    setJob(null);
-    setDivider(null);
+    jobRef.current = null;
     if (!el) return;
     let frame = 0;
     const measure = () => {
@@ -252,13 +253,15 @@ export function usePosition(d: Deps) {
       if (asked.atEnd || !asked.block) {
         s.settled = true;
         latest.current.toEnd();
-      } else
-        setJob({
+      } else {
+        jobRef.current = {
           sessionId,
           kind: "block",
           block: asked.block,
           offsetPx: asked.offsetPx,
-        });
+        };
+        advanceRef.current();
+      }
       stamp(sessionId);
       return;
     }
@@ -283,30 +286,36 @@ export function usePosition(d: Deps) {
     });
     stamp(sessionId);
     if (open.kind === "latest") s.settled = true;
-    else if (open.kind === "position")
-      setJob({
-        sessionId,
-        kind: "block",
-        block: open.block,
-        offsetPx: open.offsetPx,
-      });
-    else setJob({ sessionId, kind: "new", viewedAt: view!.viewedAt, pages: 0 });
+    else {
+      jobRef.current =
+        open.kind === "position"
+          ? {
+              sessionId,
+              kind: "block",
+              block: open.block,
+              offsetPx: open.offsetPx,
+            }
+          : { sessionId, kind: "new", viewedAt: view!.viewedAt, pages: 0 };
+      advanceRef.current();
+    }
   }, [loadedFor, sessionId, loaded, target, jump, active, listRef, stamp]);
 
-  // Finish a placement that may need older pages first.
+  // Finish a placement that may need older pages first; runs again whenever
+  // the list changes.
   const { items, hasMore, loadingOlder, loadOlder, foldEvents } = d;
-  useEffect(() => {
+  const advance = useCallback(() => {
     const el = listRef.current;
+    const job = jobRef.current;
     if (!job || job.sessionId !== sessionId || !el || loadingOlder) return;
     const give = () => {
-      setJob(null);
+      jobRef.current = null;
       st.current.settled = true;
       latest.current.toEnd();
     };
     if (job.kind === "block") {
       const there = el.querySelector(`[data-block="${CSS.escape(job.block)}"]`);
       if (there) {
-        setJob(null);
+        jobRef.current = null;
         place(job.block, job.offsetPx);
       } else if (hasMore) loadOlder();
       else give();
@@ -315,13 +324,13 @@ export function usePosition(d: Deps) {
     const first = items.findIndex((i) => i.createdAt > job.viewedAt);
     if (first === -1) return give();
     if (first === 0 && hasMore && job.pages < MAX_PAGES_FOR_NEW) {
-      setJob({ ...job, pages: job.pages + 1 });
+      jobRef.current = { ...job, pages: job.pages + 1 };
       loadOlder();
       return;
     }
     const where = locate(items, items[first].id, { foldEvents });
     if (!where) return give();
-    setJob(null);
+    jobRef.current = null;
     if (first > 0) setDivider({ sessionId, block: where.block });
     latest.current.release();
     afterLayout(() => {
@@ -336,7 +345,6 @@ export function usePosition(d: Deps) {
       el.dispatchEvent(new Event("scroll"));
     });
   }, [
-    job,
     items,
     hasMore,
     loadingOlder,
@@ -346,6 +354,10 @@ export function usePosition(d: Deps) {
     listRef,
     place,
   ]);
+  useEffect(() => {
+    advanceRef.current = advance;
+    advance();
+  }, [advance]);
 
   return { newFrom: divider?.sessionId === sessionId ? divider.block : null };
 }
