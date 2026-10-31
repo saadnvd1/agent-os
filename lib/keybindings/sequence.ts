@@ -3,6 +3,15 @@
 
 export const SEQUENCE_MS = 1500;
 
+/**
+ * The key a bare shortcut sees, or null. The hints print letters in
+ * capitals, so Shift+G counts as g; other shifted keys are nobody's but "?".
+ */
+export function plainKey(key: string, shift: boolean): string | null {
+  if (key === "?" || /^[a-z]$/i.test(key)) return key.toLowerCase();
+  return shift ? null : key;
+}
+
 export type SequenceStep =
   | { kind: "none" }
   | { kind: "pending"; first: string }
