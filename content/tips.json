@@ -18,9 +18,13 @@
         "file": "chat"
       },
       "added": "2026-10-31",
-      "mediaBrief": {
-        "kind": "crop",
-        "shot": "Composer bottom bar with Plan switched on, the agent's reply a plan checklist above it."
+      "media": {
+        "kind": "image",
+        "src": "/tips/chat-plan-mode.webp",
+        "srcDark": "/tips/chat-plan-mode-dark.webp",
+        "alt": "The chat composer with Plan switched on, the agent's plan shown above it.",
+        "width": 768,
+        "height": 481
       }
     },
     {
@@ -31,9 +35,14 @@
         "file": "chat"
       },
       "added": "2026-10-31",
-      "mediaBrief": {
-        "kind": "clip",
-        "shot": "A PDF dragged onto the composer; its chip appears; one more pasted; send."
+      "media": {
+        "kind": "video",
+        "src": "/tips/chat-attach-files.mp4",
+        "poster": "/tips/chat-attach-files-poster.webp",
+        "alt": "Two files, a PDF and a CSV, attached to the composer as chips before sending.",
+        "width": 768,
+        "height": 480,
+        "durationMs": 7300
       }
     },
     {
@@ -48,7 +57,7 @@
         "kind": "video",
         "src": "/tips/chat-slash-menu.mp4",
         "poster": "/tips/chat-slash-menu-poster.webp",
-        "alt": "Typing a slash in the composer opens a menu of commands and skills that narrows as you type.",
+        "alt": "Typing a slash in the composer opens a filtered list of commands and skills.",
         "width": 768,
         "height": 480,
         "durationMs": 6367
@@ -62,9 +71,14 @@
         "file": "chat"
       },
       "added": "2026-10-31",
-      "mediaBrief": {
-        "kind": "clip",
-        "shot": "Empty composer shows a grey suggested reply; Tab fills it in."
+      "media": {
+        "kind": "video",
+        "src": "/tips/chat-tab-suggestion.mp4",
+        "poster": "/tips/chat-tab-suggestion-poster.webp",
+        "alt": "A grey suggested next message appears in the composer and Tab accepts it.",
+        "width": 768,
+        "height": 480,
+        "durationMs": 5233
       }
     },
     {
@@ -75,9 +89,13 @@
         "file": "chat"
       },
       "added": "2026-10-31",
-      "mediaBrief": {
-        "kind": "crop",
-        "shot": "The access picker open, showing Ask first, Accept edits, Full access."
+      "media": {
+        "kind": "image",
+        "src": "/tips/chat-access-picker.webp",
+        "srcDark": "/tips/chat-access-picker-dark.webp",
+        "alt": "The access picker open in the composer, listing Ask first, Accept edits and Full access.",
+        "width": 768,
+        "height": 480
       }
     },
     {
@@ -88,9 +106,13 @@
         "file": "chat"
       },
       "added": "2026-10-31",
-      "mediaBrief": {
-        "kind": "crop",
-        "shot": "A user message with its Undo action visible on hover."
+      "media": {
+        "kind": "image",
+        "src": "/tips/chat-undo.webp",
+        "srcDark": "/tips/chat-undo-dark.webp",
+        "alt": "The undo button on a user message in a chat transcript.",
+        "width": 768,
+        "height": 480
       }
     },
     {
@@ -101,9 +123,14 @@
         "file": "chat"
       },
       "added": "2026-10-31",
-      "mediaBrief": {
-        "kind": "clip",
-        "shot": "Click Terminal in the Chat / Terminal switch; the same conversation resumes in the terminal."
+      "media": {
+        "kind": "video",
+        "src": "/tips/chat-terminal-handoff.mp4",
+        "poster": "/tips/chat-terminal-handoff-poster.webp",
+        "alt": "The Chat and Terminal switch flipping a session from the chat view to its terminal.",
+        "width": 768,
+        "height": 480,
+        "durationMs": 5967
       }
     },
     {
@@ -115,9 +142,13 @@
       },
       "when": ["no-bookmarks"],
       "added": "2026-10-31",
-      "mediaBrief": {
-        "kind": "crop",
-        "shot": "Chat header's star list open with three bookmarks."
+      "media": {
+        "kind": "image",
+        "src": "/tips/chat-bookmark.webp",
+        "srcDark": "/tips/chat-bookmark-dark.webp",
+        "alt": "A bookmarked message with the star filled in a chat transcript.",
+        "width": 768,
+        "height": 481
       }
     },
     {
@@ -128,9 +159,14 @@
         "file": "chat"
       },
       "added": "2026-10-31",
-      "mediaBrief": {
-        "kind": "clip",
-        "shot": "⌘K, type two words, matching chats appear, Tab switches to the full search."
+      "media": {
+        "kind": "video",
+        "src": "/tips/chat-search.mp4",
+        "poster": "/tips/chat-search-poster.webp",
+        "alt": "The command palette searching conversations for a phrase and listing matching sessions.",
+        "width": 768,
+        "height": 480,
+        "durationMs": 8000
       }
     },
     {
@@ -142,9 +178,14 @@
         "anchor": "new-sessions"
       },
       "added": "2026-10-31",
-      "mediaBrief": {
-        "kind": "clip",
-        "shot": "⌥N opens a draft with project, agent and worktree chips; type a line."
+      "media": {
+        "kind": "video",
+        "src": "/tips/sidebar-draft.mp4",
+        "poster": "/tips/sidebar-draft-poster.webp",
+        "alt": "A new draft session opened from the New menu with a prompt typed into its composer.",
+        "width": 768,
+        "height": 480,
+        "durationMs": 7667
       }
     },
     {
@@ -176,9 +217,13 @@
         "anchor": "the-sidebar"
       },
       "added": "2026-10-31",
-      "mediaBrief": {
-        "kind": "crop",
-        "shot": "A row's ⋯ menu open on Snooze with Tomorrow and Next week."
+      "media": {
+        "kind": "image",
+        "src": "/tips/sidebar-snooze.webp",
+        "srcDark": "/tips/sidebar-snooze-dark.webp",
+        "alt": "A session row's menu open with the snooze options in the sidebar.",
+        "width": 768,
+        "height": 480
       }
     },
     {
@@ -191,9 +236,13 @@
       },
       "when": ["no-groups"],
       "added": "2026-10-31",
-      "mediaBrief": {
-        "kind": "screenshot",
-        "shot": "Sidebar with a named group shelf holding three sessions."
+      "media": {
+        "kind": "image",
+        "src": "/tips/sidebar-groups.webp",
+        "srcDark": "/tips/sidebar-groups-dark.webp",
+        "alt": "The sidebar with sessions grouped under a named group header.",
+        "width": 768,
+        "height": 480
       }
     },
     {
@@ -205,9 +254,13 @@
         "anchor": "machine-load"
       },
       "added": "2026-10-31",
-      "mediaBrief": {
-        "kind": "crop",
-        "shot": "The machine load popover: the dot amber, the top CPU sessions listed."
+      "media": {
+        "kind": "image",
+        "src": "/tips/sidebar-load.webp",
+        "srcDark": "/tips/sidebar-load-dark.webp",
+        "alt": "The sidebar load indicator showing which sessions use the most CPU and memory.",
+        "width": 768,
+        "height": 480
       }
     },
     {
@@ -218,9 +271,13 @@
         "file": "tasks"
       },
       "added": "2026-10-31",
-      "mediaBrief": {
-        "kind": "crop",
-        "shot": "A task in review with CI green and the Sign off & merge button."
+      "media": {
+        "kind": "image",
+        "src": "/tips/tasks-sign-off.webp",
+        "srcDark": "/tips/tasks-sign-off-dark.webp",
+        "alt": "A task in review with checks passing and a Sign off action.",
+        "width": 768,
+        "height": 480
       }
     },
     {
@@ -250,9 +307,13 @@
         "anchor": "plans-in-pieces"
       },
       "added": "2026-10-31",
-      "mediaBrief": {
-        "kind": "screenshot",
-        "shot": "A plan awaiting approval with two pieces, Merge into ① and Drop on the second."
+      "media": {
+        "kind": "image",
+        "src": "/tips/tasks-plan-pieces.webp",
+        "srcDark": "/tips/tasks-plan-pieces-dark.webp",
+        "alt": "A task plan split into pieces awaiting approval.",
+        "width": 768,
+        "height": 480
       }
     },
     {
@@ -274,9 +335,13 @@
         "anchor": "stacks"
       },
       "added": "2026-10-31",
-      "mediaBrief": {
-        "kind": "screenshot",
-        "shot": "A stack of three tasks with their PR states and Land."
+      "media": {
+        "kind": "image",
+        "src": "/tips/tasks-stacks.webp",
+        "srcDark": "/tips/tasks-stacks-dark.webp",
+        "alt": "A stack of pull requests listed in order under one stack.",
+        "width": 768,
+        "height": 480
       }
     },
     {
@@ -289,9 +354,13 @@
       },
       "when": ["no-schedules"],
       "added": "2026-10-31",
-      "mediaBrief": {
-        "kind": "screenshot",
-        "shot": "The Schedules form filled in: daily at 9 AM, a prompt, a project."
+      "media": {
+        "kind": "image",
+        "src": "/tips/schedule-first.webp",
+        "srcDark": "/tips/schedule-first-dark.webp",
+        "alt": "The schedule form with a prompt, a repeat interval and a time zone.",
+        "width": 768,
+        "height": 480
       }
     },
     {
@@ -314,9 +383,13 @@
       },
       "when": ["no-recipes"],
       "added": "2026-10-31",
-      "mediaBrief": {
-        "kind": "crop",
-        "shot": "The recipe form prefilled from a finished session."
+      "media": {
+        "kind": "image",
+        "src": "/tips/recipe-save.webp",
+        "srcDark": "/tips/recipe-save-dark.webp",
+        "alt": "The menu action that saves a conversation as a recipe.",
+        "width": 768,
+        "height": 480
       }
     },
     {
@@ -346,9 +419,13 @@
         "file": "agent-network"
       },
       "added": "2026-10-31",
-      "mediaBrief": {
-        "kind": "screenshot",
-        "shot": "Messages with two sessions talking, one waiting on a reply."
+      "media": {
+        "kind": "image",
+        "src": "/tips/net-messages.webp",
+        "srcDark": "/tips/net-messages-dark.webp",
+        "alt": "A session sending and receiving messages from another session.",
+        "width": 768,
+        "height": 480
       }
     },
     {
@@ -394,9 +471,13 @@
       },
       "when": ["no-shares"],
       "added": "2026-10-31",
-      "mediaBrief": {
-        "kind": "screenshot",
-        "shot": "The Share dialog preview with masked values highlighted, before Create link."
+      "media": {
+        "kind": "image",
+        "src": "/tips/share-check.webp",
+        "srcDark": "/tips/share-check-dark.webp",
+        "alt": "The share dialog preview showing secrets, addresses and emails masked.",
+        "width": 768,
+        "height": 481
       }
     },
     {
@@ -417,9 +498,13 @@
         "file": "export"
       },
       "added": "2026-10-31",
-      "mediaBrief": {
-        "kind": "crop",
-        "shot": "The Export for AI sheet: format, Compact selected, the size estimate."
+      "media": {
+        "kind": "image",
+        "src": "/tips/export-ai.webp",
+        "srcDark": "/tips/export-ai-dark.webp",
+        "alt": "The export menu with an option to copy the conversation for another AI.",
+        "width": 768,
+        "height": 481
       }
     },
     {
