@@ -5,17 +5,22 @@ import { Button } from "@/components/ui/button";
 import { StatusPill } from "@/components/ui/status-pill";
 import { CopyButton } from "@/components/Chat/CopyButton";
 import { useReachQuery, useRecheckReach } from "@/data/reach";
-import type { ReachFinding, ReachStatus } from "@/lib/reach/types";
+import type { ReachFinding, ReachReport, ReachStatus } from "@/lib/reach/types";
 import { cn } from "@/lib/utils";
 
-const PILL: Record<
-  ReachStatus,
-  { tone: "green" | "amber" | "red"; label: string }
-> = {
-  ok: { tone: "green", label: "Reachable" },
-  warn: { tone: "amber", label: "Check" },
-  fail: { tone: "red", label: "Not reachable" },
+const TONE: Record<ReachStatus, "green" | "amber" | "red"> = {
+  ok: "green",
+  warn: "amber",
+  fail: "red",
 };
+
+// Amber has three stories: only retrying, one way in working, or a warning.
+function pillLabel(report: ReachReport, problems: ReachFinding[]): string {
+  if (report.status === "ok") return "Reachable";
+  if (report.status === "fail") return "Not reachable";
+  if (problems.every((f) => f.needs === "nothing")) return "Reconnecting";
+  return report.url ? "Partly reachable" : "Needs a look";
+}
 
 // A fix is a command when it starts with one; otherwise it's plain advice.
 const isCommand = (fix: string) => /^(agent-os|sudo)( |$)/.test(fix);
@@ -74,7 +79,10 @@ export function ReachRow({
       />
     );
   const problems = data?.findings.filter((f) => f.status !== "ok") ?? [];
-  const pill = data && PILL[data.status];
+  const pill = data && {
+    tone: TONE[data.status],
+    label: pillLabel(data, problems),
+  };
   return (
     <div
       className={cn(
