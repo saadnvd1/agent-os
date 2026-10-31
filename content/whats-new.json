@@ -1865,6 +1865,38 @@
       "area": "Updates",
       "text": "Update notices now appear as a small pop-up instead of a bar across the top of the app.",
       "url": "https://github.com/saadnvd1/agent-os/pull/543"
+    },
+    {
+      "id": 544,
+      "date": "2026-10-31",
+      "kind": "new",
+      "area": "AgentOS",
+      "text": "Run agent-os setup to get your phone connected in a few steps, and agent-os check tells you why a device can't reach your computer and how to fix it.",
+      "url": "https://github.com/saadnvd1/agent-os/pull/544"
+    },
+    {
+      "id": 545,
+      "date": "2026-10-31",
+      "kind": "improved",
+      "area": "AgentOS",
+      "text": "The session list loads much faster, especially on a phone.",
+      "url": "https://github.com/saadnvd1/agent-os/pull/545"
+    },
+    {
+      "id": 546,
+      "date": "2026-10-31",
+      "kind": "fixed",
+      "area": "AgentOS",
+      "text": "Session list rows in the installed phone app no longer lose their short task prompt.",
+      "url": "https://github.com/saadnvd1/agent-os/pull/546"
+    },
+    {
+      "id": 547,
+      "date": "2026-10-31",
+      "kind": "fixed",
+      "area": "AgentOS",
+      "text": "The reachability check now tells a stuck AgentOS apart from another program on its port, and setup keeps a copy of a startup file you edited before replacing it.",
+      "url": "https://github.com/saadnvd1/agent-os/pull/547"
     }
   ]
 }
