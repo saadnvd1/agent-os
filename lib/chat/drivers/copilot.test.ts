@@ -61,14 +61,16 @@ describe("copilotModels", () => {
               _meta: { copilotUsage: "15x usage" },
             },
             { modelId: "c", description: "Plain" },
+            { modelId: "d", name: "Free", _meta: { copilotUsage: 0 } },
             { name: "no id" },
           ],
         },
       })
     ).toEqual([
-      { value: "a", label: "Haiku", description: "0.33x usage" },
-      { value: "b", label: "Luna", description: "15x usage" },
+      { value: "a", label: "Haiku", note: "0.33x usage" },
+      { value: "b", label: "Luna", note: "15x usage" },
       { value: "c", label: "c", description: "Plain" },
+      { value: "d", label: "Free", note: "Included" },
     ]);
   });
 

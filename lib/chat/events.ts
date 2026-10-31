@@ -33,6 +33,10 @@ export interface ChatModel {
   value: string;
   label: string;
   description?: string;
+  // A short tag beside the name, e.g. what it costs to use.
+  note?: string;
+  // What it is listed under, e.g. the provider that serves it.
+  group?: string;
   // Why it can't be picked now; it is listed greyed with this.
   disabled?: string;
 }

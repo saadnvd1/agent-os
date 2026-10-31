@@ -20,6 +20,7 @@ vi.mock("../chat/discovered-models", () => ({
 }));
 vi.mock("./ollama", () => ({ ollamaModels: async () => tags.value }));
 
+import { getDb } from "@/lib/db";
 import { machineCatalog, ollamaRunner } from "./catalog";
 
 beforeEach(() => {
@@ -48,6 +49,26 @@ describe("machineCatalog", () => {
     expect(oc.taskBlocked).toMatch(/Claude Code only/);
     const codex = agents.find((a) => a.agent === "codex")!;
     expect(codex).toMatchObject({ installed: false, hint: "npm i -g codex" });
+  });
+
+  it("reports what the project last ran with", async () => {
+    getDb()
+      .prepare(
+        `INSERT INTO projects (id, name, working_directory) VALUES ('cat-proj', 'cat-proj', '/tmp')`
+      )
+      .run();
+    getDb()
+      .prepare(
+        `INSERT INTO sessions (id, name, tmux_name, working_directory, project_id, agent_type, model)
+         VALUES ('cat-recent', 'r', 'r', '/tmp', 'cat-proj', 'opencode', 'default')`
+      )
+      .run();
+    expect((await machineCatalog("cat-proj")).recent).toEqual([
+      { agent: "opencode", model: "default" },
+    ]);
+    expect((await machineCatalog()).recent).toEqual([]);
+    getDb().prepare(`DELETE FROM sessions WHERE id = 'cat-recent'`).run();
+    getDb().prepare(`DELETE FROM projects WHERE id = 'cat-proj'`).run();
   });
 
   it("keeps the fixed list and says why when discovery fails", async () => {

@@ -159,7 +159,11 @@ export function DraftChips({
       )}
 
       {!draft.openPr && !draft.agentRole && (
-        <AgentModelChip draft={draft} onChange={onChange} />
+        <AgentModelChip
+          draft={draft}
+          projectName={project?.name ?? null}
+          onChange={onChange}
+        />
       )}
 
       {!draft.openPr && local && (

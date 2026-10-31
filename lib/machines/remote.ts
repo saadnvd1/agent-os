@@ -12,6 +12,9 @@ import type { HostCatalogResponse, MachineReport } from "./types";
 const CATALOG_TTL_MS = 60_000;
 const INFO_TTL_MS = 5 * 60_000;
 
+const keyOf = (hostId: string, project: string | null) =>
+  `${hostId}\0${project ?? ""}`;
+
 interface Cached {
   at: number;
   report: MachineReport;
@@ -118,42 +121,58 @@ export function parseReport(body: unknown): MachineReport | null {
       ollama: Array.isArray(b.catalog.ollama)
         ? b.catalog.ollama.slice(0, 200)
         : [],
+      recent: Array.isArray(b.catalog.recent)
+        ? b.catalog.recent
+            .filter(
+              (r) => typeof r?.agent === "string" && typeof r.model === "string"
+            )
+            .slice(0, 16)
+        : [],
     },
   };
 }
 
 export async function fetchHostMachine(
   hostId: string,
-  now = Date.now()
+  now = Date.now(),
+  project: string | null = null
 ): Promise<MachineReport> {
-  const hit = cache.get(hostId);
+  const key = keyOf(hostId, project);
+  const hit = cache.get(key);
   if (hit && now - hit.at < CATALOG_TTL_MS) return hit.report;
   const link = hostLink(hostId);
   if (!link) throw new Error("This machine isn't linked");
-  const wait = running.get(hostId);
+  const wait = running.get(key);
   if (wait) return wait;
-  const p = hostApi<unknown>(link, "/api/machine", { timeout: 12_000 })
+  const path = project
+    ? `/api/machine?project=${encodeURIComponent(project)}`
+    : "/api/machine";
+  const p = hostApi<unknown>(link, path, { timeout: 12_000 })
     .then((body) => {
       const report = parseReport(body);
       if (!report)
         throw new Error("Its AgentOS answered in a format we can't read");
-      cache.set(hostId, { at: now, report });
+      cache.set(key, { at: now, report });
       save(hostId, report, now);
       return report;
     })
-    .finally(() => running.delete(hostId));
-  running.set(hostId, p);
+    .finally(() => running.delete(key));
+  running.set(key, p);
   return p;
 }
 
 /** The agents of a linked machine, or why they can't be listed. */
 export async function hostCatalog(
-  hostId: string
+  hostId: string,
+  project: string | null = null
 ): Promise<HostCatalogResponse> {
   if (!isRemoteHost(hostId))
     return { catalog: null, error: "Not a linked machine" };
   try {
-    return { catalog: (await fetchHostMachine(hostId)).catalog, error: null };
+    return {
+      catalog: (await fetchHostMachine(hostId, Date.now(), project)).catalog,
+      error: null,
+    };
   } catch (e) {
     const old = /404|not found|forbidden|not allowed/i.test(String(e));
     return {

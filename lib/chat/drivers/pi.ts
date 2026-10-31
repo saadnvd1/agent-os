@@ -77,7 +77,7 @@ export const piDriver: ChatDriver = {
         models: (models.models ?? []).map((m) => ({
           value: `${m.provider}/${m.id}`,
           label: String(m.name ?? m.id),
-          description: String(m.provider),
+          group: String(m.provider),
         })),
         commands: (commands.commands ?? []).map((c) => ({
           name: String(c.name),

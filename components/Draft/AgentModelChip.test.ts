@@ -23,6 +23,7 @@ describe("usableAgent", () => {
       agent({ agent: "claude", auth: "needs-login" }),
     ],
     ollama: [],
+    recent: [],
   };
 
   it("keeps an agent the machine can run", () => {

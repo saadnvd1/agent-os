@@ -7,6 +7,10 @@ export interface CatalogModel {
   value: string;
   label: string;
   description?: string;
+  /** A short tag beside the name, e.g. "15x usage". */
+  note?: string;
+  /** What it is listed under, e.g. the provider that serves it. */
+  group?: string;
 }
 
 export interface CatalogAgent {
@@ -30,9 +34,17 @@ export interface OllamaEntry {
   runsWith: { agent: AgentType; model: string } | null;
 }
 
+/** An agent and model a session in a project used. */
+export interface RecentPick {
+  agent: AgentType;
+  model: string;
+}
+
 export interface MachineCatalog {
   agents: CatalogAgent[];
   ollama: OllamaEntry[];
+  /** The latest picks in the project asked about, newest first. */
+  recent: RecentPick[];
 }
 
 export interface MachineReport {

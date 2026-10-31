@@ -104,7 +104,7 @@ export const openCodeDriver: ChatDriver = {
               .map((m) => ({
                 value: `${p.id}/${m.id}`,
                 label: str(m.name) || str(m.id),
-                description: str(p.name) || str(p.id),
+                group: str(p.name) || str(p.id),
               }))
           ),
         commands: (commands ?? []).map((c) => ({
