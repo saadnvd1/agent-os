@@ -183,10 +183,10 @@ Pairing codes work once and last 10 minutes. Choose **Add a device** again on th
 Too many wrong codes in a short time. Wait a minute, then enter a fresh one.
 
 **"Can't reach AgentOS." or the app can't connect**
-Check the address and the port: 3011 unless you changed it. Make sure the phone is on the same Wi-Fi (and **Allow devices on this Wi-Fi** is on) or that Tailscale is connected on both ends. Check that AgentOS is running with `agent-os start`. For a Connect address, the switch in Devices must show Connected, and the computer has to be awake and online.
+Run `agent-os check` on the computer: it names the cause and the fix ([Can't reach your machine](reachability.md)). Otherwise, check the address and the port: 3011 unless you changed it. Make sure the phone is on the same Wi-Fi (and **Allow devices on this Wi-Fi** is on) or that Tailscale is connected on both ends. Check that AgentOS is running with `agent-os start`. For a Connect address, the switch in Devices must show Connected, and the computer has to be awake and online.
 
 **Connect shows "Refused by Connect" or "Not running here"**
-"Refused by Connect" means the service rejected the machine. Run `agent-os connect` again to relink it. "Not running here" means this copy of AgentOS has Connect disabled, for example because `AGENTOS_CONNECT=0` is set.
+"Refused by Connect" means the service rejected the machine. Run `agent-os connect` again to relink it. "Not running here" means this copy of AgentOS has Connect disabled, for example because `AGENTOS_CONNECT=0` is set. `agent-os check` says which.
 
 **A push test says "Phone push not set up."**
 No paired phone has registered for push yet. Open the app on the phone, allow notifications, turn push on, and try again. A phone that shows a push error in its Devices row also shows the reason.

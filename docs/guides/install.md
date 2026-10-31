@@ -36,6 +36,14 @@ It needs git to start. It clones AgentOS to `~/.agent-os/repo` (or updates it if
 
 If it says `~/.local/bin` was added to your `PATH`, open a new terminal (or run `source ~/.zshrc`) before the next step.
 
+The installer then offers to run `agent-os setup`, which you can also run any time:
+
+```bash
+agent-os setup
+```
+
+It starts AgentOS and keeps it running (it starts at login and restarts after a crash), asks how other devices should reach this machine (Connect, Tailscale or the same Wi-Fi), checks that they can, and offers a QR code for your phone. It's safe to run again: finished steps print "already done". `--via connect|tailscale|lan` skips the question, `--yes` takes the defaults without asking, and `--no-service` leaves start-at-login alone.
+
 Already have Node.js? You can install from npm instead:
 
 ```bash
@@ -231,6 +239,8 @@ agent-os start            # start in the background
 agent-os stop             # stop the server
 agent-os restart          # stop, then start
 agent-os status           # show its addresses
+agent-os setup            # guided setup: keep it running, reach it from other devices, add a phone
+agent-os check            # can other devices reach this machine? names the cause and the fix
 agent-os pair             # add a phone, tablet or laptop (prints a QR code)
 agent-os logs             # tail the logs
 agent-os update           # update to the latest version
@@ -248,7 +258,7 @@ agent-os uninstall
 agent-os enable
 ```
 
-This writes a launchd service on macOS or a systemd user service on Linux. `agent-os disable` turns it off. Under WSL, `enable` needs systemd and also registers a Windows login task (see [Windows](#windows-wsl2)). To make a Linux box or WSL distro linkable from another AgentOS, run `agent-os machine` (Connect-first; `--tailscale` for the ssh route; see [Link a machine](#link-a-machine-windows-pc-linux-box-mac)).
+This writes a launchd service on macOS or a systemd user service on Linux, and both restart AgentOS if it crashes. If you edited the service file yourself, `agent-os setup` asks before replacing it. `agent-os disable` turns it off. Under WSL, `enable` needs systemd and also registers a Windows login task (see [Windows](#windows-wsl2)). To make a Linux box or WSL distro linkable from another AgentOS, run `agent-os machine` (Connect-first; `--tailscale` for the ssh route; see [Link a machine](#link-a-machine-windows-pc-linux-box-mac)).
 
 The everyday commands:
 
@@ -319,13 +329,15 @@ To go back to the previous version by hand: `AGENTOS_RESTART="agent-os restart" 
 
 ## Reach it from other devices
 
-By default AgentOS answers on the computer itself. Open **Settings → Devices & access** to add other devices:
+By default AgentOS answers on the computer itself. `agent-os setup` walks you through choosing a way in. Or open **Settings → Devices & access**:
 
 - **Same Wi-Fi.** Turn on **Allow devices on this Wi-Fi**. Only do this on a network you trust.
 - **Tailscale.** Install [Tailscale](https://tailscale.com) on the computer and the other device, and sign in to the same account on both. `agent-os status` then shows a Tailscale address, and AgentOS trusts your tailnet by default.
 - **AgentOS Connect.** Gives your machine a private address at runagentos.com that works from any network, with nothing to open on your router. Free for one machine; linking several machines is Pro. Link it with `agent-os connect`.
 
 To add a phone, tablet or another computer, choose **Add a device** in Devices, or run `agent-os pair` to print a QR code. The [phone guide](phone.md) walks through pairing, Connect and notifications in full.
+
+If a device can't get in, run `agent-os check`, or look at **Reachable from other devices** in Devices. It names the cause and the fix: see [Can't reach your machine](reachability.md).
 
 ## Uninstall
 
@@ -337,7 +349,7 @@ It asks you to confirm, then stops AgentOS, turns off start-at-login, removes th
 
 ## Troubleshooting
 
-These are the messages **Settings → Setup & health** shows.
+These are the messages **Settings → Setup & health** shows. For a phone or another computer that can't reach AgentOS, see [Can't reach your machine](reachability.md).
 
 **"v18.x; AgentOS needs 20 or newer"**
 The Node.js on your `PATH` is too old. Install Node.js 22 or newer from nodejs.org, or switch to it with your version manager, then open a new terminal and run `agent-os install` again.

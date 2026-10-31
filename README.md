@@ -55,15 +55,16 @@ You need Node.js 22+, git, tmux, and at least one agent CLI (the installer offer
 ```bash
 npm install -g @saadnvd1/agent-os
 agent-os install   # checks for tmux and ripgrep, installs what's missing, builds the app
-agent-os start     # runs in the background on http://localhost:3011
+agent-os setup     # keeps it running, chooses how your phone reaches it, adds the phone
 ```
 
 Without Node.js, the install script sets up everything:
 
 ```bash
 curl -fsSL https://raw.githubusercontent.com/saadnvd1/agent-os/main/scripts/install.sh | bash
-agent-os start
 ```
+
+It ends by offering `agent-os setup`. If another device can't reach the machine later, `agent-os check` names the cause and the fix ([guide](docs/guides/reachability.md)).
 
 Then open AgentOS, add a project from ⌘K, and press ⌥N. The [install guide](docs/guides/install.md) covers Windows (WSL2), the supported agents, first run and the `agent-os` commands. To use it from your phone, see the [phone guide](docs/guides/phone.md).
 

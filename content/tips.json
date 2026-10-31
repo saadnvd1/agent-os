@@ -536,6 +536,16 @@
         "anchor": "whats-new"
       },
       "added": "2026-10-31"
+    },
+    {
+      "id": "reach-check",
+      "title": "Can't reach your machine?",
+      "body": "Run agent-os check on the computer. It names the cause, like a stopped server or Wi-Fi access being off, and the one line that fixes it.",
+      "guide": {
+        "file": "reachability",
+        "anchor": "run-the-check"
+      },
+      "added": "2026-10-31"
     }
   ]
 }
