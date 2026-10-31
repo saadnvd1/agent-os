@@ -39,6 +39,7 @@ import {
 } from "./waits/store";
 import { HUMAN, overRateLimit, wakeLine, type BusMessageView } from "./format";
 import { groupNames } from "../session-groups/store";
+import { sessionWorkspace } from "../schedules/store";
 
 export * from "./format";
 export {
@@ -103,6 +104,7 @@ export async function listPeers(callerId?: string): Promise<Peer[]> {
   const sessions = liveSessions();
   const named = candidates(sessions);
   const caller = sessionById(callerId);
+  const callerWorkspace = caller ? sessionWorkspace(caller) : null;
   const orchestrator = heldOrchestrator(caller);
   const badges = waitBadges();
   const groups = groupNames();
@@ -127,9 +129,9 @@ export async function listPeers(callerId?: string): Promise<Peer[]> {
           groups.has(s.session_group_id) && {
             group: groups.get(s.session_group_id),
           }),
-        ...(caller?.workspace_id &&
+        ...(callerWorkspace &&
           s.role === "orchestrator" &&
-          s.workspace_id === caller.workspace_id && { yours: true }),
+          s.workspace_id === callerWorkspace && { yours: true }),
       };
     })
   );

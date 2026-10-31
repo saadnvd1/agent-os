@@ -6,6 +6,7 @@
  */
 
 import type { Session } from "../db";
+import { sessionWorkspace } from "../models/resolve";
 
 type RoleSession = Pick<
   Session,
@@ -56,9 +57,10 @@ export function resolveRoleAlias<T extends RoleSession>(
         error: `"@${role}" matches ${found.length} sessions: ${found.map(label).join(", ")}. Use the name or the id`,
       };
   }
-  if (role === "supervisor" && caller?.workspace_id) {
+  const workspace = caller ? sessionWorkspace(caller) : null;
+  if (role === "supervisor" && workspace) {
     const orchestrator = others.find(
-      (s) => s.role === "orchestrator" && s.workspace_id === caller.workspace_id
+      (s) => s.role === "orchestrator" && s.workspace_id === workspace
     );
     if (orchestrator) return { ok: true, session: orchestrator };
   }

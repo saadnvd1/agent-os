@@ -26,7 +26,8 @@ vi.mock("@/lib/chat/runner", () => ({
 const { db } = await import("@/lib/db");
 const { seedSession } = await import("@/lib/orchestrator/testing");
 const { createProject } = await import("@/lib/projects");
-const { createWorkspace } = await import("@/lib/workspaces");
+const { createWorkspace, setProjectWorkspace } =
+  await import("@/lib/workspaces");
 const bus = await import(".");
 
 function workspaceWithOrchestrator(label: string) {
@@ -89,6 +90,16 @@ describe("addressing across workspaces", () => {
     expect(() => bus.resolveTarget(`${one.ws.name}/orchestrator`)).toThrow(
       new RegExp(`matches 2 sessions.*${one.orch.slice(0, 8)}`)
     );
+  });
+
+  it("finds the orchestrator of a caller's project workspace", () => {
+    const one = workspaceWithOrchestrator("home");
+    workspaceWithOrchestrator("other");
+    setProjectWorkspace(one.project.id, one.ws.id);
+    const task = seedSession({ projectId: one.project.id, name: "task" });
+    updateSessionRow(db, task, { workspace_id: null });
+    expect(bus.resolveTarget("orchestrator", task).session.id).toBe(one.orch);
+    expect(bus.resolveTarget("@supervisor", task).session.id).toBe(one.orch);
   });
 
   it("tells a caller with no workspace to use <workspace>/orchestrator", () => {
