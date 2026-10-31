@@ -1,5 +1,4 @@
 import { useMutation, useQueryClient } from "@tanstack/react-query";
-import type { Session } from "@/lib/db";
 import { sessionKeys } from "./keys";
 import type { SessionsResponse } from "./queries";
 

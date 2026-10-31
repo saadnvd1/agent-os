@@ -137,7 +137,8 @@ export function useTerminalConnection({
 
   // Main setup effect
   useEffect(() => {
-    if (!terminalRef.current) return;
+    const container = terminalRef.current;
+    if (!container) return;
 
     let cancelled = false;
     // Reset intentional close flag (may be true from previous cleanup)
@@ -220,9 +221,9 @@ export function useTerminalConnection({
 
       // Save scroll state before unmount
       const term = xtermRef.current;
-      if (term && callbacksRef.current.onBeforeUnmount && terminalRef.current) {
+      if (term && callbacksRef.current.onBeforeUnmount) {
         const buffer = term.buffer.active;
-        const viewport = terminalRef.current.querySelector(
+        const viewport = container.querySelector(
           ".xterm-viewport"
         ) as HTMLElement;
         callbacksRef.current.onBeforeUnmount({

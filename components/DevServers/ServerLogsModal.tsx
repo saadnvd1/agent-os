@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect, useRef } from "react";
+import { useState, useEffect, useRef, useCallback } from "react";
 import { X, RefreshCw, Loader2 } from "lucide-react";
 import { cn } from "@/lib/utils";
 
@@ -20,31 +20,34 @@ export function ServerLogsModal({
   const [refreshing, setRefreshing] = useState(false);
   const logsRef = useRef<HTMLDivElement>(null);
 
-  const fetchLogs = async (isRefresh = false) => {
-    if (isRefresh) {
-      setRefreshing(true);
-    } else {
-      setLoading(true);
-    }
-
-    try {
-      const res = await fetch(`/api/dev-servers/${serverId}/logs?lines=200`);
-      if (res.ok) {
-        const data = await res.json();
-        setLogs(data.logs || []);
+  const fetchLogs = useCallback(
+    async (isRefresh = false) => {
+      if (isRefresh) {
+        setRefreshing(true);
+      } else {
+        setLoading(true);
       }
-    } catch (err) {
-      console.error("Failed to fetch logs:", err);
-    } finally {
-      setLoading(false);
-      setRefreshing(false);
-    }
-  };
+
+      try {
+        const res = await fetch(`/api/dev-servers/${serverId}/logs?lines=200`);
+        if (res.ok) {
+          const data = await res.json();
+          setLogs(data.logs || []);
+        }
+      } catch (err) {
+        console.error("Failed to fetch logs:", err);
+      } finally {
+        setLoading(false);
+        setRefreshing(false);
+      }
+    },
+    [serverId]
+  );
 
   // Initial fetch
   useEffect(() => {
     fetchLogs();
-  }, [serverId]);
+  }, [fetchLogs]);
 
   // Auto-scroll to bottom when logs update
   useEffect(() => {
@@ -59,7 +62,7 @@ export function ServerLogsModal({
       fetchLogs(true);
     }, 3000);
     return () => clearInterval(interval);
-  }, [serverId]);
+  }, [fetchLogs]);
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4">

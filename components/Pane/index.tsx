@@ -255,7 +255,7 @@ export const Pane = memo(function Pane({
       fileOpenActions.clearRequest();
       // TODO: Scroll to line (requires FileEditor enhancement)
     }
-  }, [fileOpenRequest, isFocused, session, fileEditor]);
+  }, [fileOpenRequest, isFocused, session, fileEditor, setViewMode]);
 
   // An artifact's file, opened in the Files view.
   const openInFiles = useCallback(
@@ -291,7 +291,7 @@ export const Pane = memo(function Pane({
 
   // Create onConnected callback for a specific tab
   const getTerminalConnectedHandler = useCallback(
-    (tab: (typeof paneData.tabs)[0]) => () => {
+    (tab: TabData) => () => {
       console.log(
         `[AgentOS] Terminal connected for pane: ${paneId}, tab: ${tab.id}`
       );

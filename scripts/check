@@ -37,7 +37,7 @@ if has static; then
     out=$(mktemp -d); trap 'rm -rf "$out"' EXIT
     pids=()
     npx tsc --noEmit >"$out/typecheck" 2>&1 & pids+=($!)
-    npx eslint . --max-warnings=40 --concurrency=auto >"$out/lint" 2>&1 & pids+=($!)
+    npx eslint . --max-warnings=28 --concurrency=auto >"$out/lint" 2>&1 & pids+=($!)
     npx prettier --check . --log-level warn >"$out/format" 2>&1 & pids+=($!)
     failed=()
     names=(typecheck lint format)
@@ -51,7 +51,7 @@ if has static; then
     fi
   else
     step "typecheck"; npx tsc --noEmit
-    step "lint";      npx eslint . --max-warnings=40 --concurrency=auto
+    step "lint";      npx eslint . --max-warnings=28 --concurrency=auto
     step "format";    npx prettier --check . --log-level warn
   fi
 fi

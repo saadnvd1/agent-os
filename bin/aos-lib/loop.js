@@ -31,13 +31,13 @@ module.exports = function makeLoop({ call, post, fail, me }) {
     for (let i = 0; i < words.length; i++) {
       const w = words[i];
       const v = words[i + 1];
-      if (w === "--criteria")
-        (out.criteria.push({ text: v, source: "user" }), i++);
-      else if (w === "--cycles") ((out.limits.maxCycles = num(v, w)), i++);
-      else if (w === "--cost") ((out.limits.maxCostUsd = num(v, w)), i++);
-      else if (w === "--minutes") ((out.limits.maxMinutes = num(v, w)), i++);
-      else if (w === "--grace") ((out.limits.graceSeconds = num(v, w)), i++);
+      if (w === "--criteria") out.criteria.push({ text: v, source: "user" });
+      else if (w === "--cycles") out.limits.maxCycles = num(v, w);
+      else if (w === "--cost") out.limits.maxCostUsd = num(v, w);
+      else if (w === "--minutes") out.limits.maxMinutes = num(v, w);
+      else if (w === "--grace") out.limits.graceSeconds = num(v, w);
       else fail(`unknown option ${w}`);
+      i++;
     }
     return out;
   }
