@@ -57,3 +57,28 @@ describe("escapeAction", () => {
     expect(escapeAction(key({ repeat: true }), true, false, false)).toBeNull();
   });
 });
+
+describe("escapeAction leaving the composer", () => {
+  it("leaves the composer only when nothing else takes Esc", () => {
+    expect(escapeAction(key(), false, false, false, true)).toBe("blur");
+  });
+
+  it("stops a running turn first, and keeps focus", () => {
+    expect(escapeAction(key(), true, false, false, true)).toBe("interrupt");
+  });
+
+  it("sets a suggestion aside first, and keeps focus", () => {
+    expect(escapeAction(key(), false, false, true, true)).toBe("dismiss");
+  });
+
+  it("leaves Esc to an open menu", () => {
+    expect(escapeAction(key(), false, true, false, true)).toBeNull();
+  });
+
+  it("does nothing outside the composer or for a modified Esc", () => {
+    expect(escapeAction(key(), false, false, false, false)).toBeNull();
+    expect(
+      escapeAction(key({ shiftKey: true }), false, false, false, true)
+    ).toBeNull();
+  });
+});
