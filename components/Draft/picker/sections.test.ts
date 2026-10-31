@@ -94,3 +94,22 @@ describe("matchesElsewhere", () => {
     expect(matchesElsewhere(agents, "two", "groq-a")).toBeNull();
   });
 });
+
+describe("buildSections current", () => {
+  it("pins the current model on top and does not repeat it", () => {
+    const s = buildSections({
+      models,
+      agentLabel: "X",
+      defaultValue: "default",
+      lastValue: "a1",
+      currentValue: "a1",
+      query: "",
+    });
+    expect(s.map((x) => [x.heading, x.models.map((y) => y.value)])).toEqual([
+      ["Current", ["a1"]],
+      ["Default", ["default"]],
+      ["Alpha", ["a2"]],
+      ["Beta", ["b1"]],
+    ]);
+  });
+});

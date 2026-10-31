@@ -291,6 +291,7 @@ export function ChatPanel({
     models,
     model,
     modelLabel,
+    agentName,
     send,
     interrupt,
     setModel,
@@ -881,6 +882,7 @@ export function ChatPanel({
           models={models}
           model={model}
           modelLabel={modelLabel}
+          agentName={agentName}
           onSetModel={setModel}
           access={access}
           onSetAccess={accessLocked ? undefined : setAccess}

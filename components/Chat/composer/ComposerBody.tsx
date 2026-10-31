@@ -63,6 +63,7 @@ export interface ComposerProps {
   models?: ChatModel[];
   model?: string;
   modelLabel?: string;
+  agentName?: string;
   onSetModel?: (model: string) => void;
   access?: ChatAccess;
   onSetAccess?: (access: ChatAccess) => void;
@@ -101,6 +102,7 @@ export function ComposerBody({
   models = [],
   model = "",
   modelLabel,
+  agentName,
   onSetModel,
   access,
   onSetAccess,
@@ -383,6 +385,7 @@ export function ComposerBody({
           models={models}
           model={model}
           modelLabel={modelLabel}
+          agentName={agentName}
           onSetModel={onSetModel}
           modelOpen={modelOpen}
           onModelOpenChange={setModelOpen}

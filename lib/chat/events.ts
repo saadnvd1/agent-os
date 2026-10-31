@@ -462,6 +462,8 @@ export type ChatServerMessage =
       model: string;
       // A readable name for `model` when it is not one of `models`.
       modelLabel?: string;
+      // The session's agent, named for the model picker's lock bar.
+      agentLabel?: string;
       access: ChatAccess;
       // Plan mode: on, or null when the session can't use it.
       plan: boolean | null;

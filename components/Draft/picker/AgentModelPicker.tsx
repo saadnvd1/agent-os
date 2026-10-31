@@ -1,6 +1,6 @@
 "use client";
 
-import { useRef, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import type { CatalogAgent, MachineCatalog } from "@/lib/machines/types";
 import type { AgentType } from "@/lib/providers";
 import { catalogBlocker } from "../catalogBlocker";
@@ -47,7 +47,22 @@ export function AgentModelPicker({
     agents: ready,
     defaultValue: browsing?.defaultModel,
     lastValue: catalog.recent.find((r) => r.agent === browsing?.agent)?.model,
+    open,
   });
+
+  useEffect(() => {
+    if (open) setBrowsed(value.agent);
+    // Only on opening: a pick changes `value` while it closes.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [open]);
+
+  // After ←/→ the keys belong to the new agent's list.
+  const refocus = useRef(false);
+  useEffect(() => {
+    if (!refocus.current) return;
+    refocus.current = false;
+    focusSelectedRow(root.current);
+  }, [browsing?.agent]);
 
   const browse = (agent: AgentType, keepQuery = false) => {
     setBrowsed(agent);
@@ -56,7 +71,10 @@ export function AgentModelPicker({
   const step = (delta: 1 | -1) => {
     const at = ready.findIndex((a) => a.agent === browsing?.agent);
     const next = ready[(at + delta + ready.length) % ready.length];
-    if (next) browse(next.agent);
+    if (next) {
+      refocus.current = next.agent !== browsing?.agent;
+      browse(next.agent);
+    }
   };
   const onKeyDown = useListKeys(root, search, step);
   const choose = (agent: AgentType, model: string) => {
@@ -69,13 +87,7 @@ export function AgentModelPicker({
   return (
     <PickerSheet
       open={open}
-      onOpenChange={(o) => {
-        if (o) {
-          setBrowsed(value.agent);
-          setQuery("");
-        }
-        onOpenChange(o);
-      }}
+      onOpenChange={onOpenChange}
       title="Agent & model"
       onKeyDown={onKeyDown}
       onOpened={() => focusSelectedRow(root.current)}

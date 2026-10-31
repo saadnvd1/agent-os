@@ -1,4 +1,4 @@
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import type { ChatModel } from "@/lib/chat/events";
 import {
   buildSections,
@@ -22,12 +22,17 @@ export function useModelSearch({
   agents,
   defaultValue,
   lastValue,
+  currentValue,
+  open,
 }: {
   agent: AgentModels;
   /** Every agent that can be picked, to look for matches beyond this one. */
   agents?: AgentModels[];
   defaultValue?: string;
   lastValue?: string;
+  currentValue?: string;
+  /** A picker that opens starts with an empty search. */
+  open: boolean;
 }): {
   query: string;
   setQuery: (q: string) => void;
@@ -35,6 +40,9 @@ export function useModelSearch({
   elsewhere: Elsewhere | null;
 } {
   const [query, setQuery] = useState("");
+  useEffect(() => {
+    if (open) setQuery("");
+  }, [open]);
   const sections = useMemo(
     () =>
       buildSections({
@@ -42,9 +50,10 @@ export function useModelSearch({
         agentLabel: agent.label,
         defaultValue,
         lastValue,
+        currentValue,
         query,
       }),
-    [agent.models, agent.label, defaultValue, lastValue, query]
+    [agent.models, agent.label, defaultValue, lastValue, currentValue, query]
   );
   const elsewhere = useMemo(
     () =>

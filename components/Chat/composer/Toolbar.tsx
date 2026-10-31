@@ -33,6 +33,7 @@ export function Toolbar({
   models,
   model,
   modelLabel,
+  agentName,
   onSetModel,
   modelOpen,
   onModelOpenChange,
@@ -56,6 +57,7 @@ export function Toolbar({
   models: ChatModel[];
   model: string;
   modelLabel?: string;
+  agentName?: string;
   onSetModel?: (model: string) => void;
   modelOpen: boolean;
   onModelOpenChange: (open: boolean) => void;
@@ -141,6 +143,7 @@ export function Toolbar({
           models={models}
           model={model}
           label={modelLabel}
+          agentName={agentName}
           open={modelOpen}
           onOpenChange={onModelOpenChange}
           onPick={onSetModel}

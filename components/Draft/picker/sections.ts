@@ -2,7 +2,7 @@ import type { ChatModel } from "@/lib/chat/events";
 
 export interface Section {
   key: string;
-  kind: "last" | "default" | "group";
+  kind: "current" | "last" | "default" | "group";
   heading: string;
   models: ChatModel[];
 }
@@ -30,20 +30,33 @@ export function buildSections({
   agentLabel,
   defaultValue,
   lastValue,
+  currentValue,
   query,
 }: {
   models: ChatModel[];
   agentLabel: string;
   defaultValue?: string;
   lastValue?: string;
+  /** The model in use now: pinned on top as "Current". */
+  currentValue?: string;
   query: string;
 }): Section[] {
   const searching = words(query).length > 0;
   const sections: Section[] = [];
   const taken = new Set<string>();
   if (!searching) {
+    const current = models.find((m) => m.value === currentValue);
+    if (current) {
+      sections.push({
+        key: "current",
+        kind: "current",
+        heading: "Current",
+        models: [current],
+      });
+      taken.add(current.value);
+    }
     const last = models.find((m) => m.value === lastValue);
-    if (last) {
+    if (last && !taken.has(last.value)) {
       sections.push({
         key: "last",
         kind: "last",
