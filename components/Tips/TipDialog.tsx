@@ -61,7 +61,7 @@ export function TipDialog({
       <DialogContent
         showCloseButton={false}
         placement={wide ? "center" : "sheet"}
-        className="flex max-h-[85dvh] flex-col gap-0 overflow-hidden p-0 sm:max-w-[26rem]"
+        className="flex max-h-[85dvh] flex-col gap-0 overflow-hidden p-0 sm:max-w-[26rem] md:max-w-[36rem]"
       >
         <div className="bg-muted-foreground/40 mx-auto mt-2 h-1 w-9 rounded-full md:hidden" />
         <div className="flex items-center gap-2 px-4 pt-3 pb-1">
