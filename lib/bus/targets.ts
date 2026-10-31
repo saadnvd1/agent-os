@@ -73,7 +73,8 @@ function ownOrchestrator(
   callerId?: string | null
 ): Session | undefined {
   if (!/^(my )?orchestrator$/i.test(ref.trim())) return undefined;
-  const workspace = sessionById(callerId)?.workspace_id;
+  const caller = sessionById(callerId);
+  const workspace = caller ? sessionWorkspace(caller) : null;
   if (!workspace) return undefined;
   return sessions.find(
     (s) => s.role === "orchestrator" && s.workspace_id === workspace
