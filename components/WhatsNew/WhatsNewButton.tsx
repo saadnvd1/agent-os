@@ -1,36 +1,33 @@
 "use client";
 
 import { Sparkles } from "lucide-react";
-import { StatusPill } from "@/components/ui/status-pill";
+import { Button } from "@/components/ui/button";
 import { useWhatsNewHead } from "@/data/whats-new";
 import { useWhatsNewSeen } from "@/hooks/useWhatsNewSeen";
-import { unreadLabel } from "@/lib/whats-new/unread";
 import { whatsNewActions } from "@/stores/whatsNew";
 
-/** The sidebar footer row; it opens the one dialog (WhatsNewHost). */
+/** A small footer icon that opens the one dialog (WhatsNewHost); a dot marks unread. */
 export function WhatsNewButton() {
   const { data: head } = useWhatsNewHead();
   const { unread } = useWhatsNewSeen(head);
   return (
-    <button
+    <Button
       type="button"
+      variant="ghost"
+      size="icon"
+      title="What's New"
+      aria-label={unread > 0 ? "What's New (unread changes)" : "What's New"}
       onClick={() => whatsNewActions.open()}
-      className="text-foreground hover:bg-accent/60 flex min-h-11 w-full items-center gap-2.5 rounded-lg px-2.5 text-[13px] transition-colors md:min-h-9"
+      // The ::after widens the tap area to 44px on a phone without adding height.
+      className="text-muted-foreground relative h-8 w-8 after:absolute after:-inset-1.5 after:content-[''] md:after:hidden [@media(hover:none)]:md:h-11 [@media(hover:none)]:md:w-11"
     >
-      <Sparkles className="text-muted-foreground size-4 shrink-0" />
-      <span className="flex-1 text-left">What&apos;s New</span>
+      <Sparkles className="h-4 w-4" />
       {unread > 0 && (
-        <>
-          <StatusPill tone="primary" className="rounded-full px-2">
-            {unreadLabel(unread)} new
-          </StatusPill>
-          <span
-            role="img"
-            aria-label="Unread changes"
-            className="bg-primary size-2 shrink-0 rounded-full"
-          />
-        </>
+        <span
+          data-testid="whats-new-dot"
+          className="bg-primary absolute top-1.5 right-1.5 size-1.5 rounded-full"
+        />
       )}
-    </button>
+    </Button>
   );
 }
