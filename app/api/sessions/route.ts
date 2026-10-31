@@ -10,9 +10,14 @@ import { ModelUnavailableError } from "@/lib/models/agent-binding";
 import { namesLine, waitBadges } from "@/lib/bus/waits/store";
 import { claimsSnapshot } from "@/lib/claims";
 import { isProjectRef } from "@/lib/tasks/project-ref";
+import { omitNulls } from "@/lib/sessions/omit-null";
+
+// The sidebar's Done shelf lists this many finished tasks; ?done=all lists
+// every one.
+const DONE_LISTED = 100;
 
 // GET /api/sessions - List the sidebar's sessions and the user's groups
-export async function GET() {
+export async function GET(request?: NextRequest) {
   try {
     const db = getDb();
     // Merged tasks are listed (the sidebar files them under Done). Dropped
@@ -20,12 +25,18 @@ export async function GET() {
     // and archived sessions in the Archived view: none is in the sidebar.
     const badges = waitBadges();
     const claims = claimsSnapshot();
-    const sessions = (queries.getSidebarSessions(db).all() as Session[]).map(
-      (s) => {
-        const b = badges.get(s.id);
-        const overlap = claims.bySession.get(s.id);
-        const row = overlap ? { ...s, overlap } : s;
-        return b
+    const all = request?.nextUrl.searchParams.get("done") === "all";
+    const rows = (
+      all
+        ? queries.getSidebarSessions(db).all()
+        : queries.getSidebarSessionsCapped(db, DONE_LISTED).all()
+    ) as Session[];
+    const sessions = rows.map((s) => {
+      const b = badges.get(s.id);
+      const overlap = claims.bySession.get(s.id);
+      const row = overlap ? { ...s, overlap } : s;
+      return omitNulls(
+        b
           ? {
               ...row,
               waiting_on: b.on.length
@@ -35,9 +46,9 @@ export async function GET() {
                 ? namesLine(b.by.map((w) => w.name))
                 : null,
             }
-          : row;
-      }
-    );
+          : row
+      );
+    });
     return NextResponse.json({
       sessions,
       sessionGroups: listGroups(),

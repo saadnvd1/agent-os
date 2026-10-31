@@ -11,6 +11,17 @@ import type { TaskView } from "../index";
 import { viewOf } from "../move-targets";
 import * as client from "./client";
 
+// The list leaves out the fields that are null.
+const NULL_FIELDS = {
+  projectName: null,
+  branch: null,
+  baseBranch: null,
+  pr: null,
+  blocked: null,
+  cardUrl: null,
+  setup: null,
+} as const;
+
 function offlineView(
   session: Session,
   hostName: string,
@@ -68,6 +79,7 @@ async function viewsOn(hostId: string, rows: Session[]): Promise<TaskView[]> {
       }
       return [
         {
+          ...NULL_FIELDS,
           ...t,
           // As this machine mirrored it: the other one may predate views.
           view: viewOf(s),

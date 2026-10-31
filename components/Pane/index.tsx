@@ -1,5 +1,6 @@
 "use client";
 
+import { hasPrompt } from "@/lib/sessions/has-prompt";
 import { useTaskLogQuery } from "@/data/session-logs";
 import { SetupCard } from "@/components/Chat/SetupCard";
 import { SignInCard } from "@/components/Terminal/SignInCard";
@@ -217,10 +218,11 @@ export const Pane = memo(function Pane({
 
   // A merged task keeps the log AgentOS wrote of it.
   const merged =
-    !!session?.task_prompt &&
+    !!session &&
+    hasPrompt(session) &&
     (session.task_status === "merged" || session.pr_status === "merged");
   const hasLog = !!useTaskLogQuery(session?.id, merged).data;
-  const hasReport = !!session?.task_prompt;
+  const hasReport = !!session && hasPrompt(session);
 
   // Get current project and its repositories
   const currentProject = useMemo(() => {

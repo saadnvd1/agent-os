@@ -38,7 +38,7 @@ export interface Session {
   auto_approve: boolean;
   host_id: string;
   // Async tasks: a session started from a prompt that ends in a PR
-  task_prompt: string | null;
+  task_prompt?: string | null;
   // done: finished without a merge (no PR, or its PR closed).
   // moving: handing it to another machine (moved_to); moved: handed over.
   task_status:
@@ -53,6 +53,8 @@ export interface Session {
   task_brief?: string | null;
   // Lists carry this instead of the brief itself (0/1).
   has_brief?: number;
+  // Likewise for the task prompt (0/1): lists leave the text out.
+  has_prompt?: number;
   // JSON, in lists: the recipe run this session is ({id, name, seq}), and the
   // feature piece it builds ({feature, name, position, total}).
   recipe_run?: string | null;

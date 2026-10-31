@@ -14,11 +14,19 @@ function getStmt(db: Database.Database, sql: string): Database.Statement {
   return stmt;
 }
 
-// Every session column but the two large text ones, which only the single
-// session paths read; a list gets has_brief for whether a brief exists.
+// Every session column but the large text ones, which only the single
+// session paths read; a list gets has_brief and has_prompt for whether a
+// brief or task prompt exists. orch_token is internal and never listed.
 // Read from session_rows (lib/db/session-parts).
+const LEFT_OUT_OF_LISTS = new Set([
+  "task_brief",
+  "system_prompt",
+  "task_prompt",
+  "chat_context",
+  "orch_token",
+]);
 const LIST_COLUMNS = SESSION_ROW_COLUMNS.filter(
-  (n) => n !== "task_brief" && n !== "system_prompt"
+  (n) => !LEFT_OUT_OF_LISTS.has(n)
 );
 export function sessionListColumns(_db: Database.Database, alias = ""): string {
   const prefix = alias ? `${alias}.` : "";
@@ -26,7 +34,7 @@ export function sessionListColumns(_db: Database.Database, alias = ""): string {
   // The recipe run or feature piece a session is, as JSON, for its row's chip.
   const recipe = `(SELECT json_object('id', r.id, 'name', r.name, 'seq', rr.seq, 'status', rr.status) FROM recipe_runs rr JOIN recipes r ON r.id = rr.recipe_id WHERE rr.session_id = ${alias || "session_rows"}.id)`;
   const piece = `(SELECT json_object('feature', f.id, 'name', f.name, 'position', fp.position, 'total', (SELECT COUNT(*) FROM feature_pieces WHERE feature_id = f.id AND status != 'dropped')) FROM feature_pieces fp JOIN features f ON f.id = fp.feature_id WHERE fp.session_id = ${alias || "session_rows"}.id)`;
-  return `${list}, (${prefix}task_brief IS NOT NULL AND ${prefix}task_brief != '') AS has_brief, ${recipe} AS recipe_run, ${piece} AS feature_piece`;
+  return `${list}, (${prefix}task_brief IS NOT NULL AND ${prefix}task_brief != '') AS has_brief, (${prefix}task_prompt IS NOT NULL AND ${prefix}task_prompt != '') AS has_prompt, ${recipe} AS recipe_run, ${piece} AS feature_piece`;
 }
 
 export const queries = {
@@ -57,6 +65,23 @@ export const queries = {
          WHERE archived_at IS NULL
            AND (task_status IS NULL
                 OR task_status NOT IN ('dropped', 'moved'))
+         ORDER BY updated_at DESC`
+    ),
+
+  // The sidebar again with the Done shelf cut to its most recent finished
+  // tasks (limit), for the list a browser refetches on every write.
+  getSidebarSessionsCapped: (db: Database.Database, limit: number) =>
+    getStmt(
+      db,
+      `SELECT ${sessionListColumns(db)} FROM session_rows
+         WHERE archived_at IS NULL
+           AND (task_status IS NULL
+                OR task_status NOT IN ('dropped', 'moved'))
+           AND (task_status IS NOT 'merged' OR id IN (
+                SELECT id FROM session_rows
+                  WHERE archived_at IS NULL AND task_status = 'merged'
+                  ORDER BY COALESCE(NULLIF(settled_at, ''), NULLIF(merged_at, ''), updated_at) DESC
+                  LIMIT ${Math.max(0, Math.floor(limit))}))
          ORDER BY updated_at DESC`
     ),
 
