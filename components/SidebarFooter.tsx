@@ -9,10 +9,12 @@ import {
 export function SidebarFooter() {
   return (
     <div className="mt-auto px-3 pt-2 pb-3">
-      <WhatsNewButton />
-      <div className="mt-1 flex items-center justify-between">
+      <div className="flex items-center justify-between">
         <span className="label-mono text-muted-foreground">Theme</span>
-        <ThemeToggle />
+        <div className="flex items-center">
+          <WhatsNewButton />
+          <ThemeToggle />
+        </div>
       </div>
       <div className="text-muted-foreground/50 mt-2 text-center text-[10px]">
         <Tooltip>

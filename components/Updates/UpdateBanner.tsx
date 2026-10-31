@@ -152,7 +152,7 @@ export function UpdateBannerView({
           {state === "available" && (
             <button
               type="button"
-              className="text-primary inline-flex min-h-11 items-center text-xs underline md:min-h-0"
+              className="text-muted-foreground hover:text-foreground inline-flex min-h-11 items-center text-xs underline md:min-h-0"
               onClick={() => whatsNewActions.open(true)}
             >
               See what&apos;s new
@@ -163,7 +163,7 @@ export function UpdateBannerView({
               href={latest.url}
               target="_blank"
               rel="noreferrer noopener"
-              className="text-primary inline-flex min-h-11 items-center text-xs underline md:min-h-0"
+              className="text-muted-foreground hover:text-foreground inline-flex min-h-11 items-center text-xs underline md:min-h-0"
             >
               Release notes
             </a>
