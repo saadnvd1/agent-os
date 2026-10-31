@@ -1,0 +1,20 @@
+#!/usr/bin/env bash
+# The publish half of scripts/autodeploy, run in its own process group under
+# its own command line: serviceman kills the previous cron run's process group
+# and any orphan still named like the job, so a forked copy of autodeploy
+# would die with the next minute's run. Holds $state/publish.lock (taken by the
+# caller) and releases it when done.
+#   scripts/publish-detached <sha> <state dir>
+set -euo pipefail
+head=$1
+state=$2
+cd "$(dirname "$0")/.."
+log() { echo "$(date '+%Y-%m-%d %-I:%M %p') $*"; }
+tmp=$(mktemp -d)
+trap 'rmdir "$state/publish.lock"; rm -rf "$tmp"' EXIT
+git archive "$head" | tar -x -C "$tmp"
+base=$(node -p 'require("./package.json").version.split(".").slice(0,2).join(".")')
+version="$base.$(git rev-list --count "$head")"
+(cd "$tmp" && npm version "$version" --no-git-tag-version --allow-same-version >/dev/null)
+log "Publishing $version"
+"$tmp/scripts/publish" && echo "$head" > "$state/published"

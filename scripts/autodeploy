@@ -135,15 +135,10 @@ fi
 # Publishing waits minutes for npm to serve a version, so it runs on its own
 # with its own lock and never holds up the next deploy.
 if [ "$head" != "$published" ] && mkdir "$state/publish.lock" 2>/dev/null; then
-  (
-    trap 'rmdir "$state/publish.lock"; rm -rf "$tmp"' EXIT
-    tmp=$(mktemp -d)
-    git archive "$head" | tar -x -C "$tmp"
-    base=$(node -p 'require("./package.json").version.split(".").slice(0,2).join(".")')
-    version="$base.$(git rev-list --count "$head")"
-    (cd "$tmp" && npm version "$version" --no-git-tag-version --allow-same-version >/dev/null)
-    log "Publishing $version"
-    "$tmp/scripts/publish" && echo "$head" > "$state/published"
-  ) &
+  # Its own session and command line: serviceman kills the last run's process
+  # group and orphans named like this job, which took a backgrounded subshell
+  # with it every minute.
+  nohup perl -e 'use POSIX; POSIX::setsid(); exec @ARGV' \
+    "$PWD/scripts/publish-detached" "$head" "$state" </dev/null &
   disown
 fi

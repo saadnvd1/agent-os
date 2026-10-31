@@ -28,6 +28,18 @@ function setup() {
   fs.mkdirSync(path.join(work, "bin"));
   fs.writeFileSync(path.join(work, "bin/aos"), "");
   fs.writeFileSync(path.join(work, "scripts/wait-quiet"), "#!/bin/sh\n");
+  fs.copyFileSync(
+    path.join(__dirname, "publish-detached"),
+    path.join(work, "scripts/publish-detached")
+  );
+  fs.writeFileSync(path.join(work, "package.json"), '{"version":"1.2.0"}\n');
+  // Stands in for the npm publish: records its process group, then takes a while.
+  fs.writeFileSync(
+    path.join(work, "scripts/publish"),
+    '#!/bin/sh\necho "$(ps -o pgid= -p $$ | tr -d " ")" >> "$HOME/publish-starts"\nsleep 2\n'
+  );
+  fs.chmodSync(path.join(work, "scripts/publish-detached"), 0o755);
+  fs.chmodSync(path.join(work, "scripts/publish"), 0o755);
   fs.writeFileSync(
     path.join(work, "scripts/redeploy"),
     "#!/bin/sh\ngit pull -q origin main && echo x >> ../restarts\n"
@@ -45,7 +57,7 @@ function setup() {
   commit("first");
   sh(root, "clone", "-q", origin, clone);
   const state = path.join(home, ".agent-os/autodeploy");
-  const run = () =>
+  const run = (extra: Record<string, string> = {}) =>
     execFileSync(path.join(clone, "scripts/autodeploy"), [], {
       cwd: clone,
       encoding: "utf-8",
@@ -57,6 +69,7 @@ function setup() {
         AGENTOS_RESTART: "true",
         AOS_BIN_DIR: path.join(root, "linkbin"),
         AGENT_OS_HOME: path.join(home, ".agent-os"),
+        ...extra,
       },
     });
   const restarts = () => {
@@ -71,7 +84,7 @@ function setup() {
   };
   const deployed = () =>
     fs.readFileSync(path.join(state, "deployed"), "utf-8").trim();
-  return { root, clone, commit, run, restarts, deployed, state };
+  return { root, home, clone, commit, run, restarts, deployed, state };
 }
 
 describe("autodeploy restart gap", () => {
@@ -185,5 +198,29 @@ describe("autodeploy CLI links", () => {
     expect(fs.readlinkSync(path.join(linkbin, "aos"))).toBe(
       path.join(t.clone, "bin/aos")
     );
+  });
+});
+
+describe("autodeploy publish", () => {
+  it("keeps publishing in its own process group across the next run", async () => {
+    const t = setup();
+    const head = t.commit("a");
+    const env = { AGENTOS_PUBLISH: "1", AGENTOS_WHATS_NEW: "0" };
+    t.run(env);
+    t.run(env);
+    const starts = path.join(t.home, "publish-starts");
+    const lock = path.join(t.state, "publish.lock");
+    const published = path.join(t.state, "published");
+    for (let i = 0; i < 100 && !fs.existsSync(published); i++)
+      await new Promise((r) => setTimeout(r, 100));
+    const groups = fs.readFileSync(starts, "utf-8").trim().split("\n");
+    expect(groups).toHaveLength(1);
+    expect(Number(groups[0])).not.toBe(
+      Number(execFileSync("ps", ["-o", "pgid=", "-p", String(process.pid)]))
+    );
+    expect(fs.readFileSync(published, "utf-8").trim()).toBe(head);
+    for (let i = 0; i < 20 && fs.existsSync(lock); i++)
+      await new Promise((r) => setTimeout(r, 50));
+    expect(fs.existsSync(lock)).toBe(false);
   });
 });
