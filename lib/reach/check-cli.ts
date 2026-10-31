@@ -50,6 +50,7 @@ export async function whoIsOnThePort(
   deps: CheckCliDeps
 ): Promise<ReachFinding> {
   let answered = false;
+  let silent = false;
   try {
     const res = await deps.fetch(`${deps.base}/api/reach/probe`, {
       signal: AbortSignal.timeout(deps.probeMs ?? 2_000),
@@ -61,14 +62,17 @@ export async function whoIsOnThePort(
     if (res.ok && typeof body?.boot === "string")
       return finding("service-stuck", "fail");
   } catch (err) {
-    const code = (err as { cause?: { code?: string } }).cause?.code;
-    if (!answered && code === "ECONNREFUSED")
+    const e = err as { name?: string; cause?: { code?: string } };
+    if (!answered && e.cause?.code === "ECONNREFUSED")
       return finding("service-down", "fail", {
         alt: deps.serviceInstalled() ? undefined : "no-service",
       });
+    silent = !answered && e.name === "TimeoutError";
   }
-  // Something holds the port but isn't AgentOS (or doesn't speak HTTP).
   const program = await deps.holder().catch(() => null);
+  // A blocked server takes the connection and never answers, probe included.
+  if (silent && program === "node") return finding("service-stuck", "fail");
+  // Something holds the port but isn't AgentOS (or doesn't speak HTTP).
   return finding("port-taken", "fail", {
     detail: program && PROGRAM.test(program) ? program : undefined,
   });
@@ -93,9 +97,10 @@ export async function runCheckCli(
   deps: CheckCliDeps
 ): Promise<number> {
   const json = args.includes("--json");
-  const via = args[args.indexOf("--via") + 1];
-  const want = args.includes("--via") ? ROUTES.filter((r) => r === via) : [];
-  if (args.includes("--via") && !want.length) {
+  const i = args.findIndex((a) => a === "--via" || a.startsWith("--via="));
+  const via = i < 0 ? undefined : (args[i].split("=")[1] ?? args[i + 1]);
+  const want = i < 0 ? [] : ROUTES.filter((r) => r === via);
+  if (i >= 0 && !want.length) {
     deps.out(`--via takes one of: ${ROUTES.join(", ")}`);
     return 2;
   }

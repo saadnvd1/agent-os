@@ -260,6 +260,14 @@ describe("agent-os setup", () => {
     expect(calls()).toContain("npm start");
   });
 
+  it("refuses --via with nothing after it", () => {
+    const r = run("cmd_setup --via");
+    expect(r.status).toBe(2);
+    expect(r.stdout + r.stderr).toContain(
+      "--via takes connect, tailscale or lan"
+    );
+  });
+
   it("refuses an unknown route", () => {
     const r = setup("--via carrier-pigeon");
     expect(r.status).toBe(2);
@@ -301,6 +309,41 @@ describe("the service file", () => {
     expect(readFileSync(plist(), "utf8")).toBe("edited\n");
   });
 
+  it("reconcile: an edited file that is replaced is kept as .bak", () => {
+    mkdirSync(join(dir, "Library/LaunchAgents"), { recursive: true });
+    writeFileSync(plist(), "edited\n");
+    const r = run("service_reconcile");
+    expect(r.stdout.trim()).toBe("updated");
+    expect(readFileSync(`${plist()}.bak`, "utf8")).toBe("edited\n");
+    expect(readFileSync(plist(), "utf8")).toContain("start-foreground");
+  });
+
+  it("enable on an edited systemd unit keeps a copy of it", () => {
+    mkdirSync(join(dir, ".config/systemd/user"), { recursive: true });
+    writeFileSync(unit(), "[Service]\nExecStart=/mine\n");
+    const r = run("cmd_enable", "debian");
+    expect(r.status, r.stderr).toBe(0);
+    expect(readFileSync(`${unit()}.bak`, "utf8")).toBe(
+      "[Service]\nExecStart=/mine\n"
+    );
+    expect(readFileSync(unit(), "utf8")).toBe(UNIT(realScript()));
+  });
+
+  it("paths with odd characters stay one value in both files", () => {
+    const odd = "/Users/a b/R&D <x>/100%/agent-os";
+    const xml = run(`render_launchd_plist "${odd}"`).stdout;
+    expect(xml).toContain(
+      "<string>/Users/a b/R&amp;D &lt;x&gt;/100%/agent-os</string>"
+    );
+    const systemd = run(`render_systemd_unit '${odd}'`, "debian").stdout;
+    expect(systemd).toContain(
+      'ExecStart="/Users/a b/R&D <x>/100%%/agent-os" start-foreground'
+    );
+    expect(run(`render_systemd_unit '/a/"q"\\b c'`, "debian").stdout).toContain(
+      'ExecStart="/a/\\"q\\"\\\\b c" start-foreground'
+    );
+  });
+
   it("systemd: enable writes the unit and enables it", () => {
     const r = run("cmd_enable", "debian");
     expect(r.status, r.stderr).toBe(0);
@@ -324,6 +367,16 @@ describe("launchd commands", () => {
     run("cmd_disable");
     expect(existsSync(plist())).toBe(false);
     expect(calls()).not.toMatch(/launchctl (load|unload)/);
+  });
+
+  it("start with the agent loaded but the server gone never kills one that's running", () => {
+    run("cmd_enable");
+    rmSync(join(dir, "up"));
+    rmSync(join(dir, "calls.log"));
+    const r = run("cmd_start");
+    expect(r.status, r.stderr).toBe(0);
+    expect(calls()).toMatch(/launchctl kickstart gui\/\d+\/com\.agent-os/);
+    expect(calls()).not.toContain("kickstart -k");
   });
 
   it("enable twice: the second is a no-op", () => {

@@ -49,6 +49,42 @@ describe("probeConnect", () => {
     expect(asked).toBe("https://m-1.example.test/api/reach/probe");
   });
 
+  it.each([
+    "m-1.example.test:8443",
+    "m-1.example.test/x?",
+    "user@m-1.example.test",
+    "127.0.0.1",
+    "",
+  ])(
+    "fetches nothing for a name that isn't a plain DNS name: %s",
+    async (name) => {
+      const asked: string[] = [];
+      const d = deps((url) => {
+        asked.push(url);
+        return Response.json({ boot: BOOT });
+      });
+      expect(await probeConnect(name, "api.example.test", BOOT, d)).toEqual({
+        kind: "dns",
+        scope: "host",
+      });
+      expect(asked).toEqual([]);
+    }
+  );
+
+  it("never asks a control host that isn't a plain DNS name", async () => {
+    const asked: string[] = [];
+    const d = deps(() => fetchError("CERT_HAS_EXPIRED"));
+    const f = d.fetch;
+    d.fetch = ((input, init) => {
+      asked.push(String(input));
+      return f(input, init);
+    }) as typeof fetch;
+    expect(
+      await probeConnect("m-1.example.test", "evil.test:25/x", BOOT, d)
+    ).toEqual({ kind: "tls", skewed: false });
+    expect(asked).toEqual(["https://m-1.example.test/api/reach/probe"]);
+  });
+
   it("another boot id: wrong origin", async () => {
     expect(await probe(deps(() => Response.json({ boot: "ffff" })))).toEqual({
       kind: "wrong-origin",

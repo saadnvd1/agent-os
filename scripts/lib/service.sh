@@ -27,11 +27,30 @@ service_path() {
     esac
 }
 
+# A path as plist text: & < > would break the XML.
+# sed, not ${//}: bash 5.2 reads & in a replacement as the match.
+xml_text() {
+    printf '%s' "$1" | sed -e 's/&/\&amp;/g' -e 's/</\&lt;/g' -e 's/>/\&gt;/g'
+}
+
+# A path as one systemd ExecStart word: % is a specifier, and a space would
+# split it. A plain path comes out as it went in.
+systemd_word() {
+    local s="${1//%/%%}"
+    if [[ "$s" =~ [[:space:]\"\'\\] ]]; then
+        s="${s//\\/\\\\}"
+        s="\"${s//\"/\\\"}\""
+    fi
+    printf '%s' "$s"
+}
+
 # The server runs in the foreground as launchd's own process, so a crash is
 # restarted (a clean exit isn't), and terminals (tmux) and chat workers
 # outlive a restart, as KillMode=process does on Linux.
 render_launchd_plist() {
-    local script_path="$1"
+    local script_path log_file
+    script_path=$(xml_text "$1")
+    log_file=$(xml_text "$LOG_FILE")
     cat << EOF
 <?xml version="1.0" encoding="UTF-8"?>
 <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
@@ -56,9 +75,9 @@ render_launchd_plist() {
     <key>AbandonProcessGroup</key>
     <true/>
     <key>StandardOutPath</key>
-    <string>$LOG_FILE</string>
+    <string>$log_file</string>
     <key>StandardErrorPath</key>
-    <string>$LOG_FILE</string>
+    <string>$log_file</string>
     <key>EnvironmentVariables</key>
     <dict>
         <key>PATH</key>
@@ -73,7 +92,9 @@ EOF
 # once, so launchd never restarted a crashed server. Recognised so setup can
 # offer the update rather than calling it yours.
 render_launchd_plist_v1() {
-    local script_path="$1"
+    local script_path log_file
+    script_path=$(xml_text "$1")
+    log_file=$(xml_text "$LOG_FILE")
     cat << EOF
 <?xml version="1.0" encoding="UTF-8"?>
 <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
@@ -91,9 +112,9 @@ render_launchd_plist_v1() {
     <key>KeepAlive</key>
     <false/>
     <key>StandardOutPath</key>
-    <string>$LOG_FILE</string>
+    <string>$log_file</string>
     <key>StandardErrorPath</key>
-    <string>$LOG_FILE</string>
+    <string>$log_file</string>
     <key>EnvironmentVariables</key>
     <dict>
         <key>PATH</key>
@@ -105,7 +126,8 @@ EOF
 }
 
 render_systemd_unit() {
-    local script_path="$1"
+    local script_path
+    script_path=$(systemd_word "$1")
     cat << EOF
 [Unit]
 Description=AgentOS - AI Coding Session Manager
@@ -152,14 +174,19 @@ service_file_state() {
 }
 
 # Writes the service file when it differs. Prints unchanged | installed |
-# updated | kept-yours. "keep" leaves a file that isn't ours as it is.
+# updated | kept-yours. "keep" leaves a file that isn't ours as it is; one
+# that is replaced is kept next to it as .bak first.
 service_reconcile() {
     local mode="${1:-replace}" state path
     state=$(service_file_state)
     path=$(service_path)
     case "$state" in
         same) echo unchanged; return 0 ;;
-        changed) if [[ "$mode" == keep ]]; then echo kept-yours; return 0; fi ;;
+        changed)
+            if [[ "$mode" == keep ]]; then echo kept-yours; return 0; fi
+            cp -p "$path" "$path.bak"
+            log_info "Kept your version as $path.bak" >&2
+            ;;
     esac
     mkdir -p "${path%/*}"
     render_service "$(service_script_path)" > "$path"
@@ -195,4 +222,9 @@ launchd_bootout() {
 
 launchd_restart() {
     launchctl kickstart -k "$(launchd_domain)/$LAUNCHD_LABEL" > /dev/null 2>&1
+}
+
+# Starts it if it isn't running; never kills one that is.
+launchd_kickstart() {
+    launchctl kickstart "$(launchd_domain)/$LAUNCHD_LABEL" > /dev/null 2>&1
 }
