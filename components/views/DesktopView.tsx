@@ -2,7 +2,7 @@
 
 import { DesktopSidebar } from "./DesktopSidebar";
 import { DesktopAppActions, SidebarToggle } from "./DesktopAppActions";
-import { UpdateBanner } from "@/components/Updates";
+import { UpdateToast } from "@/components/Updates";
 import { PaneLayout } from "@/components/PaneLayout";
 import { PaneBarSlotsProvider } from "@/components/Pane/PaneBarSlots";
 import type { ViewProps } from "./types";
@@ -53,7 +53,7 @@ export function DesktopView({
 
       {/* Main content */}
       <div className="flex min-w-0 flex-1 flex-col">
-        <UpdateBanner />
+        <UpdateToast />
         {/* Pane Layout - full height */}
         <div className="min-h-0 flex-1">
           <PaneBarSlotsProvider

@@ -1,5 +1,6 @@
 import "@/components/Chat/composer/test-dom";
-import { act, createElement } from "react";
+import { act, createElement, useEffect, useState } from "react";
+import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { createRoot, type Root } from "react-dom/client";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import type { UpdateView } from "@/lib/updates/banner";
@@ -19,6 +20,14 @@ for (const key of [
     writable: true,
   });
 
+let desktopMatches = true;
+window.matchMedia = ((query: string) => ({
+  matches: desktopMatches,
+  media: query,
+  addEventListener: () => {},
+  removeEventListener: () => {},
+})) as unknown as typeof window.matchMedia;
+
 let view: UpdateView | undefined;
 const runMutate = vi.fn();
 const cancelMutate = vi.fn();
@@ -27,9 +36,42 @@ vi.mock("@/data/updates", () => ({
   useRunUpdate: () => ({ mutate: runMutate, isPending: false }),
   useCancelUpdate: () => ({ mutate: cancelMutate, isPending: false }),
 }));
-vi.mock("sonner", () => ({ toast: { error: vi.fn() } }));
+// A stand-in for sonner: it records what the toast was asked to show, and a
+// tray component renders the latest content like the real Toaster would.
+interface Shown {
+  render: (id: string) => React.ReactNode;
+  opts: Record<string, unknown>;
+}
+const shown = new Map<string, Shown>();
+const listeners = new Set<() => void>();
+const emit = () => listeners.forEach((l) => l());
+const custom = vi.fn((render: Shown["render"], opts: Shown["opts"]) => {
+  shown.set(opts.id as string, { render, opts });
+  emit();
+});
+const dismiss = vi.fn((id: string) => {
+  shown.delete(id);
+  emit();
+});
+vi.mock("sonner", () => ({ toast: { error: vi.fn(), custom, dismiss } }));
 
-const { UpdateBanner } = await import("./UpdateBanner");
+const { UpdateToast } = await import("./UpdateToast");
+const { settingsUi } = await import("@/stores/settingsUi");
+
+function Tray() {
+  const [, tick] = useState(0);
+  useEffect(() => {
+    const l = () => tick((n) => n + 1);
+    listeners.add(l);
+    l();
+    return () => void listeners.delete(l);
+  }, []);
+  return createElement(
+    "div",
+    null,
+    [...shown].map(([id, t]) => createElement("div", { key: id }, t.render(id)))
+  );
+}
 
 (
   globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }
@@ -60,7 +102,18 @@ const make = (over: Partial<UpdateView> = {}): UpdateView => ({
 
 let root: Root;
 let host: HTMLElement;
-const render = () => act(async () => root.render(createElement(UpdateBanner)));
+const qc = new QueryClient();
+const render = () =>
+  act(async () =>
+    root.render(
+      createElement(
+        QueryClientProvider,
+        { client: qc },
+        createElement(UpdateToast),
+        createElement(Tray)
+      )
+    )
+  );
 const text = () => document.body.textContent ?? "";
 const button = (label: string) =>
   [...document.querySelectorAll<HTMLButtonElement>("button")].find(
@@ -70,6 +123,11 @@ const button = (label: string) =>
 
 beforeEach(() => {
   localStorage.clear();
+  shown.clear();
+  custom.mockClear();
+  dismiss.mockClear();
+  settingsUi.open = false;
+  settingsUi.section = null;
   runMutate.mockReset();
   cancelMutate.mockReset();
   view = make();
@@ -82,7 +140,7 @@ afterEach(async () => {
   host.remove();
 });
 
-describe("UpdateBanner", () => {
+describe("UpdateToast", () => {
   it("says which version is available, with a link to the notes", async () => {
     await render();
     expect(text()).toContain("AgentOS 0.3.5 is available");
@@ -119,6 +177,7 @@ describe("UpdateBanner", () => {
     view = make({ bannerEnabled: false });
     await render();
     expect(text()).toBe("");
+    expect(shown.size).toBe(0);
     view = make({ available: false });
     await render();
     expect(text()).toBe("");
@@ -161,7 +220,7 @@ describe("UpdateBanner", () => {
     expect(cancelMutate).toHaveBeenCalled();
   });
 
-  it("shows progress while updating, with no way to dismiss it", async () => {
+  it("shows progress while updating and stays up, with a close button", async () => {
     view = make({
       run: {
         id: "r",
@@ -174,10 +233,10 @@ describe("UpdateBanner", () => {
     });
     await render();
     expect(text()).toContain("Building… step 3 of 5");
-    expect(button("Dismiss")).toBeUndefined();
+    expect(custom.mock.calls.at(-1)![1].duration).toBe(Infinity);
   });
 
-  it("shows a failure with its error until dismissed", async () => {
+  it("shows a failure with its error and a link to the log, until dismissed", async () => {
     view = make({
       available: false,
       run: {
@@ -192,6 +251,11 @@ describe("UpdateBanner", () => {
     });
     await render();
     expect(text()).toContain("build exploded");
+    expect(custom.mock.calls.at(-1)![1].duration).toBe(Infinity);
+    expect(document.querySelector("pre")).toBeNull();
+    await act(async () => button("View log")!.click());
+    expect(settingsUi.open).toBe(true);
+    expect(settingsUi.section).toBe("updates");
     await act(async () => button("Dismiss")!.click());
     expect(text()).toBe("");
     expect(localStorage.getItem("agentos.update.dismissedRun")).toBe("r9");
@@ -233,5 +297,91 @@ describe("UpdateBanner", () => {
     await render();
     expect(text()).toContain("went back to 0.3.1");
     expect(document.querySelector('[role="alert"]')).toBeNull();
+  });
+
+  it("keeps one toast id and updates it in place through the update", async () => {
+    await render();
+    const run = (phase: "building" | "restarting" | "done") => ({
+      id: "r",
+      phase,
+      auto: true,
+      from: "a",
+      fromVersion: "0.3.1",
+      toVersion: "0.3.5",
+      startedAt: Date.now(),
+      finishedAt: phase === "done" ? Date.now() : undefined,
+    });
+    for (const phase of ["building", "restarting", "done"] as const) {
+      view = make({ available: false, run: run(phase) });
+      await render();
+    }
+    expect(text()).toContain("updated itself to 0.3.5");
+    expect(new Set(custom.mock.calls.map((c) => c[1].id))).toEqual(
+      new Set(["agentos-update"])
+    );
+    expect(shown.size).toBe(1);
+  });
+
+  it("auto-dismisses the updated note after a few seconds", async () => {
+    view = make({
+      available: false,
+      run: {
+        id: "a1",
+        phase: "done",
+        auto: true,
+        from: "a",
+        fromVersion: "0.3.1",
+        toVersion: "0.3.5",
+        startedAt: 1,
+        finishedAt: Date.now(),
+      },
+    });
+    await render();
+    const opts = custom.mock.calls.at(-1)![1];
+    expect(opts.duration).toBeGreaterThan(0);
+    expect(opts.duration).toBeLessThanOrEqual(10_000);
+    await act(async () => (opts.onAutoClose as () => void)());
+    expect(text()).toBe("");
+    expect(localStorage.getItem("agentos.update.dismissedRun")).toBe("a1");
+  });
+
+  it("closing a running toast hides it without cancelling the update", async () => {
+    view = make({
+      run: {
+        id: "r",
+        phase: "building",
+        from: "a",
+        fromVersion: "0.3.1",
+        toVersion: "0.3.5",
+        startedAt: Date.now(),
+      },
+    });
+    await render();
+    await act(async () => button("Dismiss")!.click());
+    expect(text()).toBe("");
+    view = make({
+      run: {
+        id: "r",
+        phase: "failed",
+        from: "a",
+        fromVersion: "0.3.1",
+        toVersion: "0.3.5",
+        startedAt: 1,
+        error: "boom",
+      },
+    });
+    await render();
+    expect(text()).toContain("boom");
+  });
+
+  it("sits top-center on phones and bottom-right on desktop", async () => {
+    await render();
+    expect(custom.mock.calls.at(-1)![1].position).toBe("bottom-right");
+    desktopMatches = false;
+    await act(async () => root.unmount());
+    root = createRoot(host);
+    await render();
+    desktopMatches = true;
+    expect(custom.mock.calls.at(-1)![1].position).toBe("top-center");
   });
 });

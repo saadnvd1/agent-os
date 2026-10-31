@@ -1,6 +1,8 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useState, type ReactNode } from "react";
+import { useQueryClient, QueryClientProvider } from "@tanstack/react-query";
+import { toast } from "sonner";
 import { ArrowUpCircle, ChevronDown, Loader2, X } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { useUpdates } from "@/data/updates";
@@ -15,6 +17,7 @@ import { cn } from "@/lib/utils";
 import { TipHost } from "@/components/Tips";
 import { WhatsNewHost } from "@/components/WhatsNew";
 import { whatsNewActions } from "@/stores/whatsNew";
+import { settingsUiActions } from "@/stores/settingsUi";
 import { UpdateActions } from "./UpdateActions";
 
 const STEPS = [
@@ -43,29 +46,12 @@ function useSince(startedAt: number | undefined, on: boolean) {
   return startedAt ? now - startedAt : 0;
 }
 
-function Log({ lines }: { lines: string[] }) {
-  const [open, setOpen] = useState(false);
-  if (!lines.length) return null;
-  return (
-    <>
-      <button
-        type="button"
-        className="text-muted-foreground hover:text-foreground min-h-11 text-xs underline md:min-h-0"
-        onClick={() => setOpen(!open)}
-      >
-        {open ? "Hide log" : "Show log"}
-      </button>
-      {open && (
-        <pre className="bg-background/60 mt-1 max-h-48 w-full overflow-auto rounded-md p-2 text-xs whitespace-pre-wrap">
-          {lines.join("\n")}
-        </pre>
-      )}
-    </>
-  );
-}
+export const UPDATE_TOAST_ID = "agentos-update";
+const UPDATED_AUTOCLOSE_MS = 6000;
+const DESKTOP_QUERY = "(min-width: 768px)";
 
-/** The bar itself; what to show and what the buttons do come in as props. */
-export function UpdateBannerView({
+/** The toast's content; what to show and what the buttons do come in as props. */
+export function UpdateToastView({
   state,
   view,
   onDismiss,
@@ -79,6 +65,8 @@ export function UpdateBannerView({
   const elapsed = useSince(run?.startedAt, state === "running");
   const latest = view.latest;
   const failed = state === "failed";
+  const link =
+    "text-muted-foreground hover:text-foreground inline-flex min-h-11 items-center text-xs underline md:min-h-0";
 
   let text: React.ReactNode;
   if (state === "available") text = <>AgentOS {latest?.version} is available</>;
@@ -113,31 +101,15 @@ export function UpdateBannerView({
       );
   }
 
-  const extra = (
-    <>
-      {state === "available" && !view.canUpdate.ok && view.canUpdate.reason && (
-        <p className="text-muted-foreground text-xs">{view.canUpdate.reason}</p>
-      )}
-      {(failed || state === "rolled_back") && <Log lines={run?.log ?? []} />}
-      {notesOpen && latest && (
-        <ul className="text-muted-foreground list-disc space-y-0.5 pl-4 text-xs">
-          {latest.notes.map((n, i) => (
-            <li key={i}>{n}</li>
-          ))}
-        </ul>
-      )}
-    </>
-  );
-
   return (
     <div
       role={failed ? "alert" : "status"}
       className={cn(
-        "flex items-start gap-2 border-b px-3 py-2 text-sm",
-        failed ? "bg-destructive/10 text-foreground" : "bg-muted/60"
+        "bg-card text-foreground pointer-events-auto flex w-[356px] max-w-[calc(100vw-2rem)] items-start gap-2 rounded-lg border p-3 text-sm shadow-lg",
+        failed && "border-destructive/50"
       )}
     >
-      <span className="flex h-6 shrink-0 items-center md:h-8">
+      <span className="flex h-6 shrink-0 items-center">
         {state === "running" ? (
           <Loader2 className="text-muted-foreground h-4 w-4 animate-spin" />
         ) : (
@@ -150,13 +122,44 @@ export function UpdateBannerView({
         )}
       </span>
       <div className="min-w-0 flex-1 space-y-1">
-        <div className="flex flex-wrap items-center gap-x-3 gap-y-1 md:min-h-8">
-          <p className="min-w-0 flex-1 basis-40">{text}</p>
+        <p className="min-h-6 leading-6">{text}</p>
+        {state === "available" &&
+          !view.canUpdate.ok &&
+          view.canUpdate.reason && (
+            <p className="text-muted-foreground text-xs">
+              {view.canUpdate.reason}
+            </p>
+          )}
+        {notesOpen && latest && (
+          <ul className="text-muted-foreground list-disc space-y-0.5 pl-4 text-xs">
+            {latest.notes.map((n, i) => (
+              <li key={i}>{n}</li>
+            ))}
+          </ul>
+        )}
+        <div className="flex flex-wrap items-center gap-x-3 gap-y-1">
+          {(state === "available" || state === "pending") && (
+            <UpdateActions view={view} />
+          )}
+          {state === "running" && elapsed > SLOW_MS && (
+            <Button size="sm" onClick={() => window.location.reload()}>
+              Reload
+            </Button>
+          )}
+          {(failed || state === "rolled_back") && (
+            <button
+              type="button"
+              className={link}
+              onClick={() => settingsUiActions.open("updates")}
+            >
+              View log
+            </button>
+          )}
           {state === "available" && latest && latest.notes.length > 0 && (
             <button
               type="button"
               aria-expanded={notesOpen}
-              className="text-muted-foreground hover:text-foreground inline-flex min-h-11 items-center gap-1 text-xs md:min-h-0"
+              className={cn(link, "gap-1 no-underline")}
               onClick={() => setNotesOpen(!notesOpen)}
             >
               Commit list
@@ -171,7 +174,7 @@ export function UpdateBannerView({
           {(state === "available" || state === "updated") && (
             <button
               type="button"
-              className="text-muted-foreground hover:text-foreground inline-flex min-h-11 items-center text-xs underline md:min-h-0"
+              className={link}
               onClick={() => whatsNewActions.open(true)}
             >
               See what&apos;s new
@@ -182,71 +185,98 @@ export function UpdateBannerView({
               href={latest.url}
               target="_blank"
               rel="noreferrer noopener"
-              className="text-muted-foreground hover:text-foreground inline-flex min-h-11 items-center text-xs underline md:min-h-0"
+              className={link}
             >
               Release notes
             </a>
           )}
-          {(state === "available" || state === "pending") && (
-            <UpdateActions view={view} />
-          )}
-          {state === "running" && elapsed > SLOW_MS && (
-            <Button size="sm" onClick={() => window.location.reload()}>
-              Reload
-            </Button>
-          )}
         </div>
-        {extra}
       </div>
-      {state !== "running" && state !== "pending" && (
-        <Button
-          variant="ghost"
-          size="icon-sm"
-          aria-label={
-            state === "available" ? "Dismiss until the next version" : "Dismiss"
-          }
-          className="-my-1 -mr-1 h-11 w-11 shrink-0 md:h-8 md:w-8"
-          onClick={onDismiss}
-        >
-          <X className="h-4 w-4" />
-        </Button>
-      )}
+      <Button
+        variant="ghost"
+        size="icon-sm"
+        aria-label={
+          state === "available" ? "Dismiss until the next version" : "Dismiss"
+        }
+        className="-my-1 -mr-1 h-11 w-11 shrink-0 md:h-8 md:w-8"
+        onClick={onDismiss}
+      >
+        <X className="h-4 w-4" />
+      </Button>
     </div>
   );
 }
 
-// Held apart: the page re-renders on every status push.
-export function UpdateBanner() {
+function useIsDesktop() {
+  const [desktop, setDesktop] = useState(true);
+  useEffect(() => {
+    const mq = window.matchMedia(DESKTOP_QUERY);
+    const on = () => setDesktop(mq.matches);
+    on();
+    mq.addEventListener("change", on);
+    return () => mq.removeEventListener("change", on);
+  }, []);
+  return desktop;
+}
+
+/**
+ * One sonner toast with a fixed id, updated in place as the update moves on.
+ * Bottom-right on desktop; top-center on phones, where the bottom is the
+ * composer. Held apart: the page re-renders on every status push.
+ */
+export function UpdateToast() {
   const { data: view } = useUpdates();
   const dismissed = useDismissedUpdate();
+  const queryClient = useQueryClient();
+  const desktop = useIsDesktop();
+  // Closing a running or pending toast hides it for that run only; the
+  // result (updated, failed) still shows afterwards.
+  const [closed, setClosed] = useState<string | null>(null);
   useReloadWhenUpdated(view);
-  const state = bannerState({
+  const computed = bannerState({
     view,
     dismissedVersion: dismissed.version,
     dismissedRun: dismissed.run,
   });
-  if (state === "hidden" || !view)
-    return (
-      <>
-        <WhatsNewHost />
-        <TipHost />
-      </>
+  const key =
+    computed === "running"
+      ? `running:${view?.run?.id}`
+      : computed === "pending"
+        ? `pending:${view?.pending?.requestedAt}`
+        : null;
+  const state = key && key === closed ? "hidden" : computed;
+
+  const { dismissVersion, dismissRun } = dismissed;
+  useEffect(() => {
+    if (state === "hidden" || !view) {
+      toast.dismiss(UPDATE_TOAST_ID);
+      return;
+    }
+    const onDismiss = () => {
+      toast.dismiss(UPDATE_TOAST_ID);
+      if (key) setClosed(key);
+      else if (state === "available" && view.latest)
+        dismissVersion(view.latest.version);
+      else if (view.run) dismissRun(view.run.id);
+    };
+    const el: ReactNode = (
+      <QueryClientProvider client={queryClient}>
+        <UpdateToastView state={state} view={view} onDismiss={onDismiss} />
+      </QueryClientProvider>
     );
+    toast.custom(() => el, {
+      id: UPDATE_TOAST_ID,
+      position: desktop ? "bottom-right" : "top-center",
+      duration: state === "updated" ? UPDATED_AUTOCLOSE_MS : Infinity,
+      onAutoClose: onDismiss,
+    });
+  }, [state, view, key, desktop, queryClient, dismissVersion, dismissRun]);
+  useEffect(() => () => void toast.dismiss(UPDATE_TOAST_ID), []);
+
   return (
     <>
       <WhatsNewHost />
       <TipHost />
-      <UpdateBannerView
-        state={state}
-        view={view}
-        onDismiss={() =>
-          state === "available" && view.latest
-            ? dismissed.dismissVersion(view.latest.version)
-            : view.run
-              ? dismissed.dismissRun(view.run.id)
-              : undefined
-        }
-      />
     </>
   );
 }
