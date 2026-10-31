@@ -1,6 +1,7 @@
 import { TipButton } from "@/components/Tips";
 import { WhatsNewButton } from "@/components/WhatsNew";
 import { ThemeToggle } from "@/components/ThemeToggle";
+import { ShortcutsButton } from "@/components/Shortcuts/ShortcutsButton";
 import {
   Tooltip,
   TooltipContent,
@@ -13,6 +14,7 @@ export function SidebarFooter() {
       <div className="flex items-center justify-between">
         <span className="label-mono text-muted-foreground">Theme</span>
         <div className="flex items-center">
+          <ShortcutsButton />
           <TipButton />
           <WhatsNewButton />
           <ThemeToggle />

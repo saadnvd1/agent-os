@@ -7,6 +7,9 @@ import { subscribe } from "valtio";
 import { viewSwitchStore, viewSwitchActions } from "@/stores/viewSwitch";
 import { useOpenSession } from "@/hooks/useOpenSession";
 import { useSessionUrl } from "@/hooks/useSessionUrl";
+import { useNavActions } from "@/hooks/useNavActions";
+import { useChatViewsSync } from "@/hooks/useChatViewsSync";
+import { chatPositionsActions } from "@/stores/chatPositions";
 import { tmuxAttachStore, tmuxAttachActions } from "@/stores/tmuxAttach";
 import type { AttachSpec } from "@/lib/hosts/attach";
 import { memo, useState, useEffect, useCallback, useMemo, useRef } from "react";
@@ -55,7 +58,8 @@ import { useDraftKeys } from "@/hooks/useDraftKeys";
 import { useDraftRequests } from "@/hooks/useDraftRequests";
 import { newDraft } from "@/stores/drafts";
 import { useOpenOrchestrator } from "@/hooks/useOpenOrchestrator";
-import { paletteActions, paletteUi } from "@/stores/palette";
+import { ShortcutsDialog } from "@/components/Shortcuts/ShortcutsDialog";
+import { PendingKeys } from "@/components/Shortcuts/PendingKeys";
 import { useAppCommands } from "@/components/CommandPalette/useAppCommands";
 import { useMoveCommands } from "@/components/Tasks/useMoveCommands";
 import dynamic from "next/dynamic";
@@ -187,6 +191,8 @@ const AppDialogs = memo(function AppDialogs({
       <AwayReport />
       <IncomingLinks />
       <CommandPalette />
+      <ShortcutsDialog />
+      <PendingKeys />
     </>
   );
 });
@@ -530,9 +536,12 @@ function HomeContent() {
     isMobile,
   });
 
+  useChatViewsSync();
+
   // Notification click handler
   const handleNotificationClick = useCallback(
     (sessionId: string) => {
+      chatPositionsActions.wantLatest(sessionId);
       const session = sessions.find((s) => s.id === sessionId);
       if (session) {
         attachToSession(session);
@@ -570,19 +579,6 @@ function HomeContent() {
   useEffect(() => {
     if (isHydrated && !isMobile) setSidebarOpen(true);
   }, [isMobile, isHydrated]);
-
-  // Cmd+K: the command palette, which searches sessions too.
-  useEffect(() => {
-    const handleKeyDown = (e: KeyboardEvent) => {
-      if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === "k") {
-        e.preventDefault();
-        if (paletteUi.open) paletteActions.setOpen(false);
-        else paletteActions.open();
-      }
-    };
-    window.addEventListener("keydown", handleKeyDown);
-    return () => window.removeEventListener("keydown", handleKeyDown);
-  }, []);
 
   // Picking a session with a tap, ⌘K or the keyboard: the composer is focused
   // inside the gesture, which iOS requires. Other ways in (URL, notification,
@@ -674,6 +670,7 @@ function HomeContent() {
   // A workspace's orchestrator row opens its chat, made on first open.
   const handleOrchestratorOpened = useCallback(
     (sessionId: string) => {
+      chatPositionsActions.wantLatest(sessionId);
       if (isMobile) setSidebarOpen(false);
       void handleSessionCreated(sessionId);
     },
@@ -724,8 +721,14 @@ function HomeContent() {
     chatMetaActions.setActive(focusedActiveTab?.sessionId ?? null);
   }, [focusedActiveTab?.sessionId]);
 
+  useNavActions({
+    sessions,
+    activeSessionId: focusedActiveTab?.sessionId,
+    select: selectSession,
+  });
   useAppCommands({
     sessions,
+    activeSessionId: focusedActiveTab?.sessionId,
     statuses: sessionStatuses,
     onSelectSession: selectSession,
     onSearchCode: () => setShowQuickSwitcher(true),

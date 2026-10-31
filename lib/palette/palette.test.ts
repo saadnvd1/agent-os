@@ -240,3 +240,40 @@ describe("empty state", () => {
     ]);
   });
 });
+
+describe("switching chats", () => {
+  const chats = [
+    cmd("session.cur", "Current chat", { group: "Sessions", hint: "Current" }),
+    cmd("session.prev", "Previous chat", {
+      group: "Sessions",
+      hint: "Previous",
+    }),
+    cmd("session.old", "Older chat", { group: "Sessions" }),
+    cmd("app.a", "Alpha"),
+  ];
+  const usage: Usage = {
+    "session.old": { count: 30, last: NOW },
+    "app.a": { count: 1, last: 1 },
+  };
+
+  it("lists sessions in the order they were given, whatever the palette use", () => {
+    expect(
+      tabItems(chats, "sessions", "", usage, NOW).map((c) => c.id)
+    ).toEqual(["session.cur", "session.prev", "session.old"]);
+  });
+
+  it("still ranks them by the query once one is typed", () => {
+    expect(tabItems(chats, "sessions", "older", usage, NOW)[0].id).toBe(
+      "session.old"
+    );
+  });
+
+  it("offers recent chats first when the palette opens, skipping the current one", () => {
+    const sections = emptySections(chats, {});
+    expect(sections[0].name).toBe("Recent chats");
+    expect(sections[0].items.map((c) => c.id)).toEqual([
+      "session.prev",
+      "session.old",
+    ]);
+  });
+});

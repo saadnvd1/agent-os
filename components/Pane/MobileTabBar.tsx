@@ -44,6 +44,7 @@ import { useCanAddAnalyst } from "@/components/Analyst/pair";
 import { MoveMenuItems } from "@/components/Tasks/MoveMenuItems";
 import { ChatBookmarksButton } from "@/components/Bookmarks/ChatBookmarksButton";
 import type { ViewMode } from "@/contexts/PaneContext";
+import { PhoneBackButton } from "@/components/Nav/HistoryButtons";
 import { MobileViewPicker } from "./MobileViewPicker";
 
 interface MobileTabBarProps {
@@ -168,6 +169,8 @@ export function MobileTabBar({
           )}
         </Button>
       )}
+
+      <PhoneBackButton />
 
       {/* Session/Tab navigation */}
       <div className="flex min-w-0 flex-1 items-center gap-1">

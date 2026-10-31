@@ -9,6 +9,7 @@ import {
   emptySections,
   withSeeAll,
   tabItems,
+  CURRENT,
   type Section,
 } from "@/lib/palette/sections";
 import { cycleTab, parsePrefix } from "@/lib/palette/tabs";
@@ -37,7 +38,8 @@ export function CommandsBody() {
   const tab = paletteUi.tab;
   const all = picker?.items ?? commands;
   const [query, setQuery] = useState(paletteUi.query);
-  const [active, setActive] = useState(0);
+  // Null until the reader moves: the list then picks where to start.
+  const [active, setActive] = useState<number | null>(null);
   // The tab a `>` or `@` chose, which Backspace on an empty query undoes.
   const [prefixTab, setPrefixTab] = useState<PaletteTab | null>(null);
   const [usage, setUsage] = useState(loadUsage);
@@ -78,9 +80,15 @@ export function CommandsBody() {
   const [shownTab, setShownTab] = useState(tab);
   if (shownTab !== tab) {
     setShownTab(tab);
-    setActive(0);
+    setActive(null);
   }
-  const highlighted = Math.min(active, Math.max(results.length - 1, 0));
+  // A switcher opens on the chat before this one, so Enter flips back to it.
+  const flipBack =
+    tab === "sessions" && !q && !picker && results[0]?.hint === CURRENT;
+  const highlighted = Math.min(
+    active ?? (flipBack ? 1 : 0),
+    Math.max(results.length - 1, 0)
+  );
 
   useEffect(() => {
     listRef.current
@@ -104,7 +112,7 @@ export function CommandsBody() {
 
   const onChange = (value: string) => {
     const prefix = !picker && !query ? parsePrefix(value) : null;
-    setActive(0);
+    setActive(null);
     if (prefix) {
       setQuery(prefix.text);
       setPrefixTab(prefix.tab);

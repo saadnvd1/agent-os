@@ -18,6 +18,8 @@ export interface Section {
 export const PER_TAB = 5;
 export const RECENT = 5;
 const NEEDS_YOU = 5;
+// The hint on the chat on show, which a switcher skips past.
+export const CURRENT = "Current";
 const SUGGESTED = 6;
 
 const label = (tab: PaletteTab) =>
@@ -61,11 +63,10 @@ export function tabItems(
   usage: Usage,
   now: number
 ): PaletteCommand[] {
-  return scoreCommands(
-    commands.filter((c) => tabOf(c) === tab),
-    query,
-    boostFor(usage, now)
-  ).map((m) => m.c);
+  const inTab = commands.filter((c) => tabOf(c) === tab);
+  // Sessions read most-recent-first (the order they were registered in).
+  if (tab === "sessions" && !query.trim()) return inTab;
+  return scoreCommands(inTab, query, boostFor(usage, now)).map((m) => m.c);
 }
 
 // The short list All opens on: the last things run, sessions that need the
@@ -99,13 +100,18 @@ export function emptySections(
       .filter((c): c is PaletteCommand => !!c),
     RECENT
   );
+  const recentChats = take(
+    commands.filter((c) => tabOf(c) === "sessions" && c.hint !== CURRENT),
+    RECENT
+  );
   const sections: Section[] = [
+    { name: "Recent chats", items: recentChats },
     { name: "Recent", items: recent },
     { name: "Needs you / running", items: busy },
     { name: "This session", items: here },
   ];
   // A first run has no history: offer the commands that start things.
-  if (recent.length + busy.length + here.length < 4)
+  if (recent.length + busy.length + here.length + recentChats.length < 4)
     sections.push({
       name: "Suggested",
       items: take(

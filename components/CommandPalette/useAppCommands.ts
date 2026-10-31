@@ -40,6 +40,9 @@ import { useAddExistingProject } from "@/components/Projects/AddProject/useAddEx
 import { usageUiActions } from "@/stores/usageUi";
 import { settingsCommands } from "@/components/Settings/commands";
 import { DRAFT_KEYS } from "@/lib/drafts";
+import { chatOpened } from "@/stores/chatPositions";
+import { previousChatId, recentFirst } from "@/lib/nav/recent";
+import { CURRENT } from "@/lib/palette/sections";
 import { useAwayCommands } from "@/components/Away/useAwayCommands";
 
 const LAST_THEME = "agentOS-last-theme-";
@@ -72,10 +75,12 @@ function sessionState(s: SessionStatus | undefined) {
 export function useAppCommands({
   sessions,
   statuses,
+  activeSessionId,
   onSelectSession,
   onSearchCode,
 }: {
   sessions: Session[];
+  activeSessionId?: string | null;
   statuses: Record<string, SessionStatus>;
   onSelectSession: (session: Session) => void;
   onSearchCode: () => void;
@@ -83,6 +88,7 @@ export function useAppCommands({
   const { theme, resolvedTheme, setTheme } = useTheme();
   const { data: workspaces = [] } = useWorkspacesQuery();
   const { workspaceId } = useSnapshot(sidebarUi);
+  const opened = useSnapshot(chatOpened);
   const current = workspaces.find((w) => w.id === workspaceId) ?? null;
   const dark = resolvedTheme?.startsWith("dark") ?? false;
   const { data: recipes = [] } = useRecipesQuery(workspaceId ?? null);
@@ -263,18 +269,30 @@ export function useAppCommands({
   usePaletteCommands("app", app);
   useAwayCommands();
 
+  const open = sessions.filter(
+    (s) => !s.archived_at && !s.conductor_session_id
+  );
+  const previousId = previousChatId(
+    open.map((s) => s.id),
+    opened,
+    activeSessionId
+  );
   usePaletteCommands(
     "sessions",
-    sessions
-      .filter((s) => !s.archived_at && !s.conductor_session_id)
-      .map((s) => ({
-        id: `session.${s.id}`,
-        title: s.name,
-        group: "Sessions",
-        keywords: [s.working_directory, s.branch_name ?? ""].filter(Boolean),
-        icon: MessageSquare,
-        ...sessionState(statuses[s.id]),
-        run: () => onSelectSession(s),
-      }))
+    recentFirst(open, opened).map((s) => ({
+      id: `session.${s.id}`,
+      title: s.name,
+      group: "Sessions",
+      keywords: [s.working_directory, s.branch_name ?? ""].filter(Boolean),
+      hint:
+        s.id === activeSessionId
+          ? CURRENT
+          : s.id === previousId
+            ? "Previous"
+            : undefined,
+      icon: MessageSquare,
+      ...sessionState(statuses[s.id]),
+      run: () => onSelectSession(s),
+    }))
   );
 }

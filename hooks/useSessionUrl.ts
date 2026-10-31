@@ -10,6 +10,8 @@ import {
   type SessionRef,
 } from "@/lib/session-url";
 import { usePanes } from "@/contexts/PaneContext";
+import { navHistoryActions } from "@/stores/navHistory";
+import { chatPositionsActions } from "@/stores/chatPositions";
 
 interface Options {
   sessions: Session[];
@@ -59,6 +61,9 @@ export function useSessionUrl({
     };
   });
 
+  const nameOf = (id: string | null) =>
+    (id && latest.current.sessions.find((s) => s.id === id)?.name) || "Chat";
+
   // Made on first use, outside render.
   const syncRef = useRef<SessionUrlSync | null>(null);
   const getSync = useCallback(() => {
@@ -79,8 +84,13 @@ export function useSessionUrl({
     syncRef.current = new SessionUrlSync(
       {
         href: () => window.location.href,
-        push: (href) => window.history.pushState(null, "", href),
-        replace: (href) => window.history.replaceState(null, "", href),
+        push: (href, id) => navHistoryActions.push(href, id, nameOf(id)),
+        replace: (href, id) => navHistoryActions.replace(href, id, nameOf(id)),
+        settle: (id) => {
+          const entry = navHistoryActions.currentState();
+          if (entry?.sessionId !== id)
+            navHistoryActions.replace(window.location.href, id, nameOf(id));
+        },
       },
       {
         find: (ref) => pickSession(ref, latest.current.sessions)?.id ?? null,
@@ -119,8 +129,10 @@ export function useSessionUrl({
   // A rename (by hand, or the title a first turn gives it) moves the slug.
   const focusedName = sessions.find((s) => s.id === focusedId)?.name ?? null;
   useEffect(() => {
-    if (focusedName !== null) getSync().renamed();
-  }, [getSync, focusedName]);
+    if (focusedName === null) return;
+    getSync().renamed();
+    if (focusedId) navHistoryActions.rename(focusedId, focusedName);
+  }, [getSync, focusedName, focusedId]);
 
   const ready = hydrated && loaded;
   useEffect(() => {
@@ -128,7 +140,13 @@ export function useSessionUrl({
   }, [getSync, ready]);
 
   useEffect(() => {
-    const onPop = () => void getSync().popstate();
+    const onPop = () => {
+      // Back or forward onto an entry: it remembers where the reader was.
+      const entry = navHistoryActions.popped();
+      if (entry?.sessionId && entry.pos)
+        chatPositionsActions.setTarget(entry.sessionId, entry.pos);
+      void getSync().popstate();
+    };
     window.addEventListener("popstate", onPop);
     return () => window.removeEventListener("popstate", onPop);
   }, [getSync]);

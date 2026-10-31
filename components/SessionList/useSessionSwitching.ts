@@ -4,11 +4,12 @@ import { MessageSquare } from "lucide-react";
 import { useKeybindings } from "@/hooks/useKeybindings";
 import { usePaletteCommands } from "@/hooks/usePaletteCommands";
 import { chordHint } from "@/lib/keybindings/chord";
+import { keysOf } from "@/lib/keybindings/keymap";
 import { fieldOwnsKey } from "@/lib/keybindings/focus";
 import { neighbourSession } from "@/lib/sidebar/visible-order";
 
-const PREVIOUS = "mod+up";
-const NEXT = "mod+down";
+const PREVIOUS = keysOf("session.previous");
+const NEXT = keysOf("session.next");
 
 // ⌘↑ / ⌘↓ (Ctrl off a Mac) select the row above or below the active one, as
 // a click would, in the order the sidebar shows. Nothing happens at either end.

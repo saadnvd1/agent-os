@@ -6,8 +6,9 @@ import { UpdateBanner } from "@/components/Updates";
 import { PaneLayout } from "@/components/PaneLayout";
 import { PaneBarSlotsProvider } from "@/components/Pane/PaneBarSlots";
 import type { ViewProps } from "./types";
-import { QuickSwitcher, StartServerDialog } from "./lazy";
+import { CodeSearchDialog, StartServerDialog } from "./lazy";
 import { fileOpenActions } from "@/stores/fileOpen";
+import { HistoryButtons } from "@/components/Nav/HistoryButtons";
 import { useSidebarPinned } from "@/hooks/useSidebarPinned";
 
 export function DesktopView({
@@ -57,7 +58,10 @@ export function DesktopView({
         <div className="min-h-0 flex-1">
           <PaneBarSlotsProvider
             leading={
-              <SidebarToggle isPinned={isPinned} togglePin={togglePin} />
+              <>
+                <SidebarToggle isPinned={isPinned} togglePin={togglePin} />
+                <HistoryButtons />
+              </>
             }
             trailing={<DesktopAppActions showNew={!isPinned} />}
           >
@@ -67,16 +71,10 @@ export function DesktopView({
       </div>
 
       {/* Dialogs */}
-      <QuickSwitcher
-        sessions={sessions}
+      <CodeSearchDialog
         open={showQuickSwitcher}
         onOpenChange={setShowQuickSwitcher}
-        currentSessionId={focusedActiveTab?.sessionId ?? undefined}
         activeSessionWorkingDir={activeSession?.working_directory ?? undefined}
-        onSelectSession={(sessionId) => {
-          const session = sessions.find((s) => s.id === sessionId);
-          if (session) selectSession(session);
-        }}
         onSelectFile={(file, line) => {
           // Convert relative path to absolute by prepending working directory
           const absolutePath = activeSession?.working_directory
