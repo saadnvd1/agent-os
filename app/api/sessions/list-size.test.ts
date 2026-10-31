@@ -30,7 +30,7 @@ beforeEach(() => {
 });
 
 describe("GET /api/sessions payload", () => {
-  it("never carries the prompt text, the chat context or the orchestrator token", async () => {
+  it("never carries the full prompt, the chat context or the orchestrator token", async () => {
     const id = seed({
       task_status: "running",
       task_prompt: "x".repeat(5000),
@@ -38,7 +38,8 @@ describe("GET /api/sessions payload", () => {
       orch_token: "secret-token",
     });
     const row = (await list()).find((r) => r.id === id)!;
-    expect(row).not.toHaveProperty("task_prompt");
+    // Installed phone builds read !!task_prompt, so a short prefix stays.
+    expect(row.task_prompt).toBe("x".repeat(80));
     expect(row).not.toHaveProperty("chat_context");
     expect(row).not.toHaveProperty("orch_token");
     expect(row.has_prompt).toBe(1);
