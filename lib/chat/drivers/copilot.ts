@@ -1,6 +1,9 @@
+import { readFileSync } from "node:fs";
+import os from "node:os";
+import path from "node:path";
 import { sessionBaseEnv } from "../../agents/server-env";
 import type { ChatConversation, ChatDriver, ChatStartOptions } from "../driver";
-import type { ChatImage, DriverEvent } from "../events";
+import type { ChatImage, ChatModel, DriverEvent } from "../events";
 import { InputQueue } from "../queue";
 import { AGENT_DEFAULT_MODEL } from "../../providers/registry";
 import { CopilotApprovals } from "./copilot-approvals";
@@ -9,10 +12,54 @@ import { CopilotRpc } from "./copilot-rpc";
 
 type P = Record<string, unknown>;
 
-export function copilotArgs(o: ChatStartOptions): string[] {
-  const args: string[] = [];
-  if (o.model && o.model !== AGENT_DEFAULT_MODEL) args.push("--model", o.model);
-  return args;
+// `copilot --acp` ignores the user's default model (COPILOT_MODEL and
+// ~/.copilot/settings.json) and only honours --model, so we pass it on.
+export function copilotDefaultModel(
+  env: Record<string, string | undefined>,
+  readSettings: () => string = () =>
+    readFileSync(path.join(os.homedir(), ".copilot", "settings.json"), "utf8")
+): string | undefined {
+  if (env.COPILOT_MODEL) return env.COPILOT_MODEL;
+  try {
+    const model = (JSON.parse(readSettings()) as P).model;
+    return typeof model === "string" && model ? model : undefined;
+  } catch {
+    return undefined;
+  }
+}
+
+export function copilotArgs(
+  o: ChatStartOptions,
+  fallback = copilotDefaultModel({ ...process.env, ...o.env })
+): string[] {
+  const model = o.model && o.model !== AGENT_DEFAULT_MODEL ? o.model : fallback;
+  return model ? ["--model", model] : [];
+}
+
+// The models a new ACP session offers (`models.availableModels`), with
+// Copilot's premium-request multiplier as the description when it gives one.
+export function copilotModels(session: P | undefined): ChatModel[] {
+  const list = ((session?.models as P | undefined)?.availableModels ??
+    []) as P[];
+  return list
+    .filter((m) => typeof m.modelId === "string")
+    .map((m) => {
+      const meta = (m._meta ?? {}) as P;
+      const usage = meta.copilotUsage ?? m.copilotUsage;
+      const description =
+        typeof usage === "number"
+          ? `${usage}x usage`
+          : typeof usage === "string"
+            ? usage
+            : typeof m.description === "string"
+              ? m.description
+              : undefined;
+      return {
+        value: String(m.modelId),
+        label: String(m.name ?? m.modelId),
+        ...(description ? { description } : {}),
+      };
+    });
 }
 
 export function copilotPrompt(text: string, images?: ChatImage[]) {
@@ -35,10 +82,31 @@ export const copilotDriver: ChatDriver = {
   inProcessTools: false,
   atRest: false,
 
-  // The ACP server lists no models or commands without a session; the agent
-  // picks its own model unless one is chosen.
-  async discover() {
-    return { commands: [], models: [] };
+  // The ACP server lists models only for a session, so a throwaway one is
+  // opened, read and closed.
+  async discover({ cwd, env, signal }) {
+    const rpc = new CopilotRpc(
+      [],
+      { cwd, env: { ...sessionBaseEnv(), ...env } },
+      {
+        notify: () => {},
+        request: (id) => rpc.replyError(id, "not supported"),
+        exit: () => {},
+      }
+    );
+    const close = () => rpc.close();
+    signal?.addEventListener("abort", close);
+    try {
+      await rpc.initialize();
+      const session = await rpc.request<P>("session/new", {
+        cwd,
+        mcpServers: [],
+      });
+      return { commands: [], models: copilotModels(session) };
+    } finally {
+      signal?.removeEventListener("abort", close);
+      close();
+    }
   },
 
   start(options): ChatConversation {
@@ -147,8 +215,15 @@ export const copilotDriver: ChatDriver = {
       async interrupt() {
         stop();
       },
-      // The model is chosen when the CLI starts.
-      async setModel() {},
+      async setModel(model) {
+        const modelId =
+          model && model !== AGENT_DEFAULT_MODEL
+            ? model
+            : copilotDefaultModel({ ...process.env, ...options.env });
+        if (!modelId) return;
+        await ready;
+        await rpc.request("session/set_model", { sessionId, modelId });
+      },
       async setAccess(next) {
         approvals.access = next;
       },
