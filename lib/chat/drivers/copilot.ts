@@ -6,6 +6,7 @@ import type { ChatConversation, ChatDriver, ChatStartOptions } from "../driver";
 import type { ChatImage, ChatModel, DriverEvent } from "../events";
 import { InputQueue } from "../queue";
 import { AGENT_DEFAULT_MODEL } from "../../providers/registry";
+import { ASK_SERVER, ASK_TOOL, CopilotAskServer } from "./copilot-ask";
 import { CopilotApprovals } from "./copilot-approvals";
 import { CopilotMapper } from "./copilot-mapper";
 import { CopilotRpc } from "./copilot-rpc";
@@ -33,7 +34,10 @@ export function copilotArgs(
   fallback = copilotDefaultModel({ ...process.env, ...o.env })
 ): string[] {
   const model = o.model && o.model !== AGENT_DEFAULT_MODEL ? o.model : fallback;
-  return model ? ["--model", model] : [];
+  return [
+    ...(model ? ["--model", model] : []),
+    `--allow-tool=${ASK_SERVER}(${ASK_TOOL})`,
+  ];
 }
 
 // The models a new ACP session offers (`models.availableModels`), with
@@ -117,6 +121,7 @@ export const copilotDriver: ChatDriver = {
     const emit = (e: DriverEvent) => out.push(e);
     const mapper = new CopilotMapper(emit);
     const approvals = new CopilotApprovals(emit, options.access);
+    const ask = new CopilotAskServer(approvals.pending);
     let sessionId: string | null = null;
     let busy = false;
     let intro = options.resumeId ? "" : (options.systemAppend ?? "").trim();
@@ -136,7 +141,7 @@ export const copilotDriver: ChatDriver = {
           void approvals.handle(params).then((result) => rpc.reply(id, result));
         },
         exit(error) {
-          approvals.pending.expireAll();
+          ask.close();
           mapper.endTurn({ error });
           out.end();
         },
@@ -145,7 +150,15 @@ export const copilotDriver: ChatDriver = {
     emit({ type: "usage_start", totals: { ...mapper.totals } });
 
     const ready = rpc.initialize().then(async () => {
-      const params = { cwd: options.cwd, mcpServers: [] };
+      // Without it the agent just can't ask: the chat still works.
+      const mcpServers = await ask.start().then(
+        (s) => [s],
+        (e: Error) => {
+          mapper.items.error(`Questions aren't available: ${e.message}`);
+          return [];
+        }
+      );
+      const params = { cwd: options.cwd, mcpServers };
       if (options.resumeId) {
         mapper.replaying = true;
         try {
@@ -170,6 +183,7 @@ export const copilotDriver: ChatDriver = {
       emit({ type: "resume_id", id: sessionId });
     });
     ready.catch((error: Error) => {
+      ask.close();
       mapper.items.error(`GitHub Copilot couldn't start: ${error.message}`);
       mapper.endTurn({});
       out.end();
@@ -243,7 +257,7 @@ export const copilotDriver: ChatDriver = {
         };
       },
       close() {
-        approvals.pending.expireAll();
+        ask.close();
         rpc.close();
         out.end();
       },

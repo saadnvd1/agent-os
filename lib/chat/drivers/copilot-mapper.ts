@@ -1,5 +1,6 @@
 import type { ChatContext, DriverEvent, UsageTotals } from "../events";
 import { toolTitle } from "../tools";
+import { isAskUserCall } from "./copilot-ask";
 import { TurnItems, type ToolStart } from "./turn-items";
 
 type P = Record<string, unknown>;
@@ -135,14 +136,22 @@ export class CopilotMapper {
     this.block++;
   }
 
+  // The card is the question's only trace, so its tool call stays hidden.
+  private asks = new Set<string>();
+
   private started(update: P): void {
     this.items.startTurn();
+    if (isAskUserCall(update)) {
+      this.asks.add(str(update.toolCallId));
+      return;
+    }
     this.close();
     this.items.tool(str(update.toolCallId), toolStart(update));
   }
 
   private updated(update: P): void {
     const id = str(update.toolCallId);
+    if (this.asks.has(id)) return;
     const status = str(update.status);
     if (status !== "completed" && status !== "failed") return;
     const start = toolStart(update);
