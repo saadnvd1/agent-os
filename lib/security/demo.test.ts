@@ -194,6 +194,7 @@ describe("demo gate: allowed", () => {
     for (const url of [
       "/api/devices",
       "/api/devices/network",
+      "/api/reach",
       "/api/orchestrators",
       "/api/projects",
       "/api/sessions",

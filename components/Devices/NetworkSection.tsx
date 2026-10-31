@@ -4,6 +4,7 @@ import { SettingToggle as Toggle } from "@/components/Settings/SettingToggle";
 import { useNetworkQuery, useUpdateNetwork } from "@/data/devices";
 import { TailscaleCard } from "./TailscaleCard";
 import { ConnectCard } from "./ConnectCard";
+import { ReachRow } from "@/components/Reach/ReachRow";
 
 export function NetworkSection({
   open,
@@ -22,6 +23,7 @@ export function NetworkSection({
 
   return (
     <div className="space-y-2">
+      <ReachRow enabled={open} />
       <ConnectCard
         connect={data.connect}
         canManage={canManage}

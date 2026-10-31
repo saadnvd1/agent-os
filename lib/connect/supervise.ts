@@ -24,6 +24,17 @@ import type { Readable, Writable } from "stream";
 import { ApiError, clean } from "./control-api";
 
 export type TunnelState = "connecting" | "up" | "denied" | "error" | "stopped";
+/** Where a failure came from: getting the connector, or the Connect service. */
+export type Stage = "connector" | "service";
+
+/** Tags an error with the stage it came from, for the supervisor to keep. */
+export function atStage<T>(stage: Stage, work: Promise<T>): Promise<T> {
+  return work.catch((err) => {
+    throw Object.assign(err instanceof Error ? err : new Error(String(err)), {
+      stage,
+    });
+  });
+}
 
 export interface Prepared {
   bin: string;
@@ -178,6 +189,13 @@ export function superviseTunnel(opts: SuperviseOptions) {
 
   let state: TunnelState = "connecting";
   let reason: string | undefined;
+  let stage: Stage | undefined;
+  // When it last left "up", or started trying: how long it has been down.
+  let downSince = Date.now();
+  const set = (next: TunnelState) => {
+    if (state === "up" && next !== "up") downSince = Date.now();
+    state = next;
+  };
   let stopped = false;
   let child: Child | null = null;
   let timer: NodeJS.Timeout | null = null;
@@ -203,13 +221,13 @@ export function superviseTunnel(opts: SuperviseOptions) {
   // Nothing here may reject: an unhandled rejection takes AgentOS down.
   const tick = () =>
     void attempt().catch(() => {
-      state = "error";
+      set("error");
       retry(delays.max);
     });
 
   const attempt = async () => {
     if (stopped) return;
-    state = "connecting";
+    set("connecting");
     try {
       const prepared = await opts.prepare();
       if (stopped) return;
@@ -218,13 +236,15 @@ export function superviseTunnel(opts: SuperviseOptions) {
       if (stopped) return;
       const status = err instanceof ApiError ? err.status : 0;
       reason = clean((err as Error)?.message ?? String(err));
+      stage =
+        (err as { stage?: Stage })?.stage ?? (status ? "service" : undefined);
       log(`connect: ${reason}`);
       if (status === 401 || status === 403) {
         // Revoked or disabled: it won't fix itself in seconds.
-        state = "denied";
+        set("denied");
         retry(delays.denied);
       } else {
-        state = "error";
+        set("error");
         retry(delay);
         delay = Math.min(delay * 2, delays.setupMax);
       }
@@ -265,8 +285,9 @@ export function superviseTunnel(opts: SuperviseOptions) {
         }
       );
     } catch (err) {
-      state = "error";
+      set("error");
       reason = `cloudflared could not start: ${redact((err as Error).message)}`;
+      stage = "connector";
       log(`connect: ${reason}`);
       retry(delay);
       delay = Math.min(delay * 2, delays.max);
@@ -298,8 +319,9 @@ export function superviseTunnel(opts: SuperviseOptions) {
       if (message.startsWith("Registered tunnel connection")) {
         connections.add(conn);
         if (state !== "up") log("connect: tunnel up");
-        state = "up";
+        set("up");
         reason = undefined;
+        stage = undefined;
         delay = delays.min;
       } else if (
         message.startsWith("Unregistered tunnel connection") ||
@@ -307,7 +329,7 @@ export function superviseTunnel(opts: SuperviseOptions) {
           entry.connIndex !== undefined)
       ) {
         connections.delete(conn);
-        if (state === "up" && connections.size === 0) state = "connecting";
+        if (state === "up" && connections.size === 0) set("connecting");
       }
       if (["warn", "error", "fatal"].includes(entry.level ?? "")) {
         const text = entry.error ? `${message}: ${entry.error}` : message;
@@ -332,7 +354,7 @@ export function superviseTunnel(opts: SuperviseOptions) {
           fs.rmSync(pidFile, { force: true });
       } catch {}
       if (stopped) return;
-      state = "connecting";
+      set("connecting");
       reason = why;
       log(`connect: ${why}; starting it again`);
       retry(delay);
@@ -361,10 +383,12 @@ export function superviseTunnel(opts: SuperviseOptions) {
   return {
     state: () => state,
     reason: () => reason,
+    stage: () => stage,
+    downSince: () => (state === "up" ? undefined : downSince),
     stop() {
       if (stopped) return;
       stopped = true;
-      state = "stopped";
+      set("stopped");
       process.removeListener("exit", killNow);
       for (const s of SIGNALS) process.removeListener(s, onSignal);
       if (timer) clearTimeout(timer);

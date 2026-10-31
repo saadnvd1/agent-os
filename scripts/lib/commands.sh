@@ -1,6 +1,9 @@
 #!/usr/bin/env bash
 # Command implementations for agent-os
 
+# The background service (launchd/systemd) the start/stop commands go through.
+source "${BASH_SOURCE[0]%/*}/service.sh"
+
 cmd_install() {
     local use_local=false
     [[ "${1:-}" == "--local" ]] && use_local=true
@@ -91,8 +94,8 @@ cmd_install() {
     fi
 
     echo "Next steps:"
-    echo "  agent-os start     Start the server"
-    echo "  agent-os enable    Auto-start on boot"
+    echo "  agent-os setup     Start it, keep it running, and reach it from your phone"
+    echo "  agent-os check     Can other devices reach this machine? (names the cause if not)"
     echo "  agent-os status    Show URLs"
     wsl_next_steps
 }
@@ -128,6 +131,16 @@ systemd_unit_active() {
 }
 
 cmd_start() {
+    if [[ "${OS:-}" == "macos" ]] && ! is_running && launchd_keeps_alive; then
+        if launchd_loaded; then
+            launchd_restart && log_success "AgentOS started (launchd)" && return 0
+        elif launchd_bootstrap; then
+            log_success "AgentOS started (launchd)"
+            return 0
+        fi
+        # No desktop session (ssh): run it by hand this time.
+        launchd_no_gui_session
+    fi
     if ! is_running && has_systemd &&
         systemctl --user is-enabled --quiet agent-os 2>/dev/null; then
         systemctl --user start agent-os
@@ -186,6 +199,15 @@ cmd_start() {
 }
 
 cmd_stop() {
+    # A kill would just be restarted: launchd stops it, until the next login
+    # or 'agent-os start'.
+    if [[ "${OS:-}" == "macos" ]] && launchd_loaded && launchd_keeps_alive; then
+        log_info "Stopping AgentOS (launchd)..."
+        launchd_bootout
+        rm -f "$PID_FILE"
+        log_success "AgentOS stopped"
+        return 0
+    fi
     if systemd_unit_active; then
         log_info "Stopping AgentOS (systemd)..."
         systemctl --user stop agent-os
@@ -226,6 +248,11 @@ cmd_stop() {
 }
 
 cmd_restart() {
+    if [[ "${OS:-}" == "macos" ]] && launchd_loaded && launchd_keeps_alive; then
+        launchd_restart
+        log_success "AgentOS restarted (launchd)"
+        return 0
+    fi
     if systemd_unit_active; then
         systemctl --user restart agent-os
         log_success "AgentOS restarted (systemd)"
@@ -387,69 +414,34 @@ cmd_enable() {
         exit 1
     fi
 
-    local script_path
-    script_path=$(realpath "$0")
-
     if [[ "$OS" == "macos" ]]; then
-        local plist_path="$HOME/Library/LaunchAgents/com.agent-os.plist"
-
-        cat > "$plist_path" << EOF
-<?xml version="1.0" encoding="UTF-8"?>
-<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
-<plist version="1.0">
-<dict>
-    <key>Label</key>
-    <string>com.agent-os</string>
-    <key>ProgramArguments</key>
-    <array>
-        <string>$script_path</string>
-        <string>start</string>
-    </array>
-    <key>RunAtLoad</key>
-    <true/>
-    <key>KeepAlive</key>
-    <false/>
-    <key>StandardOutPath</key>
-    <string>$LOG_FILE</string>
-    <key>StandardErrorPath</key>
-    <string>$LOG_FILE</string>
-    <key>EnvironmentVariables</key>
-    <dict>
-        <key>PATH</key>
-        <string>/usr/local/bin:/opt/homebrew/bin:/usr/bin:/bin</string>
-    </dict>
-</dict>
-</plist>
-EOF
-
-        launchctl load "$plist_path" 2>/dev/null || true
-        log_success "Auto-start enabled (launchd)"
-        echo "  Plist: $plist_path"
+        local result path managed=false
+        path=$(launchd_plist_path)
+        launchd_loaded && launchd_keeps_alive && managed=true
+        if [[ "$(service_file_state)" == same && "$managed" == true ]]; then
+            log_success "Auto-start already enabled (launchd)"
+            echo "  Plist: $path"
+            return 0
+        fi
+        # launchd runs the server itself from now on: one started by hand
+        # (or by the old plist) would hold the port it needs.
+        if is_running && [[ "$managed" == false ]]; then
+            cmd_stop
+        fi
+        result=$(service_reconcile)
+        [[ "$result" == updated ]] && log_info "Updated $path"
+        if launchd_bootstrap; then
+            log_success "Auto-start enabled (launchd): AgentOS starts at login and restarts after a crash"
+        else
+            launchd_no_gui_session
+        fi
+        echo "  Plist: $path"
 
     elif has_systemd; then
-        local service_dir="$HOME/.config/systemd/user"
-        local service_path="$service_dir/agent-os.service"
-
-        mkdir -p "$service_dir"
-
-        cat > "$service_path" << EOF
-[Unit]
-Description=AgentOS - AI Coding Session Manager
-After=network.target
-
-[Service]
-Type=simple
-ExecStart=$script_path start-foreground
-Restart=on-failure
-RestartSec=10
-# Only the server is stopped on a restart: terminals (tmux), chat workers and
-# an update in progress outlive it, as they do under launchd.
-KillMode=process
-Environment=PATH=/usr/local/bin:/usr/bin:/bin
-
-[Install]
-WantedBy=default.target
-EOF
+        local service_path
+        service_path=$(systemd_unit_path)
+        # Writes the unit only when it differs; the rest is safe to repeat.
+        service_reconcile > /dev/null
 
         systemctl --user daemon-reload
         systemctl --user enable agent-os
@@ -486,8 +478,8 @@ cmd_disable() {
         local plist_path="$HOME/Library/LaunchAgents/com.agent-os.plist"
 
         if [[ -f "$plist_path" ]]; then
-            launchctl unload "$plist_path" 2>/dev/null || true
-            rm -f "$plist_path"
+            launchd_bootout
+            rm -f "$plist_path" "$PID_FILE"
             log_success "Auto-start disabled"
         else
             log_warn "Auto-start was not enabled"
@@ -584,13 +576,15 @@ cmd_help() {
     echo ""
     echo "Commands:"
     echo "  install     Install AgentOS (auto-installs dependencies)"
+    echo "  setup       Guided setup: background service, how devices reach it, phone"
+    echo "  check       Can other devices reach this machine? Names the cause and the fix"
     echo "  run         Start server and open in browser"
     echo "  start       Start the server in background"
     echo "  stop        Stop the server"
     echo "  restart     Restart the server"
     echo "  status      Show server status and URLs"
     echo "  pair        Add a phone, tablet or laptop (prints a QR code)"
-    echo "  connect     Turn on AgentOS Connect for this machine (in development)"
+    echo "  connect     Turn on AgentOS Connect for this machine"
     echo "  disconnect  Turn Connect off; the tunnel closes within seconds"
     echo "  link        Link machines on your Connect account (link <name>, link accept <code>)"
     echo "  unlink      Unlink a machine linked through Connect"

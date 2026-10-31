@@ -146,6 +146,8 @@ const READS = [
   // stub: what a client checks before it trusts the server.
   "devices",
   "devices/network",
+  // A fixed "no way in" report: the demo never probes the internet.
+  "reach",
   // Whether this is a demo, for the UI.
   "demo",
   // The changelog: a static file, no agent.

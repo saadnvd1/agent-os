@@ -3,6 +3,7 @@ import { tipApplies } from "./conditions";
 import { loadTips } from "./load";
 import { orderDeck, pickToday } from "./pick";
 import type { ClientTip, Tip, TipsView } from "./schema";
+import { guideUrl } from "@/lib/guides";
 import {
   readPinned,
   readSeen,
@@ -12,10 +13,7 @@ import {
   writeSeen,
 } from "./state";
 
-const GUIDES = "https://github.com/saadnvd1/agent-os/blob/main/docs/guides";
-
-export const guideUrl = (g: NonNullable<Tip["guide"]>) =>
-  `${GUIDES}/${g.file}.md${g.anchor ? `#${g.anchor}` : ""}`;
+export { guideUrl };
 
 const forClient = ({ id, title, body, guide, media }: Tip): ClientTip => ({
   id,

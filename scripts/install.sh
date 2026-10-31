@@ -45,4 +45,15 @@ else
 fi
 
 # Run the install command
-exec "$INSTALL_DIR/scripts/agent-os" install
+"$INSTALL_DIR/scripts/agent-os" install
+
+# Under `curl | bash` stdin is this script, so ask on the terminal itself.
+if [[ -t 1 ]] && { : < /dev/tty; } 2> /dev/null; then
+    echo ""
+    read -p "Set up access from your phone and other devices now? [Y/n] " -r answer < /dev/tty || answer=n
+    if [[ ! "$answer" =~ ^[Nn] ]]; then
+        exec "$INSTALL_DIR/scripts/agent-os" setup < /dev/tty
+    fi
+fi
+echo ""
+echo "Next: agent-os setup"

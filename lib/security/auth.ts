@@ -95,6 +95,8 @@ const PUBLIC_EXACT = new Set([
   "/api/peer/hello",
   "/api/peer/hello/reveal",
   "/api/peer/hello/status",
+  // A constant per boot, so this machine can tell its own answer through Connect.
+  "/api/reach/probe",
   "/manifest.webmanifest",
   "/manifest.json",
   "/favicon.ico",

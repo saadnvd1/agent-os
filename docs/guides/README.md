@@ -14,5 +14,6 @@ How-to guides for using AgentOS, in reading order.
 10. [Local models](local-models.md): run a model you host through Pi or OpenCode, turn on tool calling in its server, and what "Ended early" means.
 11. [Tips and What's New](tips.md): the lightbulb and sparkle in the sidebar, what a tip is, and how to turn tips off.
 12. [Getting around](navigation.md): each chat reopens where you left it, what is new since, and back and forward between chats.
+13. [Can't reach your machine](reachability.md): one check that names why another device can't reach AgentOS, and the fix for each cause.
 
 How each part works in detail is in [the reference docs](https://github.com/saadnvd1/agent-os/tree/main/docs/reference).

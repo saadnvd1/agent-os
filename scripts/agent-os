@@ -66,6 +66,7 @@ source "$SCRIPT_DIR/lib/prerequisites.sh"
 source "$SCRIPT_DIR/lib/ai-clis.sh"
 source "$SCRIPT_DIR/lib/commands.sh"
 source "$SCRIPT_DIR/lib/machine.sh"
+source "$SCRIPT_DIR/lib/setup.sh"
 
 # The package family the installers key off (debian, redhat, linux, macos),
 # and the WSL version (0 off WSL).
@@ -75,6 +76,8 @@ WSL=$(detect_wsl)
 # Main
 case "${1:-}" in
     install)          cmd_install "${2:-}" ;;
+    setup)            shift; cmd_setup "$@" ;;
+    check)            shift; aos_tsx lib/reach/cli.ts "$PORT" "$@" ;;
     start)            cmd_start ;;
     stop)             cmd_stop ;;
     restart)          cmd_restart ;;

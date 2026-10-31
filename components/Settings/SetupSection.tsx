@@ -3,6 +3,7 @@
 import { Button } from "@/components/ui/button";
 import { HealthList } from "@/components/Welcome/HealthList";
 import { AgentList } from "@/components/Welcome/AgentList";
+import { ReachRow } from "@/components/Reach/ReachRow";
 import { settingsUiActions } from "@/stores/settingsUi";
 import { welcomeUiActions } from "@/stores/welcomeUi";
 
@@ -32,6 +33,7 @@ export function SetupSection() {
       <div className="flex flex-col gap-2">
         <h3 className="text-sm font-medium">Health</h3>
         <HealthList />
+        <ReachRow />
       </div>
       <div className="flex flex-col gap-2">
         <h3 className="text-sm font-medium">Agents on this machine</h3>

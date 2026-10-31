@@ -7,6 +7,7 @@ import { PassThrough } from "stream";
 import { ApiError } from "./control-api";
 import { execFileSync } from "child_process";
 import {
+  atStage,
   reapTunnel,
   spawnTunnel,
   superviseTunnel,
@@ -188,6 +189,48 @@ describe("superviseTunnel", () => {
     await until(() => calls >= 3);
     expect(h.sup.state()).toBe("error");
     expect(h.children).toHaveLength(0);
+  });
+
+  it("keeps where a failure came from: the connector or the service", async () => {
+    const binary = harness(() =>
+      atStage("connector", Promise.reject(new Error("download failed")))
+    );
+    await until(() => binary.sup.state() === "error");
+    expect(binary.sup.stage()).toBe("connector");
+    const service = harness(() =>
+      atStage("service", Promise.reject(new Error("fetch failed")))
+    );
+    await until(() => service.sup.state() === "error");
+    expect(service.sup.stage()).toBe("service");
+    // A refusal from the service is the service's, tagged or not.
+    const refused = harness(() =>
+      Promise.reject(new ApiError("machine disabled", 403, {}))
+    );
+    await until(() => refused.sup.state() === "denied");
+    expect(refused.sup.stage()).toBe("service");
+  });
+
+  it("knows since when it's been down, and forgets the stage once up", async () => {
+    const before = Date.now();
+    const h = harness();
+    await until(() => h.children.length === 1);
+    expect(h.sup.downSince()).toBeGreaterThanOrEqual(before);
+    h.children[0].say({
+      level: "info",
+      message: "Registered tunnel connection",
+      connIndex: 0,
+    });
+    await until(() => h.sup.state() === "up");
+    expect(h.sup.downSince()).toBeUndefined();
+    expect(h.sup.stage()).toBeUndefined();
+    const left = Date.now();
+    h.children[0].say({
+      level: "info",
+      message: "Unregistered tunnel connection",
+      connIndex: 0,
+    });
+    await until(() => h.sup.state() === "connecting");
+    expect(h.sup.downSince()).toBeGreaterThanOrEqual(left);
   });
 
   it("survives a failing write in its own folder and keeps retrying", async () => {
