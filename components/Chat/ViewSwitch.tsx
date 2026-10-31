@@ -1,6 +1,7 @@
 "use client";
 
 import { MessageSquare, SquareTerminal } from "lucide-react";
+import { hasPrompt } from "@/lib/sessions/has-prompt";
 import type { Session } from "@/lib/db";
 import { supportsChat } from "@/lib/chat/capabilities";
 import { viewSwitchActions } from "@/stores/viewSwitch";
@@ -15,7 +16,7 @@ export function ViewSwitch({
   if (!session || !supportsChat(session.agent_type)) return null;
   if (session.host_id && session.host_id !== "local") return null;
   // A task's agent runs in its terminal with its brief; chat would end it.
-  if (session.task_prompt) return null;
+  if (hasPrompt(session)) return null;
   const options = [
     { view: "chat" as const, icon: MessageSquare, label: "Chat" },
     { view: "terminal" as const, icon: SquareTerminal, label: "Terminal" },

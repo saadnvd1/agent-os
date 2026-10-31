@@ -31,12 +31,26 @@ import { setPr } from "../db/session-parts";
 export const expandHome = (p: string) => p.replace(/^~/, os.homedir());
 
 // Without the brief and system prompt: a list doesn't need them.
-export function taskSessions(includeArchived = true): Session[] {
+// mergedLimit keeps only that many of the most recently finished merged ones.
+export function taskSessions(
+  includeArchived = true,
+  mergedLimit?: number
+): Session[] {
+  const cap =
+    mergedLimit === undefined
+      ? ""
+      : `AND (task_status != 'merged' OR id IN (
+           SELECT id FROM session_rows
+             WHERE task_status = 'merged'
+               ${includeArchived ? "" : "AND archived_at IS NULL"}
+             ORDER BY COALESCE(NULLIF(merged_at, ''), updated_at) DESC
+             LIMIT ${Math.max(0, Math.floor(mergedLimit))}))`;
   return db
     .prepare(
       `SELECT ${sessionListColumns(db)} FROM session_rows
          WHERE task_status IS NOT NULL AND task_status != 'moved'
            ${includeArchived ? "" : "AND archived_at IS NULL"}
+           ${cap}
          ORDER BY created_at DESC`
     )
     .all() as Session[];

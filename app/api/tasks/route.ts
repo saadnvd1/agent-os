@@ -1,6 +1,6 @@
 import { parseOverride } from "@/lib/models/resolve";
 import { NextRequest, NextResponse } from "next/server";
-import { createTask, listTasks, movedTasks } from "@/lib/tasks";
+import { createTask, listTasks, movedTasks, type TaskView } from "@/lib/tasks";
 import { stampPriority, startOrQueue } from "@/lib/tasks/queue";
 import { isPriority } from "@/lib/tasks/schedule-types";
 import { TASK_CAPABILITIES } from "@/lib/tasks/contract/types";
@@ -13,12 +13,29 @@ import {
 } from "@/lib/tasks/move-bundle";
 import { startView } from "@/lib/sessions/launch";
 import { isValidAgentType } from "@/lib/providers";
+import { omitNulls } from "@/lib/sessions/omit-null";
 import { isAgentModelName } from "@/lib/providers/registry";
 
+// The most recent merged tasks the list holds; ?done=all lists every one.
+const MERGED_LISTED = 100;
+
+// A task as the list shows it: no prompt text (a mirrored one from a machine
+// that still sends it included) and no null fields.
+function listed(task: TaskView) {
+  const { prompt: _prompt, ...rest } = task;
+  return omitNulls(rest);
+}
+
 // moved and capabilities are for another machine that mirrors these tasks.
-export async function GET() {
+export async function GET(request?: NextRequest) {
   return NextResponse.json({
-    tasks: await listTasks(),
+    tasks: (
+      await listTasks(
+        request?.nextUrl.searchParams.get("done") === "all"
+          ? undefined
+          : MERGED_LISTED
+      )
+    ).map(listed),
     moved: movedTasks(),
     capabilities: TASK_CAPABILITIES,
   });

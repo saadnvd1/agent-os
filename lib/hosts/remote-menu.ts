@@ -5,6 +5,7 @@
  * pin, select, done and delete all work: the ones that change the session
  * run on its machine.
  */
+import { hasPrompt } from "@/lib/sessions/has-prompt";
 
 export const REMOTE_UNSUPPORTED = {
   fork: (host: string) => `Runs on ${host}: fork it there`,
@@ -26,12 +27,13 @@ export type RemoteAction = keyof typeof REMOTE_UNSUPPORTED;
 export function remoteBlocks(
   session: {
     host_id: string | null;
-    task_prompt: string | null;
+    task_prompt?: string | null;
+    has_prompt?: number;
     peer_mirror?: number;
   },
   linkedHostName: (hostId: string) => string | undefined
 ): Record<RemoteAction, string> | null {
-  if (!session.peer_mirror || !session.host_id || session.task_prompt)
+  if (!session.peer_mirror || !session.host_id || hasPrompt(session))
     return null;
   const host = linkedHostName(session.host_id);
   if (!host) return null;

@@ -67,6 +67,7 @@ import { saidSinceLastMessage } from "../chat/store";
 
 import { lastActiveOf } from "./last-active";
 import { setPlan, setTask } from "../db/session-parts";
+import { hasPrompt } from "../sessions/has-prompt";
 import { joinCrew } from "../sessions/crew";
 export * from "./state";
 export { codeReviewGate, codeReviewRefusal } from "./code-review";
@@ -77,7 +78,9 @@ export { assertMovable, moveTask } from "./move-flow";
 export interface TaskView {
   id: string;
   name: string;
-  prompt: string;
+  // A list leaves the text out (hasPrompt says there is one).
+  prompt?: string;
+  hasPrompt?: boolean;
   projectId: string | null;
   projectName: string | null;
   branch: string | null;
@@ -523,7 +526,8 @@ export async function taskView(session: Session): Promise<TaskView> {
   return {
     id: session.id,
     name: session.name,
-    prompt: session.task_prompt || "",
+    prompt: session.task_prompt || undefined,
+    hasPrompt: hasPrompt(session),
     projectId: session.project_id,
     projectName: project?.name ?? null,
     branch: session.branch_name,
@@ -563,9 +567,9 @@ export function movedTasks(): { id: string; movedTo: string | null }[] {
     .all() as { id: string; movedTo: string | null }[];
 }
 
-// Archived tasks aren't listed.
-export async function listTasks(): Promise<TaskView[]> {
-  const sessions = taskSessions(false);
+// Archived tasks aren't listed; mergedLimit keeps only the most recent merged.
+export async function listTasks(mergedLimit?: number): Promise<TaskView[]> {
+  const sessions = taskSessions(false, mergedLimit);
   const [local, remote] = await Promise.all([
     Promise.all(sessions.filter((s) => !isMirror(s)).map(taskView)),
     mirrorViews(sessions.filter(isMirror)),
