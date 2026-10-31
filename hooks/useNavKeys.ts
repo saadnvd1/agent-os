@@ -5,7 +5,11 @@ import { useKeybindings } from "@/hooks/useKeybindings";
 import { useStoredFlag } from "@/hooks/useStoredFlag";
 import { isFreeTarget } from "@/lib/keybindings/focus";
 import { KEYMAP, isSequence, keysOf } from "@/lib/keybindings/keymap";
-import { SEQUENCE_MS, SequenceMatcher } from "@/lib/keybindings/sequence";
+import {
+  SEQUENCE_MS,
+  SequenceMatcher,
+  plainKey,
+} from "@/lib/keybindings/sequence";
 import { shortcutsUiActions } from "@/stores/shortcutsUi";
 
 export const SINGLE_KEYS_FLAG = "agentos-single-key-shortcuts";
@@ -70,7 +74,7 @@ export function useNavKeys(actions: NavActions) {
       if (!isFreeTarget(e.target) || dialogOpen()) return clear();
       if (e.key === "Escape") return clear();
       if (e.key === "Shift") return;
-      const bare = e.key === "?" ? e.key : e.shiftKey ? null : e.key;
+      const bare = plainKey(e.key, e.shiftKey);
       if (bare === null) return clear();
       const waiting = matcher.pending() !== null;
       const step = matcher.feed(bare);

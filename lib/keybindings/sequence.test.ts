@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { SEQUENCE_MS, SequenceMatcher } from "./sequence";
+import { SEQUENCE_MS, SequenceMatcher, plainKey } from "./sequence";
 
 const make = (t = { v: 0 }) => ({
   t,
@@ -42,5 +42,19 @@ describe("SequenceMatcher", () => {
   it("does not match a second key that was never started", () => {
     const { m } = make();
     expect(m.feed("i")).toEqual({ kind: "none" });
+  });
+});
+
+describe("plainKey", () => {
+  it("takes a shifted letter as the letter (the hints print G I)", () => {
+    expect(plainKey("G", true)).toBe("g");
+    expect(plainKey("g", false)).toBe("g");
+  });
+
+  it("keeps ? and drops other shifted keys", () => {
+    expect(plainKey("?", true)).toBe("?");
+    expect(plainKey("!", true)).toBeNull();
+    expect(plainKey("ArrowUp", true)).toBeNull();
+    expect(plainKey("ArrowUp", false)).toBe("ArrowUp");
   });
 });
