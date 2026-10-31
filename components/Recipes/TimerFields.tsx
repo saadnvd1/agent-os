@@ -77,7 +77,8 @@ export function timerProblem(v: TimerValue): string | null {
   if (!isTimezone(v.timezone)) return "Unknown time zone";
   const bad = cronError(cron);
   if (bad) return bad;
-  return minGapMinutes(cron, v.timezone) < MIN_GAP_MINUTES
+  return minGapMinutes(cron, v.timezone, Date.now(), MIN_GAP_MINUTES) <
+    MIN_GAP_MINUTES
     ? "A recipe runs at most once an hour"
     : null;
 }

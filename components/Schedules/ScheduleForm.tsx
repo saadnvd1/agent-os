@@ -303,7 +303,7 @@ export function ScheduleForm({
       !once &&
       !cronProblem &&
       tzOk &&
-      minGapMinutes(cron, timezone, openedAt) < minGap,
+      minGapMinutes(cron, timezone, openedAt, minGap) < minGap,
     [minGap, once, cron, cronProblem, timezone, tzOk, openedAt]
   );
 

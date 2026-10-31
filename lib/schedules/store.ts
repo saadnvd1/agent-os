@@ -298,7 +298,7 @@ function validate(
   if (
     !oneOff &&
     (input.kind === "task" || input.kind === "session") &&
-    minGapMinutes(cron, timezone) < MIN_GAP_MINUTES
+    minGapMinutes(cron, timezone, Date.now(), MIN_GAP_MINUTES) < MIN_GAP_MINUTES
   )
     throw new Error(
       "A task or session schedule runs at most once an hour; for more often, post to the orchestrator"
@@ -309,7 +309,8 @@ function validate(
   if (
     !oneOff &&
     (message || agentCheckIn) &&
-    minGapMinutes(cron, timezone) < MESSAGE_MIN_GAP_MINUTES
+    minGapMinutes(cron, timezone, Date.now(), MESSAGE_MIN_GAP_MINUTES) <
+      MESSAGE_MIN_GAP_MINUTES
   )
     throw new Error(
       `A message schedule runs at most every ${MESSAGE_MIN_GAP_MINUTES} minutes`
