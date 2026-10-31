@@ -30,6 +30,7 @@ import { isFast } from "../project-tier/getProjectTier";
 import { workspaceTask } from "./targets";
 import { markStatusDirty } from "../status/dirty";
 import { setPr } from "../db/session-parts";
+import { noteAutoArmed } from "./fast-lane-state";
 
 // Judged again at least this often, for what the fingerprint can't see.
 export const ARMED_RECHECK_MS = 5 * 60 * 1000;
@@ -140,6 +141,10 @@ async function armedNow(workspaceId: string, task: Session): Promise<string> {
 export function disarm(workspaceId: string, ref: string): string {
   const task = workspaceTask(workspaceId, ref);
   setArmed(task.id, false);
+  // A fast task not yet auto-armed would be armed on the next pass; mark
+  // its PR as handled so the disarm sticks either way.
+  if (isFast(task) && task.pr_number)
+    noteAutoArmed(task.id, workspaceId, task.pr_number);
   return `Disarmed ${task.name}: it merges only through sign_off now.`;
 }
 
