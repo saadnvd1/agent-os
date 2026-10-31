@@ -5,6 +5,9 @@
 # Without AGENTOS_RESTART it builds and checks but swaps nothing in.
 # Restart with: AGENTOS_RESTART="<command>" scripts/redeploy
 # Put the previous build back: AGENTOS_RESTART="<command>" scripts/redeploy --rollback
+# ...and the source with it: scripts/redeploy --rollback --to <sha>
+# AGENTOS_UPDATE_TO=<sha> fast-forwards to that commit instead of the head.
+# "::stage <name>" lines say how far it got, for scripts/update-recover.mjs.
 set -euo pipefail
 cd "$(dirname "$0")/.."
 # shellcheck source=lib/build-swap.sh
@@ -20,10 +23,29 @@ if [ -s "$HOME/.nvm/nvm.sh" ]; then
   nvm use >/dev/null
 fi
 
+# A build next to the live one, plus a staged install, needs room; running
+# out halfway is the one failure that can leave the disk too full to recover.
+check_disk() {
+  local need_gb="${AGENTOS_UPDATE_MIN_FREE_GB:-3}" free_kb
+  [ "$need_gb" = 0 ] && return 0
+  free_kb=$(df -Pk . | awk 'NR==2 {print $4}')
+  if [ -n "$free_kb" ] && [ "$free_kb" -lt $((need_gb * 1024 * 1024)) ]; then
+    echo "Not enough free disk space: $((free_kb / 1024)) MB free, the update needs ${need_gb} GB." >&2
+    exit 1
+  fi
+}
+
 # The pull can replace this script, so what follows runs from a fresh start.
 if [ "${1:-}" != "--rollback" ] && [ "${1:-}" != "--pulled" ]; then
+  check_disk
   echo "::phase pulling"
-  git pull --ff-only
+  if [ -n "${AGENTOS_UPDATE_TO:-}" ]; then
+    git fetch -q origin
+    git merge -q --ff-only "$AGENTOS_UPDATE_TO"
+  else
+    git pull --ff-only
+  fi
+  echo "::stage pulled"
   exec bash "$0" --pulled
 fi
 
@@ -33,6 +55,12 @@ if [ "${1:-}" = "--rollback" ]; then
   rollback_build
   # The build and the dependencies it ran on go back together.
   restore_deps
+  # server.ts and lib/ run from source, so the source goes back too, or the
+  # old build would run under the new server code.
+  if [ "${2:-}" = "--to" ] && [ -n "${3:-}" ]; then
+    git reset -q --keep "$3"
+  fi
+  echo "::stage build_swapped"
 else
   echo "::phase installing"
   use_pnpm
@@ -44,7 +72,7 @@ else
   # and the running server keeps the build and dependencies it has.
   swapped=0
   install_beside && rc=0 || rc=$?
-  [ "$rc" = 0 ] && { swap_deps; swapped=1; }
+  [ "$rc" = 0 ] && { swap_deps; swapped=1; echo "::stage deps_swapped"; }
   [ "$rc" = 0 ] || [ "$rc" = 10 ] || exit 1
   install_pdf_browser
   echo "::phase building"
@@ -59,6 +87,7 @@ else
     exit 0
   fi
   swap_build
+  echo "::stage build_swapped"
 fi
 
 if [ -n "${AGENTOS_RESTART:-}" ]; then

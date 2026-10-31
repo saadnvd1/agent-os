@@ -98,6 +98,20 @@ describe("checkForUpdate", () => {
     expect(result.latest?.url).toBeNull();
   });
 
+  it("lists the first-parent commits to update to, newest first, with their times", async () => {
+    for (let i = 1; i <= 3; i++) commit(pusher, `c${i}`);
+    sh(pusher, "push", "-q", "origin", "main");
+    const head = sh(pusher, "rev-parse", "HEAD").trim();
+    const { result } = await checkForUpdate({}, deps());
+    expect(result.candidates).toHaveLength(3);
+    expect(result.candidates?.[0].sha).toBe(head);
+    expect(result.candidates?.[0].at).toBeGreaterThan(1_600_000_000_000);
+    // Once the checkout has the middle one, only the newer one is left.
+    sh(install, "merge", "-q", "--ff-only", result.candidates![1].sha);
+    const left = await reconcile(result, deps());
+    expect(left?.candidates?.map((c) => c.sha)).toEqual([head]);
+  });
+
   it("is diverged, with no update offered, when the checkout has its own commits", async () => {
     commit(install, "local only");
     commit(pusher, "remote only");

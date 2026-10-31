@@ -1,7 +1,10 @@
-// Running an update, only when someone asks. The server does no more than
-// check the checkout and start scripts/update-run.mjs detached; that runs
-// scripts/redeploy (pull, install, build beside the live server, swap,
-// restart) and writes where it is to a state file, which the restart outlives.
+// Running an update, when someone asks or, with automatic updates on, once
+// everything has been idle (lib/updates/auto.ts decides when). The server
+// does no more than check the checkout and start scripts/update-run.mjs
+// detached; that backs up the database, runs scripts/redeploy (pull,
+// install, build beside the live server, swap, restart), checks the new
+// server and rolls back when it isn't healthy, writing where it is to a
+// state file, which the restart outlives.
 
 import { spawn, execFile } from "child_process";
 import fs from "fs";
@@ -10,24 +13,53 @@ import path from "path";
 import { promisify } from "util";
 import { git } from "@/lib/git-exec";
 import { buildId } from "@/lib/build";
+import { agentosHome } from "@/lib/agentos-home";
+import { dbPath } from "@/lib/db/path";
 import {
   isActivePhase,
   workingTotal,
+  type AutoUpdateView,
   type UpdateRefusal,
   type UpdateRun,
   type UpdateView,
 } from "./banner";
 import {
+  cachedCheck,
   checkForUpdate,
   realDeps as realCheckDeps,
+  reconcile,
+  versionAt,
   type CheckDeps,
   type CheckResult,
 } from "./check";
-import { getSetting, putSetting } from "./settings";
+import { decideAutoUpdate, pickTarget, type AutoDecision } from "./auto";
+import {
+  attemptOf,
+  failedInARow,
+  readAttempts,
+  recordAttempt,
+} from "./history";
+import {
+  autoEnabled,
+  autoLocked,
+  deadlineMs,
+  getSetting,
+  idleMinutes,
+  idleMinutesLocked,
+  minFreeBytes,
+  putSetting,
+  soakMs,
+} from "./settings";
 
 const exec = promisify(execFile);
 
 export const STALE_RUN_MS = 30 * 60_000;
+/** A runner that hasn't written for this long, and whose pid is gone, was cut off. */
+export const HEARTBEAT_STALE_MS = 2 * 60_000;
+/** autodeploy touches its heartbeat every minute or two; older means it stopped. */
+const MANAGED_FRESH_MS = 15 * 60_000;
+/** A refused automatic update isn't asked about again for this long. */
+const AUTO_REFUSED_MS = 30 * 60_000;
 export const PENDING_EXPIRES_MS = 24 * 60 * 60_000;
 export const IDLE_TICK_MS = 30_000;
 const PENDING_KEY = "updates.pending";
@@ -48,6 +80,16 @@ export interface RunDeps {
   working: () => Promise<UpdateView["working"]>;
   getSetting: (key: string) => string | null;
   putSetting: (key: string, value: string | null) => void;
+  /** Free bytes on the checkout's disk; null when it can't tell. */
+  freeBytes: () => number | null;
+  /** True when scripts/autodeploy deploys this checkout. */
+  managed: () => boolean;
+  /** What a restart would interrupt, as short labels; empty when nothing. */
+  busy: () => Promise<string[]>;
+  /** The database the runner backs up first, and where to. */
+  dbFile: string | null;
+  backupDir: string | null;
+  notify: (text: string) => void;
 }
 
 const shellQuote = (s: string) => `'${s.replace(/'/g, `'\\''`)}'`;
@@ -77,14 +119,33 @@ async function startedByCli(cwd: string, env: RunDeps["env"]) {
   return false;
 }
 
+/**
+ * False when systemd runs this server from a unit written before it set
+ * KillMode=process: restarting that unit would stop terminals, chat workers
+ * and the update itself with it.
+ */
+function systemdUnitOk(env: RunDeps["env"]): boolean {
+  if (!env.INVOCATION_ID) return true;
+  try {
+    const unit = fs.readFileSync(
+      path.join(os.homedir(), ".config/systemd/user/agent-os.service"),
+      "utf8"
+    );
+    return /^KillMode=process$/m.test(unit);
+  } catch {
+    return true;
+  }
+}
+
 /** AGENTOS_RESTART, else the CLI's restart when it started this server, else none. */
 export async function resolveRestart(
   cwd: string,
   env: RunDeps["env"],
-  cli: () => Promise<boolean> = () => startedByCli(cwd, env)
+  cli: () => Promise<boolean> = () => startedByCli(cwd, env),
+  unitOk: () => boolean = () => systemdUnitOk(env)
 ): Promise<string | null> {
   if (env.AGENTOS_RESTART) return env.AGENTOS_RESTART;
-  if (await cli())
+  if ((await cli()) && unitOk())
     return `${shellQuote(path.join(cwd, "scripts/agent-os"))} restart`;
   return null;
 }
@@ -136,7 +197,53 @@ export function realRunDeps(): RunDeps {
     working: workingSummary,
     getSetting,
     putSetting,
+    freeBytes: () => {
+      try {
+        const st = fs.statfsSync(cwd);
+        return st.bavail * st.bsize;
+      } catch {
+        return null;
+      }
+    },
+    managed: () => {
+      try {
+        const at = fs.statSync(agentosHome("autodeploy", "heartbeat")).mtimeMs;
+        return Date.now() - at < MANAGED_FRESH_MS;
+      } catch {
+        return false;
+      }
+    },
+    busy: busyLabels,
+    dbFile: path.resolve(dbPath()),
+    backupDir: agentosHome("backups"),
+    notify: (text) => {
+      import("@/lib/notify")
+        .then(({ notifyPhone }) => notifyPhone("updates", text))
+        .catch(() => {});
+    },
   };
+}
+
+const plural = (n: number, word: string) => `${n} ${word}${n === 1 ? "" : "s"}`;
+
+/** Everything a restart would interrupt, for automatic updates. */
+export async function busyLabels(): Promise<string[]> {
+  const { inFlight } = await import("@/lib/busy");
+  const { sessions } = await workingSummary();
+  const f = inFlight();
+  const out: string[] = [];
+  if (sessions) out.push(`${plural(sessions, "session")} working`);
+  if (f.reviews) out.push(plural(f.reviews, "review"));
+  if (f.setups) out.push(`${plural(f.setups, "task")} setting up`);
+  if (f.simulatorStarts) out.push(plural(f.simulatorStarts, "simulator start"));
+  if (f.merges) out.push(plural(f.merges, "merge"));
+  if (f.landings) out.push(`${plural(f.landings, "stack")} landing`);
+  const cwd = process.cwd();
+  if (fs.existsSync(path.join(cwd, ".next-build.lock"))) out.push("a build");
+  try {
+    if (fs.existsSync(agentosHome("autodeploy", "lock"))) out.push("a deploy");
+  } catch {}
+  return out;
 }
 
 export async function workingSummary(): Promise<UpdateView["working"]> {
@@ -152,6 +259,24 @@ export async function workingSummary(): Promise<UpdateView["working"]> {
 
 // ── run state ────────────────────────────────────────────────────────────
 
+export function pidAlive(pid: number | undefined): boolean {
+  if (!pid) return false;
+  try {
+    process.kill(pid, 0);
+    return true;
+  } catch (error) {
+    return (error as NodeJS.ErrnoException).code === "EPERM";
+  }
+}
+
+/** A run in an active phase that nothing is running any more. */
+export function isStaleRun(run: UpdateRun, now: number): boolean {
+  if (!isActivePhase(run.phase)) return false;
+  if (run.updatedAt)
+    return now - run.updatedAt > HEARTBEAT_STALE_MS && !pidAlive(run.pid);
+  return now - run.startedAt > STALE_RUN_MS;
+}
+
 export function readRun(
   deps: Pick<RunDeps, "stateFile" | "now">
 ): UpdateRun | null {
@@ -161,7 +286,7 @@ export function readRun(
     ) as UpdateRun;
     if (!run?.id || !run.phase) return null;
     // A run that stopped writing was cut off (the machine went down).
-    if (isActivePhase(run.phase) && deps.now() - run.startedAt > STALE_RUN_MS)
+    if (isStaleRun(run, deps.now()))
       return {
         ...run,
         phase: "failed",
@@ -198,7 +323,7 @@ export type Refusal = { code: UpdateRefusal; error: string };
 
 /** Why this checkout can't be updated now; null when it can. No network. */
 export const NO_RESTART =
-  "This server can't restart itself, so an update would leave the old build running on new files. Set AGENTOS_RESTART to its restart command, or start it with agent-os start.";
+  "This server can't restart itself, so an update would leave the old build running on new files. Set AGENTOS_RESTART to its restart command, or start it with agent-os start (started at login on Linux: run agent-os enable again to update its service).";
 
 export async function preflight(
   check: CheckResult | null,
@@ -263,6 +388,13 @@ export async function preflight(
     return { code: "up_to_date", error: "AgentOS is up to date." };
   if (!(await deps.restartCommand()))
     return { code: "no_restart", error: NO_RESTART };
+  const free = deps.freeBytes();
+  const need = minFreeBytes(deps.env);
+  if (free !== null && need > 0 && free < need)
+    return {
+      code: "disk",
+      error: `Not enough free disk space to update: ${(free / 1024 ** 3).toFixed(1)} GB free, an update needs ${(need / 1024 ** 3).toFixed(0)} GB.`,
+    };
   return null;
 }
 
@@ -297,7 +429,11 @@ const releaseStart = (deps: Pick<RunDeps, "stateFile">) => {
 };
 
 export async function startUpdate(
-  { when }: { when: "now" | "idle" },
+  {
+    when,
+    to,
+    auto = false,
+  }: { when: "now" | "idle"; to?: string; auto?: boolean },
   deps: RunDeps = realRunDeps()
 ): Promise<StartResult> {
   if (!claimStart(deps))
@@ -307,7 +443,7 @@ export async function startUpdate(
       error: "An update is already starting.",
     };
   try {
-    return await begin(when, deps);
+    return await begin(when, deps, to, auto);
   } finally {
     releaseStart(deps);
   }
@@ -315,7 +451,9 @@ export async function startUpdate(
 
 async function begin(
   when: "now" | "idle",
-  deps: RunDeps
+  deps: RunDeps,
+  to: string | undefined,
+  auto: boolean
 ): Promise<StartResult> {
   const { result } = await checkForUpdate({ force: true }, deps.check);
   // A failed look can't vouch for the cached answer.
@@ -334,6 +472,20 @@ async function begin(
     );
     return { ok: true, pending: true };
   }
+  // An automatic update takes a soaked commit, which may be behind the head.
+  let target = { sha: result.latest!.sha, version: result.latest!.version };
+  if (to && to !== target.sha) {
+    if (!result.candidates?.some((c) => c.sha === to))
+      return {
+        ok: false,
+        code: "up_to_date",
+        error: `${to.slice(0, 7)} isn't a newer version of this checkout.`,
+      };
+    target = await versionAt(deps.check.git, to).catch(() => ({
+      sha: to,
+      version: to.slice(0, 7),
+    }));
+  }
   deps.putSetting(PENDING_KEY, null);
   const id = `${deps.now().toString(36)}${Math.random().toString(36).slice(2, 6)}`;
   writeRun(deps.stateFile, {
@@ -341,8 +493,11 @@ async function begin(
     phase: "starting",
     from: result.current!.sha,
     fromVersion: result.current!.version,
-    toVersion: result.latest!.version,
+    to: target.sha,
+    toVersion: target.version,
     startedAt: deps.now(),
+    updatedAt: deps.now(),
+    ...(auto ? { auto: true } : {}),
   });
   const restart = (await deps.restartCommand())!;
   const env = { ...deps.env } as NodeJS.ProcessEnv;
@@ -352,6 +507,13 @@ async function begin(
   env.AGENTOS_UPDATE_STATE = deps.stateFile;
   env.AGENTOS_UPDATE_ID = id;
   env.AGENTOS_RESTART = restart;
+  env.AGENTOS_UPDATE_TO = target.sha;
+  delete env.AGENTOS_UPDATE_DB;
+  delete env.AGENTOS_UPDATE_BACKUPS;
+  if (deps.dbFile && deps.backupDir) {
+    env.AGENTOS_UPDATE_DB = deps.dbFile;
+    env.AGENTOS_UPDATE_BACKUPS = deps.backupDir;
+  }
   if (deps.env.PORT) env.PORT = deps.env.PORT;
   deps.spawnRunner(env, deps.logFile);
   return { ok: true, pending: false };
@@ -376,20 +538,154 @@ export const cancelPending = (
   deps: Pick<RunDeps, "putSetting"> = realRunDeps()
 ) => deps.putSetting(PENDING_KEY, null);
 
+// ── automatic updates ────────────────────────────────────────────────────
+
+const PAUSES: ReadonlySet<UpdateRefusal> = new Set<UpdateRefusal>([
+  "dev",
+  "not_git",
+  "dirty",
+  "branch",
+  "diverged",
+  "unknown",
+  "no_restart",
+  "disk",
+]);
+
+/** What the watcher saw last, for Settings. */
+interface AutoMemory {
+  quietSince: number | null;
+  busy: string[];
+  refusal: { text: string; until: number } | null;
+}
+const gm = globalThis as unknown as { __agentosAutoMemory?: AutoMemory };
+const memory = (): AutoMemory =>
+  (gm.__agentosAutoMemory ??= { quietSince: null, busy: [], refusal: null });
+export const resetAutoMemory = () => {
+  gm.__agentosAutoMemory = { quietSince: null, busy: [], refusal: null };
+};
+
+/** Files a finished run in the history, once, and tells the phone when it matters. */
+export function recordFinishedRun(deps: RunDeps): void {
+  const attempt = attemptOf(readRun(deps));
+  if (!attempt || !recordAttempt(deps.getSetting, deps.putSetting, attempt))
+    return;
+  if (!attempt.auto) return;
+  const version = attempt.toVersion || attempt.to.slice(0, 7);
+  if (attempt.outcome === "broken")
+    deps.notify(
+      `AgentOS couldn't update to ${version} and rolling back didn't work either. Open Settings → Updates on that machine.`
+    );
+  else if (failedInARow(readAttempts(deps.getSetting)) === 3)
+    deps.notify(
+      `AgentOS has failed to update itself 3 times in a row (last: ${version}). It keeps running the version it has; Settings → Updates says why.`
+    );
+}
+
+/** The cached check, brought up to date with the checkout cheaply. */
+async function currentCheck(deps: RunDeps): Promise<CheckResult | null> {
+  const check = cachedCheck(deps.check);
+  if (!check?.candidates?.length) return check;
+  // The server's own build is HEAD unless someone pulled under it.
+  if (check.current?.sha === deps.buildId()) return check;
+  return reconcile(check, deps.check);
+}
+
+function autoInput(deps: RunDeps, check: CheckResult | null) {
+  const mem = memory();
+  const now = deps.now();
+  const refusal =
+    mem.refusal && mem.refusal.until > now ? mem.refusal.text : null;
+  return {
+    enabled: autoEnabled(deps.env, deps.getSetting),
+    locked: autoLocked(deps.env),
+    managed: deps.managed(),
+    refusal,
+    candidates: check?.available ? (check.candidates ?? []) : [],
+    attempts: readAttempts(deps.getSetting),
+    busy: mem.busy,
+    quietSince: mem.quietSince,
+    now,
+    soakMs: soakMs(deps.env),
+    idleMs: idleMinutes(deps.env, deps.getSetting) * 60_000,
+    deadlineMs: deadlineMs(deps.env),
+  };
+}
+
+/** One look: start an automatic update when it's time. */
+async function autoTick(
+  deps: RunDeps
+): Promise<"none" | "waiting" | "started"> {
+  const mem = memory();
+  const input = autoInput(deps, await currentCheck(deps));
+  // Off, managed, refused or up to date: nothing to watch.
+  const first = decideAutoUpdate({ ...input, busy: [], quietSince: 0 });
+  if (first.action === "skip" || !("eligibleSince" in pickTarget(input))) {
+    mem.quietSince = null;
+    mem.busy = [];
+    return "none";
+  }
+  const busy = await deps.busy();
+  mem.busy = busy;
+  mem.quietSince = busy.length ? null : (mem.quietSince ?? input.now);
+  const decision = decideAutoUpdate({
+    ...input,
+    busy,
+    quietSince: mem.quietSince,
+  });
+  if (decision.action !== "start") return "waiting";
+  mem.quietSince = null;
+  const started = await startUpdate(
+    { when: "now", to: decision.to, auto: true },
+    deps
+  );
+  if (!started.ok && PAUSES.has(started.code))
+    mem.refusal = { text: started.error, until: input.now + AUTO_REFUSED_MS };
+  return started.ok ? "started" : "waiting";
+}
+
+/** What automatic updates are doing, for the /api/updates payload. */
+export async function autoView(
+  deps: RunDeps,
+  check: CheckResult | null,
+  refusal: { code: UpdateRefusal; error: string } | null
+): Promise<AutoUpdateView> {
+  const input = autoInput(deps, check);
+  const run = readRun(deps);
+  let status: AutoDecision | { code: string; text: string };
+  if (run && isActivePhase(run.phase))
+    status = { code: "running", text: "An update is running." };
+  else
+    status = decideAutoUpdate({
+      ...input,
+      refusal:
+        refusal && PAUSES.has(refusal.code) ? refusal.error : input.refusal,
+    });
+  return {
+    enabled: input.enabled,
+    locked: input.locked,
+    managed: input.managed,
+    idleMinutes: idleMinutes(deps.env, deps.getSetting),
+    idleLocked: idleMinutesLocked(deps.env),
+    status:
+      "text" in status
+        ? { code: status.code, text: status.text }
+        : { code: "starting", text: "Starting an update." },
+    attempts: input.attempts.slice(0, 5),
+  };
+}
+
+// ── the watcher ──────────────────────────────────────────────────────────
+
 /**
- * Starts a requested "update when idle" once nothing has been working for two
- * checks in a row, so a gap between two turns doesn't count as quiet.
+ * Every 30 seconds: files finished runs in the history, starts a requested
+ * "update when idle" once nothing has been working for two checks in a row
+ * (so a gap between two turns doesn't count as quiet), and otherwise runs
+ * automatic updates.
  */
 export function createIdleWatcher(deps: RunDeps = realRunDeps()) {
   let quiet = 0;
   let busy = false;
-  const tick = async (): Promise<"none" | "waiting" | "started"> => {
-    if (!readPending(deps)) {
-      quiet = 0;
-      return "none";
-    }
-    const run = readRun(deps);
-    if (run && isActivePhase(run.phase)) return "waiting";
+  const manual = async (): Promise<"waiting" | "started"> => {
     quiet = workingTotal(await deps.working()) === 0 ? quiet + 1 : 0;
     if (quiet < 2) return "waiting";
     quiet = 0;
@@ -409,6 +705,14 @@ export function createIdleWatcher(deps: RunDeps = realRunDeps()) {
       });
     }
     return "started";
+  };
+  const tick = async (): Promise<"none" | "waiting" | "started"> => {
+    recordFinishedRun(deps);
+    const run = readRun(deps);
+    if (run && isActivePhase(run.phase)) return "waiting";
+    if (readPending(deps)) return manual();
+    quiet = 0;
+    return autoTick(deps);
   };
   return {
     async tick() {
@@ -436,14 +740,20 @@ export function startIdleWatcher(): void {
 
 // ── after a restart ──────────────────────────────────────────────────────
 
-/** A run that reached "restarting" is done if this server runs a newer build. */
+/**
+ * A run that reached "restarting" is done if this server runs a newer build,
+ * unless its runner is still alive: then it is checking this server and
+ * will say how it ended.
+ */
 export function reconcileOnBoot(deps: RunDeps = realRunDeps()): void {
   const run = readRun(deps);
   if (!run || run.phase !== "restarting") return;
+  if (run.updatedAt && pidAlive(run.pid)) return;
   const moved = deps.buildId() !== run.from;
   writeRun(deps.stateFile, {
     ...run,
     phase: moved ? "done" : "failed",
+    outcome: moved ? "done" : "build_failed",
     finishedAt: deps.now(),
     ...(moved
       ? {}
@@ -453,4 +763,5 @@ export function reconcileOnBoot(deps: RunDeps = realRunDeps()): void {
           log: readLog(deps),
         }),
   });
+  recordFinishedRun(deps);
 }

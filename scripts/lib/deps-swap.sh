@@ -9,7 +9,9 @@
 
 DEPS=.deps
 STAGE=$DEPS/stage
-PREV=$DEPS/prev
+# Not PREV: build-swap.sh, sourced beside this, uses that for .next-prev,
+# and sharing it sent the old build into .deps/prev.
+DEPS_PREV=$DEPS/prev
 STAMP=.agentos-deps
 
 # What an install depends on. A new Node or CPU rebuilds the native modules.
@@ -29,7 +31,7 @@ install_beside() {
     echo "Dependencies unchanged."
     # The last build ran on these same dependencies, so a rollback has
     # nothing to put back.
-    rm -rf "$PREV"
+    rm -rf "$DEPS_PREV"
     return 10
   fi
   rm -rf "$STAGE"
@@ -52,9 +54,9 @@ install_beside() {
 
 swap_deps() {
   [ -d "$STAGE/node_modules" ] || { echo "no checked install to swap in" >&2; return 1; }
-  rm -rf "$PREV"
+  rm -rf "$DEPS_PREV"
   mkdir -p "$DEPS"
-  [ -d node_modules ] && mv node_modules "$PREV"
+  [ -d node_modules ] && mv node_modules "$DEPS_PREV"
   mv "$STAGE/node_modules" node_modules
   rm -rf "$STAGE"
 }
@@ -62,7 +64,7 @@ swap_deps() {
 # Put the node_modules from before the last swap back (a failed build, or
 # `redeploy --rollback`); the current one is dropped.
 restore_deps() {
-  [ -d "$PREV" ] || return 0
+  [ -d "$DEPS_PREV" ] || return 0
   rm -rf node_modules
-  mv "$PREV" node_modules
+  mv "$DEPS_PREV" node_modules
 }

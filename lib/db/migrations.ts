@@ -26,6 +26,11 @@ export type { Migration } from "./migration-types";
 // typecheck, lint and test) and is not committed. A duplicate id or key, or a
 // file whose name does not match its id, throws when this module loads.
 // lib/db/migrations.test.ts enforces the rest.
+//
+// A migration must leave the previous release runnable: an automatic update
+// that isn't healthy rolls the code back but not the database (chat workers
+// keep writing through the restart, so a restore would drop their work). Add
+// columns and tables; don't rename or drop what the last release reads.
 
 export const migrationKey = (m: Migration): string => m.key ?? String(m.id);
 const migrationName = (m: Migration): string =>
@@ -92,6 +97,22 @@ function compareToUpTo(m: Migration, upTo: number | string): number {
 
 // All migrations in order - never modify existing ones, only add new
 export const migrations: Migration[] = buildRegistry(migrationFiles);
+
+/** How many of this build's migrations the database has; the update health check reads it. */
+export function migrationStatus(db: Database.Database): {
+  known: number;
+  applied: number;
+} {
+  const rows = db.prepare(`SELECT id, key FROM _migrations`).all() as {
+    id: number;
+    key: string | null;
+  }[];
+  const have = new Set(rows.map((r) => r.key ?? String(r.id)));
+  return {
+    known: migrations.length,
+    applied: migrations.filter((m) => have.has(migrationKey(m))).length,
+  };
+}
 
 // `upTo`: stop after this legacy id or timestamp key, inclusive (tests that
 // start from an older database).

@@ -3,10 +3,14 @@
 // or mirror works too. The working tree is never touched.
 
 import { git, GIT_TIMEOUT_MS } from "@/lib/git-exec";
-import { getSetting, putSetting, bannerEnabled } from "./settings";
+import type { Candidate } from "./auto";
+import { autoEnabled, bannerEnabled, getSetting, putSetting } from "./settings";
 import { isNewer, versionFor } from "./version";
 
 export const CHECK_EVERY_MS = 6 * 60 * 60_000;
+/** With automatic updates on, a release is seen within about an hour. */
+export const AUTO_CHECK_EVERY_MS = 60 * 60_000;
+const CANDIDATES_MAX = 50;
 export const FORCE_FLOOR_MS = 60_000;
 const FIRST_CHECK_MS = 2 * 60_000;
 const NOTES_MAX = 8;
@@ -26,6 +30,8 @@ export interface CheckResult {
   branch: string | null;
   checkedAt: number;
   error: string | null;
+  /** First-parent commits between HEAD and the remote, newest first. */
+  candidates?: Candidate[];
 }
 
 export interface CheckDeps {
@@ -74,7 +80,7 @@ const NO_REPO: Omit<CheckResult, "checkedAt"> = {
   error: null,
 };
 
-async function versionAt(
+export async function versionAt(
   g: CheckDeps["git"],
   ref: string
 ): Promise<{ version: string; sha: string }> {
@@ -145,6 +151,22 @@ export async function compare(deps: CheckDeps): Promise<CheckResult> {
           .map((s) => s.trim())
           .filter(Boolean)
       : [];
+  const candidates =
+    behind > 0 && fastForward
+      ? (
+          await g([
+            "log",
+            "--first-parent",
+            "--format=%H %ct",
+            `-n${CANDIDATES_MAX}`,
+            `HEAD..${remoteRef}`,
+          ])
+        )
+          .split("\n")
+          .map((l) => l.trim().split(" "))
+          .filter(([sha, at]) => /^[0-9a-f]{40}$/.test(sha) && Number(at) > 0)
+          .map(([sha, at]) => ({ sha, at: Number(at) * 1000 }))
+      : [];
   const status = behind > 0 && !fastForward ? "diverged" : "ok";
   return {
     status,
@@ -160,6 +182,7 @@ export async function compare(deps: CheckDeps): Promise<CheckResult> {
     branch,
     checkedAt,
     error: null,
+    candidates,
   };
 }
 
@@ -188,11 +211,34 @@ export async function reconcile(
           available: false,
           behind: 0,
           current: { version: check.latest.version, sha: head },
+          candidates: [],
         }
-      : check;
+      : {
+          ...check,
+          // Commits the checkout already has aren't updates any more.
+          candidates: await keepNewer(check.candidates, deps),
+        };
   } catch {
     return check;
   }
+}
+
+async function keepNewer(
+  candidates: Candidate[] | undefined,
+  deps: Pick<CheckDeps, "git">
+): Promise<Candidate[]> {
+  const out: Candidate[] = [];
+  for (const c of candidates ?? []) {
+    const has = await deps
+      .git(["merge-base", "--is-ancestor", c.sha, "HEAD"])
+      .then(
+        () => true,
+        () => false
+      );
+    if (has) break;
+    out.push(c);
+  }
+  return out;
 }
 
 let memo: CheckResult | null = null;
@@ -214,7 +260,11 @@ export function cachedCheck(deps: CheckDeps = realDeps()): CheckResult | null {
  * fetch keeps the last good answer and notes the error.
  */
 export async function checkForUpdate(
-  { force = false, always = false }: { force?: boolean; always?: boolean } = {},
+  {
+    force = false,
+    always = false,
+    maxAge = CHECK_EVERY_MS,
+  }: { force?: boolean; always?: boolean; maxAge?: number } = {},
   deps: CheckDeps = realDeps()
 ): Promise<{ result: CheckResult; throttled?: number }> {
   const last = cachedCheck(deps);
@@ -224,7 +274,7 @@ export async function checkForUpdate(
       result: last,
       throttled: Math.ceil((FORCE_FLOOR_MS - age) / 1000),
     };
-  if (last && !force && age < CHECK_EVERY_MS) return { result: last };
+  if (last && !force && age < maxAge) return { result: last };
   inflight ??= compare(deps)
     .catch((error: unknown): CheckResult => {
       const message = error instanceof Error ? error.message : String(error);
@@ -254,17 +304,23 @@ export function updateChecksEnabled(
 
 const g = globalThis as unknown as { __agentosUpdateChecks?: NodeJS.Timeout };
 
-/** First check two minutes after boot, then every six hours (jittered). */
+/**
+ * First check two minutes after boot, then every six hours, or every hour
+ * with automatic updates on (jittered). Off when both the banner and
+ * automatic updates are.
+ */
 export function startUpdateChecks(): void {
   if (g.__agentosUpdateChecks) return;
   const schedule = (delay: number): void => {
     g.__agentosUpdateChecks = setTimeout(async () => {
+      const every = autoEnabled() ? AUTO_CHECK_EVERY_MS : CHECK_EVERY_MS;
       try {
-        if (bannerEnabled()) await checkForUpdate();
+        if (bannerEnabled() || autoEnabled())
+          await checkForUpdate({ maxAge: every - 5 * 60_000 });
       } catch (error) {
         console.error("Checking for updates failed:", error);
       }
-      schedule(CHECK_EVERY_MS + Math.floor(Math.random() * 10 * 60_000));
+      schedule(every + Math.floor(Math.random() * 10 * 60_000));
     }, delay);
     g.__agentosUpdateChecks.unref();
   };

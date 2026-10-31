@@ -500,8 +500,9 @@ app.prepare().then(async () => {
   startWaitWatcher();
   // Schedules tick here, once a minute, and nowhere else.
   if (schedulesEnabled(process.env)) startScheduler(realDeps);
-  // Looking for a newer version, and running an update only when one is
-  // asked for (the banner, Settings > Updates).
+  // Looking for a newer version, and running an update when one is asked
+  // for (the banner, Settings > Updates) or, with automatic updates on, once
+  // everything has been idle (lib/updates/auto.ts).
   try {
     reconcileUpdateRun();
   } catch (error) {

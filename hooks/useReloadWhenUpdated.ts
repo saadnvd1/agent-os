@@ -13,7 +13,11 @@ export function useReloadWhenUpdated(view: UpdateView | undefined) {
   useEffect(() => {
     if (!run) return;
     if (isActivePhase(run.phase)) watched.current = run.id;
-    else if (run.phase === "done" && watched.current === run.id)
+    // A rollback restarted the server onto the old build: reload onto it too.
+    else if (
+      (run.phase === "done" || run.phase === "rolled_back") &&
+      watched.current === run.id
+    )
       window.location.reload();
   }, [run]);
 }

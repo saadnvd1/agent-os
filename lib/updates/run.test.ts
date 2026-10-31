@@ -10,6 +10,12 @@ let check: CheckResult;
 vi.mock("./check", async (orig) => ({
   ...(await orig<typeof import("./check")>()),
   checkForUpdate: async () => ({ result: check }),
+  cachedCheck: () => check,
+  reconcile: async (c: CheckResult) => c,
+  versionAt: async (_g: unknown, sha: string) => ({
+    sha,
+    version: `v-${sha}`,
+  }),
 }));
 
 const run = await import("./run");
@@ -24,6 +30,10 @@ let working: { sessions: number; reviews: number; setups: number };
 let lock: boolean;
 let env: Record<string, string | undefined>;
 let restart: string | null;
+let free: number | null;
+let managed: boolean;
+let busyNow: string[];
+let notified: string[];
 
 const deps = (): import("./run").RunDeps => ({
   cwd: dir,
@@ -45,6 +55,12 @@ const deps = (): import("./run").RunDeps => ({
   getSetting: (k) => settings.get(k) ?? null,
   putSetting: (k, v) =>
     void (v === null ? settings.delete(k) : settings.set(k, v)),
+  freeBytes: () => free,
+  managed: () => managed,
+  busy: async () => busyNow,
+  dbFile: null,
+  backupDir: null,
+  notify: (text) => void notified.push(text),
 });
 
 const available = (): CheckResult => ({
@@ -72,7 +88,12 @@ beforeEach(() => {
   lock = false;
   env = { PORT: "3111", AGENTOS_BUILD: "stale" };
   restart = "restart-cmd";
+  free = null;
+  managed = false;
+  busyNow = [];
+  notified = [];
   check = available();
+  run.resetAutoMemory();
 });
 afterEach(() => fs.rmSync(dir, { recursive: true, force: true }));
 
@@ -203,6 +224,15 @@ describe("resolveRestart", () => {
       "'/r/scripts/agent-os' restart"
     );
     expect(await run.resolveRestart("/r", {}, async () => false)).toBeNull();
+    // A systemd unit from before KillMode=process would take the update down with it.
+    expect(
+      await run.resolveRestart(
+        "/r",
+        {},
+        async () => true,
+        () => false
+      )
+    ).toBeNull();
   });
 });
 
@@ -286,5 +316,181 @@ describe("reconcileOnBoot", () => {
     write("building", "oldsha");
     run.reconcileOnBoot(deps());
     expect(state().phase).toBe("building");
+  });
+});
+
+describe("automatic updates", () => {
+  const H = 60 * 60_000;
+  const soaked = (sha = "newsha", age = 3 * H) => ({ sha, at: now - age });
+  const tickFor = async (
+    watcher: ReturnType<typeof run.createIdleWatcher>,
+    ms: number
+  ) => {
+    let last = "";
+    for (let t = 0; t <= ms; t += 30_000) {
+      last = await watcher.tick();
+      now += 30_000;
+      if (last === "started") break;
+    }
+    return last;
+  };
+
+  beforeEach(() => {
+    check = { ...available(), candidates: [soaked()] };
+  });
+
+  it("starts once everything has been idle for the idle time, pinned to the target", async () => {
+    const watcher = run.createIdleWatcher(deps());
+    expect(await watcher.tick()).toBe("waiting");
+    now += 9 * 60_000;
+    expect(await watcher.tick()).toBe("waiting");
+    now += 60_000;
+    expect(await watcher.tick()).toBe("started");
+    expect(spawned).toHaveLength(1);
+    expect(spawned[0].env.AGENTOS_UPDATE_TO).toBe("newsha");
+    expect(state()).toMatchObject({
+      auto: true,
+      to: "newsha",
+      phase: "starting",
+    });
+  });
+
+  it("follows the idle-minutes setting", async () => {
+    settings.set("updates.autoIdleMinutes", "30");
+    const watcher = run.createIdleWatcher(deps());
+    expect(await tickFor(watcher, 20 * 60_000)).toBe("waiting");
+    expect(await tickFor(watcher, 11 * 60_000)).toBe("started");
+  });
+
+  it("never starts while something is working, and quiet starts over after it", async () => {
+    const watcher = run.createIdleWatcher(deps());
+    busyNow = ["1 session working"];
+    expect(await tickFor(watcher, 4 * H)).toBe("waiting");
+    busyNow = [];
+    expect(await tickFor(watcher, 8 * 60_000)).toBe("waiting");
+    busyNow = ["1 merge"];
+    await watcher.tick();
+    busyNow = [];
+    expect(await tickFor(watcher, 8 * 60_000)).toBe("waiting");
+    expect(spawned).toHaveLength(0);
+  });
+
+  it("takes the newest commit that has soaked, not a fresh head", async () => {
+    check = {
+      ...available(),
+      candidates: [soaked("fresh", 10 * 60_000), soaked("older", 3 * H)],
+    };
+    const watcher = run.createIdleWatcher(deps());
+    expect(await tickFor(watcher, 11 * 60_000)).toBe("started");
+    expect(spawned[0].env.AGENTOS_UPDATE_TO).toBe("older");
+    expect(state().toVersion).toBe("v-older");
+  });
+
+  it("does nothing when off, pinned off, or deployed by autodeploy", async () => {
+    settings.set("updates.auto", "0");
+    expect(await tickFor(run.createIdleWatcher(deps()), H)).toBe("none");
+    settings.delete("updates.auto");
+    env.AGENTOS_AUTO_UPDATE = "off";
+    expect(await tickFor(run.createIdleWatcher(deps()), H)).toBe("none");
+    delete env.AGENTOS_AUTO_UPDATE;
+    managed = true;
+    expect(await tickFor(run.createIdleWatcher(deps()), H)).toBe("none");
+    expect(spawned).toHaveLength(0);
+  });
+
+  it("a refused install skips quietly: no failed run, and the reason in the view", async () => {
+    porcelain = " M lib/a.ts\n";
+    const watcher = run.createIdleWatcher(deps());
+    // Refused once, then left alone instead of asking every tick.
+    expect(await tickFor(watcher, 15 * 60_000)).toBe("none");
+    expect(spawned).toHaveLength(0);
+    expect(fs.existsSync(path.join(dir, "state.json"))).toBe(false);
+    const view = await run.autoView(deps(), check, null);
+    expect(view.status?.code).toBe("refused");
+    expect(view.status?.text).toContain("local changes");
+  });
+
+  it("refuses when the disk is nearly full", async () => {
+    free = 1024 ** 3;
+    const r = await run.startUpdate({ when: "now" }, deps());
+    expect(r).toMatchObject({ ok: false, code: "disk" });
+    expect(spawned).toHaveLength(0);
+  });
+
+  it("files a finished run once and tells the phone when it broke", () => {
+    run.writeRun(deps().stateFile, {
+      id: "b1",
+      phase: "failed",
+      outcome: "broken",
+      auto: true,
+      from: "oldsha",
+      to: "newsha",
+      fromVersion: "0.3.1",
+      toVersion: "0.3.5",
+      startedAt: now,
+      finishedAt: now,
+    });
+    run.recordFinishedRun(deps());
+    run.recordFinishedRun(deps());
+    expect(JSON.parse(settings.get("updates.attempts")!)).toHaveLength(1);
+    expect(notified).toHaveLength(1);
+    expect(notified[0]).toContain("0.3.5");
+  });
+
+  it("won't take a commit that was rolled back, until a newer one soaks", async () => {
+    settings.set(
+      "updates.attempts",
+      JSON.stringify([
+        {
+          id: "r",
+          from: "oldsha",
+          to: "newsha",
+          fromVersion: "",
+          toVersion: "",
+          auto: true,
+          startedAt: now,
+          finishedAt: now,
+          outcome: "rolled_back",
+        },
+      ])
+    );
+    const watcher = run.createIdleWatcher(deps());
+    expect(await tickFor(watcher, H)).toBe("none");
+    check = { ...available(), candidates: [soaked("newer"), soaked()] };
+    expect(await tickFor(watcher, 11 * 60_000)).toBe("started");
+    expect(spawned[0].env.AGENTOS_UPDATE_TO).toBe("newer");
+  });
+});
+
+describe("run heartbeat", () => {
+  it("a run whose runner stopped writing and is gone reads as failed", () => {
+    run.writeRun(deps().stateFile, {
+      id: "h",
+      phase: "building",
+      from: "a",
+      fromVersion: "1",
+      toVersion: "2",
+      startedAt: now - 5 * 60_000,
+      updatedAt: now - 3 * 60_000,
+      pid: 2 ** 22 + 12345,
+    });
+    expect(run.readRun(deps())?.phase).toBe("failed");
+  });
+
+  it("a slow run with a live runner is still running, however long it takes", () => {
+    run.writeRun(deps().stateFile, {
+      id: "h",
+      phase: "restarting",
+      from: "oldsha",
+      fromVersion: "1",
+      toVersion: "2",
+      startedAt: now - 60 * 60_000,
+      updatedAt: now - 3 * 60_000,
+      pid: process.pid,
+    });
+    expect(run.readRun(deps())?.phase).toBe("restarting");
+    // Its runner is checking the new server; the boot leaves it alone.
+    run.reconcileOnBoot(deps());
+    expect(state().phase).toBe("restarting");
   });
 });

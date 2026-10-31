@@ -36,7 +36,7 @@
     "disk:dry-run": "tsx scripts/disk-dry-run.ts",
     "prebuild": "node scripts/gen-migrations-index.mjs",
     "build": "next build",
-    "prestart": "node scripts/check-native.mjs --rebuild && node scripts/gen-migrations-index.mjs",
+    "prestart": "node scripts/update-recover.mjs && node scripts/check-native.mjs --rebuild && node scripts/gen-migrations-index.mjs",
     "start": "NODE_ENV=production AGENTOS_SERVER=live node --import tsx server.ts",
     "pretypecheck": "node scripts/gen-migrations-index.mjs",
     "typecheck": "tsc --noEmit",

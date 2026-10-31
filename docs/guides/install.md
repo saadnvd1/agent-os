@@ -267,17 +267,55 @@ agent-os update
 
 It pulls the latest version, reinstalls dependencies, rebuilds, and starts AgentOS again if it was running. If you're already on the latest version, it says so and changes nothing.
 
+### Automatic updates
+
+AgentOS keeps itself up to date. It checks its own git remote every hour, and once a new version has been out for two hours (so a bad release can be fixed before anyone takes it), it updates as soon as everything has been idle for 10 minutes, at any time of day. To change this, open **Settings → Updates**:
+
+- **Install updates automatically** turns it on or off. It is on unless you switch it off. `AGENTOS_AUTO_UPDATE=off` pins it off.
+- **Idle for** sets how long nothing must be working first: 5, 10, 15, 30 or 60 minutes. `AGENTOS_AUTO_UPDATE_IDLE_MIN` pins it.
+- A status line says what it is waiting for, and **Recent updates** lists the last few and how each one went.
+
+"Idle" means nothing a restart would interrupt is happening: no agent working or chat reply being written, no review, no task setting up, no merge or stack landing, no simulator starting, and no build or deploy already running. It never interrupts work. If a new version has waited three days without a quiet moment, a two-minute lull is enough, and until then it keeps waiting.
+
+What a restart keeps, and what starts over:
+
+|                                                               |                                                       |
+| ------------------------------------------------------------- | ----------------------------------------------------- |
+| Terminals                                                     | Keep running; the page reconnects                     |
+| Chats and task agents                                         | Keep running, mid-reply included; the page reconnects |
+| Queued messages, schedules, notifications, `aos send --await` | Picked up again                                       |
+| Reviews                                                       | Start over                                            |
+| Task setups                                                   | Pick up where they were, or run again                 |
+| A merge in progress, a simulator starting                     | Cut off, which is why it waits for them               |
+
+Each update goes like this:
+
+1. It backs up the database. The last three copies are kept in `~/.agent-os/backups`.
+2. It pulls, installs and builds beside the running server. If any of that fails, the running server is left as it was. It tries that version again after an hour, then after six hours, and then gives up on it until a newer one comes out.
+3. It swaps the new build in and restarts.
+4. It checks the new server: it answers on the new version, every database migration ran, the main pages load, and it stays up for two minutes. If any of that fails, it puts the previous version back (code, dependencies and build), restarts, and never tries that version again. The banner says so, quietly.
+
+A computer that slept or lost power mid-update recovers when AgentOS next starts: a half-done update is undone and tried again later. Your phone only hears about it when an update and its rollback both failed, or after three failed updates in a row.
+
+The database is never restored on a rollback, because chats keep writing to it through the restart. Updates only ever add to it, so the previous version runs fine on it. If you need an older copy, stop AgentOS, copy one of the backups over `agent-os.db`, and start it again.
+
+A machine whose checkout is deployed by `scripts/autodeploy` (a self-hosted setup that deploys every push) is left to it: Settings says so, and automatic updates stay off there.
+
+Automatic updates skip a checkout they can't update safely, and Settings says why: local changes, not on the default branch, commits the remote doesn't have, a dev server, less than 3 GB of free disk (`AGENTOS_UPDATE_MIN_FREE_GB`), or no way to restart. On Linux, a service set up with `agent-os enable` before automatic updates existed needs `agent-os enable` once more, so a restart keeps terminals running.
+
 ### Update from the app
 
-AgentOS checks its own git remote for a newer version every few hours. When there is one, a slim banner offers **Update now** and **Dismiss**. Dismissing hides it for that version only, in that browser; the next version shows it again. Nothing updates unless you choose it.
+When a newer version is out, a slim banner offers **Update now** and **Dismiss**. Dismissing hides it for that version only, in that browser; the next version shows it again. After an automatic update, the banner says it updated and links to What's New.
 
-**Settings → Updates** shows the installed and latest versions, has **Check for updates**, and a switch for the banner (it also stops the background checks).
+**Settings → Updates** shows the installed and latest versions, has **Check for updates**, and a switch for the banner.
 
-Update now pulls, installs and builds beside the running server, then restarts it and reloads the page. Terminals and chats keep running through the restart; reviews and task setups in progress start over. If something is working, you're asked first and can choose **Update when idle**, which waits until nothing is working (for up to a day) and can be cancelled.
+Update now pulls, installs and builds beside the running server, then restarts it and reloads the page. Terminals and chats keep running through the restart; reviews and task setups in progress start over. If something is working, you're asked first and can choose **Update when idle**, which waits until nothing is working (for up to a day) and can be cancelled. Update now takes the latest version straight away, without the two-hour wait.
 
 It refuses, and says why, when the checkout has local changes, isn't on the default branch, has commits the remote doesn't, or is a dev server. The progress and any error show in the banner, and the full output is in `agent-os-update.log` next to the database. Only this machine, your tailnet, or a paired device with **Can approve** can start an update.
 
-The restart uses `AGENTOS_RESTART` if you set it (for a service manager, for example), or `agent-os restart` when `agent-os start` started the server. Otherwise the Update button is disabled and says why: an update needs a restart command. `AGENTOS_UPDATE_CHECK=off` turns the background checks off, and `AGENTOS_UPDATE_BANNER=off` pins the banner off.
+The restart uses `AGENTOS_RESTART` if you set it (for a service manager, for example), or `agent-os restart` when `agent-os start` started the server. Otherwise updating is disabled and says why: an update needs a restart command. `AGENTOS_UPDATE_CHECK=off` turns the background checks off (and with them automatic updates), and `AGENTOS_UPDATE_BANNER=off` pins the banner off.
+
+To go back to the previous version by hand: `AGENTOS_RESTART="agent-os restart" scripts/redeploy --rollback --to <commit>` puts back the build, the dependencies and the code at that commit. Without `--to` it only puts back the build and dependencies.
 
 ## Reach it from other devices
 

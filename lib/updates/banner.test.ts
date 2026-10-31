@@ -1,5 +1,10 @@
 import { describe, expect, it } from "vitest";
-import { bannerState, type UpdateRun, type UpdateView } from "./banner";
+import {
+  UPDATED_NOTE_MS,
+  bannerState,
+  type UpdateRun,
+  type UpdateView,
+} from "./banner";
 
 const view = (over: Partial<UpdateView> = {}): UpdateView => ({
   current: { version: "0.3.1", sha: "a" },
@@ -79,5 +84,61 @@ describe("bannerState", () => {
     expect(
       bannerState({ view: view({ pending: { requestedAt: 1 } }), ...none })
     ).toBe("pending");
+  });
+
+  it("an automatic update says it happened, for a few days, until dismissed", () => {
+    const done = {
+      ...run("done"),
+      auto: true,
+      finishedAt: 1_000,
+    };
+    const v = view({ available: false, run: done });
+    expect(bannerState({ view: v, ...none, now: 2_000 })).toBe("updated");
+    expect(
+      bannerState({ view: v, ...none, now: 1_000 + UPDATED_NOTE_MS })
+    ).toBe("hidden");
+    expect(
+      bannerState({
+        view: v,
+        dismissedVersion: null,
+        dismissedRun: "r1",
+        now: 2_000,
+      })
+    ).toBe("hidden");
+    // One someone started reloads the page instead.
+    expect(
+      bannerState({
+        view: view({ available: false, run: { ...done, auto: false } }),
+        ...none,
+        now: 2_000,
+      })
+    ).toBe("hidden");
+  });
+
+  it("a rollback shows, and an automatic build failure only when it left things broken", () => {
+    expect(
+      bannerState({ view: view({ run: run("rolled_back") }), ...none })
+    ).toBe("rolled_back");
+    const failed = {
+      ...run("failed"),
+      auto: true,
+      outcome: "build_failed" as const,
+    };
+    expect(
+      bannerState({ view: view({ available: false, run: failed }), ...none })
+    ).toBe("hidden");
+    expect(
+      bannerState({
+        view: view({ run: { ...failed, outcome: "broken" } }),
+        ...none,
+      })
+    ).toBe("failed");
+  });
+
+  it("the new phases count as running", () => {
+    for (const p of ["backing_up", "verifying", "rolling_back"] as const)
+      expect(bannerState({ view: view({ run: run(p) }), ...none })).toBe(
+        "running"
+      );
   });
 });
