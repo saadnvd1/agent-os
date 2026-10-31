@@ -41,22 +41,26 @@ let root: string;
 let live: string;
 let port: string;
 
+// Nothing of the machine's git config: no global identity or default branch
+// to lean on, as on a CI runner. Every git here and in the scripts under
+// test gets this environment.
+const GIT_ENV = {
+  GIT_CONFIG_GLOBAL: "/dev/null",
+  GIT_CONFIG_NOSYSTEM: "1",
+  GIT_AUTHOR_NAME: "t",
+  GIT_AUTHOR_EMAIL: "t@t",
+  GIT_COMMITTER_NAME: "t",
+  GIT_COMMITTER_EMAIL: "t@t",
+};
 const git = (cwd: string, ...args: string[]) =>
-  execFileSync("git", args, { cwd, encoding: "utf8" }).trim();
+  execFileSync("git", args, {
+    cwd,
+    encoding: "utf8",
+    env: { ...process.env, ...GIT_ENV },
+  }).trim();
 const commit = (cwd: string, msg: string) => {
   git(cwd, "add", "-A");
-  git(
-    cwd,
-    "-c",
-    "user.email=t@t",
-    "-c",
-    "user.name=t",
-    "commit",
-    "-q",
-    "--allow-empty",
-    "-m",
-    msg
-  );
+  git(cwd, "commit", "-q", "--allow-empty", "-m", msg);
   git(cwd, "push", "-q", "origin", "HEAD:main");
   return git(cwd, "rev-parse", "HEAD");
 };
@@ -84,7 +88,7 @@ beforeEach(async () => {
   const origin = path.join(root, "origin.git");
   const src = path.join(root, "src");
   live = path.join(root, "live");
-  git(root, "init", "-q", "--bare", origin);
+  git(root, "init", "-q", "-b", "main", "--bare", origin);
   git(root, "init", "-q", "-b", "main", src);
   git(src, "remote", "add", "origin", origin);
   for (const f of SCRIPTS) {
@@ -122,7 +126,7 @@ echo $! > "${root}/pid"
     { mode: 0o755 }
   );
   execFileSync(path.join(root, "restart"), {
-    env: { ...process.env, PORT: port },
+    env: { ...process.env, ...GIT_ENV, PORT: port },
   });
   for (let i = 0; i < 50 && !(await health()); i++)
     await new Promise((r) => setTimeout(r, 100));
@@ -147,6 +151,7 @@ async function update(from: string, to: string) {
   );
   const env: NodeJS.ProcessEnv = {
     ...process.env,
+    ...GIT_ENV,
     HOME: root,
     PATH: `${path.join(root, "bin")}:${process.env.PATH}`,
     PORT: port,

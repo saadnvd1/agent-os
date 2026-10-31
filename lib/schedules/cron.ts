@@ -261,16 +261,25 @@ export const MIN_GAP_MINUTES = 60;
 // A message to a session, at most this often.
 export const MESSAGE_MIN_GAP_MINUTES = 10;
 
-// The shortest gap between runs over the next few weeks of them.
+// The shortest gap between runs over the next few weeks of them. With
+// `stopBelow`, it returns as soon as a gap under it turns up: "every minute"
+// then costs two searches, not two hundred.
 export function minGapMinutes(
   cron: string,
   timezone: string,
-  from = Date.now()
+  from = Date.now(),
+  stopBelow = 0
 ): number {
-  const runs = nextRuns(cron, from, 200, timezone);
+  const parsed = parseCron(cron);
   let min = Infinity;
-  for (let i = 1; i < runs.length; i++)
-    min = Math.min(min, (runs[i] - runs[i - 1]) / 60_000);
+  let prev = nextRun(parsed, from, timezone);
+  for (let i = 1; i < 200 && prev !== null; i++) {
+    const next = nextRun(parsed, prev, timezone);
+    if (next === null) break;
+    min = Math.min(min, (next - prev) / 60_000);
+    if (min < stopBelow) break;
+    prev = next;
+  }
   return min;
 }
 

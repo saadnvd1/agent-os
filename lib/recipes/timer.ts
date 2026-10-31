@@ -67,7 +67,9 @@ export function setTimer(
   if (!isTimezone(timezone)) throw new Error(`Unknown time zone "${timezone}"`);
   const bad = cronError(cron);
   if (bad) throw new Error(bad);
-  if (minGapMinutes(cron, timezone) < MIN_GAP_MINUTES)
+  if (
+    minGapMinutes(cron, timezone, Date.now(), MIN_GAP_MINUTES) < MIN_GAP_MINUTES
+  )
     throw new Error("A recipe runs at most once an hour");
   const enabled = input.enabled ?? true;
   if (!existing) {
