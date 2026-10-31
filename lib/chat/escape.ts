@@ -37,13 +37,16 @@ export function escapeInterrupts(
 }
 
 // What Esc does in a chat: set the composer's suggestion aside, stop the
-// turn, or nothing (something on top takes it, or it isn't a bare Esc).
+// turn, or, with nothing else to do, leave the composer so the bare-key
+// shortcuts (g i) work; nothing when something on top takes it or it isn't
+// a bare Esc.
 export function escapeAction(
   e: EscapeKey,
   running: boolean,
   overlayOpen: boolean,
-  ghostShown: boolean
-): "dismiss" | "interrupt" | null {
+  ghostShown: boolean,
+  inComposer = false
+): "dismiss" | "interrupt" | "blur" | null {
   const bare =
     e.key === "Escape" &&
     !e.repeat &&
@@ -51,5 +54,6 @@ export function escapeAction(
     !(e.metaKey || e.ctrlKey || e.altKey || e.shiftKey);
   if (!bare || overlayOpen) return null;
   if (ghostShown) return "dismiss";
-  return running ? "interrupt" : null;
+  if (running) return "interrupt";
+  return inComposer ? "blur" : null;
 }

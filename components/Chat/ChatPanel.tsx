@@ -375,9 +375,17 @@ export function ChatPanel({
       if ((e.target as Element).closest?.("[data-find-bar]")) return;
       const overlay = !!document.querySelector(OVERLAY_SELECTOR);
       const ghost = !!root.querySelector(GHOST_SELECTOR);
-      const action = escapeAction(e, escape.current.running, overlay, ghost);
+      const composer = (e.target as Element).closest?.(".chat-composer");
+      const action = escapeAction(
+        e,
+        escape.current.running,
+        overlay,
+        ghost,
+        !!composer
+      );
       if (action === "interrupt") escape.current.interrupt();
       else if (action === "dismiss") setDismissed(escape.current.suggestion);
+      else if (action === "blur") (e.target as HTMLElement).blur?.();
     };
     window.addEventListener("keydown", onKey, true);
     return () => window.removeEventListener("keydown", onKey, true);
