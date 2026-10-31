@@ -4,6 +4,7 @@ import { describe, expect, it, vi } from "vitest";
 import { tempDir } from "@/lib/test-temp";
 import { parseCommit } from "./collect";
 import { generate, type GenerateDeps } from "./generate";
+import { GENERIC_TERMS } from "@/scripts/hooks/banned-terms";
 import { lintText, readBlocklist } from "./lint";
 import { WHATS_NEW_FILE } from "./load";
 import { authorLine, parseAnswer } from "./summarize";
@@ -178,6 +179,13 @@ describe("lintText", () => {
     "Files under /Users/someone/work.",
   ])("refuses %s", (text) => {
     expect(lintText(text)).not.toBeNull();
+  });
+
+  it("refuses the repo's banned terms, as scripts/check would", () => {
+    const term = GENERIC_TERMS[0];
+    expect(lintText(`Run /${term}-audit to compare.`)).toBe(
+      "contains a banned term"
+    );
   });
 
   it("allows plain sentences and single slash commands", () => {

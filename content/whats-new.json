@@ -1694,8 +1694,9 @@
       "date": "2026-10-10",
       "kind": "new",
       "area": "AgentOS",
-      "text": "You can run /competitor-audit to see how a competitor's latest changes compare with AgentOS.",
-      "url": "https://github.com/saadnvd1/agent-os/pull/184"
+      "text": "Internal tooling update.",
+      "url": "https://github.com/saadnvd1/agent-os/pull/184",
+      "hidden": true
     },
     {
       "id": 200,

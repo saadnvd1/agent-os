@@ -1,6 +1,7 @@
 import fs from "fs";
 import path from "path";
 import { agentosHome } from "@/lib/agentos-home";
+import { loadTerms } from "@/scripts/hooks/banned-terms";
 import type { Entry } from "./schema";
 
 // The repo is public, so this checks only generic shapes. Names that must
@@ -25,6 +26,10 @@ const GENERIC: [string, RegExp][] = [
   ["a vulnerability", /vulnerab|exploit|\bRCE\b/i],
 ];
 
+// The repo-wide banned terms (scripts/check fails on them), read once.
+let banned: RegExp[] | null = null;
+const bannedTerms = () => (banned ??= loadTerms());
+
 const escape = (s: string) => s.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
 
 /** Why this text can't ship, or null when it can. */
@@ -34,6 +39,8 @@ export function lintText(
 ): string | null {
   for (const [what, re] of GENERIC)
     if (re.test(text)) return `contains ${what}`;
+  if (bannedTerms().some((re) => re.test(text)))
+    return "contains a banned term";
   for (const name of blocklist) {
     if (
       new RegExp(
