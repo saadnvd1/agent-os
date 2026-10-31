@@ -4,6 +4,7 @@ import { toast } from "sonner";
 import { Loader2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { SettingToggle } from "@/components/Settings/SettingToggle";
+import { useSetTipsOff, useTips } from "@/data/tips";
 import {
   useCheckForUpdates,
   useUpdateBannerSetting,
@@ -145,6 +146,22 @@ export function UpdatesSection() {
           banner.mutate(on, { onError: (e) => toast.error(e.message) })
         }
       />
+      <TipsToggle />
     </div>
+  );
+}
+
+function TipsToggle() {
+  const { data } = useTips();
+  const setOff = useSetTipsOff();
+  return (
+    <SettingToggle
+      title="Show Tip of the Day"
+      detail="A short tip about something AgentOS can do, behind the lightbulb in the sidebar. It never opens on its own."
+      checked={!!data && !data.off}
+      onChange={(on) =>
+        setOff.mutate(!on, { onError: (e) => toast.error(e.message) })
+      }
+    />
   );
 }

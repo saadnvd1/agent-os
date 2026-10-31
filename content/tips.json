@@ -1,0 +1,456 @@
+{
+  "v": 1,
+  "tips": [
+    {
+      "id": "chat-enter-sends",
+      "title": "Enter sends, Shift+Enter adds a line",
+      "body": "Cmd/Ctrl+Enter always sends. On a phone, Enter is a new line.",
+      "guide": {
+        "file": "chat"
+      },
+      "added": "2026-10-31"
+    },
+    {
+      "id": "chat-plan-mode",
+      "title": "Plan before anything changes",
+      "body": "Turn on Plan under the composer, or press Shift+Tab, and the agent reads and plans without editing. It stays on for that session.",
+      "guide": {
+        "file": "chat"
+      },
+      "added": "2026-10-31",
+      "mediaBrief": {
+        "kind": "crop",
+        "shot": "Composer bottom bar with Plan switched on, the agent's reply a plan checklist above it."
+      }
+    },
+    {
+      "id": "chat-attach-files",
+      "title": "Attach PDFs, spreadsheets and documents",
+      "body": "The paperclip, a paste or a drag takes up to 8 files a message, 25 MB each. Big photos are shrunk for you.",
+      "guide": {
+        "file": "chat"
+      },
+      "added": "2026-10-31",
+      "mediaBrief": {
+        "kind": "clip",
+        "shot": "A PDF dragged onto the composer; its chip appears; one more pasted; send."
+      }
+    },
+    {
+      "id": "chat-slash-menu",
+      "title": "Type / for commands and skills",
+      "body": "/ in the composer lists every command and skill the agent knows, filtered as you type.",
+      "guide": {
+        "file": "chat"
+      },
+      "added": "2026-10-31",
+      "media": {
+        "kind": "video",
+        "src": "/tips/chat-slash-menu.mp4",
+        "poster": "/tips/chat-slash-menu-poster.webp",
+        "alt": "Typing a slash in the composer opens a menu of commands and skills that narrows as you type.",
+        "width": 768,
+        "height": 480,
+        "durationMs": 6367
+      }
+    },
+    {
+      "id": "chat-tab-suggestion",
+      "title": "Tab takes the suggested reply",
+      "body": "After the first turn, a guess at your next message shows in the empty composer. Tab or → takes it; typing sets it aside.",
+      "guide": {
+        "file": "chat"
+      },
+      "added": "2026-10-31",
+      "mediaBrief": {
+        "kind": "clip",
+        "shot": "Empty composer shows a grey suggested reply; Tab fills it in."
+      }
+    },
+    {
+      "id": "chat-access-picker",
+      "title": "Choose what the agent may do",
+      "body": "The access picker under the composer has Ask first, Accept edits and Full access. Ask first shows an approval card for anything not already allowed.",
+      "guide": {
+        "file": "chat"
+      },
+      "added": "2026-10-31",
+      "mediaBrief": {
+        "kind": "crop",
+        "shot": "The access picker open, showing Ask first, Accept edits, Full access."
+      }
+    },
+    {
+      "id": "chat-undo",
+      "title": "Undo a message and its edits",
+      "body": "Undo on a message puts back the files the agent edited since and returns the message to the composer. Shell command changes aren't tracked.",
+      "guide": {
+        "file": "chat"
+      },
+      "added": "2026-10-31",
+      "mediaBrief": {
+        "kind": "crop",
+        "shot": "A user message with its Undo action visible on hover."
+      }
+    },
+    {
+      "id": "chat-terminal-handoff",
+      "title": "Hand a chat to the terminal",
+      "body": "The Chat / Terminal switch in the tab bar resumes the same conversation in the agent's own terminal, and back.",
+      "guide": {
+        "file": "chat"
+      },
+      "added": "2026-10-31",
+      "mediaBrief": {
+        "kind": "clip",
+        "shot": "Click Terminal in the Chat / Terminal switch; the same conversation resumes in the terminal."
+      }
+    },
+    {
+      "id": "chat-bookmark",
+      "title": "Star a message to find it later",
+      "body": "Star a message, a step or a whole turn. The star in the chat header lists them and jumps to one.",
+      "guide": {
+        "file": "chat"
+      },
+      "when": ["no-bookmarks"],
+      "added": "2026-10-31",
+      "mediaBrief": {
+        "kind": "crop",
+        "shot": "Chat header's star list open with three bookmarks."
+      }
+    },
+    {
+      "id": "chat-search",
+      "title": "⌘K searches every conversation",
+      "body": "Type in ⌘K for matching chats, or Tab for a full search of what you and the agents said.",
+      "guide": {
+        "file": "chat"
+      },
+      "added": "2026-10-31",
+      "mediaBrief": {
+        "kind": "clip",
+        "shot": "⌘K, type two words, matching chats appear, Tab switches to the full search."
+      }
+    },
+    {
+      "id": "sidebar-draft",
+      "title": "⌥N opens a draft",
+      "body": "A draft in the project you're in. Nothing starts until you send, and unsent drafts wait under Drafts.",
+      "guide": {
+        "file": "sessions",
+        "anchor": "new-sessions"
+      },
+      "added": "2026-10-31",
+      "mediaBrief": {
+        "kind": "clip",
+        "shot": "⌥N opens a draft with project, agent and worktree chips; type a line."
+      }
+    },
+    {
+      "id": "sidebar-open-pr",
+      "title": "Make a session a task",
+      "body": "Tick Open a PR when done on a draft and it runs in its own worktree and ends in a pull request.",
+      "guide": {
+        "file": "sessions",
+        "anchor": "new-sessions"
+      },
+      "added": "2026-10-31"
+    },
+    {
+      "id": "sidebar-pin",
+      "title": "Pin a session",
+      "body": "Pin in a row's ⋯ menu keeps it on the Pinned shelf, and a pinned session never settles on its own.",
+      "guide": {
+        "file": "sessions",
+        "anchor": "the-sidebar"
+      },
+      "added": "2026-10-31"
+    },
+    {
+      "id": "sidebar-snooze",
+      "title": "Snooze until tomorrow",
+      "body": "Snooze in a row's ⋯ menu hides it until 9 AM tomorrow or next Monday. It wakes early if it needs you.",
+      "guide": {
+        "file": "sessions",
+        "anchor": "the-sidebar"
+      },
+      "added": "2026-10-31",
+      "mediaBrief": {
+        "kind": "crop",
+        "shot": "A row's ⋯ menu open on Snooze with Tomorrow and Next week."
+      }
+    },
+    {
+      "id": "sidebar-groups",
+      "title": "Put sessions in a group",
+      "body": "Move to group → New group… in a row's ⋯ menu gives them their own shelf. Select moves many at once.",
+      "guide": {
+        "file": "sessions",
+        "anchor": "groups"
+      },
+      "when": ["no-groups"],
+      "added": "2026-10-31",
+      "mediaBrief": {
+        "kind": "screenshot",
+        "shot": "Sidebar with a named group shelf holding three sessions."
+      }
+    },
+    {
+      "id": "sidebar-load",
+      "title": "The dot that shows machine load",
+      "body": "The dot in the sidebar header turns amber or red when the machine is busy. Tap it to see which sessions use the most CPU.",
+      "guide": {
+        "file": "sessions",
+        "anchor": "machine-load"
+      },
+      "added": "2026-10-31",
+      "mediaBrief": {
+        "kind": "crop",
+        "shot": "The machine load popover: the dot amber, the top CPU sessions listed."
+      }
+    },
+    {
+      "id": "tasks-sign-off",
+      "title": "Sign off and merge from the app",
+      "body": "Sign off & merge merges a task's PR once CI is green, then removes its worktree and branches.",
+      "guide": {
+        "file": "tasks"
+      },
+      "added": "2026-10-31",
+      "mediaBrief": {
+        "kind": "crop",
+        "shot": "A task in review with CI green and the Sign off & merge button."
+      }
+    },
+    {
+      "id": "tasks-queue",
+      "title": "Cap how many tasks run at once",
+      "body": "Settings → Workspaces sets a running limit. Extra tasks wait under Queued and start in order.",
+      "guide": {
+        "file": "tasks"
+      },
+      "added": "2026-10-31"
+    },
+    {
+      "id": "tasks-pause",
+      "title": "Pause a task for a while",
+      "body": "A running task's row menu pauses it for an hour, until tomorrow, or until you resume it.",
+      "guide": {
+        "file": "tasks"
+      },
+      "added": "2026-10-31"
+    },
+    {
+      "id": "tasks-plan-pieces",
+      "title": "Approve a plan piece by piece",
+      "body": "A plan waiting on you lists its pieces, each with Merge into ① or Drop, and Approve with note… for the whole plan.",
+      "guide": {
+        "file": "tasks",
+        "anchor": "plans-in-pieces"
+      },
+      "added": "2026-10-31",
+      "mediaBrief": {
+        "kind": "screenshot",
+        "shot": "A plan awaiting approval with two pieces, Merge into ① and Drop on the second."
+      }
+    },
+    {
+      "id": "tasks-linked-machines",
+      "title": "Run tasks on another machine",
+      "body": "Link a second machine and queued tasks start there when this one is busy. Linking more than one machine with Connect needs Pro.",
+      "guide": {
+        "file": "install",
+        "anchor": "with-agentos-connect-any-network-free-for-one-machine-pro-to-link-several"
+      },
+      "added": "2026-10-31"
+    },
+    {
+      "id": "tasks-stacks",
+      "title": "Run a board as a stack",
+      "body": "In a project linked to a board, Run as stack starts the cards as stacked PRs, and Land merges them in order.",
+      "guide": {
+        "file": "tasks",
+        "anchor": "stacks"
+      },
+      "added": "2026-10-31",
+      "mediaBrief": {
+        "kind": "screenshot",
+        "shot": "A stack of three tasks with their PR states and Land."
+      }
+    },
+    {
+      "id": "schedule-first",
+      "title": "Start work on a timer",
+      "body": "Schedules in the sidebar's ⋯ menu runs a prompt every day, every few hours, or once.",
+      "guide": {
+        "file": "schedules",
+        "anchor": "schedules"
+      },
+      "when": ["no-schedules"],
+      "added": "2026-10-31",
+      "mediaBrief": {
+        "kind": "screenshot",
+        "shot": "The Schedules form filled in: daily at 9 AM, a prompt, a project."
+      }
+    },
+    {
+      "id": "schedule-check-in",
+      "title": "Check in on a long session",
+      "body": "Schedule check-ins in a session's ⋯ menu sends it a message on a timer.",
+      "guide": {
+        "file": "schedules",
+        "anchor": "schedules"
+      },
+      "added": "2026-10-31"
+    },
+    {
+      "id": "recipe-save",
+      "title": "Save a job you'll do again",
+      "body": "Save as recipe on a finished session or task fills in a recipe from what it did. Each run starts fresh.",
+      "guide": {
+        "file": "schedules",
+        "anchor": "recipes"
+      },
+      "when": ["no-recipes"],
+      "added": "2026-10-31",
+      "mediaBrief": {
+        "kind": "crop",
+        "shot": "The recipe form prefilled from a finished session."
+      }
+    },
+    {
+      "id": "net-peers",
+      "title": "Sessions can talk to each other",
+      "body": "Agents run aos peers to see other sessions and aos send to message one.",
+      "guide": {
+        "file": "agent-network"
+      },
+      "added": "2026-10-31"
+    },
+    {
+      "id": "net-await",
+      "title": "Wait for a reply without polling",
+      "body": "aos send <session> --await ends the agent's turn and wakes it with the answer.",
+      "guide": {
+        "file": "agent-network",
+        "anchor": "waiting-on-a-peer"
+      },
+      "added": "2026-10-31"
+    },
+    {
+      "id": "net-messages",
+      "title": "Read what your agents say to each other",
+      "body": "Messages shows every conversation between sessions, and you can join any of them.",
+      "guide": {
+        "file": "agent-network"
+      },
+      "added": "2026-10-31",
+      "mediaBrief": {
+        "kind": "screenshot",
+        "shot": "Messages with two sessions talking, one waiting on a reply."
+      }
+    },
+    {
+      "id": "phone-pair",
+      "title": "Use AgentOS from your phone",
+      "body": "Settings → Devices & access → Add a device shows a code to scan. Each code works once.",
+      "guide": {
+        "file": "phone",
+        "anchor": "pair-the-phone"
+      },
+      "when": ["no-paired-device"],
+      "added": "2026-10-31"
+    },
+    {
+      "id": "phone-connect",
+      "title": "Reach this machine from anywhere",
+      "body": "Connect gives it a private address that works off your home network, free for one machine.",
+      "guide": {
+        "file": "phone",
+        "anchor": "from-anywhere-with-connect"
+      },
+      "when": ["connect-not-linked"],
+      "added": "2026-10-31"
+    },
+    {
+      "id": "phone-push",
+      "title": "Get pushes when an agent needs you",
+      "body": "Settings → Notifications → Your phone sends a test push to check it works.",
+      "guide": {
+        "file": "phone",
+        "anchor": "notifications"
+      },
+      "when": ["no-push-device"],
+      "added": "2026-10-31"
+    },
+    {
+      "id": "share-check",
+      "title": "Shares are masked before upload",
+      "body": "The Share dialog shows exactly what goes up, with secrets, addresses and emails masked. Nothing leaves until Create link.",
+      "guide": {
+        "file": "sharing",
+        "anchor": "check-it-first"
+      },
+      "when": ["no-shares"],
+      "added": "2026-10-31",
+      "mediaBrief": {
+        "kind": "screenshot",
+        "shot": "The Share dialog preview with masked values highlighted, before Create link."
+      }
+    },
+    {
+      "id": "share-expiry",
+      "title": "Links can expire",
+      "body": "Create link lasts 1, 7 or 30 days, or never. Revoke one in Settings → Shared links.",
+      "guide": {
+        "file": "sharing",
+        "anchor": "create-the-link"
+      },
+      "added": "2026-10-31"
+    },
+    {
+      "id": "export-ai",
+      "title": "Hand a chat to another AI",
+      "body": "Export for AI… in the ⋯ menu saves the chat as Markdown, JSON or HTML, with secrets masked.",
+      "guide": {
+        "file": "export"
+      },
+      "added": "2026-10-31",
+      "mediaBrief": {
+        "kind": "crop",
+        "shot": "The Export for AI sheet: format, Compact selected, the size estimate."
+      }
+    },
+    {
+      "id": "export-compact",
+      "title": "Compact export for long chats",
+      "body": "Compact drops thinking and trims tool output, and the sheet warns when a file is too big for most models.",
+      "guide": {
+        "file": "export",
+        "anchor": "what-you-choose"
+      },
+      "added": "2026-10-31"
+    },
+    {
+      "id": "update-when-idle",
+      "title": "Update without interrupting work",
+      "body": "Update when idle in the update banner waits until nothing is working.",
+      "guide": {
+        "file": "install",
+        "anchor": "update-from-the-app"
+      },
+      "added": "2026-10-31"
+    },
+    {
+      "id": "tips-whats-new",
+      "title": "See what changed in each update",
+      "body": "The sparkle next to the lightbulb lists every change. A dot on it means something new since you last looked.",
+      "guide": {
+        "file": "tips",
+        "anchor": "whats-new"
+      },
+      "added": "2026-10-31"
+    }
+  ]
+}

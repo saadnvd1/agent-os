@@ -126,7 +126,7 @@ export const SECTION_INFO: Record<
   },
   updates: {
     label: "Updates",
-    hint: "Version, check for updates, the update banner",
+    hint: "Version, check for updates, the update banner, tips",
     icon: RefreshCw,
   },
   experiments: {

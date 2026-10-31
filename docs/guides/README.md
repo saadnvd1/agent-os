@@ -12,5 +12,6 @@ How-to guides for using AgentOS, in reading order.
 8. [Sharing](sharing.md): a read-only link to a chat or a page, checked and masked first, or downloaded as HTML.
 9. [Export for AI](export.md): a session or a range of its turns as Markdown, JSON or HTML for another model, with a compact mode, masking and a size estimate.
 10. [Local models](local-models.md): run a model you host through Pi or OpenCode, turn on tool calling in its server, and what "Ended early" means.
+11. [Tips and What's New](tips.md): the lightbulb and sparkle in the sidebar, what a tip is, and how to turn tips off.
 
 How each part works in detail is in [the reference docs](https://github.com/saadnvd1/agent-os/tree/main/docs/reference).

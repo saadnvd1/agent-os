@@ -202,6 +202,7 @@ describe("demo gate: allowed", () => {
       "/api/workspaces",
       "/api/demo",
       "/api/whats-new",
+      "/api/tips",
       "/api/sessions/6c1a585a-5a7b-4c3b-80e9-90f6fac0267b/preview",
     ])
       expect(allows("GET", url), url).toBe(true);
@@ -219,6 +220,7 @@ describe("demo gate: allowed", () => {
     expect(allows("DELETE", "/api/sessions/abc")).toBe(false);
     expect(allows("POST", "/api/workspaces/w1/orchestrator/pause")).toBe(false);
     expect(allows("POST", "/api/workspaces/w1/orchestrator")).toBe(false);
+    expect(allows("POST", "/api/tips")).toBe(false);
   });
 
   it("refuses every session-group write, reordering included", () => {

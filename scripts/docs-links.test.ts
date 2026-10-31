@@ -2,34 +2,10 @@ import { execFileSync } from "node:child_process";
 import fs from "node:fs";
 import path from "node:path";
 import { describe, expect, it } from "vitest";
+import { headingSlugs, slug } from "./lib/heading-slugs";
 
 const root = path.resolve(__dirname, "..");
 const REPO = "saadnvd1/agent-os";
-
-function slug(heading: string): string {
-  return heading
-    .trim()
-    .toLowerCase()
-    .replace(/[`*]/g, "")
-    .replace(/[^\w\- ]/g, "")
-    .replace(/ /g, "-");
-}
-
-function headingSlugs(text: string): Set<string> {
-  const seen = new Map<string, number>();
-  const out = new Set<string>();
-  let fence = false;
-  for (const line of text.split("\n")) {
-    if (line.startsWith("```")) fence = !fence;
-    const m = !fence && /^#+ (.*)$/.exec(line);
-    if (!m) continue;
-    const base = slug(m[1]);
-    const n = seen.get(base) ?? 0;
-    seen.set(base, n + 1);
-    out.add(n ? `${base}-${n}` : base);
-  }
-  return out;
-}
 
 function markdownFiles(): string[] {
   const out = execFileSync(
