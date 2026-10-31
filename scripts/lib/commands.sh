@@ -133,7 +133,7 @@ systemd_unit_active() {
 cmd_start() {
     if [[ "${OS:-}" == "macos" ]] && ! is_running && launchd_keeps_alive; then
         if launchd_loaded; then
-            launchd_restart && log_success "AgentOS started (launchd)" && return 0
+            launchd_kickstart && log_success "AgentOS started (launchd)" && return 0
         elif launchd_bootstrap; then
             log_success "AgentOS started (launchd)"
             return 0

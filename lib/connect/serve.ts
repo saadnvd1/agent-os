@@ -191,13 +191,18 @@ export function startConnect(
   g.__agentosConnect = () => {
     if (!running) return base;
     const s: TunnelState = running.supervisor?.state() ?? "connecting";
+    const state = bindError ? "error" : s === "stopped" ? "off" : s;
     return {
       ...base,
       hostname: hostname || base.hostname,
-      state: bindError ? "error" : s === "stopped" ? "off" : s,
+      state,
       reason: bindError ?? running.supervisor?.reason(),
       stage: bindError ? undefined : running.supervisor?.stage(),
-      downSince: running.supervisor?.downSince() ?? running.since,
+      // Up has no down clock: the probe through the tunnel keeps its own.
+      downSince:
+        state === "up"
+          ? undefined
+          : (running.supervisor?.downSince() ?? running.since),
     };
   };
 

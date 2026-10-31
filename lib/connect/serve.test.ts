@@ -334,6 +334,8 @@ describe("startConnect", () => {
     await until(() => connectStatus().state === "up");
     expect(asked).toEqual([tunnelPort]);
     expect(connectStatus()).toMatchObject({ hostname: HOST, enrolled: true });
+    // Up: no down clock, so a failing probe through it starts its own.
+    expect(connectStatus().downSince).toBeUndefined();
     expect(started.hostname()).toBe(HOST);
     const saved = JSON.parse(
       fs.readFileSync(path.join(dir, "connect.json"), "utf8")

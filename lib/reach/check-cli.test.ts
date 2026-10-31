@@ -134,6 +134,37 @@ describe("agent-os check", () => {
     });
   });
 
+  it("AgentOS blocked (takes the connection, never answers): service-stuck", async () => {
+    const port = await listen(http.createServer(() => {}));
+    const { code, text } = await run(port, ["--json"], {
+      holder: async () => "node",
+    });
+    expect(code).toBe(2);
+    expect(JSON.parse(text).findings[0]).toMatchObject({
+      cause: "service-stuck",
+      fix: "agent-os restart",
+    });
+  });
+
+  it("another program that never answers: still port-taken", async () => {
+    const port = await listen(http.createServer(() => {}));
+    const { text } = await run(port, ["--json"]);
+    expect(JSON.parse(text).findings[0]).toMatchObject({
+      cause: "port-taken",
+      title: `${CAUSES["port-taken"].title} (python3)`,
+    });
+  });
+
+  it("an AgentOS-looking program that answers with something else: port-taken", async () => {
+    const port = await listen(
+      http.createServer((_q, res) => res.end("<html>hello</html>"))
+    );
+    const { text } = await run(port, ["--json"], {
+      holder: async () => "node",
+    });
+    expect(JSON.parse(text).findings[0]).toMatchObject({ cause: "port-taken" });
+  });
+
   it("another web server on the port: port-taken, with its program", async () => {
     const port = await listen(
       http.createServer((_q, res) => res.end("<html>hello</html>"))
@@ -163,5 +194,21 @@ describe("agent-os check", () => {
     ]);
     expect(code).toBe(2);
     expect(text).toContain("--via takes one of");
+  });
+
+  it("takes --via=route as well as --via route", async () => {
+    const asked: string[] = [];
+    const port = await listen(
+      http.createServer((req, res) => {
+        asked.push(req.url ?? "");
+        res.end(JSON.stringify({ ...REPORT, status: "ok" }));
+      })
+    );
+    expect((await run(port, ["--via=lan"])).code).toBe(0);
+    expect((await run(port, ["--via", "connect"])).code).toBe(0);
+    expect(asked).toEqual([
+      "/api/reach?fresh=&want=lan",
+      "/api/reach?fresh=&want=connect",
+    ]);
   });
 });

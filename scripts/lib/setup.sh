@@ -265,7 +265,11 @@ cmd_setup() {
     while [[ $# -gt 0 ]]; do
         case "$1" in
             --via)
-                SETUP_VIA="${2:-}"
+                if [[ $# -lt 2 ]]; then
+                    log_error "--via takes connect, tailscale or lan"
+                    exit 2
+                fi
+                SETUP_VIA="$2"
                 shift
                 ;;
             --via=*) SETUP_VIA="${1#--via=}" ;;

@@ -43,6 +43,10 @@ const OFFLINE = new Set([
   "ECONNREFUSED",
 ]);
 const TLS = /^(CERT_|ERR_TLS_|ERR_SSL_)|SELF_SIGNED|UNABLE_TO_(GET|VERIFY)/;
+// Both names come from Connect's own config; only a plain DNS name is fetched,
+// so nothing in them can add a port, a path or a userinfo part to the URL.
+const DNS_NAME =
+  /^(?=.{1,253}$)([a-z0-9]([a-z0-9-]{0,61}[a-z0-9])?\.)+[a-z][a-z0-9-]{0,62}$/i;
 
 function errorCode(err: unknown): string {
   const e = err as { name?: string; code?: string; cause?: { code?: string } };
@@ -56,6 +60,7 @@ async function clockSkewed(
   deps: ProbeDeps,
   controlHost: string
 ): Promise<boolean> {
+  if (!controlHost) return false;
   try {
     const res = await deps.fetch(`http://${controlHost}/`, {
       method: "HEAD",
@@ -75,6 +80,8 @@ export async function probeConnect(
   boot = bootId(),
   deps: ProbeDeps = defaultDeps
 ): Promise<ConnectProbe> {
+  if (!DNS_NAME.test(hostname)) return { kind: "dns", scope: "host" };
+  if (!DNS_NAME.test(controlHost)) controlHost = "";
   let res: Response;
   try {
     res = await deps.fetch(`https://${hostname}${PROBE_PATH}`, {
@@ -88,7 +95,8 @@ export async function probeConnect(
     if (DNS.has(code))
       return {
         kind: "dns",
-        scope: (await deps.resolves(controlHost)) ? "host" : "all",
+        scope:
+          controlHost && !(await deps.resolves(controlHost)) ? "all" : "host",
       };
     if (TLS.test(code))
       return {
