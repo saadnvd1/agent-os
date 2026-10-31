@@ -76,6 +76,13 @@ describe("the fast lane", () => {
     expect(armedAt(t.task)).toBeNull();
   });
 
+  it("keeps a disarm made before the first auto-arm", async () => {
+    const t = fastTask();
+    await runTool(t.w, "disarm", { task: "add-a" });
+    await autoArmFast(t.w, t.facts());
+    expect(armedAt(t.task)).toBeNull();
+  });
+
   it("still refuses an AI-attributed body, another base and Saad's hold", async () => {
     const t = fastTask();
     S.pr = { ...S.pr!, attribution: "footer" as never };
