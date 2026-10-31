@@ -63,6 +63,7 @@ export function buildTaskBrief(opts: {
 - Never merge the pull request, never push to ${opts.baseBranch}, and never delete branches or worktrees. A human reviews and merges.${opts.stack ? stackedLines(opts.baseBranch, opts.stack) : ""}
 - Write scratch files (PR bodies, review notes, logs, test output) outside the worktree, in your scratchpad or \$TMPDIR. Anything uncommitted left in the worktree keeps it from being removed when the task is done.
 - Do not add any AI or assistant attribution to commits or the pull request.
+- End the pull request body with one line for the in-app What's New list: \`Whats-new: New|Improved|Fixed — <one plain sentence a user would understand>\`, or \`Whats-new: skip\` when users won't see the change (internals, tests, refactors, security). No jargon, file names, paths, hosts or other machine details.
 - If you are blocked or need a decision only a human can make, print one line starting with "BLOCKED:" that says what you need, then stop and wait.`;
   const ui = uiVerifyBrief(opts.ui ?? null, opts.browse);
   return ui ? `${base}\n\n${ui}` : base;

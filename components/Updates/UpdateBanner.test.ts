@@ -89,7 +89,7 @@ describe("UpdateBanner", () => {
     expect(
       document.querySelector<HTMLAnchorElement>("a")?.getAttribute("href")
     ).toBe("https://example.com/compare");
-    await act(async () => button("What's new")!.click());
+    await act(async () => button("Commit list")!.click());
     expect(text()).toContain("Faster boot (#9)");
   });
 

@@ -1,3 +1,4 @@
+import { WhatsNewButton } from "@/components/WhatsNew";
 import { ThemeToggle } from "@/components/ThemeToggle";
 import {
   Tooltip,
@@ -8,7 +9,8 @@ import {
 export function SidebarFooter() {
   return (
     <div className="mt-auto px-3 pt-2 pb-3">
-      <div className="flex items-center justify-between">
+      <WhatsNewButton />
+      <div className="mt-1 flex items-center justify-between">
         <span className="label-mono text-muted-foreground">Theme</span>
         <ThemeToggle />
       </div>

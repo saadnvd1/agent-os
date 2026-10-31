@@ -113,6 +113,59 @@ describe("autodeploy restart gap", () => {
   });
 });
 
+describe("autodeploy changelog commits", () => {
+  const changelog = (t: ReturnType<typeof setup>, also?: string) => {
+    const work = path.join(t.root, "work");
+    fs.mkdirSync(path.join(work, "content"), { recursive: true });
+    fs.writeFileSync(path.join(work, "content/whats-new.json"), "{}\n");
+    if (also) fs.appendFileSync(path.join(work, "f"), also + "\n");
+    sh(work, "add", "-A");
+    sh(
+      work,
+      "-c",
+      "user.name=t",
+      "-c",
+      "user.email=t@t",
+      "commit",
+      "-qm",
+      "chore(whats-new): add 1 entries"
+    );
+    sh(work, "push", "-q", "origin", "main");
+    return sh(work, "rev-parse", "HEAD");
+  };
+
+  it("pulls a commit that touches only the changelog without a restart", () => {
+    const t = setup();
+    const a = t.commit("a");
+    t.run();
+    expect(t.restarts()).toBe(1);
+
+    const b = changelog(t);
+    expect(t.run()).toBe("");
+    expect(t.deployed()).toBe(b);
+    expect(t.deployed()).not.toBe(a);
+    expect(t.restarts()).toBe(1);
+    expect(fs.existsSync(path.join(t.clone, "content/whats-new.json"))).toBe(
+      true
+    );
+    expect(t.run()).toBe("");
+  });
+
+  it("still redeploys a commit that touches the changelog and something else", () => {
+    const t = setup();
+    t.commit("a");
+    t.run();
+    const c = changelog(t, "more");
+    fs.writeFileSync(
+      path.join(t.state, "restarted"),
+      `${Math.floor(Date.now() / 1000) - 3601}\n`
+    );
+    expect(t.run()).toContain("Deploying");
+    expect(t.deployed()).toBe(c);
+    expect(t.restarts()).toBe(2);
+  });
+});
+
 describe("autodeploy CLI links", () => {
   it("repoints a link into another clone at the live checkout after a deploy", () => {
     const t = setup();

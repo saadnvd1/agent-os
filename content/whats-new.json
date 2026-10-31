@@ -1,0 +1,1685 @@
+{
+  "v": 1,
+  "entries": [
+    {
+      "id": 70,
+      "date": "2026-10-05",
+      "kind": "fixed",
+      "area": "AgentOS",
+      "text": "The quick switcher no longer shows a close button in the wrong place.",
+      "url": "https://github.com/saadnvd1/agent-os/pull/70"
+    },
+    {
+      "id": 83,
+      "date": "2026-10-06",
+      "kind": "new",
+      "area": "AgentOS",
+      "text": "Run the cards on a LumifyHub board as a stack of tasks.",
+      "url": "https://github.com/saadnvd1/agent-os/pull/83"
+    },
+    {
+      "id": 84,
+      "date": "2026-10-06",
+      "kind": "improved",
+      "area": "Chat",
+      "text": "The message box shows markdown formatting as you type.",
+      "url": "https://github.com/saadnvd1/agent-os/pull/84"
+    },
+    {
+      "id": 89,
+      "date": "2026-10-06",
+      "kind": "new",
+      "area": "Connect",
+      "text": "Enroll a machine with AgentOS Connect and receive its certificate.",
+      "url": "https://github.com/saadnvd1/agent-os/pull/89"
+    },
+    {
+      "id": 90,
+      "date": "2026-10-06",
+      "kind": "fixed",
+      "area": "Connect",
+      "text": "Two processes can no longer both take over the same stale lock at once.",
+      "url": "https://github.com/saadnvd1/agent-os/pull/90"
+    },
+    {
+      "id": 94,
+      "date": "2026-10-06",
+      "kind": "new",
+      "area": "Connect",
+      "text": "Machines can now enroll with a link code through AgentOS Connect.",
+      "url": "https://github.com/saadnvd1/agent-os/pull/94"
+    },
+    {
+      "id": 95,
+      "date": "2026-10-06",
+      "kind": "new",
+      "area": "Sessions",
+      "text": "Mark finished work as Done, and find it later in an Archived view.",
+      "url": "https://github.com/saadnvd1/agent-os/pull/95"
+    },
+    {
+      "id": 96,
+      "date": "2026-10-06",
+      "kind": "new",
+      "area": "AgentOS",
+      "text": "Code review is required before a pull request is opened, and merges are blocked without it.",
+      "url": "https://github.com/saadnvd1/agent-os/pull/96"
+    },
+    {
+      "id": 97,
+      "date": "2026-10-06",
+      "kind": "fixed",
+      "area": "AgentOS",
+      "text": "Cancelled checks no longer fail the merge gate.",
+      "url": "https://github.com/saadnvd1/agent-os/pull/97"
+    },
+    {
+      "id": 99,
+      "date": "2026-10-06",
+      "kind": "improved",
+      "area": "Sidebar",
+      "text": "Sessions on shelves now appear in one flat list.",
+      "url": "https://github.com/saadnvd1/agent-os/pull/99"
+    },
+    {
+      "id": 110,
+      "date": "2026-10-07",
+      "kind": "fixed",
+      "area": "Chat",
+      "text": "Send now reaches the agent when you stop it, and old tool rows no longer stay open.",
+      "url": "https://github.com/saadnvd1/agent-os/pull/110"
+    },
+    {
+      "id": 112,
+      "date": "2026-10-07",
+      "kind": "new",
+      "area": "Sessions",
+      "text": "Sessions and tasks get descriptive names generated automatically.",
+      "url": "https://github.com/saadnvd1/agent-os/pull/112"
+    },
+    {
+      "id": 115,
+      "date": "2026-10-07",
+      "kind": "fixed",
+      "area": "Chat",
+      "text": "Next-prompt suggestions no longer disappear when a worker goes stale.",
+      "url": "https://github.com/saadnvd1/agent-os/pull/115"
+    },
+    {
+      "id": 122,
+      "date": "2026-10-07",
+      "kind": "improved",
+      "area": "AgentOS",
+      "text": "The app loads with about half the JavaScript and stalls less during redraws and git work.",
+      "url": "https://github.com/saadnvd1/agent-os/pull/122"
+    },
+    {
+      "id": 120,
+      "date": "2026-10-07",
+      "kind": "improved",
+      "area": "Sessions",
+      "text": "New sessions begin as drafts, and projects are simpler to set up.",
+      "url": "https://github.com/saadnvd1/agent-os/pull/120"
+    },
+    {
+      "id": 130,
+      "date": "2026-10-07",
+      "kind": "improved",
+      "area": "Chat",
+      "text": "Long conversations scroll smoothly, and older history loads as you go.",
+      "url": "https://github.com/saadnvd1/agent-os/pull/130"
+    },
+    {
+      "id": 131,
+      "date": "2026-10-07",
+      "kind": "improved",
+      "area": "Notifications",
+      "text": "Status updates arrive as they happen instead of on a timer.",
+      "url": "https://github.com/saadnvd1/agent-os/pull/131"
+    },
+    {
+      "id": 132,
+      "date": "2026-10-07",
+      "kind": "improved",
+      "area": "Terminal",
+      "text": "Terminals can be attached from more than one place at once.",
+      "url": "https://github.com/saadnvd1/agent-os/pull/132"
+    },
+    {
+      "id": 134,
+      "date": "2026-10-09",
+      "kind": "new",
+      "area": "AgentOS",
+      "text": "Demo mode runs AgentOS on sample data with a stubbed chat.",
+      "url": "https://github.com/saadnvd1/agent-os/pull/134"
+    },
+    {
+      "id": 135,
+      "date": "2026-10-09",
+      "kind": "fixed",
+      "area": "Chat",
+      "text": "A deleted session no longer crashes the server.",
+      "url": "https://github.com/saadnvd1/agent-os/pull/135"
+    },
+    {
+      "id": 141,
+      "date": "2026-10-09",
+      "kind": "new",
+      "area": "Demo",
+      "text": "Demo data refreshes every ten minutes, and Done is refused on orchestrators and archived sessions.",
+      "url": "https://github.com/saadnvd1/agent-os/pull/141"
+    },
+    {
+      "id": 142,
+      "date": "2026-10-09",
+      "kind": "new",
+      "area": "Demo",
+      "text": "A notice appears where terminals and new sessions would go, and asks explain the passkey.",
+      "url": "https://github.com/saadnvd1/agent-os/pull/142"
+    },
+    {
+      "id": 143,
+      "date": "2026-10-10",
+      "kind": "new",
+      "area": "Sessions",
+      "text": "Every session gets its own address you can open directly.",
+      "url": "https://github.com/saadnvd1/agent-os/pull/143"
+    },
+    {
+      "id": 144,
+      "date": "2026-10-10",
+      "kind": "new",
+      "area": "Settings",
+      "text": "Projects can be configured for ports, agent environment and working copy setup.",
+      "url": "https://github.com/saadnvd1/agent-os/pull/144"
+    },
+    {
+      "id": 145,
+      "date": "2026-10-10",
+      "kind": "new",
+      "area": "Machines",
+      "text": "Sessions on a linked machine can be opened through that machine's own AgentOS.",
+      "url": "https://github.com/saadnvd1/agent-os/pull/145"
+    },
+    {
+      "id": 146,
+      "date": "2026-10-10",
+      "kind": "fixed",
+      "area": "Drafts",
+      "text": "New opens in the workspace you have selected in the sidebar.",
+      "url": "https://github.com/saadnvd1/agent-os/pull/146"
+    },
+    {
+      "id": 147,
+      "date": "2026-10-10",
+      "kind": "new",
+      "area": "Sidebar",
+      "text": "Each workspace's orchestrator stays pinned to the top of its list.",
+      "url": "https://github.com/saadnvd1/agent-os/pull/147"
+    },
+    {
+      "id": 148,
+      "date": "2026-10-10",
+      "kind": "fixed",
+      "area": "Schedules",
+      "text": "Check-ins for a missing session pause instead of failing.",
+      "url": "https://github.com/saadnvd1/agent-os/pull/148"
+    },
+    {
+      "id": 150,
+      "date": "2026-10-10",
+      "kind": "fixed",
+      "area": "Chat",
+      "text": "Quoting a reply now includes its whole last line.",
+      "url": "https://github.com/saadnvd1/agent-os/pull/150"
+    },
+    {
+      "id": 151,
+      "date": "2026-10-10",
+      "kind": "fixed",
+      "area": "Worktrees",
+      "text": "A failed start no longer leaves leftovers, and Done ignores files copied during setup.",
+      "url": "https://github.com/saadnvd1/agent-os/pull/151"
+    },
+    {
+      "id": 149,
+      "date": "2026-10-10",
+      "kind": "new",
+      "area": "Settings",
+      "text": "Each session can get its own private database, set up in the project config.",
+      "url": "https://github.com/saadnvd1/agent-os/pull/149"
+    },
+    {
+      "id": 155,
+      "date": "2026-10-10",
+      "kind": "fixed",
+      "area": "Done shelf",
+      "text": "A folder being removed is no longer reported as kept, and Done waits for cleanup to finish.",
+      "url": "https://github.com/saadnvd1/agent-os/pull/155"
+    },
+    {
+      "id": 154,
+      "date": "2026-10-10",
+      "kind": "improved",
+      "area": "Sidebar",
+      "text": "Orchestrator rows show their workspace name, and the header is more compact.",
+      "url": "https://github.com/saadnvd1/agent-os/pull/154"
+    },
+    {
+      "id": 156,
+      "date": "2026-10-10",
+      "kind": "new",
+      "area": "Machines",
+      "text": "Sessions on a linked machine now appear in your session list here.",
+      "url": "https://github.com/saadnvd1/agent-os/pull/156"
+    },
+    {
+      "id": 158,
+      "date": "2026-10-10",
+      "kind": "improved",
+      "area": "Chat",
+      "text": "Messages from a linked machine show as event rows, not as your own messages.",
+      "url": "https://github.com/saadnvd1/agent-os/pull/158"
+    },
+    {
+      "id": 157,
+      "date": "2026-10-10",
+      "kind": "fixed",
+      "area": "Chat",
+      "text": "The slash command list picks up new skills, and has a refresh button.",
+      "url": "https://github.com/saadnvd1/agent-os/pull/157"
+    },
+    {
+      "id": 162,
+      "date": "2026-10-10",
+      "kind": "new",
+      "area": "Worktrees",
+      "text": "AI attribution is removed from commits, and pull requests that include it are refused.",
+      "url": "https://github.com/saadnvd1/agent-os/pull/162"
+    },
+    {
+      "id": 163,
+      "date": "2026-10-10",
+      "kind": "new",
+      "area": "Sidebar",
+      "text": "Queued tasks appear in the session list, and each workspace can have a task limit.",
+      "url": "https://github.com/saadnvd1/agent-os/pull/163"
+    },
+    {
+      "id": 164,
+      "date": "2026-10-10",
+      "kind": "fixed",
+      "area": "Worktrees",
+      "text": "AI attribution is now detected more reliably in commits and pull requests.",
+      "url": "https://github.com/saadnvd1/agent-os/pull/164"
+    },
+    {
+      "id": 165,
+      "date": "2026-10-10",
+      "kind": "new",
+      "area": "Sidebar",
+      "text": "Workspaces with no orchestrator show a Start orchestrator row.",
+      "url": "https://github.com/saadnvd1/agent-os/pull/165"
+    },
+    {
+      "id": 166,
+      "date": "2026-10-10",
+      "kind": "new",
+      "area": "Machines",
+      "text": "Projects can run sessions on linked machines.",
+      "url": "https://github.com/saadnvd1/agent-os/pull/166"
+    },
+    {
+      "id": 171,
+      "date": "2026-10-10",
+      "kind": "fixed",
+      "area": "Chat",
+      "text": "The chat stays where you scrolled, and follows new messages only at the bottom.",
+      "url": "https://github.com/saadnvd1/agent-os/pull/171"
+    },
+    {
+      "id": 169,
+      "date": "2026-10-10",
+      "kind": "fixed",
+      "area": "Chat",
+      "text": "Deploying AgentOS no longer breaks tasks that are running.",
+      "url": "https://github.com/saadnvd1/agent-os/pull/169"
+    },
+    {
+      "id": 174,
+      "date": "2026-10-10",
+      "kind": "new",
+      "area": "AgentOS",
+      "text": "Choose how pull requests merge, and have branches cleaned up after merging.",
+      "url": "https://github.com/saadnvd1/agent-os/pull/174"
+    },
+    {
+      "id": 175,
+      "date": "2026-10-10",
+      "kind": "new",
+      "area": "AgentOS",
+      "text": "AgentOS runs on Windows through WSL 2.",
+      "url": "https://github.com/saadnvd1/agent-os/pull/175"
+    },
+    {
+      "id": 177,
+      "date": "2026-10-10",
+      "kind": "improved",
+      "area": "Settings",
+      "text": "Merging, workspaces, devices, notifications and schedules are all on one Settings page.",
+      "url": "https://github.com/saadnvd1/agent-os/pull/177"
+    },
+    {
+      "id": 176,
+      "date": "2026-10-10",
+      "kind": "fixed",
+      "area": "Chat",
+      "text": "Sessions pick up new tools after an update, once their current turn finishes.",
+      "url": "https://github.com/saadnvd1/agent-os/pull/176"
+    },
+    {
+      "id": 179,
+      "date": "2026-10-10",
+      "kind": "fixed",
+      "area": "AgentOS",
+      "text": "Restart notes appear only for tool changes, and held merge requests keep their code review.",
+      "url": "https://github.com/saadnvd1/agent-os/pull/179"
+    },
+    {
+      "id": 182,
+      "date": "2026-10-10",
+      "kind": "fixed",
+      "area": "Chat",
+      "text": "Opening a session puts the cursor in the message box.",
+      "url": "https://github.com/saadnvd1/agent-os/pull/182"
+    },
+    {
+      "id": 183,
+      "date": "2026-10-10",
+      "kind": "new",
+      "area": "Sidebar",
+      "text": "Orchestrator rows show unseen replies, labelled Replied, Waiting or Idle.",
+      "url": "https://github.com/saadnvd1/agent-os/pull/183"
+    },
+    {
+      "id": 189,
+      "date": "2026-10-10",
+      "kind": "new",
+      "area": "Chat",
+      "text": "Find text in a conversation with Command F, across its whole stored history.",
+      "url": "https://github.com/saadnvd1/agent-os/pull/189"
+    },
+    {
+      "id": 192,
+      "date": "2026-10-11",
+      "kind": "improved",
+      "area": "AgentOS",
+      "text": "The app stays responsive and stops rereading every session every second.",
+      "url": "https://github.com/saadnvd1/agent-os/pull/192"
+    },
+    {
+      "id": 194,
+      "date": "2026-10-11",
+      "kind": "new",
+      "area": "Chat",
+      "text": "Long chats that sit idle are compacted before your next message.",
+      "url": "https://github.com/saadnvd1/agent-os/pull/194"
+    },
+    {
+      "id": 197,
+      "date": "2026-10-11",
+      "kind": "fixed",
+      "area": "Done shelf",
+      "text": "Processes wait for a folder's removal to finish, and cleanup is reported accurately.",
+      "url": "https://github.com/saadnvd1/agent-os/pull/197"
+    },
+    {
+      "id": 199,
+      "date": "2026-10-11",
+      "kind": "new",
+      "area": "AgentOS",
+      "text": "Add projects to a workspace more easily, and orchestrators can add projects themselves.",
+      "url": "https://github.com/saadnvd1/agent-os/pull/199"
+    },
+    {
+      "id": 201,
+      "date": "2026-10-11",
+      "kind": "new",
+      "area": "Models",
+      "text": "Choose which model handles each role, with a before and after comparison.",
+      "url": "https://github.com/saadnvd1/agent-os/pull/201"
+    },
+    {
+      "id": 202,
+      "date": "2026-10-11",
+      "kind": "fixed",
+      "area": "Chat",
+      "text": "Agents routed to other models no longer compact every few turns.",
+      "url": "https://github.com/saadnvd1/agent-os/pull/202"
+    },
+    {
+      "id": 203,
+      "date": "2026-10-11",
+      "kind": "improved",
+      "area": "Models",
+      "text": "Orchestrators now use Opus by default.",
+      "url": "https://github.com/saadnvd1/agent-os/pull/203"
+    },
+    {
+      "id": 204,
+      "date": "2026-10-11",
+      "kind": "new",
+      "area": "Away mode",
+      "text": "Work runs only through orchestrators, which send one digest per sweep.",
+      "url": "https://github.com/saadnvd1/agent-os/pull/204"
+    },
+    {
+      "id": 207,
+      "date": "2026-10-11",
+      "kind": "fixed",
+      "area": "Sessions",
+      "text": "Processes from ended sessions no longer keep running in the background.",
+      "url": "https://github.com/saadnvd1/agent-os/pull/207"
+    },
+    {
+      "id": 208,
+      "date": "2026-10-11",
+      "kind": "new",
+      "area": "Schedules",
+      "text": "Set one-off schedules and reminders for orchestrators.",
+      "url": "https://github.com/saadnvd1/agent-os/pull/208"
+    },
+    {
+      "id": 211,
+      "date": "2026-10-11",
+      "kind": "new",
+      "area": "Chat",
+      "text": "Selected text can span messages and copies as a transcript.",
+      "url": "https://github.com/saadnvd1/agent-os/pull/211"
+    },
+    {
+      "id": 212,
+      "date": "2026-10-11",
+      "kind": "new",
+      "area": "Chat",
+      "text": "Working context carries over when a long chat is compacted.",
+      "url": "https://github.com/saadnvd1/agent-os/pull/212"
+    },
+    {
+      "id": 213,
+      "date": "2026-10-11",
+      "kind": "new",
+      "area": "Chat",
+      "text": "Stop ends the turn in progress, and you get an alert when a turn stalls.",
+      "url": "https://github.com/saadnvd1/agent-os/pull/213"
+    },
+    {
+      "id": 217,
+      "date": "2026-10-11",
+      "kind": "fixed",
+      "area": "AgentOS",
+      "text": "The queued tasks list no longer goes out of date.",
+      "url": "https://github.com/saadnvd1/agent-os/pull/217"
+    },
+    {
+      "id": 218,
+      "date": "2026-10-11",
+      "kind": "fixed",
+      "area": "Chat",
+      "text": "Long sessions no longer pile up tool output in memory.",
+      "url": "https://github.com/saadnvd1/agent-os/pull/218"
+    },
+    {
+      "id": 220,
+      "date": "2026-10-11",
+      "kind": "new",
+      "area": "Sidebar",
+      "text": "Summary chips filter the orchestrator list, Done items fold away, and tasks show a tag for their orchestrator.",
+      "url": "https://github.com/saadnvd1/agent-os/pull/220"
+    },
+    {
+      "id": 223,
+      "date": "2026-10-12",
+      "kind": "fixed",
+      "area": "Sidebar",
+      "text": "The orchestrator summary chip shows a steady highlight on hover and focus.",
+      "url": "https://github.com/saadnvd1/agent-os/pull/223"
+    },
+    {
+      "id": 226,
+      "date": "2026-10-12",
+      "kind": "fixed",
+      "area": "Chat",
+      "text": "Code blocks and inline code in sent messages now display properly.",
+      "url": "https://github.com/saadnvd1/agent-os/pull/226"
+    },
+    {
+      "id": 229,
+      "date": "2026-10-12",
+      "kind": "new",
+      "area": "Usage",
+      "text": "Usage is tracked in a ledger with daily totals, quality metrics and alerts.",
+      "url": "https://github.com/saadnvd1/agent-os/pull/229"
+    },
+    {
+      "id": 228,
+      "date": "2026-10-12",
+      "kind": "improved",
+      "area": "Connect",
+      "text": "Linked machines are reached through Cloudflare Tunnel instead of the relay.",
+      "url": "https://github.com/saadnvd1/agent-os/pull/228"
+    },
+    {
+      "id": 230,
+      "date": "2026-10-12",
+      "kind": "fixed",
+      "area": "Chat",
+      "text": "A session that is compacting shows as compacting, not working.",
+      "url": "https://github.com/saadnvd1/agent-os/pull/230"
+    },
+    {
+      "id": 231,
+      "date": "2026-10-12",
+      "kind": "new",
+      "area": "Interface",
+      "text": "The session row and header show which stage a task's pull request has reached.",
+      "url": "https://github.com/saadnvd1/agent-os/pull/231"
+    },
+    {
+      "id": 233,
+      "date": "2026-10-12",
+      "kind": "fixed",
+      "area": "Interface",
+      "text": "Session rows no longer lose the PR stage and compacting status.",
+      "url": "https://github.com/saadnvd1/agent-os/pull/233"
+    },
+    {
+      "id": 232,
+      "date": "2026-10-12",
+      "kind": "new",
+      "area": "AgentOS",
+      "text": "A session log is now written automatically when a task merges, without using any model.",
+      "url": "https://github.com/saadnvd1/agent-os/pull/232"
+    },
+    {
+      "id": 234,
+      "date": "2026-10-12",
+      "kind": "new",
+      "area": "AgentOS",
+      "text": "Session logs are now saved and committed to your workspace's main repo automatically.",
+      "url": "https://github.com/saadnvd1/agent-os/pull/234"
+    },
+    {
+      "id": 235,
+      "date": "2026-10-12",
+      "kind": "fixed",
+      "area": "AgentOS",
+      "text": "Merge commit IDs are no longer hidden, and merge times now come straight from GitHub.",
+      "url": "https://github.com/saadnvd1/agent-os/pull/235"
+    },
+    {
+      "id": 237,
+      "date": "2026-10-12",
+      "kind": "improved",
+      "area": "Connect",
+      "text": "Paired devices check in every minute and stop straight away once they are disabled or unlinked.",
+      "url": "https://github.com/saadnvd1/agent-os/pull/237"
+    },
+    {
+      "id": 238,
+      "date": "2026-10-12",
+      "kind": "fixed",
+      "area": "Away mode",
+      "text": "Orchestrators only hear about people who have messaged you in the last 24 hours.",
+      "url": "https://github.com/saadnvd1/agent-os/pull/238"
+    },
+    {
+      "id": 240,
+      "date": "2026-10-12",
+      "kind": "improved",
+      "area": "AgentOS",
+      "text": "Session lists and approvals load faster and send less data.",
+      "url": "https://github.com/saadnvd1/agent-os/pull/240"
+    },
+    {
+      "id": 241,
+      "date": "2026-10-12",
+      "kind": "improved",
+      "area": "Chat",
+      "text": "Chat attachments and restored activity load faster in long sessions.",
+      "url": "https://github.com/saadnvd1/agent-os/pull/241"
+    },
+    {
+      "id": 242,
+      "date": "2026-10-12",
+      "kind": "improved",
+      "area": "Status",
+      "text": "Status updates only recalculate sessions that changed, so the app stays quicker.",
+      "url": "https://github.com/saadnvd1/agent-os/pull/242"
+    },
+    {
+      "id": 244,
+      "date": "2026-10-12",
+      "kind": "fixed",
+      "area": "Connect",
+      "text": "Remote access now shuts down with AgentOS, and cross-site requests are refused however the app is set up.",
+      "url": "https://github.com/saadnvd1/agent-os/pull/244"
+    },
+    {
+      "id": 245,
+      "date": "2026-10-12",
+      "kind": "new",
+      "area": "Notifications",
+      "text": "Paired phones can now receive push notifications from AgentOS, and you can see each device's push status.",
+      "url": "https://github.com/saadnvd1/agent-os/pull/245"
+    },
+    {
+      "id": 251,
+      "date": "2026-10-13",
+      "kind": "new",
+      "area": "Setup",
+      "text": "A first-run setup now walks you through adding agents, a first project and a first session.",
+      "url": "https://github.com/saadnvd1/agent-os/pull/251"
+    },
+    {
+      "id": 250,
+      "date": "2026-10-13",
+      "kind": "new",
+      "area": "Chat",
+      "text": "You can send a blocking shell command or subagent to the background.",
+      "url": "https://github.com/saadnvd1/agent-os/pull/250"
+    },
+    {
+      "id": 249,
+      "date": "2026-10-13",
+      "kind": "new",
+      "area": "Simulator",
+      "text": "Tasks on iOS projects can now run and control their own iOS simulator.",
+      "url": "https://github.com/saadnvd1/agent-os/pull/249"
+    },
+    {
+      "id": 254,
+      "date": "2026-10-13",
+      "kind": "new",
+      "area": "Setup",
+      "text": "Setup now runs health checks and includes a devices step.",
+      "url": "https://github.com/saadnvd1/agent-os/pull/254"
+    },
+    {
+      "id": 255,
+      "date": "2026-10-13",
+      "kind": "new",
+      "area": "Simulator",
+      "text": "Tasks now show a phone indicator and a strip of their screenshots.",
+      "url": "https://github.com/saadnvd1/agent-os/pull/255"
+    },
+    {
+      "id": 256,
+      "date": "2026-10-13",
+      "kind": "new",
+      "area": "AgentOS",
+      "text": "Chat sessions and tasks can now run on the GitHub Copilot CLI.",
+      "url": "https://github.com/saadnvd1/agent-os/pull/256"
+    },
+    {
+      "id": 257,
+      "date": "2026-10-13",
+      "kind": "new",
+      "area": "Notifications",
+      "text": "The Settings test now also sends to paired phones and shows a result for each channel.",
+      "url": "https://github.com/saadnvd1/agent-os/pull/257"
+    },
+    {
+      "id": 262,
+      "date": "2026-10-12",
+      "kind": "new",
+      "area": "Setup",
+      "text": "You can link and switch Connect right from the phone setup step.",
+      "url": "https://github.com/saadnvd1/agent-os/pull/262"
+    },
+    {
+      "id": 261,
+      "date": "2026-10-13",
+      "kind": "new",
+      "area": "AgentOS",
+      "text": "Recipes save reusable recurring jobs, and plans can now be broken into pieces.",
+      "url": "https://github.com/saadnvd1/agent-os/pull/261"
+    },
+    {
+      "id": 263,
+      "date": "2026-10-13",
+      "kind": "improved",
+      "area": "Schedules",
+      "text": "Task and session schedules now live in recipes.",
+      "url": "https://github.com/saadnvd1/agent-os/pull/263"
+    },
+    {
+      "id": 264,
+      "date": "2026-10-13",
+      "kind": "new",
+      "area": "AgentOS",
+      "text": "Kiro CLI and the legacy Amazon Q CLI are now supported, with sign-in from your phone.",
+      "url": "https://github.com/saadnvd1/agent-os/pull/264"
+    },
+    {
+      "id": 270,
+      "date": "2026-10-13",
+      "kind": "fixed",
+      "area": "Sidebar",
+      "text": "Done now holds only finished work, and tasks with open pull requests move to In review.",
+      "url": "https://github.com/saadnvd1/agent-os/pull/270"
+    },
+    {
+      "id": 271,
+      "date": "2026-10-13",
+      "kind": "fixed",
+      "area": "Sidebar",
+      "text": "The sidebar fits on iPad, with no overlapping rows and larger tap targets.",
+      "url": "https://github.com/saadnvd1/agent-os/pull/271"
+    },
+    {
+      "id": 272,
+      "date": "2026-10-13",
+      "kind": "new",
+      "area": "Sidebar",
+      "text": "New Ongoing and Snoozed shelves, plus Mark done and Reopen actions.",
+      "url": "https://github.com/saadnvd1/agent-os/pull/272"
+    },
+    {
+      "id": 273,
+      "date": "2026-10-13",
+      "kind": "fixed",
+      "area": "Composer",
+      "text": "Selecting a session on iPad now puts the cursor straight in the message box.",
+      "url": "https://github.com/saadnvd1/agent-os/pull/273"
+    },
+    {
+      "id": 274,
+      "date": "2026-10-13",
+      "kind": "new",
+      "area": "AgentOS",
+      "text": "Add a device now opens the app's QR scanner, and pairing links open straight in the app.",
+      "url": "https://github.com/saadnvd1/agent-os/pull/274"
+    },
+    {
+      "id": 278,
+      "date": "2026-10-13",
+      "kind": "new",
+      "area": "AgentOS",
+      "text": "Devices paired through the native app can now approve requests by default.",
+      "url": "https://github.com/saadnvd1/agent-os/pull/278"
+    },
+    {
+      "id": 279,
+      "date": "2026-10-13",
+      "kind": "fixed",
+      "area": "Done shelf",
+      "text": "Finished tasks no longer show as waiting for your input.",
+      "url": "https://github.com/saadnvd1/agent-os/pull/279"
+    },
+    {
+      "id": 280,
+      "date": "2026-10-13",
+      "kind": "new",
+      "area": "AgentOS",
+      "text": "A new No approvals switch turns off every approval and agent permission prompt at once.",
+      "url": "https://github.com/saadnvd1/agent-os/pull/280"
+    },
+    {
+      "id": 284,
+      "date": "2026-10-13",
+      "kind": "new",
+      "area": "Chat",
+      "text": "Assistant messages now have a Quote action.",
+      "url": "https://github.com/saadnvd1/agent-os/pull/284"
+    },
+    {
+      "id": 282,
+      "date": "2026-10-13",
+      "kind": "new",
+      "area": "Updates",
+      "text": "An opt-in update banner, with a new Updates page in Settings.",
+      "url": "https://github.com/saadnvd1/agent-os/pull/282"
+    },
+    {
+      "id": 283,
+      "date": "2026-10-13",
+      "kind": "fixed",
+      "area": "Done shelf",
+      "text": "Marking a quick change Done from the sidebar no longer gets stuck on Merging.",
+      "url": "https://github.com/saadnvd1/agent-os/pull/283"
+    },
+    {
+      "id": 285,
+      "date": "2026-10-13",
+      "kind": "new",
+      "area": "AgentOS",
+      "text": "A new Experiments section in Settings, with usage tracked for each experiment.",
+      "url": "https://github.com/saadnvd1/agent-os/pull/285"
+    },
+    {
+      "id": 286,
+      "date": "2026-10-13",
+      "kind": "new",
+      "area": "AgentOS",
+      "text": "Sessions now end with suggestions to save a recipe or keep a lesson, shown as learning cards.",
+      "url": "https://github.com/saadnvd1/agent-os/pull/286"
+    },
+    {
+      "id": 287,
+      "date": "2026-10-13",
+      "kind": "fixed",
+      "area": "Plans",
+      "text": "Pieces go to the right repo and are never silently dropped or merged, and stuck work is cleaned up.",
+      "url": "https://github.com/saadnvd1/agent-os/pull/287"
+    },
+    {
+      "id": 288,
+      "date": "2026-10-13",
+      "kind": "fixed",
+      "area": "Sidebar",
+      "text": "Merged tasks now appear on the Done shelf, so finished work is visible.",
+      "url": "https://github.com/saadnvd1/agent-os/pull/288"
+    },
+    {
+      "id": 290,
+      "date": "2026-10-13",
+      "kind": "fixed",
+      "area": "Sidebar",
+      "text": "Merged quick changes now move off their orchestrator and onto the Done shelf.",
+      "url": "https://github.com/saadnvd1/agent-os/pull/290"
+    },
+    {
+      "id": 293,
+      "date": "2026-10-13",
+      "kind": "fixed",
+      "area": "Worktrees",
+      "text": "Repositories that use git-crypt now work.",
+      "url": "https://github.com/saadnvd1/agent-os/pull/293"
+    },
+    {
+      "id": 294,
+      "date": "2026-10-13",
+      "kind": "new",
+      "area": "Chat",
+      "text": "Orchestrators can now render and preview HTML pages.",
+      "url": "https://github.com/saadnvd1/agent-os/pull/294"
+    },
+    {
+      "id": 295,
+      "date": "2026-10-13",
+      "kind": "fixed",
+      "area": "Plans",
+      "text": "Pieces that a parent's pull request already built are no longer restarted.",
+      "url": "https://github.com/saadnvd1/agent-os/pull/295"
+    },
+    {
+      "id": 297,
+      "date": "2026-10-13",
+      "kind": "improved",
+      "area": "Usage",
+      "text": "Usage windows are now measured from AgentOS's own agents.",
+      "url": "https://github.com/saadnvd1/agent-os/pull/297"
+    },
+    {
+      "id": 299,
+      "date": "2026-10-13",
+      "kind": "new",
+      "area": "Sharing",
+      "text": "Every share now includes a redacted Markdown copy, previewable and uploaded with the page.",
+      "url": "https://github.com/saadnvd1/agent-os/pull/299"
+    },
+    {
+      "id": 302,
+      "date": "2026-10-14",
+      "kind": "new",
+      "area": "Models",
+      "text": "Read-only subagents can now run on cheaper models.",
+      "url": "https://github.com/saadnvd1/agent-os/pull/302"
+    },
+    {
+      "id": 305,
+      "date": "2026-10-14",
+      "kind": "fixed",
+      "area": "Simulator",
+      "text": "Simulators started by a finished task are now shut down.",
+      "url": "https://github.com/saadnvd1/agent-os/pull/305"
+    },
+    {
+      "id": 304,
+      "date": "2026-10-14",
+      "kind": "new",
+      "area": "Chat",
+      "text": "Your own sessions can now have a separate size for compacting mid-turn.",
+      "url": "https://github.com/saadnvd1/agent-os/pull/304"
+    },
+    {
+      "id": 306,
+      "date": "2026-10-14",
+      "kind": "fixed",
+      "area": "Sidebar",
+      "text": "The row menu no longer shows a stray 0.",
+      "url": "https://github.com/saadnvd1/agent-os/pull/306"
+    },
+    {
+      "id": 309,
+      "date": "2026-10-14",
+      "kind": "new",
+      "area": "Chat",
+      "text": "Links in your own messages are now clickable.",
+      "url": "https://github.com/saadnvd1/agent-os/pull/309"
+    },
+    {
+      "id": 311,
+      "date": "2026-10-14",
+      "kind": "fixed",
+      "area": "AgentOS",
+      "text": "Finished sessions, including failed runs, now close out properly and leave the notification bell.",
+      "url": "https://github.com/saadnvd1/agent-os/pull/311"
+    },
+    {
+      "id": 313,
+      "date": "2026-10-14",
+      "kind": "new",
+      "area": "Chat",
+      "text": "Background jobs show live output and clearly mark when they are quiet or have exited.",
+      "url": "https://github.com/saadnvd1/agent-os/pull/313"
+    },
+    {
+      "id": 314,
+      "date": "2026-10-14",
+      "kind": "new",
+      "area": "Chat",
+      "text": "Messages, tool calls and turns can now be bookmarked.",
+      "url": "https://github.com/saadnvd1/agent-os/pull/314"
+    },
+    {
+      "id": 317,
+      "date": "2026-10-14",
+      "kind": "improved",
+      "area": "Chat",
+      "text": "Typing / anywhere in a message now opens the slash-command menu.",
+      "url": "https://github.com/saadnvd1/agent-os/pull/317"
+    },
+    {
+      "id": 322,
+      "date": "2026-10-14",
+      "kind": "fixed",
+      "area": "Chat",
+      "text": "Sent messages appear immediately instead of waiting on a cold worker.",
+      "url": "https://github.com/saadnvd1/agent-os/pull/322"
+    },
+    {
+      "id": 320,
+      "date": "2026-10-14",
+      "kind": "new",
+      "area": "Sessions",
+      "text": "Dropped, done and archived sessions can be brought back.",
+      "url": "https://github.com/saadnvd1/agent-os/pull/320"
+    },
+    {
+      "id": 324,
+      "date": "2026-10-14",
+      "kind": "new",
+      "area": "Sidebar",
+      "text": "Plans now show badges and a nested rail, and delegated work has a hover tooltip.",
+      "url": "https://github.com/saadnvd1/agent-os/pull/324"
+    },
+    {
+      "id": 326,
+      "date": "2026-10-14",
+      "kind": "new",
+      "area": "Sessions",
+      "text": "A new Artifacts view collects everything a session made in one place.",
+      "url": "https://github.com/saadnvd1/agent-os/pull/326"
+    },
+    {
+      "id": 329,
+      "date": "2026-10-14",
+      "kind": "fixed",
+      "area": "Chat",
+      "text": "Background task items now end once their tool stops or their agent is gone.",
+      "url": "https://github.com/saadnvd1/agent-os/pull/329"
+    },
+    {
+      "id": 327,
+      "date": "2026-10-14",
+      "kind": "fixed",
+      "area": "Sidebar",
+      "text": "Plan badges stay visible when you hover over a row.",
+      "url": "https://github.com/saadnvd1/agent-os/pull/327"
+    },
+    {
+      "id": 331,
+      "date": "2026-10-14",
+      "kind": "improved",
+      "area": "AgentOS",
+      "text": "The focus indicator is quieter and only shows the accent color when the view is split.",
+      "url": "https://github.com/saadnvd1/agent-os/pull/331"
+    },
+    {
+      "id": 330,
+      "date": "2026-10-14",
+      "kind": "improved",
+      "area": "Interface",
+      "text": "There is now one Inbox in the desktop header, and commands moved into the pane menu.",
+      "url": "https://github.com/saadnvd1/agent-os/pull/330"
+    },
+    {
+      "id": 336,
+      "date": "2026-10-14",
+      "kind": "improved",
+      "area": "AgentOS",
+      "text": "Restarts no longer relaunch simulators, and task briefs ask for targeted checks.",
+      "url": "https://github.com/saadnvd1/agent-os/pull/336"
+    },
+    {
+      "id": 337,
+      "date": "2026-10-14",
+      "kind": "fixed",
+      "area": "Sidebar",
+      "text": "The session row menu fits in the window, scrolls when needed and is shorter.",
+      "url": "https://github.com/saadnvd1/agent-os/pull/337"
+    },
+    {
+      "id": 338,
+      "date": "2026-10-14",
+      "kind": "fixed",
+      "area": "AgentOS",
+      "text": "Load is now attributed to the right session, and unmatched processes are reported.",
+      "url": "https://github.com/saadnvd1/agent-os/pull/338"
+    },
+    {
+      "id": 339,
+      "date": "2026-10-14",
+      "kind": "improved",
+      "area": "AgentOS",
+      "text": "Tasks now use smaller screenshots and can crop to a region, so they read less.",
+      "url": "https://github.com/saadnvd1/agent-os/pull/339"
+    },
+    {
+      "id": 340,
+      "date": "2026-10-14",
+      "kind": "improved",
+      "area": "Phone",
+      "text": "A single view picker now sits in the session header.",
+      "url": "https://github.com/saadnvd1/agent-os/pull/340"
+    },
+    {
+      "id": 342,
+      "date": "2026-10-14",
+      "kind": "new",
+      "area": "AgentOS",
+      "text": "Pending cards now show on Needs you, in the sidebar and in the orchestrator.",
+      "url": "https://github.com/saadnvd1/agent-os/pull/342"
+    },
+    {
+      "id": 344,
+      "date": "2026-10-15",
+      "kind": "fixed",
+      "area": "Chat",
+      "text": "Send status now says Compacting first while a message is compacted before it sends.",
+      "url": "https://github.com/saadnvd1/agent-os/pull/344"
+    },
+    {
+      "id": 346,
+      "date": "2026-10-15",
+      "kind": "fixed",
+      "area": "Chat",
+      "text": "Status says Compacting as soon as a compact-first message is accepted.",
+      "url": "https://github.com/saadnvd1/agent-os/pull/346"
+    },
+    {
+      "id": 345,
+      "date": "2026-10-15",
+      "kind": "fixed",
+      "area": "AgentOS",
+      "text": "Lessons now save correctly in projects whose instructions file is gitignored.",
+      "url": "https://github.com/saadnvd1/agent-os/pull/345"
+    },
+    {
+      "id": 349,
+      "date": "2026-10-15",
+      "kind": "improved",
+      "area": "AgentOS",
+      "text": "The Git toggle is hidden outside git repositories.",
+      "url": "https://github.com/saadnvd1/agent-os/pull/349"
+    },
+    {
+      "id": 353,
+      "date": "2026-10-15",
+      "kind": "fixed",
+      "area": "AgentOS",
+      "text": "Retries carry on through an AgentOS restart.",
+      "url": "https://github.com/saadnvd1/agent-os/pull/353"
+    },
+    {
+      "id": 355,
+      "date": "2026-10-15",
+      "kind": "fixed",
+      "area": "Chat",
+      "text": "Backgrounding a running step now sends your queued messages.",
+      "url": "https://github.com/saadnvd1/agent-os/pull/355"
+    },
+    {
+      "id": 356,
+      "date": "2026-10-15",
+      "kind": "new",
+      "area": "Sidebar",
+      "text": "One status dot now shows machine load and health.",
+      "url": "https://github.com/saadnvd1/agent-os/pull/356"
+    },
+    {
+      "id": 358,
+      "date": "2026-10-15",
+      "kind": "new",
+      "area": "Chat",
+      "text": "Typing @ in an orchestrator now searches your workspace and project repos.",
+      "url": "https://github.com/saadnvd1/agent-os/pull/358"
+    },
+    {
+      "id": 359,
+      "date": "2026-10-15",
+      "kind": "fixed",
+      "area": "Chat",
+      "text": "Code blocks in sent messages no longer get stray blank lines around them.",
+      "url": "https://github.com/saadnvd1/agent-os/pull/359"
+    },
+    {
+      "id": 365,
+      "date": "2026-10-15",
+      "kind": "fixed",
+      "area": "Chat",
+      "text": "Links now light up on hover, focus and touch.",
+      "url": "https://github.com/saadnvd1/agent-os/pull/365"
+    },
+    {
+      "id": 373,
+      "date": "2026-10-15",
+      "kind": "new",
+      "area": "Worktrees",
+      "text": "Finished and abandoned task workspaces can now be cleaned up automatically by age.",
+      "url": "https://github.com/saadnvd1/agent-os/pull/373"
+    },
+    {
+      "id": 378,
+      "date": "2026-10-16",
+      "kind": "fixed",
+      "area": "Sidebar",
+      "text": "Renaming a session keeps the cursor in the name field after the menu closes.",
+      "url": "https://github.com/saadnvd1/agent-os/pull/378"
+    },
+    {
+      "id": 380,
+      "date": "2026-10-16",
+      "kind": "new",
+      "area": "Chat",
+      "text": "Ctrl+B sends the current task to the background.",
+      "url": "https://github.com/saadnvd1/agent-os/pull/380"
+    },
+    {
+      "id": 381,
+      "date": "2026-10-16",
+      "kind": "new",
+      "area": "Sidebar",
+      "text": "Cmd+Up and Cmd+Down jump to the previous and next session.",
+      "url": "https://github.com/saadnvd1/agent-os/pull/381"
+    },
+    {
+      "id": 382,
+      "date": "2026-10-16",
+      "kind": "new",
+      "area": "Chat",
+      "text": "Pressing Enter quotes the highlighted text while the Quote button is showing.",
+      "url": "https://github.com/saadnvd1/agent-os/pull/382"
+    },
+    {
+      "id": 384,
+      "date": "2026-10-16",
+      "kind": "new",
+      "area": "Sharing",
+      "text": "Download a chat as a PDF from the Download menu.",
+      "url": "https://github.com/saadnvd1/agent-os/pull/384"
+    },
+    {
+      "id": 388,
+      "date": "2026-10-18",
+      "kind": "new",
+      "area": "AgentOS",
+      "text": "Agent sessions can now use the language versions and tools you have installed on your machine.",
+      "url": "https://github.com/saadnvd1/agent-os/pull/388"
+    },
+    {
+      "id": 393,
+      "date": "2026-10-18",
+      "kind": "new",
+      "area": "AgentOS",
+      "text": "Finishing a task now removes the files it left behind on disk.",
+      "url": "https://github.com/saadnvd1/agent-os/pull/393"
+    },
+    {
+      "id": 395,
+      "date": "2026-10-18",
+      "kind": "new",
+      "area": "Chat",
+      "text": "A Sign in button now appears for tool servers that need you to log in.",
+      "url": "https://github.com/saadnvd1/agent-os/pull/395"
+    },
+    {
+      "id": 402,
+      "date": "2026-10-19",
+      "kind": "new",
+      "area": "Chat",
+      "text": "You can now attach PDFs, spreadsheets, documents and text files to a chat message.",
+      "url": "https://github.com/saadnvd1/agent-os/pull/402"
+    },
+    {
+      "id": 404,
+      "date": "2026-10-19",
+      "kind": "new",
+      "area": "AgentOS",
+      "text": "The aos read command shows what another session in your workspace said and did.",
+      "url": "https://github.com/saadnvd1/agent-os/pull/404"
+    },
+    {
+      "id": 405,
+      "date": "2026-10-19",
+      "kind": "new",
+      "area": "AgentOS",
+      "text": "Cmd+K searches the full text of all your conversations.",
+      "url": "https://github.com/saadnvd1/agent-os/pull/405"
+    },
+    {
+      "id": 406,
+      "date": "2026-10-19",
+      "kind": "fixed",
+      "area": "Sidebar",
+      "text": "Ended tasks only offer Restore when they can actually be brought back.",
+      "url": "https://github.com/saadnvd1/agent-os/pull/406"
+    },
+    {
+      "id": 428,
+      "date": "2026-10-19",
+      "kind": "new",
+      "area": "AgentOS",
+      "text": "You can choose an OpenCode model before sending the first prompt.",
+      "url": "https://github.com/saadnvd1/agent-os/pull/428"
+    },
+    {
+      "id": 429,
+      "date": "2026-10-19",
+      "kind": "fixed",
+      "area": "Sessions",
+      "text": "A session without a project now stays in the workspace it was started in.",
+      "url": "https://github.com/saadnvd1/agent-os/pull/429"
+    },
+    {
+      "id": 430,
+      "date": "2026-10-20",
+      "kind": "new",
+      "area": "AgentOS",
+      "text": "WSL 2 and ARM Linux machines can now be linked and stay connected.",
+      "url": "https://github.com/saadnvd1/agent-os/pull/430"
+    },
+    {
+      "id": 433,
+      "date": "2026-10-20",
+      "kind": "fixed",
+      "area": "Command line",
+      "text": "The stop command now reports correctly when the server takes more than one check to stop.",
+      "url": "https://github.com/saadnvd1/agent-os/pull/433"
+    },
+    {
+      "id": 438,
+      "date": "2026-10-20",
+      "kind": "improved",
+      "area": "AgentOS",
+      "text": "Connecting a machine now goes through Connect by default, and a flag keeps the older SSH route.",
+      "url": "https://github.com/saadnvd1/agent-os/pull/438"
+    },
+    {
+      "id": 439,
+      "date": "2026-10-20",
+      "kind": "new",
+      "area": "Sidebar",
+      "text": "Sessions can be grouped inside a workspace, under Pinned.",
+      "url": "https://github.com/saadnvd1/agent-os/pull/439"
+    },
+    {
+      "id": 448,
+      "date": "2026-10-20",
+      "kind": "new",
+      "area": "Sidebar",
+      "text": "Right-click the session list to create a new session group.",
+      "url": "https://github.com/saadnvd1/agent-os/pull/448"
+    },
+    {
+      "id": 452,
+      "date": "2026-10-21",
+      "kind": "fixed",
+      "area": "Chat",
+      "text": "Tool calls that local models write as text now run, and turns that end early get flagged.",
+      "url": "https://github.com/saadnvd1/agent-os/pull/452"
+    },
+    {
+      "id": 455,
+      "date": "2026-10-21",
+      "kind": "fixed",
+      "area": "Artifacts",
+      "text": "Mockups and screenshots saved by sessions now show up in the list, even after the task ends.",
+      "url": "https://github.com/saadnvd1/agent-os/pull/455"
+    },
+    {
+      "id": 456,
+      "date": "2026-10-21",
+      "kind": "new",
+      "area": "AgentOS",
+      "text": "Export a session as Markdown, JSON or HTML, ready to paste into an AI.",
+      "url": "https://github.com/saadnvd1/agent-os/pull/456"
+    },
+    {
+      "id": 457,
+      "date": "2026-10-21",
+      "kind": "new",
+      "area": "Models",
+      "text": "Each agent role can now be given its own model.",
+      "url": "https://github.com/saadnvd1/agent-os/pull/457"
+    },
+    {
+      "id": 459,
+      "date": "2026-10-21",
+      "kind": "new",
+      "area": "Analyst",
+      "text": "An analyst chat can be paired with a coding chat that reviews each turn.",
+      "url": "https://github.com/saadnvd1/agent-os/pull/459"
+    },
+    {
+      "id": 460,
+      "date": "2026-10-21",
+      "kind": "new",
+      "area": "Analyst",
+      "text": "A side-by-side analyst pane shows review cards and can send findings to the coding agent.",
+      "url": "https://github.com/saadnvd1/agent-os/pull/460"
+    },
+    {
+      "id": 464,
+      "date": "2026-10-21",
+      "kind": "new",
+      "area": "AgentOS",
+      "text": "Health reports are now written in plain English, with links to the evidence behind them.",
+      "url": "https://github.com/saadnvd1/agent-os/pull/464"
+    },
+    {
+      "id": 465,
+      "date": "2026-10-21",
+      "kind": "new",
+      "area": "Chat",
+      "text": "Copy a single response or a whole turn as Markdown.",
+      "url": "https://github.com/saadnvd1/agent-os/pull/465"
+    },
+    {
+      "id": 466,
+      "date": "2026-10-21",
+      "kind": "fixed",
+      "area": "AgentOS",
+      "text": "Creating a group from All workspaces now puts it in a workspace, and sessions can be dragged into groups.",
+      "url": "https://github.com/saadnvd1/agent-os/pull/466"
+    },
+    {
+      "id": 467,
+      "date": "2026-10-21",
+      "kind": "new",
+      "area": "AgentOS",
+      "text": "Port checks now run per machine, and agents waiting on a taken port are told so.",
+      "url": "https://github.com/saadnvd1/agent-os/pull/467"
+    },
+    {
+      "id": 468,
+      "date": "2026-10-21",
+      "kind": "fixed",
+      "area": "Updates",
+      "text": "Web updates are now refused when the server cannot restart itself.",
+      "url": "https://github.com/saadnvd1/agent-os/pull/468"
+    },
+    {
+      "id": 473,
+      "date": "2026-10-23",
+      "kind": "new",
+      "area": "Machines",
+      "text": "Machines show their real names, and a machine switcher lets you move between them.",
+      "url": "https://github.com/saadnvd1/agent-os/pull/473"
+    },
+    {
+      "id": 474,
+      "date": "2026-10-23",
+      "kind": "fixed",
+      "area": "Chat",
+      "text": "Verification results stay on screen after tool steps finish.",
+      "url": "https://github.com/saadnvd1/agent-os/pull/474"
+    },
+    {
+      "id": 476,
+      "date": "2026-10-23",
+      "kind": "fixed",
+      "area": "Chat",
+      "text": "Dropped model requests are retried, stale edits are refused, and edits are checked for syntax.",
+      "url": "https://github.com/saadnvd1/agent-os/pull/476"
+    },
+    {
+      "id": 477,
+      "date": "2026-10-23",
+      "kind": "new",
+      "area": "Chat",
+      "text": "Running steps now stream their output live in Pi and OpenCode.",
+      "url": "https://github.com/saadnvd1/agent-os/pull/477"
+    },
+    {
+      "id": 478,
+      "date": "2026-10-23",
+      "kind": "improved",
+      "area": "Chat",
+      "text": "The activity line now shows when the model is waiting, the current step and any retries.",
+      "url": "https://github.com/saadnvd1/agent-os/pull/478"
+    },
+    {
+      "id": 480,
+      "date": "2026-10-24",
+      "kind": "improved",
+      "area": "Analyst",
+      "text": "The option once called Unlink and finish the analyst is now End analyst, with a plain description.",
+      "url": "https://github.com/saadnvd1/agent-os/pull/480"
+    },
+    {
+      "id": 482,
+      "date": "2026-10-24",
+      "kind": "fixed",
+      "area": "Updates",
+      "text": "An update notice no longer shows once you already have the latest release.",
+      "url": "https://github.com/saadnvd1/agent-os/pull/482"
+    },
+    {
+      "id": 483,
+      "date": "2026-10-24",
+      "kind": "fixed",
+      "area": "Sidebar",
+      "text": "Header status badges shrink to icons, and the filter row wraps instead of getting cut off.",
+      "url": "https://github.com/saadnvd1/agent-os/pull/483"
+    },
+    {
+      "id": 484,
+      "date": "2026-10-24",
+      "kind": "fixed",
+      "area": "Chat",
+      "text": "Stalled model requests now stop, and a turn that ends with nothing says so and offers Retry.",
+      "url": "https://github.com/saadnvd1/agent-os/pull/484"
+    },
+    {
+      "id": 485,
+      "date": "2026-10-24",
+      "kind": "new",
+      "area": "Analyst",
+      "text": "An analyst can now run on any configured model that supports tool calls.",
+      "url": "https://github.com/saadnvd1/agent-os/pull/485"
+    },
+    {
+      "id": 486,
+      "date": "2026-10-26",
+      "kind": "improved",
+      "area": "Chat",
+      "text": "Finished step groups collapse to one summary line, and failed steps are named instead of marked with a tick.",
+      "url": "https://github.com/saadnvd1/agent-os/pull/486"
+    },
+    {
+      "id": 489,
+      "date": "2026-10-28",
+      "kind": "improved",
+      "area": "AgentOS",
+      "text": "aos spawn now opens a chat by default, and a terminal flag opens tmux instead.",
+      "url": "https://github.com/saadnvd1/agent-os/pull/489"
+    },
+    {
+      "id": 501,
+      "date": "2026-10-28",
+      "kind": "fixed",
+      "area": "Composer",
+      "text": "Long names now show in full, and menu headers stay pinned while you scroll.",
+      "url": "https://github.com/saadnvd1/agent-os/pull/501"
+    },
+    {
+      "id": 502,
+      "date": "2026-10-29",
+      "kind": "new",
+      "area": "Artifacts",
+      "text": "Every version of a page is now kept, and the pages view has the same actions as the card.",
+      "url": "https://github.com/saadnvd1/agent-os/pull/502"
+    },
+    {
+      "id": 505,
+      "date": "2026-10-29",
+      "kind": "new",
+      "area": "Sharing",
+      "text": "Follow-latest page links now re-upload automatically with each new version of a page.",
+      "url": "https://github.com/saadnvd1/agent-os/pull/505"
+    },
+    {
+      "id": 506,
+      "date": "2026-10-29",
+      "kind": "new",
+      "area": "Connect",
+      "text": "Connect is free for one machine, and the same story now appears in the docs and app.",
+      "url": "https://github.com/saadnvd1/agent-os/pull/506"
+    },
+    {
+      "id": 509,
+      "date": "2026-10-29",
+      "kind": "fixed",
+      "area": "Away mode",
+      "text": "A deploy paused during an automatic restart is shown as waiting, not failed.",
+      "url": "https://github.com/saadnvd1/agent-os/pull/509"
+    },
+    {
+      "id": 510,
+      "date": "2026-10-29",
+      "kind": "new",
+      "area": "Sessions",
+      "text": "Sessions have readable links that keep working after a rename.",
+      "url": "https://github.com/saadnvd1/agent-os/pull/510"
+    },
+    {
+      "id": 512,
+      "date": "2026-10-29",
+      "kind": "new",
+      "area": "Artifacts",
+      "text": "A page whose title changes in a new version stays one page, and the title follows the latest.",
+      "url": "https://github.com/saadnvd1/agent-os/pull/512"
+    },
+    {
+      "id": 513,
+      "date": "2026-10-29",
+      "kind": "new",
+      "area": "Artifacts",
+      "text": "Two versions of a page can now be compared side by side or by their changes.",
+      "url": "https://github.com/saadnvd1/agent-os/pull/513"
+    },
+    {
+      "id": 514,
+      "date": "2026-10-29",
+      "kind": "new",
+      "area": "Sharing",
+      "text": "Share just part of a chat, choosing a range with presets or shift-click.",
+      "url": "https://github.com/saadnvd1/agent-os/pull/514"
+    },
+    {
+      "id": 515,
+      "date": "2026-10-29",
+      "kind": "improved",
+      "area": "AgentOS",
+      "text": "Search has tabs, ranks results by how much you use them, and > and @ prefixes narrow the results.",
+      "url": "https://github.com/saadnvd1/agent-os/pull/515"
+    },
+    {
+      "id": 516,
+      "date": "2026-10-29",
+      "kind": "new",
+      "area": "Live sharing",
+      "text": "Hosts can now start live shares that guests join.",
+      "url": "https://github.com/saadnvd1/agent-os/pull/516"
+    },
+    {
+      "id": 517,
+      "date": "2026-10-29",
+      "kind": "new",
+      "area": "Sharing",
+      "text": "Passwords, keys and tokens that look like secrets are now masked in shared output.",
+      "url": "https://github.com/saadnvd1/agent-os/pull/517"
+    },
+    {
+      "id": 518,
+      "date": "2026-10-29",
+      "kind": "fixed",
+      "area": "Done shelf",
+      "text": "Done chat sessions stay on the Done shelf, and the sessions tool lists them as done.",
+      "url": "https://github.com/saadnvd1/agent-os/pull/518"
+    },
+    {
+      "id": 519,
+      "date": "2026-10-29",
+      "kind": "new",
+      "area": "Live sharing",
+      "text": "Each invite can be set to Watch or Suggest, and can include earlier messages.",
+      "url": "https://github.com/saadnvd1/agent-os/pull/519"
+    },
+    {
+      "id": 520,
+      "date": "2026-10-29",
+      "kind": "new",
+      "area": "Live sharing",
+      "text": "Live guest shares now have a Drive mode on the machine.",
+      "url": "https://github.com/saadnvd1/agent-os/pull/520"
+    },
+    {
+      "id": 521,
+      "date": "2026-10-29",
+      "kind": "new",
+      "area": "Live sharing",
+      "text": "Live shares can now require an access code, which you can generate and send to guests.",
+      "url": "https://github.com/saadnvd1/agent-os/pull/521"
+    },
+    {
+      "id": 522,
+      "date": "2026-10-30",
+      "kind": "fixed",
+      "area": "Models",
+      "text": "Copilot models now appear in the list, can be switched mid-chat, and respect your default model.",
+      "url": "https://github.com/saadnvd1/agent-os/pull/522"
+    },
+    {
+      "id": 523,
+      "date": "2026-10-30",
+      "kind": "new",
+      "area": "Models",
+      "text": "Agents sit on a rail, each with a searchable model list and a same-as-last-time choice, and it works on phones.",
+      "url": "https://github.com/saadnvd1/agent-os/pull/523"
+    }
+  ]
+}

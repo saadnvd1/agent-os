@@ -12,6 +12,8 @@ import {
   type UpdateView,
 } from "@/lib/updates/banner";
 import { cn } from "@/lib/utils";
+import { WhatsNewHost } from "@/components/WhatsNew";
+import { whatsNewActions } from "@/stores/whatsNew";
 import { UpdateActions } from "./UpdateActions";
 
 const STEPS = ["pulling", "installing", "building", "restarting"] as const;
@@ -138,13 +140,22 @@ export function UpdateBannerView({
               className="text-muted-foreground hover:text-foreground inline-flex min-h-11 items-center gap-1 text-xs md:min-h-0"
               onClick={() => setNotesOpen(!notesOpen)}
             >
-              What&apos;s new
+              Commit list
               <ChevronDown
                 className={cn(
                   "h-3 w-3 transition-transform",
                   notesOpen && "rotate-180"
                 )}
               />
+            </button>
+          )}
+          {state === "available" && (
+            <button
+              type="button"
+              className="text-primary inline-flex min-h-11 items-center text-xs underline md:min-h-0"
+              onClick={() => whatsNewActions.open(true)}
+            >
+              See what&apos;s new
             </button>
           )}
           {state === "available" && latest?.url && (
@@ -195,18 +206,21 @@ export function UpdateBanner() {
     dismissedVersion: dismissed.version,
     dismissedRun: dismissed.run,
   });
-  if (state === "hidden" || !view) return null;
+  if (state === "hidden" || !view) return <WhatsNewHost />;
   return (
-    <UpdateBannerView
-      state={state}
-      view={view}
-      onDismiss={() =>
-        state === "available" && view.latest
-          ? dismissed.dismissVersion(view.latest.version)
-          : view.run
-            ? dismissed.dismissRun(view.run.id)
-            : undefined
-      }
-    />
+    <>
+      <WhatsNewHost />
+      <UpdateBannerView
+        state={state}
+        view={view}
+        onDismiss={() =>
+          state === "available" && view.latest
+            ? dismissed.dismissVersion(view.latest.version)
+            : view.run
+              ? dismissed.dismissRun(view.run.id)
+              : undefined
+        }
+      />
+    </>
   );
 }
