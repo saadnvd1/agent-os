@@ -32,14 +32,18 @@ export function FileChip({
   uploading?: boolean;
   onRemove?: () => void;
 }) {
-  const Icon = ICONS[typeFor(file.name)?.kind ?? "text"];
+  const type = typeFor(file.name);
+  const Icon = ICONS[type?.kind ?? "text"];
+  const detail = uploading
+    ? "Uploading…"
+    : [formatBytes(file.size), type?.note].filter(Boolean).join(" · ");
   return (
     <div
       className={cn(
         "bg-foreground/[0.05] flex h-14 max-w-56 min-w-0 items-center gap-2 rounded-lg pl-3",
         onRemove ? "pr-1" : "pr-3"
       )}
-      title={file.name}
+      title={type?.note ? `${file.name} (${type.note})` : file.name}
     >
       {uploading ? (
         <Loader2 className="text-muted-foreground h-4 w-4 shrink-0 animate-spin" />
@@ -48,8 +52,8 @@ export function FileChip({
       )}
       <span className="min-w-0">
         <span className="block truncate text-sm">{file.name}</span>
-        <span className="text-muted-foreground block text-xs">
-          {uploading ? "Uploading…" : formatBytes(file.size)}
+        <span className="text-muted-foreground block truncate text-xs">
+          {detail}
         </span>
       </span>
       {onRemove && (

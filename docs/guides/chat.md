@@ -137,7 +137,22 @@ window you pick; on a phone, attach a screenshot as a photo.
 
 **Files.** The paperclip, a paste or a drag-drop also take PDFs, spreadsheets
 (xlsx, xls, csv, tsv), Word and other documents (docx, doc, pptx, odt, rtf),
-and text, markdown, JSON and code files, up to 8 per message and 25 MB each.
+HAR captures, iPhone photos (HEIC), SVG, and text files: logs, markdown, JSON,
+config (ini, conf, toml, yaml, tf), shell scripts, subtitles, calendars, mail
+(eml), lockfiles, source in most languages, and well-known names without an
+extension (Dockerfile, Makefile, Procfile, Gemfile, `.gitignore`,
+`.env.example`). Up to 8 per message; 25 MB each, and 100 MB for text files and
+HARs, which are never pasted into the prompt: the agent gets the path and
+opens or greps them itself (a file over 1 MB is flagged to be read in parts).
+On a HAR, the values of Cookie, Set-Cookie, Authorization and
+API-key/token-style headers and every cookie are replaced with `[redacted]`
+when it is attached (URLs, timings, bodies and statuses stay; query strings
+and request bodies are not scrubbed), the chip says "auth headers redacted",
+and the agent also gets a short summary: request count, hosts, status
+classes, the largest and the failing requests. HEIC photos are converted to
+JPEG (`sips`, ImageMagick or libheif, whichever the machine has; with none,
+the original is kept). SVG is stored as text and never rendered. Anything
+else that isn't text is refused with a message listing what is accepted.
 A file uploads as soon as you attach it, shows as a chip (icon, name, size)
 you can remove before sending, and a wrong type or a too-big file is refused
 there with a message. The server decides the types and sizes; the app reads

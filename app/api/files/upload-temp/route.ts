@@ -4,11 +4,13 @@ import path from "path";
 import os from "os";
 import { checkUpload } from "@/lib/attachments/check";
 import { ATTACHMENT_LIMITS, tooBigMessage } from "@/lib/attachments/policy";
+import { prepareUpload } from "@/lib/attachments/prepare";
 import { saveAttachment } from "@/lib/attachments/store";
 import { peerChatLink } from "@/lib/chat/peer-relay";
 
 // Base64 is a third bigger than the bytes, and the JSON around it is small.
-const MAX_BODY = Math.ceil((ATTACHMENT_LIMITS.maxBytes * 4) / 3) + 64 * 1024;
+const MAX_BODY =
+  Math.ceil((ATTACHMENT_LIMITS.maxTextBytes * 4) / 3) + 64 * 1024;
 
 const fail = (error: string, status: number) =>
   NextResponse.json({ error }, { status });
@@ -34,6 +36,8 @@ export async function POST(request: Request) {
     const buffer = Buffer.from(base64, "base64");
     const checked = checkUpload(name, buffer);
     if (!checked.ok) return fail(checked.error, checked.status);
+    const prepared = await prepareUpload(checked.type, name, buffer);
+    if (!prepared.ok) return fail(prepared.error, prepared.status);
 
     if (typeof sessionId === "string" && sessionId) {
       if (sessionId !== "draft" && peerChatLink(sessionId))
@@ -43,25 +47,26 @@ export async function POST(request: Request) {
         );
       const file = saveAttachment(
         sessionId,
-        name,
-        buffer,
-        checked.type.mediaType
+        prepared.name,
+        prepared.data,
+        prepared.mediaType,
+        prepared.summary
       );
-      return NextResponse.json({ ...file, kind: checked.type.kind });
+      return NextResponse.json({ ...file, kind: prepared.kind });
     }
 
     const tempDir = path.join(os.tmpdir(), "agent-os-screenshots");
     await mkdir(tempDir, { recursive: true });
-    const safeName = name.replace(/[^a-zA-Z0-9.-]/g, "_");
+    const safeName = prepared.name.replace(/[^a-zA-Z0-9.-]/g, "_");
     const filePath = path.join(tempDir, `${Date.now()}-${safeName}`);
-    await writeFile(filePath, buffer);
+    await writeFile(filePath, prepared.data);
 
     return NextResponse.json({
       path: filePath,
       name: safeName,
-      size: buffer.length,
-      mediaType: checked.type.mediaType,
-      kind: checked.type.kind,
+      size: prepared.data.length,
+      mediaType: prepared.mediaType,
+      kind: prepared.kind,
     });
   } catch (error) {
     console.error("Upload error:", error);

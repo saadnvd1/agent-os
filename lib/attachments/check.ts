@@ -1,6 +1,6 @@
 import { isText, sniff } from "../intake/sniff";
 import {
-  ATTACHMENT_LIMITS,
+  limitFor,
   tooBigMessage,
   typeFor,
   unsupportedMessage,
@@ -28,10 +28,7 @@ const bad = (name: string): UploadCheck => ({
 export function checkUpload(name: string, data: Buffer): UploadCheck {
   const type = typeFor(name);
   if (!type) return { ok: false, status: 415, error: unsupportedMessage(name) };
-  const limit =
-    type.kind === "image"
-      ? ATTACHMENT_LIMITS.maxImageBytes
-      : ATTACHMENT_LIMITS.maxBytes;
+  const limit = limitFor(type);
   if (data.length > limit)
     return {
       ok: false,

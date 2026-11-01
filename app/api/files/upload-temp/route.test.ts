@@ -68,7 +68,7 @@ describe("POST /api/files/upload-temp", () => {
   });
 
   it("refuses types it doesn't take, saying which", async () => {
-    for (const name of ["a.zip", "run.sh", "tool.exe", "noext"]) {
+    for (const name of ["a.zip", "tool.exe", "noext", "clip.mov"]) {
       const res = await upload(name, "x", { sessionId: SESSION });
       expect(res.status).toBe(415);
       expect((await res.json()).error).toContain(`${name}: this file type`);
@@ -105,9 +105,59 @@ describe("POST /api/files/upload-temp", () => {
 
   it("refuses a file over the limit, and says what the limit is", async () => {
     const big = Buffer.alloc(ATTACHMENT_LIMITS.maxBytes + 1, 97);
-    const res = await upload("big.txt", big, { sessionId: SESSION });
+    const res = await upload("big.csv", big, { sessionId: SESSION });
     expect(res.status).toBe(413);
     expect((await res.json()).error).toContain("the limit is 25.0 MB");
+  });
+
+  it("takes shell scripts, config and extensionless names as text", async () => {
+    for (const name of ["run.sh", "Dockerfile", ".env.example", "main.tf"]) {
+      const res = await upload(name, "echo hi\n", { sessionId: SESSION });
+      expect(res.status, name).toBe(200);
+      expect((await res.json()).kind).toBe("text");
+    }
+  });
+
+  it("names what is accepted when it refuses a type", async () => {
+    const res = await upload("a.zip", "x", { sessionId: SESSION });
+    expect((await res.json()).error).toMatch(/HAR.*HEIC|HEIC.*HAR/);
+  });
+
+  it("redacts a HAR on the way in and keeps a summary beside it", async () => {
+    const secret = ["s", "3", "cr", "et"].join("") + Date.now();
+    const har = JSON.stringify({
+      log: {
+        entries: [
+          {
+            request: {
+              method: "GET",
+              url: "https://api.example.com/me",
+              headers: [{ name: "Authorization", value: `Bearer ${secret}` }],
+              cookies: [{ name: "sid", value: secret }],
+            },
+            response: { status: 500, headers: [], cookies: [] },
+          },
+        ],
+      },
+    });
+    const res = await upload("trace.har", har, { sessionId: SESSION });
+    expect(res.status).toBe(200);
+    const body = await res.json();
+    expect(body.mediaType).toBe("application/json");
+    const saved = fs.readFileSync(body.path, "utf8");
+    expect(saved).not.toContain(secret);
+    expect(saved).toContain("api.example.com/me");
+    expect(fs.readFileSync(`${body.path}.summary.txt`, "utf8")).toContain(
+      "1 requests"
+    );
+  });
+
+  it("refuses a .har that isn't a HAR", async () => {
+    for (const data of ["not json", '{"log":{}}']) {
+      const res = await upload("x.har", data, { sessionId: SESSION });
+      expect(res.status).toBe(400);
+      expect((await res.json()).error).toContain("real HAR");
+    }
   });
 
   it("refuses an image over the image limit", async () => {
@@ -122,7 +172,9 @@ describe("POST /api/files/upload-temp", () => {
     const res = await POST(
       new Request("http://localhost/x", {
         method: "POST",
-        headers: { "content-length": String(ATTACHMENT_LIMITS.maxBytes * 2) },
+        headers: {
+          "content-length": String(ATTACHMENT_LIMITS.maxTextBytes * 2),
+        },
         body: "{}",
       })
     );
