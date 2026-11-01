@@ -1897,6 +1897,14 @@
       "area": "AgentOS",
       "text": "The reachability check now tells a stuck AgentOS apart from another program on its port, and setup keeps a copy of a startup file you edited before replacing it.",
       "url": "https://github.com/saadnvd1/agent-os/pull/547"
+    },
+    {
+      "id": 548,
+      "date": "2026-11-01",
+      "kind": "new",
+      "area": "Chat",
+      "text": "Chats now accept HAR network captures (with logins and cookies hidden), iPhone photos and many more file types.",
+      "url": "https://github.com/saadnvd1/agent-os/pull/548"
     }
   ]
 }
