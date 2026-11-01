@@ -1905,6 +1905,14 @@
       "area": "Chat",
       "text": "Chats now accept HAR network captures (with logins and cookies hidden), iPhone photos and many more file types.",
       "url": "https://github.com/saadnvd1/agent-os/pull/548"
+    },
+    {
+      "id": 549,
+      "date": "2026-11-01",
+      "kind": "improved",
+      "area": "AgentOS",
+      "text": "Files shared into the app are now checked against the same rules as chat attachments.",
+      "url": "https://github.com/saadnvd1/agent-os/pull/549"
     }
   ]
 }
