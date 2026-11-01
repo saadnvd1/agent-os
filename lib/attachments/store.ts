@@ -28,6 +28,10 @@ export function safeName(name: string, taken: Set<string>, n: number): string {
   return out;
 }
 
+// A short description kept beside a big file (a HAR's hosts and failures),
+// which the agent is given with the path.
+export const summaryPath = (file: string) => `${file}.summary.txt`;
+
 export function scopeDir(scope: string): string {
   return path.join(attachmentsRoot(), segment(scope) || "new");
 }
@@ -36,7 +40,8 @@ export function saveAttachment(
   scope: string,
   name: string,
   data: Buffer,
-  mediaType: string
+  mediaType: string,
+  summary?: string
 ): ChatFile {
   const dir = scopeDir(scope);
   fs.mkdirSync(dir, { recursive: true, mode: 0o700 });
@@ -44,6 +49,7 @@ export function saveAttachment(
   const file = safeName(name, taken, taken.size + 1);
   const full = path.join(dir, file);
   fs.writeFileSync(full, data, { mode: 0o600 });
+  if (summary) fs.writeFileSync(summaryPath(full), summary, { mode: 0o600 });
   return { path: full, name: file, size: data.length, mediaType };
 }
 

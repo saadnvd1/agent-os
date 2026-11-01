@@ -36,12 +36,14 @@ export interface ClientConfig {
 export interface AttachmentConfig {
   max: number;
   maxBytes: number;
+  maxTextBytes: number;
   maxImageBytes: number;
   pdfInlineBytes: number;
   types: {
     ext: string;
     mediaType: string;
     kind: "image" | "pdf" | "sheet" | "doc" | "text";
+    note?: string;
   }[];
 }
 

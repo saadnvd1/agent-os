@@ -9,6 +9,7 @@ import {
 } from "@/data/client-config/queries";
 import {
   acceptAttr,
+  limitFor,
   tooBigMessage,
   typeFor,
   unsupportedMessage,
@@ -83,11 +84,13 @@ export function useAttachFiles({
         const shrunk = await shrinkImage(f, limits.maxImageBytes);
         if (shrunk.ok) images.push(shrunk.file);
         else error = tooBigMessage(f.name, f.size, limits.maxImageBytes);
-      } else if (!typeFor(f.name, limits.types))
-        error = unsupportedMessage(f.name);
-      else if (f.size > limits.maxBytes)
-        error = tooBigMessage(f.name, f.size, limits.maxBytes);
-      else others.push(f);
+      } else {
+        const type = typeFor(f.name, limits.types);
+        if (!type) error = unsupportedMessage(f.name);
+        else if (f.size > limitFor(type, limits))
+          error = tooBigMessage(f.name, f.size, limitFor(type, limits));
+        else others.push(f);
+      }
       if (error) toast.error(error);
     }
     if (images.length) onImages(await Promise.all(images.map(readImage)));

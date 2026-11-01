@@ -14,9 +14,12 @@ export interface PasteHandlers {
 }
 
 // Dragged files sometimes arrive without a type; go by the name then.
+// Only the formats a model takes; HEIC photos and SVG go up as files, where
+// the server converts or keeps them.
+const INLINE_IMAGE = /^image\/(png|jpe?g|gif|webp)$/;
 export const isImage = (f: File) =>
-  f.type.startsWith("image/") ||
-  (!f.type && /\.(png|jpe?g|gif|webp|heic)$/i.test(f.name));
+  INLINE_IMAGE.test(f.type) ||
+  (!f.type && /\.(png|jpe?g|gif|webp)$/i.test(f.name));
 
 function editorMode(data: DataTransfer): string | undefined {
   try {
