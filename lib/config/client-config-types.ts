@@ -72,7 +72,9 @@ export interface VoiceLimits {
 }
 
 export const INTAKE_LIMITS: IntakeLimits = {
-  maxBytes: 25_000_000,
+  // All files together; each is also held to its kind's limit in
+  // lib/attachments/policy.ts (text up to maxTextBytes, so a big HAR fits).
+  maxBytes: 100_000_000,
   maxFiles: 8,
   maxInlineImages: 2,
   maxNoteChars: 280,

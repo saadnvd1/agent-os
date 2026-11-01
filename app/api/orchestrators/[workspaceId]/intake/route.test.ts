@@ -193,6 +193,83 @@ describe("POST /api/orchestrators/:id/intake", () => {
     expect(sent).toHaveLength(0);
   });
 
+  it("takes a HAR over the old 25 MB cap, redacted, and names it by path", async () => {
+    const { ws, device } = setup();
+    const secret = ["tok", crypto.randomUUID()].join("-");
+    const har = JSON.stringify({
+      log: {
+        version: "1.2",
+        entries: [
+          {
+            request: {
+              method: "GET",
+              url: "https://api.example.com/v1/me",
+              headers: [{ name: "Authorization", value: `Bearer ${secret}` }],
+            },
+            response: {
+              status: 200,
+              headers: [],
+              content: { size: 30_000_000, text: "x".repeat(30_000_000) },
+            },
+          },
+        ],
+      },
+    });
+    expect(Buffer.byteLength(har)).toBeGreaterThan(25_000_000);
+    const res = await post(ws, device, { clientId: cid(), kind: "share" }, [
+      { name: "capture.har", data: Buffer.from(har) },
+    ]);
+    expect(res.status).toBe(201);
+    const body = await res.json();
+    const saved = fs.readFileSync(path.join(body.dir, "capture.har"), "utf8");
+    expect(saved).not.toContain(secret);
+    expect(saved).toContain("[redacted]");
+    expect(
+      fs.readFileSync(path.join(body.dir, "capture.har.summary.txt"), "utf8")
+    ).toContain("1 requests");
+    const text = (sent[0].input as { text: string }).text;
+    expect(text).toContain(path.join(body.dir, "capture.har"));
+    expect(text).toContain("large: read it in parts");
+    expect(text).not.toContain("xxxxxxxxxx");
+  });
+
+  it("takes a shell script as text, with its #! line", async () => {
+    const { ws, device } = setup();
+    const res = await post(ws, device, { clientId: cid(), kind: "share" }, [
+      { name: "deploy.sh", data: Buffer.from("#!/bin/sh\necho hi\n") },
+    ]);
+    expect(res.status).toBe(201);
+    const { dir } = await res.json();
+    expect(fs.readFileSync(path.join(dir, "deploy.sh"), "utf8")).toContain(
+      "#!/bin/sh"
+    );
+  });
+
+  it("still refuses a Mach-O or ELF binary, even named like a script", async () => {
+    const { ws, device } = setup();
+    const macho = Buffer.from([0xcf, 0xfa, 0xed, 0xfe, 7, 0, 0, 1, 0, 0]);
+    const elf = Buffer.from([0x7f, 0x45, 0x4c, 0x46, 2, 1, 1, 0, 0, 0]);
+    for (const name of ["tool", "tool.sh", "tool.exe"])
+      for (const data of [macho, elf]) {
+        const res = await post(ws, device, { clientId: cid(), kind: "share" }, [
+          { name, data },
+        ]);
+        expect([400, 415]).toContain(res.status);
+      }
+    expect(sent).toHaveLength(0);
+  });
+
+  it("holds an image to the image limit", async () => {
+    const { ws, device } = setup();
+    const res = await post(ws, device, { clientId: cid(), kind: "share" }, [
+      {
+        name: "big.png",
+        data: Buffer.concat([png(), Buffer.alloc(4_000_000)]),
+      },
+    ]);
+    expect(res.status).toBe(413);
+  });
+
   it("rejects bad meta", async () => {
     const { ws, device } = setup();
     expect((await post(ws, device, "{nope")).status).toBe(400);
