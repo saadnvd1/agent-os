@@ -7,8 +7,9 @@ import { ensureOrchestrator, getOrchestrator } from "../orchestrator/home";
 import { getWorkspace } from "../workspaces";
 import { INTAKE_LIMITS, MAX_INLINE_IMAGE_BYTES } from "./limits";
 import { buildIntakeMessage, type IntakeMeta } from "./message";
-import { sniff } from "./sniff";
-import { safeName } from "../attachments/store";
+import { acceptFile, RefusedFile, type AcceptedFile } from "./accept";
+import { safeName, summaryPath } from "../attachments/store";
+import { formatBytes } from "../attachments/policy";
 
 export class IntakeError extends Error {
   constructor(
@@ -84,6 +85,18 @@ function earlier(dir: string, clientId: string, workspaceId: string) {
   }
 }
 
+// A big file is only ever named by its path: the agent opens it in parts.
+const LARGE_BYTES = 1_000_000;
+
+function fileNote(file: AcceptedFile): string {
+  const large =
+    file.data.length > LARGE_BYTES ? ", large: read it in parts" : "";
+  const summary = file.summary
+    ? `\n${file.summary.slice(0, 3000).replace(/^/gm, "  ")}`
+    : "";
+  return ` (${file.mediaType}, ${formatBytes(file.data.length)}${large})${summary}`;
+}
+
 /** Saves what a phone sent and hands it to the workspace's orchestrator. */
 export async function receiveIntake(input: {
   workspaceId: string;
@@ -101,12 +114,20 @@ export async function receiveIntake(input: {
     throw new IntakeError(413, "Too many files");
   const total = files.reduce((n, f) => n + f.data.length, 0);
   if (total > INTAKE_LIMITS.maxBytes) throw new IntakeError(413, "Too large");
-  const sniffed = files.map((f) => {
-    const kind = sniff(f.data, f.name);
-    if (!kind)
-      throw new IntakeError(415, `Can't take ${path.basename(f.name)}`);
-    return kind;
-  });
+  const logsAt = files.findIndex((f) => f.name === "logs.txt");
+  const accepted: (AcceptedFile | null)[] = [];
+  for (const [i, f] of files.entries()) {
+    if (i === logsAt) {
+      accepted.push(null);
+      continue;
+    }
+    try {
+      accepted.push(await acceptFile(f.name, f.data));
+    } catch (e) {
+      if (e instanceof RefusedFile) throw new IntakeError(e.status, e.message);
+      throw e;
+    }
+  }
 
   const prior = existing(workspaceId, meta.clientId, now);
   if (prior)
@@ -140,8 +161,10 @@ export async function receiveIntake(input: {
     ]);
     let logs: string | undefined;
     const saved: { path: string; name: string; i: number }[] = [];
+    const notes: Record<string, string> = {};
     files.forEach((f, i) => {
-      if (f.name === "logs.txt" && logs === undefined) {
+      const file = accepted[i];
+      if (!file) {
         logs = f.data
           .toString("utf8")
           .split(/\r?\n/)
@@ -150,17 +173,20 @@ export async function receiveIntake(input: {
         write("logs.txt", logs);
         return;
       }
-      const name = safeName(f.name, taken, i + 1);
-      write(name, f.data);
-      saved.push({ path: path.join(dir, name), name, i });
+      const name = safeName(file.name, taken, i + 1);
+      const full = path.join(dir, name);
+      write(name, file.data);
+      if (file.summary) write(path.basename(summaryPath(full)), file.summary);
+      notes[full] = fileNote(file);
+      saved.push({ path: full, name, i });
     });
 
     const images: ChatImage[] = saved
       .filter(
         (s) =>
-          sniffed[s.i].kind === "image" &&
-          sniffed[s.i].mediaType !== "image/heic" &&
-          files[s.i].data.length <= MAX_INLINE_IMAGE_BYTES
+          accepted[s.i]?.kind === "image" &&
+          accepted[s.i]?.mediaType !== "image/heic" &&
+          accepted[s.i]!.data.length <= MAX_INLINE_IMAGE_BYTES
       )
       .sort(
         (a, b) =>
@@ -169,8 +195,8 @@ export async function receiveIntake(input: {
       )
       .slice(0, INTAKE_LIMITS.maxInlineImages)
       .map((s) => ({
-        mediaType: sniffed[s.i].mediaType,
-        data: files[s.i].data.toString("base64"),
+        mediaType: accepted[s.i]!.mediaType,
+        data: accepted[s.i]!.data.toString("base64"),
       }));
 
     const { text, body } = buildIntakeMessage({
@@ -179,6 +205,7 @@ export async function receiveIntake(input: {
       dir,
       files: saved.map((s) => s.path),
       logs,
+      notes,
     });
     const orchestrator = ensureOrchestrator(workspaceId);
     const state = chatState(orchestrator.id);
