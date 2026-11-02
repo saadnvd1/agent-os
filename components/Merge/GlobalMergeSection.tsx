@@ -9,7 +9,6 @@ import {
   type MergeOverride,
   type MergeSettings,
 } from "@/lib/tasks/merge-methods";
-import { MergeApprovalToggle } from "./MergeApprovalToggle";
 import { MergeSettingsFields } from "./MergeSettingsFields";
 import { GlobalSweepSection } from "./WorktreeSweepSection";
 
@@ -37,7 +36,7 @@ function Overrides({ overrides }: { overrides: MergeOverride[] }) {
             <p className="truncate font-medium">{o.name}</p>
             {Object.keys(o.config).length > 0 && (
               <p className="text-muted-foreground text-xs">
-                agentos.json: {describe(o.config)}
+                Repo config: {describe(o.config)}
               </p>
             )}
             {Object.keys(o.project).length > 0 && (
@@ -49,21 +48,21 @@ function Overrides({ overrides }: { overrides: MergeOverride[] }) {
         ))}
       </ul>
       <p className="text-muted-foreground text-xs">
-        A project&rsquo;s own setting wins over its agentos.json, which wins
-        over these. Change a project&rsquo;s in its Project Settings.
+        A project&rsquo;s own setting wins over its repo config, which wins over
+        these. Change a project&rsquo;s in its Project Settings.
       </p>
     </div>
   );
 }
 
-// The global merge settings, and the approval gate for sensitive PRs.
+// The global merge settings and worktree clean-up. The approval gate for
+// sensitive PRs is in Approvals.
 export function GlobalMergeSection() {
   const { data, isPending, isError, error } = useGlobalMergeSettings(true);
   const update = useUpdateGlobalMergeSettings();
 
   return (
     <div className="space-y-5">
-      <MergeApprovalToggle />
       <div className="space-y-3">
         <p className="text-muted-foreground text-sm">
           How tasks&rsquo; PRs merge and what&rsquo;s cleaned up after, for

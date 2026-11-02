@@ -1,7 +1,7 @@
 "use client";
 
 import { canManageDevices } from "@/components/Devices";
-import { SettingToggle } from "@/components/Settings/SettingToggle";
+import { SwitchSetting } from "@/components/Settings/settings-fields";
 import {
   useDevicesQuery,
   useNetworkQuery,
@@ -11,7 +11,12 @@ import {
 // Switching it off asks for a passkey (useUpdateNetwork), and only the
 // machine itself or the tailnet may change it, like the other access
 // switches.
-export function MergeApprovalToggle() {
+export function MergeApprovalToggle({
+  overriddenBy,
+}: {
+  // While No approvals is on this switch has no effect: say so, greyed.
+  overriddenBy?: boolean;
+}) {
   const devices = useDevicesQuery(true);
   const { data, isPending, isError, error } = useNetworkQuery(true);
   const update = useUpdateNetwork();
@@ -23,17 +28,18 @@ export function MergeApprovalToggle() {
     return <p className="text-destructive text-sm">{error.message}</p>;
 
   return (
-    <div className="space-y-1">
-      <SettingToggle
-        title="Require my approval to merge sensitive or large PRs"
-        detail="PRs touching CI, deploys, secrets, build scripts, agent config or AgentOS's security code, or too big to review whole, wait for you to approve them with your passkey. Off, they merge through the usual gates, and a big PR is reviewed in parts."
-        checked={data.mergeApprovals.on}
-        locked={data.mergeApprovals.locked || !canManage}
-        onChange={(mergeApprovals) => update.mutate({ mergeApprovals })}
-      />
-      {update.error && (
-        <p className="text-destructive text-xs">{update.error.message}</p>
-      )}
-    </div>
+    <SwitchSetting
+      id="merge-approvals"
+      label="Require my approval to merge sensitive or large PRs"
+      help={
+        overriddenBy
+          ? "Not in effect while No approvals is on: every PR merges through the usual gates."
+          : "PRs touching CI, deploys, secrets, build scripts, agent config or AgentOS's security code, or too big to review whole, wait for you to approve them with your passkey. Off, they merge through the usual gates, and a big PR is reviewed in parts."
+      }
+      disabled={overriddenBy}
+      checked={data.mergeApprovals.on}
+      locked={data.mergeApprovals.locked || !canManage}
+      onSave={(mergeApprovals) => update.mutateAsync({ mergeApprovals })}
+    />
   );
 }

@@ -1,11 +1,11 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import type { AuditRow } from "@/lib/approvals/no-approvals";
+import type { ApprovalLine } from "@/lib/approvals/describe";
 import { provePresence } from "../presence";
 import { usePollWhenOffline } from "../push/connection";
 
 export interface ApprovalsMode {
   on: boolean;
-  audit: AuditRow[];
+  audit: ApprovalLine[];
 }
 
 export const approvalsKeys = { all: ["approvals"] as const };

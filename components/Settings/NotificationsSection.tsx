@@ -3,7 +3,8 @@
 import { Button } from "@/components/ui/button";
 import { PhoneNotifyForm } from "@/components/PhoneNotify/PhoneNotifyForm";
 import type { NotificationSettings } from "@/lib/notifications";
-import { SettingToggle } from "./SettingToggle";
+import { SettingRow, SettingSection } from "./SettingRow";
+import { SwitchSetting } from "./settings-fields";
 
 // This browser's alerts live in the page (useNotifications), so they come in
 // as props.
@@ -21,44 +22,45 @@ export function NotificationsSection({
 }) {
   return (
     <div className="space-y-5">
-      <div className="space-y-2">
-        <h3 className="text-sm font-medium">This browser</h3>
-        <SettingToggle
-          title="Sound"
-          detail="Play a sound when a session needs you or hits an error."
+      <SettingSection title="This browser">
+        <SwitchSetting
+          id="notify-sound"
+          label="Sound"
+          help="Play a sound when a session needs you or hits an error."
           checked={browser.settings.sound}
-          onChange={(sound) => browser.updateSettings({ sound })}
+          defaultValue={true}
+          onSave={async (sound) => browser.updateSettings({ sound })}
         />
         {browser.permissionGranted ? (
-          <SettingToggle
-            title="Browser alerts"
-            detail="Show a system notification when a session needs you and AgentOS isn't in front."
+          <SwitchSetting
+            id="notify-browser"
+            label="Browser alerts"
+            help="Show a system notification when a session needs you and AgentOS isn't in front."
             checked={browser.settings.browserNotifications}
-            onChange={(browserNotifications) =>
+            onSave={async (browserNotifications) =>
               browser.updateSettings({ browserNotifications })
             }
           />
         ) : (
-          <div className="bg-muted/40 flex items-center gap-3 rounded-lg px-3 py-2.5">
-            <div className="min-w-0 flex-1">
-              <p className="text-sm font-medium">Browser alerts</p>
-              <p className="text-muted-foreground text-xs">
-                This browser hasn&rsquo;t allowed AgentOS to show notifications.
-              </p>
-            </div>
-            <Button
-              size="sm"
-              variant="outline"
-              className="h-11 md:h-8"
-              onClick={() => void browser.requestPermission()}
-            >
-              Allow
-            </Button>
-          </div>
+          <SettingRow
+            id="notify-browser"
+            label="Browser alerts"
+            help="This browser hasn't allowed AgentOS to show notifications."
+            control={
+              <Button
+                size="sm"
+                variant="outline"
+                className="h-11 md:h-9"
+                onClick={() => void browser.requestPermission()}
+              >
+                Allow
+              </Button>
+            }
+          />
         )}
-      </div>
+      </SettingSection>
       <div className="space-y-2">
-        <h3 className="text-sm font-medium">Your phone</h3>
+        <h3 className="text-sm font-semibold">Your phone</h3>
         <PhoneNotifyForm />
       </div>
     </div>

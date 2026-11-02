@@ -2,7 +2,8 @@
 
 import { toast } from "sonner";
 import { CheckCircle2, CircleAlert, RotateCcw } from "lucide-react";
-import { SettingToggle } from "@/components/Settings/SettingToggle";
+import { SwitchSetting } from "@/components/Settings/settings-fields";
+import { SettingSection } from "@/components/Settings/SettingRow";
 import {
   Select,
   SelectContent,
@@ -80,13 +81,16 @@ export function AutoUpdates({ auto }: { auto: AutoUpdateView }) {
   const onError = (e: Error) => toast.error(e.message);
   return (
     <div className="space-y-3">
-      <SettingToggle
-        title="Install updates automatically"
-        detail="Once everything has been idle for a while. Terminals and chats keep running through the restart, and a version that doesn't start cleanly is rolled back."
-        checked={auto.enabled}
-        locked={auto.locked}
-        onChange={(on) => save.mutate({ auto: on }, { onError })}
-      />
+      <SettingSection>
+        <SwitchSetting
+          id="auto-update"
+          label="Install updates automatically"
+          help="Once everything has been idle for a while. Terminals and chats keep running through the restart, and a version that doesn't start cleanly is rolled back."
+          checked={auto.enabled}
+          locked={auto.locked}
+          onSave={(on) => save.mutateAsync({ auto: on })}
+        />
+      </SettingSection>
       {auto.enabled && (
         <div className="flex flex-wrap items-center justify-between gap-2 px-3">
           <label htmlFor="auto-idle" className="text-sm">

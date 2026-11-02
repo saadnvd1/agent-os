@@ -24,6 +24,8 @@ import {
 import { getRecipe, toRun } from "./store";
 import type { Recipe, RecipeRun, RunStatus } from "./types";
 
+// A live run with nothing running behind it for this long is given up on.
+export const LOST_RUN_MS = 24 * 60 * 60_000;
 // A session run that stops without a RESULT line settles from the model's
 // reading after it has been idle this long.
 export const IDLE_SETTLE_MS = 30 * 60_000;
@@ -376,6 +378,26 @@ async function settleOne(
     return void finish(
       run,
       judge("timed_out", line, `Over ${recipe.max_minutes} minutes`),
+      session,
+      now
+    );
+  // Nothing live behind it for a day (a terminal session, an archived one, a
+  // worker that's gone): it isn't still running, so it must not say so.
+  if (
+    Number.isFinite(startedMs) &&
+    now - startedMs > LOST_RUN_MS &&
+    state !== "running" &&
+    state !== "waiting"
+  )
+    return void finish(
+      run,
+      {
+        status: "failed",
+        result: line,
+        source: "state",
+        error: "Lost track of it",
+        summary: "Lost track of it",
+      },
       session,
       now
     );

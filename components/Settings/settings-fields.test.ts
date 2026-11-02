@@ -4,7 +4,13 @@ import { createRoot, type Root } from "react-dom/client";
 import { afterEach, describe, expect, it, vi } from "vitest";
 
 // Radix dispatches its own events; they must be jsdom's, not Node's.
-for (const key of ["Event", "CustomEvent", "FocusEvent", "HTMLButtonElement"])
+for (const key of [
+  "Event",
+  "CustomEvent",
+  "FocusEvent",
+  "HTMLButtonElement",
+  "HTMLFormElement",
+])
   Object.defineProperty(globalThis, key, {
     value: (window as unknown as Record<string, unknown>)[key],
     configurable: true,
@@ -15,7 +21,7 @@ for (const key of ["Event", "CustomEvent", "FocusEvent", "HTMLButtonElement"])
 ).IS_REACT_ACT_ENVIRONMENT = true;
 vi.mock("sonner", () => ({ toast: { error: vi.fn() } }));
 
-const { NumberSetting } = await import("./settings-fields");
+const { NumberSetting, SwitchSetting } = await import("./settings-fields");
 
 let root: Root;
 let host: HTMLElement;
@@ -99,5 +105,78 @@ describe("NumberSetting", () => {
     await blur(input);
     expect(save).toHaveBeenCalledWith(14);
     expect(input.value).toBe("7");
+  });
+});
+
+async function render(el: ReturnType<typeof createElement>) {
+  host = document.createElement("div");
+  document.body.appendChild(host);
+  root = createRoot(host);
+  await act(async () => root.render(el));
+}
+const noop = () => Promise.resolve();
+
+describe("Reset and default text", () => {
+  const num = (value: number, extra = {}) =>
+    createElement(NumberSetting, {
+      id: "n",
+      label: "Days",
+      value,
+      defaultValue: 7,
+      min: 1,
+      max: 30,
+      unit: "days",
+      onSave: noop,
+      ...extra,
+    });
+
+  it("shows no default text or Reset while the value is the default", async () => {
+    await render(num(7));
+    expect(host.textContent).not.toMatch(/default|Reset/i);
+  });
+
+  it("offers 'Reset to X' once it differs", async () => {
+    await render(num(9));
+    expect(host.textContent).toContain("Reset to 7");
+    expect(host.textContent).not.toContain("Default:");
+  });
+
+  it("puts the range in the help text and the unit right after the number", async () => {
+    await render(num(7));
+    expect(host.textContent).toContain("Allowed: 1–30 days.");
+    const input = host.querySelector("input")!;
+    expect(input.nextElementSibling?.textContent).toBe("days");
+  });
+
+  it("disables and empties the field while its switch is off", async () => {
+    await render(num(0, { optional: { off: 0, on: 7 } }));
+    const input = host.querySelector("input")!;
+    expect(input.disabled).toBe(true);
+    expect(input.value).toBe("");
+  });
+
+  it("shows Reset to on/off for a switch only when it differs", async () => {
+    await render(
+      createElement(SwitchSetting, {
+        id: "s",
+        label: "Sound",
+        checked: true,
+        defaultValue: true,
+        onSave: noop,
+      })
+    );
+    expect(host.textContent).not.toMatch(/Reset/);
+    await act(async () => root.unmount());
+    host.remove();
+    await render(
+      createElement(SwitchSetting, {
+        id: "s",
+        label: "Sound",
+        checked: false,
+        defaultValue: true,
+        onSave: noop,
+      })
+    );
+    expect(host.textContent).toContain("Reset to on");
   });
 });

@@ -348,3 +348,9 @@ body {
   border-color: transparent;
   color: hsl(var(--muted-foreground));
 }
+
+/* Toasts never sit over the Settings dialog: a rejected save shows on its
+   row (useAutoSave), and the update toast comes back when Settings closes. */
+html[data-settings-open] [data-sonner-toaster] {
+  display: none;
+}

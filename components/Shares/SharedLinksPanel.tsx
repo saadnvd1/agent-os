@@ -2,7 +2,8 @@
 
 import { useState } from "react";
 import { toast } from "sonner";
-import { Copy, Link2 } from "lucide-react";
+import { Copy } from "lucide-react";
+import { ListSection } from "@/components/Settings/ListSection";
 import { Button } from "@/components/ui/button";
 import { writeClipboard } from "@/hooks/useCopyToClipboard";
 import {
@@ -52,7 +53,7 @@ function Row({ share }: { share: SharedLinkRow }) {
     );
 
   return (
-    <li className="bg-muted/40 rounded-lg px-3 py-2.5">
+    <div className="px-3 py-2.5">
       <div className="flex flex-col gap-2 sm:flex-row sm:items-center">
         <div className="min-w-0 flex-1">
           <div className="truncate text-sm font-medium">{title}</div>
@@ -114,7 +115,7 @@ function Row({ share }: { share: SharedLinkRow }) {
           onCancel={() => setRevoking(false)}
         />
       )}
-    </li>
+    </div>
   );
 }
 
@@ -194,18 +195,14 @@ export function SharedLinksPanel() {
       )}
       {isLoading ? (
         <p className="text-muted-foreground text-sm">Loading…</p>
-      ) : data?.shares.length ? (
-        <ul className="space-y-2">
-          {data.shares.map((s) => (
-            <Row key={s.id} share={s} />
-          ))}
-        </ul>
       ) : (
-        <div className="text-muted-foreground flex items-center gap-2 rounded-lg border border-dashed px-3 py-6 text-sm">
-          <Link2 className="h-4 w-4 shrink-0" />
-          Nothing shared yet. Use Share… in a chat&apos;s menu, or the share
-          button on a page.
-        </div>
+        <ListSection
+          title="Snapshots"
+          items={data?.shares ?? []}
+          keyOf={(s) => s.id}
+          render={(s) => <Row share={s} />}
+          empty="Nothing shared yet. Use Share… in a chat's menu, or the share button on a page."
+        />
       )}
     </div>
   );

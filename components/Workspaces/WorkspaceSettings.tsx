@@ -4,7 +4,6 @@ import { useContext, useState } from "react";
 import { settingsUiActions } from "@/stores/settingsUi";
 import { useWorkspacesQuery } from "@/data/workspaces";
 import { useProjectsQuery } from "@/data/projects";
-import { AppWideLimits } from "@/components/Settings/AppWideLimits";
 import {
   matchesQuery,
   SettingsQueryContext,
@@ -69,7 +68,6 @@ export function WorkspaceSettings() {
         }}
       />
       <WorkspacePanel key={shown.id} workspace={shown} />
-      <AppWideLimits />
       <p className="text-muted-foreground text-sm">
         Fresh starts and compaction are app-wide:{" "}
         <button

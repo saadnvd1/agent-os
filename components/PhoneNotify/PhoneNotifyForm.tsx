@@ -22,32 +22,25 @@ export function PhoneNotifyForm() {
   return (
     <div className="space-y-5">
       <p className="text-muted-foreground text-sm">
-        Your phone gets a failed schedule run, and anything an agent sends with{" "}
-        <code className="font-mono text-xs">aos notify</code>. At most one a
-        minute from each; the rest wait and go together.
+        Your phone gets a failed schedule run and anything an agent sends you.
+        At most one a minute from each; the rest wait and go together.
       </p>
 
       <div className="bg-foreground/[0.03] rounded-lg px-3 py-2.5 text-sm">
         {settings.active === "command" ? (
           <>
-            Sending through{" "}
-            <code className="font-mono text-xs">AGENTOS_NOTIFY_CMD</code>, set
-            on this machine. It takes priority over Telegram below.
+            Sending through a command set up on this machine. It takes priority
+            over Telegram below.
           </>
         ) : settings.active === "telegram" ? (
           <>Sending through the Telegram bot below.</>
         ) : (
-          <>
-            Not set up. Add a Telegram bot below, or set{" "}
-            <code className="font-mono text-xs">AGENTOS_NOTIFY_CMD</code> to a
-            command that reads the message on stdin.
-          </>
+          <>Not set up. Add a Telegram bot below.</>
         )}
       </div>
 
       <div className="space-y-2">
-        <p className="label-mono text-muted-foreground">Telegram</p>
-        <SettingSection>
+        <SettingSection title="Telegram">
           <TextSetting
             id="tg-chat"
             label="Chat id"

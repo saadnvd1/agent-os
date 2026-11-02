@@ -1,6 +1,9 @@
 "use client";
 
 import { Button } from "@/components/ui/button";
+import { ListSection } from "@/components/Settings/ListSection";
+import { SettingRow, SettingSection } from "@/components/Settings/SettingRow";
+import { SwitchSetting } from "@/components/Settings/settings-fields";
 import {
   useRunSweep,
   useSetReaperArmed,
@@ -49,7 +52,7 @@ function Run({ run }: { run: SweepRun }) {
   const skipped = run.details?.skipped ?? [];
   const removed = run.details?.removed ?? [];
   return (
-    <li className="border-border/60 border-b px-3 py-1 last:border-b-0">
+    <div className="px-3 py-1">
       <details>
         <summary className="flex min-h-11 cursor-pointer flex-wrap items-center gap-x-3 gap-y-1 text-sm">
           <span className="font-medium">
@@ -111,7 +114,7 @@ function Run({ run }: { run: SweepRun }) {
           </div>
         )}
       </details>
-    </li>
+    </div>
   );
 }
 
@@ -132,45 +135,40 @@ export function SweepRuns() {
         </p>
       )}
       {data && (
-        <div className="flex flex-wrap items-center gap-2">
-          <p className="text-muted-foreground min-w-0 flex-1 text-sm">
-            Full clean-up is {data.armed ? "on" : "off"}: test leftovers, stale
-            task databases, spares, temp folders and build caches{" "}
-            {data.armed
-              ? "are removed with each run."
-              : "are only listed until you turn it on. Read a dry run first."}
-          </p>
-          <Button
-            variant="outline"
-            className="min-h-11 md:min-h-8"
-            disabled={arm.isPending}
-            onClick={() => arm.mutate(!data.armed)}
-          >
-            {data.armed ? "Turn off" : "Turn on"}
-          </Button>
-        </div>
+        <SettingSection>
+          <SwitchSetting
+            id="sweep-full"
+            label="Full clean-up"
+            help="Test leftovers, stale task databases, spares, temp folders and build caches are removed with each run. Off, they are only listed: read a dry run first. Settled worktrees go after the number of days set in Merging, every 6 hours; branches and conversations stay."
+            checked={data.armed}
+            defaultValue={false}
+            onSave={(on) => arm.mutateAsync(on)}
+          />
+          <SettingRow
+            id="sweep-run"
+            label="Run a clean-up now"
+            control={
+              <>
+                <Button
+                  variant="outline"
+                  className="min-h-11 md:min-h-8"
+                  disabled={run.isPending}
+                  onClick={() => run.mutate(true)}
+                >
+                  Dry run
+                </Button>
+                <Button
+                  className="min-h-11 md:min-h-8"
+                  disabled={run.isPending}
+                  onClick={() => run.mutate(false)}
+                >
+                  Run now
+                </Button>
+              </>
+            }
+          />
+        </SettingSection>
       )}
-      <div className="flex flex-wrap items-center gap-2">
-        <p className="text-muted-foreground min-w-0 flex-1 text-sm">
-          Settled worktrees older than {data?.days ?? data?.defaultDays ?? 7}{" "}
-          days are removed every 6 hours. Branches and conversations stay.
-        </p>
-        <Button
-          variant="outline"
-          className="min-h-11 md:min-h-8"
-          disabled={run.isPending}
-          onClick={() => run.mutate(true)}
-        >
-          Dry run
-        </Button>
-        <Button
-          className="min-h-11 md:min-h-8"
-          disabled={run.isPending}
-          onClick={() => run.mutate(false)}
-        >
-          Run now
-        </Button>
-      </div>
       {run.error && (
         <p role="alert" className="text-destructive text-sm">
           {run.error.message}
@@ -184,17 +182,14 @@ export function SweepRuns() {
       {isPending && (
         <div className="bg-muted/40 h-24 animate-pulse rounded-xl" />
       )}
-      {data && data.runs.length === 0 && (
-        <p className="text-muted-foreground text-sm">
-          No run yet. The first one starts 10 minutes after the server does.
-        </p>
-      )}
-      {data && data.runs.length > 0 && (
-        <ul className="border-border/60 overflow-hidden rounded-xl border">
-          {data.runs.map((r) => (
-            <Run key={r.id} run={r} />
-          ))}
-        </ul>
+      {data && (
+        <ListSection
+          title="Clean-up runs"
+          items={data.runs}
+          keyOf={(r) => String(r.id)}
+          render={(r) => <Run run={r} />}
+          empty="No run yet. The first one starts 10 minutes after the server does."
+        />
       )}
     </div>
   );

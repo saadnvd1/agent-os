@@ -25,11 +25,12 @@ const w = (calls: number) => ({
   costUsd: calls * 0.01,
   scripts: 0,
   shown: 0,
-  accepted: 1,
-  dismissed: 1,
-  acceptRate: 0.5,
+  accepted: calls ? 1 : 0,
+  dismissed: calls ? 1 : 0,
+  acceptRate: calls ? 0.5 : null,
 });
 const state = vi.hoisted(() => ({
+  zero: false,
   mutateAsync: vi.fn().mockResolvedValue({}),
 }));
 vi.mock("@/data/experiments", () => ({
@@ -47,7 +48,9 @@ vi.mock("@/data/experiments", () => ({
           status: "experimental",
           suggests: true,
           on: false,
-          usage: { today: w(1), d7: w(2), d30: w(3) },
+          usage: state.zero
+            ? { today: w(0), d7: w(0), d30: w(0) }
+            : { today: w(1), d7: w(2), d30: w(3) },
         },
       ],
     },
@@ -62,6 +65,7 @@ let root: Root;
 let host: HTMLDivElement;
 beforeEach(() => {
   state.mutateAsync.mockClear();
+  state.zero = false;
   host = document.createElement("div");
   document.body.appendChild(host);
   root = createRoot(host);
@@ -80,6 +84,18 @@ describe("ExperimentsSection", () => {
     expect(
       host.querySelector('[role="switch"]')?.getAttribute("aria-checked")
     ).toBe("false");
+  });
+
+  it("doesn't tag every card Experimental", () => {
+    act(() => root.render(createElement(ExperimentsSection)));
+    expect(host.textContent).not.toContain("Experimental");
+  });
+
+  it("shows an empty state instead of a table of zeros", () => {
+    state.zero = true;
+    act(() => root.render(createElement(ExperimentsSection)));
+    expect(host.querySelector("table")).toBeNull();
+    expect(host.textContent).toContain("No usage yet");
   });
 
   it("turns one on from its toggle", () => {

@@ -16,8 +16,8 @@ import {
   LayoutGrid,
   Search,
   Link2,
-  ListChecks,
-  ShieldOff,
+  ShieldCheck,
+  SlidersHorizontal,
   FlaskConical,
   RefreshCw,
   Smartphone,
@@ -52,8 +52,8 @@ import { RecipesPanel } from "@/components/Recipes";
 import { settingsUi, settingsUiActions } from "@/stores/settingsUi";
 import { ContextSection } from "./ContextSection";
 import { SettingsQueryContext } from "./SettingRow";
-import { SetupSection } from "./SetupSection";
-import { NoApprovalsSection } from "./NoApprovalsSection";
+import { ApprovalsSection } from "./ApprovalsSection";
+import { GeneralSection } from "./GeneralSection";
 import {
   NotificationsSection,
   type BrowserNotifications,
@@ -63,15 +63,20 @@ export const SECTION_INFO: Record<
   SettingsSection,
   { label: string; hint: string; icon: LucideIcon }
 > = {
+  general: {
+    label: "General",
+    hint: "Your name, alerts, first-run setup",
+    icon: SlidersHorizontal,
+  },
   merging: {
     label: "Merging",
-    hint: "Approval, merge method, branch and worktree clean-up",
+    hint: "Merge method, branch and worktree clean-up",
     icon: GitMerge,
   },
   approvals: {
-    label: "No approvals",
-    hint: "Switch off every approval and permission prompt",
-    icon: ShieldOff,
+    label: "Approvals",
+    hint: "No approvals, merge approval, what was approved for you",
+    icon: ShieldCheck,
   },
   workspaces: {
     label: "Workspaces",
@@ -125,13 +130,8 @@ export const SECTION_INFO: Record<
   },
   health: {
     label: "Health",
-    hint: "What the watchers caught, what normal looks like, thresholds",
+    hint: "What the watchers caught, thresholds, clean-up, this machine",
     icon: HeartPulse,
-  },
-  setup: {
-    label: "Setup & health",
-    hint: "What this machine has, agents, first-run setup",
-    icon: ListChecks,
   },
   updates: {
     label: "Updates",
@@ -153,10 +153,12 @@ function SectionBody({
   browser: BrowserNotifications;
 }) {
   switch (section) {
+    case "general":
+      return <GeneralSection />;
     case "merging":
       return <GlobalMergeSection />;
     case "approvals":
-      return <NoApprovalsSection />;
+      return <ApprovalsSection />;
     case "workspaces":
       return <WorkspaceSettings />;
     case "context":
@@ -179,8 +181,6 @@ function SectionBody({
       return <AuditsPanel />;
     case "health":
       return <HealthPanel />;
-    case "setup":
-      return <SetupSection />;
     case "updates":
       return <UpdatesSection />;
     case "experiments":
@@ -234,6 +234,11 @@ export const SettingsDialog = memo(function SettingsDialog({
 }) {
   const { open, section } = useSnapshot(settingsUi);
   useSettingsUrl();
+  useEffect(() => {
+    if (!open) return;
+    document.documentElement.setAttribute("data-settings-open", "");
+    return () => document.documentElement.removeAttribute("data-settings-open");
+  }, [open]);
   // A wide screen always shows a section; a phone shows the list first.
   const shown = section ?? SETTINGS_SECTIONS[0];
 

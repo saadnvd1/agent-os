@@ -5,6 +5,7 @@
 export const SETTINGS_PARAM = "settings";
 
 export const SETTINGS_SECTIONS = [
+  "general",
   "merging",
   "approvals",
   "workspaces",
@@ -18,12 +19,18 @@ export const SETTINGS_SECTIONS = [
   "schedules",
   "audits",
   "health",
-  "setup",
   "updates",
   "experiments",
 ] as const;
 
 export type SettingsSection = (typeof SETTINGS_SECTIONS)[number];
+
+// Sections that were folded into another: an old link still lands in the
+// right place.
+export const SECTION_REDIRECTS: Record<string, SettingsSection> = {
+  setup: "health",
+  "no-approvals": "approvals",
+};
 
 export interface SettingsLocation {
   open: boolean;
@@ -40,7 +47,12 @@ export const isSettingsSection = (v: unknown): v is SettingsSection =>
 export function settingsFromHref(href: string): SettingsLocation {
   const value = new URL(href, BASE).searchParams.get(SETTINGS_PARAM);
   if (value === null) return { open: false, section: null };
-  return { open: true, section: isSettingsSection(value) ? value : null };
+  const section = isSettingsSection(value)
+    ? value
+    : value !== null && Object.hasOwn(SECTION_REDIRECTS, value)
+      ? SECTION_REDIRECTS[value]
+      : null;
+  return { open: true, section };
 }
 
 /** The same address with Settings set (or removed), as path+query+hash. */

@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import {
   HEALTH_DEFAULTS,
   HEALTH_LABELS,
+  HEALTH_META,
   healthConfig,
   setHealthConfig,
 } from "@/lib/health/config";
@@ -10,6 +11,7 @@ const body = () => ({
   config: healthConfig(),
   defaults: HEALTH_DEFAULTS,
   labels: HEALTH_LABELS,
+  meta: HEALTH_META,
 });
 
 // GET /api/health/config - the thresholds, their defaults and labels.

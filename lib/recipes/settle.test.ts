@@ -19,7 +19,8 @@ vi.mock("../done", () => ({
   },
 }));
 
-const { settleRuns, IDLE_SETTLE_MS, judge } = await import("./settle");
+const { settleRuns, IDLE_SETTLE_MS, LOST_RUN_MS, judge } =
+  await import("./settle");
 const { getRun } = await import("./store");
 
 function liveRun(
@@ -214,6 +215,26 @@ describe("settleRuns: session recipes", () => {
     await settleRuns(Date.now(), noModel);
     expect(getRun(id)!.status).toBe("timed_out");
     expect(done).toEqual([]);
+  });
+
+  it("gives up on a run nothing has been running behind for a day", async () => {
+    const r = makeRecipe();
+    const s = makeSession();
+    const id = liveRun(r.id, s);
+    await settleRuns(Date.now() + LOST_RUN_MS + 60 * 60_000, noModel);
+    expect(getRun(id)).toMatchObject({
+      status: "failed",
+      summary: "Lost track of it",
+    });
+  });
+
+  it("keeps a day-old run live while its session is still working", async () => {
+    const r = makeRecipe();
+    const s = makeSession();
+    chat.set(s, "running");
+    const id = liveRun(r.id, s);
+    await settleRuns(Date.now() + LOST_RUN_MS + 60 * 60_000, noModel);
+    expect(getRun(id)!.status).toBe("running");
   });
 
   it("is idempotent across two loops: one event, one Done", async () => {

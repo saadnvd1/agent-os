@@ -3,7 +3,8 @@
 import { toast } from "sonner";
 import { Loader2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
-import { SettingToggle } from "@/components/Settings/SettingToggle";
+import { SwitchSetting } from "@/components/Settings/settings-fields";
+import { SettingSection } from "@/components/Settings/SettingRow";
 import { useSetTipsOff, useTips } from "@/data/tips";
 import {
   useCheckForUpdates,
@@ -141,16 +142,17 @@ export function UpdatesSection() {
 
       {view.auto && <AutoUpdates auto={view.auto} />}
 
-      <SettingToggle
-        title="Show update banner"
-        detail="Tell everyone using this AgentOS when a newer version is out, and when it updated itself."
-        checked={view.bannerEnabled}
-        locked={view.bannerLocked}
-        onChange={(on) =>
-          banner.mutate(on, { onError: (e) => toast.error(e.message) })
-        }
-      />
-      <TipsToggle />
+      <SettingSection>
+        <SwitchSetting
+          id="update-banner"
+          label="Show update banner"
+          help="Tell everyone using this AgentOS when a newer version is out, and when it updated itself."
+          checked={view.bannerEnabled}
+          locked={view.bannerLocked}
+          onSave={(on) => banner.mutateAsync(on)}
+        />
+        <TipsToggle />
+      </SettingSection>
     </div>
   );
 }
@@ -159,13 +161,12 @@ function TipsToggle() {
   const { data } = useTips();
   const setOff = useSetTipsOff();
   return (
-    <SettingToggle
-      title="Show Tip of the Day"
-      detail="A short tip about something AgentOS can do, behind the lightbulb in the sidebar. It never opens on its own."
+    <SwitchSetting
+      id="tips"
+      label="Show Tip of the Day"
+      help="A short tip about something AgentOS can do, behind the lightbulb in the sidebar. It never opens on its own."
       checked={!!data && !data.off}
-      onChange={(on) =>
-        setOff.mutate(!on, { onError: (e) => toast.error(e.message) })
-      }
+      onSave={(on) => setOff.mutateAsync(!on)}
     />
   );
 }

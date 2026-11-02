@@ -28,7 +28,7 @@ const KINDS: {
 }[] = [
   { value: "tokenvault", label: "tokenvault", a: "Project", b: "Description" },
   { value: "keychain", label: "macOS Keychain", a: "Service", b: "Account" },
-  { value: "env", label: "Environment variable", a: "Variable (…_API_KEY)" },
+  { value: "env", label: "Environment variable", a: "Variable name" },
 ];
 
 function refFields(ref: SecretRef | undefined): [string, string] {

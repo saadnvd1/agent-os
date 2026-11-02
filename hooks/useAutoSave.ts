@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useRef, useState } from "react";
 import { toast } from "sonner";
+import { settingsUi } from "@/stores/settingsUi";
 
 export type SaveStatus = "idle" | "saving" | "saved" | "undo";
 
@@ -13,6 +14,9 @@ export interface AutoSave<T> {
   // rejected save drops the in-flight value, so this is the saved one again.
   value: T;
   status: SaveStatus;
+  // Why the last save was rejected; cleared by the next commit. Shown on the
+  // row while Settings is open (a toast would sit over the dialog).
+  error: string | null;
   // Commit a new value. `undoable` keeps the previous one for Undo (large or
   // destructive changes). Resolves false when the server rejected it.
   commit: (next: T, opts?: { undoable?: boolean }) => Promise<boolean>;
@@ -27,7 +31,7 @@ export function useAutoSave<T>({
   saved,
   save,
   equals = Object.is,
-  notify = (message) => toast.error(message),
+  notify,
 }: {
   saved: T;
   save: (next: T) => Promise<unknown>;
@@ -36,6 +40,7 @@ export function useAutoSave<T>({
 }): AutoSave<T> {
   const [pending, setPending] = useState<{ value: T } | null>(null);
   const [status, setStatus] = useState<SaveStatus>("idle");
+  const [error, setError] = useState<string | null>(null);
   const previous = useRef<{ value: T } | null>(null);
   const timer = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
   const seq = useRef(0);
@@ -56,6 +61,7 @@ export function useAutoSave<T>({
       const mine = ++seq.current;
       clearTimeout(timer.current);
       setPending({ value: next });
+      setError(null);
       setStatus("saving");
       try {
         await latest.current.save(next);
@@ -64,9 +70,10 @@ export function useAutoSave<T>({
           setPending(null);
           setStatus("idle");
         }
-        latest.current.notify(
-          err instanceof Error ? err.message : "Couldn't save"
-        );
+        const message = err instanceof Error ? err.message : "Couldn't save";
+        if (latest.current.notify) latest.current.notify(message);
+        else if (settingsUi.open) setError(message);
+        else toast.error(message);
         return false;
       }
       if (mine !== seq.current) return true;
@@ -94,5 +101,11 @@ export function useAutoSave<T>({
     return run(back.value, false, latest.current.saved);
   }, [run]);
 
-  return { value: pending ? pending.value : saved, status, commit, undo };
+  return {
+    value: pending ? pending.value : saved,
+    status,
+    error,
+    commit,
+    undo,
+  };
 }

@@ -32,11 +32,12 @@ export function SwitchSetting({
   confirmLabel = "Turn on",
   undoable,
   locked,
+  disabled,
   extra,
 }: {
   id: string;
   label: string;
-  help?: string;
+  help?: ReactNode;
   checked: boolean;
   onSave: Save<boolean>;
   defaultValue?: boolean;
@@ -45,6 +46,8 @@ export function SwitchSetting({
   undoable?: boolean;
   // Can't be changed from here.
   locked?: boolean;
+  // Greyed for a reason the help already gives.
+  disabled?: boolean;
   // Shown under the row (usage, links).
   extra?: ReactNode;
 }) {
@@ -54,14 +57,11 @@ export function SwitchSetting({
     <SettingRow
       id={id}
       label={label}
-      help={locked ? `${help ?? ""} Can't be changed from here.`.trim() : help}
+      help={locked ? <>{help} Can&apos;t be changed from here.</> : help}
       status={auto.status}
       onUndo={auto.undo}
-      hint={
-        defaultValue === undefined || auto.value === defaultValue
-          ? undefined
-          : `Default: ${defaultValue ? "on" : "off"}`
-      }
+      error={auto.error}
+      resetLabel={defaultValue ? "on" : "off"}
       onReset={
         defaultValue !== undefined && auto.value !== defaultValue
           ? () => void auto.commit(defaultValue, { undoable: true })
@@ -72,9 +72,8 @@ export function SwitchSetting({
         <Switch
           id={id}
           checked={auto.value}
-          disabled={locked}
+          disabled={locked || disabled}
           aria-describedby={`${id}-hint`}
-          className="data-[state=checked]:bg-primary"
           onCheckedChange={(on) => {
             if (on && confirm) setAsking(true);
             else void auto.commit(on, { undoable: undoable || !on });
@@ -149,10 +148,11 @@ export function NumberSetting({
   const off = optional ? auto.value === optional.off : false;
   const shown = (off ? optional!.on : auto.value) / scale;
   const defOff = optional ? defaultValue === optional.off : false;
-  const hint =
-    error === null && auto.value !== defaultValue
-      ? `Default: ${defOff ? "off" : `${defaultValue / scale}${short}`}`
-      : undefined;
+  const resetLabel = defOff ? "off" : `${defaultValue / scale}${short}`;
+  const range =
+    max === undefined
+      ? undefined
+      : `${min / scale}–${max / scale}${short || (unit ? ` ${unit}` : "")}`;
 
   const finish = () => {
     if (text === null) return;
@@ -180,10 +180,10 @@ export function NumberSetting({
     <SettingRow
       id={id}
       label={label}
-      help={help}
+      help={[help, range && `Allowed: ${range}.`].filter(Boolean).join(" ")}
       status={auto.status}
-      error={error}
-      hint={hint}
+      error={error ?? auto.error}
+      resetLabel={resetLabel}
       onUndo={auto.undo}
       onReset={
         auto.value !== defaultValue
@@ -200,7 +200,8 @@ export function NumberSetting({
             id={id}
             type="text"
             inputMode={integer ? "numeric" : "decimal"}
-            value={text ?? String(shown)}
+            value={off ? "" : (text ?? String(shown))}
+            placeholder={off ? "Off" : undefined}
             disabled={off}
             aria-invalid={!!error}
             aria-describedby={`${id}-hint`}
@@ -220,7 +221,9 @@ export function NumberSetting({
             className={`${FIELD} w-24 text-right tabular-nums`}
           />
           {unit && (
-            <span className="text-muted-foreground min-w-16 text-sm">
+            <span
+              className={`text-sm ${off ? "text-muted-foreground/50" : "text-muted-foreground"}`}
+            >
               {unit}
             </span>
           )}
@@ -261,7 +264,7 @@ export function SelectSetting({
   options: { value: string; label: string }[];
   onSave: Save<string>;
   defaultValue?: string;
-  // Replaces "default <label>" (an empty string for none).
+  // A line under the row (what an Inherit choice resolves to).
   hint?: string;
 }) {
   const auto = useAutoSave({ saved: value, save: onSave });
@@ -273,12 +276,9 @@ export function SelectSetting({
       help={help}
       status={auto.status}
       onUndo={auto.undo}
-      hint={
-        hint ??
-        (def && auto.value !== defaultValue
-          ? `Default: ${def.label}`
-          : undefined)
-      }
+      hint={hint}
+      error={auto.error}
+      resetLabel={def?.label}
       onReset={
         defaultValue !== undefined && auto.value !== defaultValue
           ? () => void auto.commit(defaultValue, { undoable: true })
@@ -367,7 +367,7 @@ export function TextSetting({
       label={label}
       help={help}
       status={checking ? "saving" : auto.status}
-      error={error}
+      error={error ?? auto.error}
       onUndo={auto.undo}
       onReset={
         resettable && !secret && auto.value !== defaultValue
@@ -407,7 +407,7 @@ export function TextSetting({
                 e.currentTarget.blur();
               }
             }}
-            className={`${FIELD} w-full sm:w-64`}
+            className={`${FIELD} w-full ${deliberate ? "sm:w-48" : "sm:w-64"}`}
           />
           {deliberate && (
             <Button

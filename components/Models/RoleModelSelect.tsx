@@ -11,6 +11,7 @@ import {
 } from "@/components/ui/select";
 import { useModelChoices } from "@/data/models";
 import type { ModelChoice } from "@/lib/models/catalog";
+import { TWO_LINE_TRIGGER, ValueLabel } from "@/components/Settings/ValueLabel";
 import { AvailabilityDot, LocalityBadge } from "./ModelBadges";
 
 const INHERIT = "__inherit";
@@ -41,6 +42,7 @@ export function RoleModelSelect({
   id,
   value,
   inheritLabel,
+  inheritDetail,
   claudeOnly,
   gateOnly,
   blockedBy,
@@ -50,6 +52,8 @@ export function RoleModelSelect({
   id?: string;
   value: string | null;
   inheritLabel: string;
+  // What the inherited choice resolves to (a model id), shown under it.
+  inheritDetail?: string;
   claudeOnly?: boolean;
   // Only models that can serve a merge gate are selectable.
   gateOnly?: boolean;
@@ -71,13 +75,21 @@ export function RoleModelSelect({
       onValueChange={(v) => onChange(v === INHERIT ? null : v)}
       disabled={disabled}
     >
-      <SelectTrigger id={id} className="h-11 md:h-9">
+      <SelectTrigger id={id} className={TWO_LINE_TRIGGER}>
         <SelectValue>
-          {current ? <Row choice={current} /> : (value ?? inheritLabel)}
+          {current ? (
+            <Row choice={current} />
+          ) : value ? (
+            <ValueLabel label={value} />
+          ) : (
+            <ValueLabel label={inheritLabel} detail={inheritDetail} />
+          )}
         </SelectValue>
       </SelectTrigger>
       <SelectContent>
-        <SelectItem value={INHERIT}>{inheritLabel}</SelectItem>
+        <SelectItem value={INHERIT}>
+          <ValueLabel label={inheritLabel} detail={inheritDetail} />
+        </SelectItem>
         {value && !current && <SelectItem value={value}>{value}</SelectItem>}
         {groups.map((g) => (
           <SelectGroup key={g}>

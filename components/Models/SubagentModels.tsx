@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import { SettingRow, SettingSection } from "@/components/Settings/SettingRow";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import {
@@ -46,58 +47,72 @@ export function SubagentModels({
         on Haiku, anything that plans, decides or reviews on Sonnet. A new
         session picks a change up.
       </p>
-      <ul className="space-y-2">
+      <SettingSection>
         {Object.entries(rows).map(([type, tier]) => {
           const custom = !(type in DEFAULT_SUBAGENT_MODELS);
+          const changed = saved?.[type] !== undefined;
           return (
-            <li
+            <SettingRow
               key={type}
-              className="bg-muted/40 flex items-center gap-2 rounded-lg px-3 py-2"
-            >
-              <span className="min-w-0 flex-1 truncate font-mono text-sm">
-                {type}
-              </span>
-              <Select
-                value={tier}
-                disabled={disabled}
-                onValueChange={(v) => set(type, v as SubagentTier)}
-              >
-                <SelectTrigger
-                  aria-label={`Model for ${type}`}
-                  className="min-h-11 w-44"
-                >
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectContent>
-                  {SUBAGENT_TIERS.map((t) => (
-                    <SelectItem
-                      key={t}
-                      value={t}
-                      disabled={t === "haiku" && mustNotBeHaiku(type)}
+              id={`subagent-${type}`}
+              label={type}
+              resetLabel={
+                custom ? undefined : TIER_LABELS[DEFAULT_SUBAGENT_MODELS[type]]
+              }
+              onReset={
+                !custom && changed
+                  ? () => {
+                      const next = { ...saved };
+                      delete next[type];
+                      onChange(next);
+                    }
+                  : undefined
+              }
+              control={
+                <>
+                  <Select
+                    value={tier}
+                    disabled={disabled}
+                    onValueChange={(v) => set(type, v as SubagentTier)}
+                  >
+                    <SelectTrigger
+                      aria-label={`Model for ${type}`}
+                      className="min-h-11 w-40 md:min-h-9"
                     >
-                      {TIER_LABELS[t]}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-              {(custom || saved?.[type] !== undefined) && (
-                <Button
-                  variant="ghost"
-                  className="min-h-11"
-                  disabled={disabled}
-                  onClick={() => {
-                    const next = { ...saved };
-                    delete next[type];
-                    onChange(next);
-                  }}
-                >
-                  {custom ? "Remove" : "Reset"}
-                </Button>
-              )}
-            </li>
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {SUBAGENT_TIERS.map((t) => (
+                        <SelectItem
+                          key={t}
+                          value={t}
+                          disabled={t === "haiku" && mustNotBeHaiku(type)}
+                        >
+                          {TIER_LABELS[t]}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                  {custom && (
+                    <Button
+                      variant="ghost"
+                      className="min-h-11 md:min-h-9"
+                      disabled={disabled}
+                      onClick={() => {
+                        const next = { ...saved };
+                        delete next[type];
+                        onChange(next);
+                      }}
+                    >
+                      Remove
+                    </Button>
+                  )}
+                </>
+              }
+            />
           );
         })}
-      </ul>
+      </SettingSection>
       <div className="flex gap-2">
         <Input
           value={adding}

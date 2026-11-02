@@ -2,7 +2,10 @@
 
 import { Button } from "@/components/ui/button";
 import { PriceInput } from "./PriceInput";
-import { SettingToggle } from "@/components/Settings/SettingToggle";
+import { PickerSetting } from "@/components/Settings/PickerSetting";
+import { ScrollTable } from "@/components/Settings/ListSection";
+import { SettingSection } from "@/components/Settings/SettingRow";
+import { SwitchSetting } from "@/components/Settings/settings-fields";
 import { useModelsQuery, useUpdateModels } from "@/data/models";
 import type { ModelSettings } from "@/lib/models/config";
 import {
@@ -63,42 +66,42 @@ export function ModelsSection() {
           and Supervisor are in Agent roles. A workspace can set its own
           (Settings › Workspaces), and a task its own when it starts or resumes.
         </p>
-        <ul className="space-y-2">
+        <SettingSection>
           {INTERNAL_MODEL_ROLES(MODEL_ROLES).map((role) => (
-            <li
+            <PickerSetting<string | null>
               key={role}
-              className="bg-muted/40 space-y-1.5 rounded-lg px-3 py-2.5"
-            >
-              <label htmlFor={`role-${role}`} className="block">
-                <span className="text-sm font-medium">
-                  {ROLE_LABELS[role].label}
-                </span>
-                <span className="text-muted-foreground block text-xs">
-                  {ROLE_LABELS[role].hint}
-                </span>
-              </label>
-              <ModelSelect
-                id={`role-${role}`}
-                value={saved.roles?.[role] ?? null}
-                effective={effective}
-                inheritLabel={`Default (${defaults[role].split("/").slice(1).join("/")})`}
-                disabled={update.isPending}
-                onChange={(ref) => {
-                  const roles = { ...saved.roles };
-                  if (ref) roles[role] = ref;
-                  else delete roles[role];
-                  save({ roles });
-                }}
-              />
-            </li>
+              id={`role-${role}`}
+              label={ROLE_LABELS[role].label}
+              help={ROLE_LABELS[role].hint}
+              value={saved.roles?.[role] ?? null}
+              defaultValue={null}
+              resetLabel="default"
+              onSave={(ref) => {
+                const roles = { ...saved.roles };
+                if (ref) roles[role] = ref;
+                else delete roles[role];
+                return update.mutateAsync({ ...saved, roles });
+              }}
+              render={({ value, commit }) => (
+                <ModelSelect
+                  id={`role-${role}`}
+                  value={value}
+                  effective={effective}
+                  inheritLabel="Default"
+                  inheritDetail={defaults[role].split("/").slice(1).join("/")}
+                  onChange={commit}
+                />
+              )}
+            />
           ))}
-        </ul>
-        <SettingToggle
-          title="Tasks plan first"
-          detail="A chat task's first turn writes its plan to .agentos/plan.md on the planning model; the implementation model then follows it in the same conversation."
-          checked={effective.planStep}
-          onChange={(planStep) => save({ planStep })}
-        />
+          <SwitchSetting
+            id="plan-step"
+            label="Tasks plan first"
+            help="A chat task's first turn writes its plan on the planning model; the implementation model then follows it in the same conversation."
+            checked={effective.planStep}
+            onSave={(planStep) => update.mutateAsync({ ...saved, planStep })}
+          />
+        </SettingSection>
       </section>
 
       <SubagentModels
@@ -151,7 +154,7 @@ export function ModelsSection() {
           Dollars per million tokens, for Usage&apos;s estimates. Claude&apos;s
           are API list prices: the plan itself is measured by its window.
         </p>
-        <div className="overflow-x-auto">
+        <ScrollTable>
           <table className="w-full text-xs">
             <thead className="text-muted-foreground text-left">
               <tr>
@@ -166,7 +169,9 @@ export function ModelsSection() {
             <tbody>
               {Object.entries(effective.prices).map(([ref, price]) => (
                 <tr key={ref} className="border-border border-t">
-                  <td className="py-1 pr-2 font-mono">{ref}</td>
+                  <td className="py-1 pr-2 font-mono whitespace-nowrap">
+                    {ref}
+                  </td>
                   {PRICE_FIELDS.map((f) => (
                     <td key={f.key} className="py-1 pr-2">
                       <PriceInput
@@ -187,7 +192,7 @@ export function ModelsSection() {
               ))}
             </tbody>
           </table>
-        </div>
+        </ScrollTable>
       </section>
       {update.isError && (
         <p className="text-destructive text-sm">{update.error.message}</p>

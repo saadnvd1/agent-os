@@ -18,6 +18,7 @@ export function PickerSetting<T>({
   defaultValue,
   hint,
   error,
+  resetLabel,
   render,
   below,
 }: {
@@ -30,6 +31,8 @@ export function PickerSetting<T>({
   defaultValue?: T;
   hint?: string;
   error?: string | null;
+  // What Reset goes back to, in words.
+  resetLabel?: string;
   render: (picker: { value: T; commit: (next: T) => void }) => ReactNode;
   below?: ReactNode;
 }) {
@@ -40,7 +43,8 @@ export function PickerSetting<T>({
       label={label}
       help={help}
       hint={hint}
-      error={error}
+      error={error ?? auto.error}
+      resetLabel={resetLabel}
       status={auto.status}
       onUndo={auto.undo}
       onReset={

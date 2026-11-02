@@ -28,9 +28,14 @@ const stub = (name: string) =>
 vi.mock("@/components/Merge/GlobalMergeSection", () => ({
   GlobalMergeSection: stub("merging"),
 }));
-vi.mock("./NoApprovalsSection", () => ({
-  NoApprovalsSection: stub("approvals"),
+vi.mock("./ApprovalsSection", () => ({
+  ApprovalsSection: stub("approvals"),
 }));
+vi.mock("./GeneralSection", () => ({ GeneralSection: stub("general") }));
+vi.mock("@/components/Health/HealthPanel", () => ({
+  HealthPanel: stub("health"),
+}));
+vi.mock("@/components/Recipes", () => ({ RecipesPanel: stub("recipes") }));
 vi.mock("@/components/Workspaces", () => ({
   WorkspaceSettings: stub("workspaces"),
 }));
@@ -128,8 +133,8 @@ describe("SettingsDialog", () => {
   it("shows the first section beside the list when none is chosen", async () => {
     await mount();
     await act(async () => settingsUiActions.open());
-    expect(body()).toContain("body:merging");
-    expect(navButton("Merging").getAttribute("aria-current")).toBe("page");
+    expect(body()).toContain("body:general");
+    expect(navButton("General").getAttribute("aria-current")).toBe("page");
   });
 
   it("goes back to the list on a phone", async () => {
@@ -196,6 +201,28 @@ describe("SettingsDialog", () => {
     await mount("/?session=s1&settings=workspaces");
     expect(settingsUi).toMatchObject({ open: true, section: "workspaces" });
     expect(body()).toContain("body:workspaces");
+  });
+
+  it("sends an old ?settings=setup link to Health and rewrites the address", async () => {
+    await mount("/?session=s1&settings=setup");
+    await flush();
+    expect(settingsUi).toMatchObject({ open: true, section: "health" });
+    expect(body()).toContain("body:health");
+    expect(search()).toBe("?session=s1&settings=health");
+  });
+
+  it("names each section once in the list", async () => {
+    await mount();
+    await act(async () => settingsUiActions.open());
+    const labels = [
+      ...document.querySelectorAll(
+        'nav[aria-label="Settings sections"] button'
+      ),
+    ].map((b) => b.querySelector("span span")?.textContent);
+    expect(new Set(labels).size).toBe(labels.length);
+    expect(labels).toContain("Approvals");
+    expect(labels).not.toContain("No approvals");
+    expect(labels).not.toContain("Setup & health");
   });
 
   it("drops the section from the address when closed", async () => {

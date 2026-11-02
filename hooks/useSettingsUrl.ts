@@ -19,8 +19,7 @@ function fromAddress() {
  */
 export function useSettingsUrl() {
   useEffect(() => {
-    fromAddress();
-    const unsubscribe = subscribe(settingsUi, () => {
+    const toAddress = () => {
       const href = window.location.href;
       const next = hrefWithSettings(href, {
         open: settingsUi.open,
@@ -29,7 +28,11 @@ export function useSettingsUrl() {
       const url = new URL(href);
       if (next !== url.pathname + url.search + url.hash)
         window.history.replaceState(window.history.state, "", next);
-    });
+    };
+    fromAddress();
+    // An old link (?settings=setup) is rewritten to where it landed.
+    toAddress();
+    const unsubscribe = subscribe(settingsUi, toAddress);
     window.addEventListener("popstate", fromAddress);
     return () => {
       unsubscribe();
