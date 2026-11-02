@@ -117,6 +117,21 @@ describe("startUpdate refusals", () => {
     expect(r.ok === false && r.error).toContain("lib/a.ts, lib/b.ts");
   });
 
+  it("treats a modified generated file as clean, and still blocks on other files", async () => {
+    fs.mkdirSync(path.join(dir, "scripts"));
+    fs.writeFileSync(
+      path.join(dir, "scripts/generated-files.txt"),
+      "# generated\nnext-env.d.ts\n"
+    );
+    porcelain = " M next-env.d.ts\n";
+    expect(await run.preflight(available(), deps())).toBeNull();
+    porcelain = " M next-env.d.ts\n M lib/a.ts\n";
+    const r = await run.preflight(available(), deps());
+    expect(r).toMatchObject({ code: "dirty" });
+    expect(r?.error).toContain("lib/a.ts");
+    expect(r?.error).not.toContain("next-env");
+  });
+
   it("refuses off the default branch, when diverged, and when up to date", async () => {
     branch = "feature";
     expect(await refused()).toMatchObject({ code: "branch" });

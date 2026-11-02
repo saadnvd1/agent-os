@@ -1,0 +1,3 @@
+# Files the build or dev server rewrites in a checkout. The updater and the
+# deploy scripts discard changes to these before pulling; one path per line.
+next-env.d.ts

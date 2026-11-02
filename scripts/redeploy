@@ -38,6 +38,7 @@ check_disk() {
 # The pull can replace this script, so what follows runs from a fresh start.
 if [ "${1:-}" != "--rollback" ] && [ "${1:-}" != "--pulled" ]; then
   check_disk
+  discard_generated
   echo "::phase pulling"
   if [ -n "${AGENTOS_UPDATE_TO:-}" ]; then
     git fetch -q origin

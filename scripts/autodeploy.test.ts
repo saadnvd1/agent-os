@@ -22,7 +22,12 @@ function setup() {
   fs.mkdirSync(path.join(work, "scripts"));
   fs.copyFileSync(script, path.join(work, "scripts/autodeploy"));
   fs.mkdirSync(path.join(work, "scripts/lib"));
-  for (const f of ["sync-cli-links", "lib/cli-links.sh"])
+  for (const f of [
+    "sync-cli-links",
+    "lib/cli-links.sh",
+    "lib/generated.sh",
+    "generated-files.txt",
+  ])
     fs.copyFileSync(path.join(__dirname, f), path.join(work, "scripts", f));
   fs.chmodSync(path.join(work, "scripts/sync-cli-links"), 0o755);
   fs.mkdirSync(path.join(work, "bin"));

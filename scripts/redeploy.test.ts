@@ -20,6 +20,7 @@ beforeEach(() => {
   for (const f of [
     "redeploy",
     "lib/build-swap.sh",
+    "lib/generated.sh",
     "lib/pnpm.sh",
     "lib/deps-swap.sh",
   ])
