@@ -86,6 +86,7 @@ import { resumeHeldStarts, resumeTaskStarts } from "./lib/tasks/start";
 import { failInterruptedSetups } from "./lib/sessions/worktree-setup";
 import { sweepOrphanTmux } from "./lib/tmux/orphans";
 import { releaseInterruptedClaims } from "./lib/orchestrator/ask-approvals";
+import { syncAllTechNames } from "./lib/leads/home";
 import { resumeReviews } from "./lib/orchestrator/review";
 import {
   isLiveServer,
@@ -150,6 +151,11 @@ app.prepare().then(async () => {
       console.log(`Released ${released} merge approval(s) a restart cut off`);
   } catch (error) {
     console.error("Releasing interrupted merge approvals failed:", error);
+  }
+  try {
+    syncAllTechNames();
+  } catch (error) {
+    console.error("Naming the Tech leads failed:", error);
   }
   const policy: AccessPolicy = {
     bound: [],
