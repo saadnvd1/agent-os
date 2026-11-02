@@ -12,6 +12,7 @@ import { asActor } from "./actor";
 import { actedOn, areaRefusal } from "./area";
 import { notifyAreaAction } from "./area-notify";
 import { chiefRefusal } from "./chief";
+import { addLeadTool, updateCharterTool } from "./chief-setup";
 import { companyText, companyThread } from "./company";
 import { CHIEF } from "./order";
 import { currentDirection, openProposals, proposePin } from "./direction";
@@ -92,6 +93,28 @@ export const LEAD_TOOL_SHAPES = {
       .optional()
       .describe("A thread's name from the list, to read its messages"),
   },
+  add_lead: {
+    kind: z
+      .string()
+      .trim()
+      .min(1)
+      .max(32)
+      .describe(
+        "The lead's kind: a short lowercase name such as marketing, product or design"
+      ),
+    title: z.string().trim().min(1).max(120).optional(),
+  },
+  update_charter: {
+    lead: z.string().trim().min(1).max(32).describe("The lead's kind"),
+    title: z.string().trim().min(1).max(120).optional(),
+    area: z.string().max(2000).optional(),
+    goal: z.string().max(2000).optional(),
+    charter_md: z
+      .string()
+      .max(20000)
+      .optional()
+      .describe("The whole charter, rewritten"),
+  },
 } satisfies Record<LeadToolName, z.ZodRawShape>;
 
 export const LEAD_TOOL_DESCRIPTIONS: Record<LeadToolName, string> = {
@@ -105,6 +128,10 @@ export const LEAD_TOOL_DESCRIPTIONS: Record<LeadToolName, string> = {
     "Write to another lead of this workspace on a thread (one per topic). It arrives in their chat, fenced as a lead's words, with the pins you cite quoted by the server. A few messages an hour per thread; past that it goes to the owner as an ask, so don't retry.",
   company:
     "This workspace's leads from their records, never their chats: each one's pinned direction, memo, recent decisions, open asks and work, and the headers of the threads between them. With thread, that thread's messages.",
+  add_lead:
+    "Add a lead to this workspace, the same as the Add leads sheet: it starts with a generic or blank charter. Any short lowercase kind works, such as design.",
+  update_charter:
+    "Rewrite a lead's charter (title, area, goal, charter text; what you leave out stays). A running lead is told its new charter at once.",
 };
 
 function parseLeadArgs<T extends LeadToolName>(tool: T, args: unknown) {
@@ -178,6 +205,10 @@ function runLeadTool(
       const { thread } = parseLeadArgs(tool, raw);
       return thread ? companyThread(w, thread) : companyText(w);
     }
+    case "add_lead":
+      return addLeadTool(w, parseLeadArgs(tool, raw));
+    case "update_charter":
+      return updateCharterTool(w, parseLeadArgs(tool, raw));
   }
 }
 

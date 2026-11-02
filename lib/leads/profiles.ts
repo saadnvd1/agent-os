@@ -10,23 +10,27 @@ import type { LeadKind } from "./types";
 import { TECH } from "./types";
 
 // The tools leads and the chief have on top of the orchestrator's
-// (./tools.ts). `company` is the chief's alone.
+// (./tools.ts). `company`, `add_lead` and `update_charter` are the chief's alone.
 export const LEAD_TOOLS = [
   "update_memo",
   "propose_pin",
   "direction",
   "message_lead",
   "company",
+  "add_lead",
+  "update_charter",
 ] as const;
 export type LeadToolName = (typeof LEAD_TOOLS)[number];
 const OWN_LEAD_TOOLS: readonly LeadToolName[] = LEAD_TOOLS.filter(
-  (t) => t !== "company"
+  (t) => t !== "company" && t !== "add_lead" && t !== "update_charter"
 );
 // The chief has no direction or memo of its own: it reads the leads'.
 const CHIEF_LEAD_TOOLS: readonly LeadToolName[] = [
   "direction",
   "message_lead",
   "company",
+  "add_lead",
+  "update_charter",
 ];
 export const isLeadToolName = (t: unknown): t is LeadToolName =>
   typeof t === "string" && (LEAD_TOOLS as readonly string[]).includes(t);
