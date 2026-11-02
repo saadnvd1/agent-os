@@ -31,10 +31,17 @@ async function setup(access: "ask" | "full" = "ask") {
     events.flatMap((e) =>
       e.type === "item" && e.item.kind === "approval" ? [e.item] : []
     ) as Extract<ChatItem, { kind: "approval" }>[];
+  // The id of the next question card to go up, once it's waiting.
+  const seen = new Set<string>();
   const pendingId = async () => {
-    for (let i = 0; i < 100 && !approvals.pending.has("approval-ask-1"); i++)
+    for (let i = 0; i < 100; i++) {
+      const c = cards().find(
+        (c) => !seen.has(c.id) && approvals.pending.has(c.id)
+      );
+      if (c) return (seen.add(c.id), c.id);
       await new Promise((r) => setTimeout(r, 5));
-    return "approval-ask-1";
+    }
+    throw new Error("no question card");
   };
   return { events, approvals, server, entry, connect, cards, pendingId };
 }
@@ -98,9 +105,7 @@ describe("CopilotAskServer", () => {
       name: "ask_user",
       arguments: { question: "Name?" },
     });
-    for (let i = 0; i < 100 && !t.approvals.pending.has("approval-ask-2"); i++)
-      await new Promise((r) => setTimeout(r, 5));
-    t.approvals.pending.respond("approval-ask-2", {
+    t.approvals.pending.respond(await t.pendingId(), {
       decision: "answer",
       answers: { "Name?": "Ada" },
     });
@@ -148,6 +153,33 @@ describe("CopilotAskServer", () => {
     await expect(fetch(t.entry.url, { method: "POST" })).rejects.toThrow();
   });
 
+  it("expires the card when Copilot drops the call", async () => {
+    const t = await setup();
+    const ac = new AbortController();
+    const call = fetch(t.entry.url, {
+      method: "POST",
+      signal: ac.signal,
+      headers: {
+        "content-type": "application/json",
+        accept: "application/json, text/event-stream",
+      },
+      body: JSON.stringify({
+        jsonrpc: "2.0",
+        id: 1,
+        method: "tools/call",
+        params: { name: "ask_user", arguments: { question: "Sure?" } },
+      }),
+    }).catch(() => {});
+    const id = await t.pendingId();
+    ac.abort();
+    for (let i = 0; i < 100 && t.approvals.pending.has(id); i++)
+      await new Promise((r) => setTimeout(r, 5));
+    expect(t.approvals.pending.has(id)).toBe(false);
+    expect(t.cards().at(-1)).toMatchObject({ id, status: "expired" });
+    expect(t.events.at(-1)).toEqual({ type: "state", state: "running" });
+    await call;
+  });
+
   it("keeps two conversations apart", async () => {
     const a = await setup();
     const b = await setup();
@@ -166,6 +198,53 @@ describe("CopilotAskServer", () => {
     expect(b.cards()).toEqual([]);
     a.approvals.pending.respond(id, { decision: "deny" });
     await call;
+  });
+
+  it("puts a question after a worker restart at the latest turn", async () => {
+    const { listItems, saveItem } = await import("../store");
+    const { seedSession } = await import("../../orchestrator/testing");
+    const { createProject } = await import("../../projects");
+    const project = createProject({
+      name: `p-${crypto.randomUUID().slice(0, 6)}`,
+      workingDirectory: "/tmp/p",
+    });
+    const session = seedSession({
+      projectId: project.id,
+      name: "c",
+      view: "chat",
+    });
+    // One worker's life: its question cards land in the chat as the runner
+    // saves them, then the worker goes away mid-question.
+    const life = async (question: string) => {
+      const t = await setup();
+      const call = (await t.connect())
+        .callTool({ name: "ask_user", arguments: { question } })
+        .catch(() => {});
+      const id = await t.pendingId();
+      t.server.close();
+      await call;
+      for (const c of t.cards()) saveItem(session, c);
+      return id;
+    };
+
+    const first = await life("First?");
+    saveItem(session, {
+      id: "user-2",
+      kind: "user",
+      text: "next turn",
+      createdAt: Date.now(),
+    });
+    const second = await life("Second?");
+
+    expect(second).not.toBe(first);
+    const items = listItems(session);
+    expect(items.map((i) => i.id)).toEqual([first, "user-2", second]);
+    expect(items[0]).toMatchObject({
+      questions: [{ question: "First?" }],
+    });
+    expect(items.at(-1)).toMatchObject({
+      questions: [{ question: "Second?" }],
+    });
   });
 
   it("refuses a browser origin", async () => {

@@ -19,7 +19,8 @@ that asks the chat as the access setting says. GitHub Copilot runs through
 approval cards under the same access setting, its questions arrive as
 question cards (each conversation serves the agent a private `ask_user` tool
 on loopback, since Copilot doesn't offer its own over ACP; a question always
-waits for you, even with full access), and a conversation resumes with
+waits for you, even with full access, and each card has its own id, so one
+asked after a restart lands at the latest turn), and a conversation resumes with
 `session/load` after a restart. It signs in with `copilot login` or a
 `COPILOT_GITHUB_TOKEN`, `GH_TOKEN` or `GITHUB_TOKEN`; it has no plan mode,
 undo or in-chat model list yet, so it runs on its own default model unless one
