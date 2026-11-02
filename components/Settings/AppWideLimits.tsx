@@ -19,8 +19,8 @@ export function AppWideLimits() {
   const updateAway = useUpdateAwaySettings();
   return (
     <SettingSection
-      title="All workspaces"
-      help="Stall alerts and Away mode apply across every workspace."
+      title="Alerts and Away"
+      help="Apply across every workspace."
     >
       {stall.data && (
         <NumberSetting

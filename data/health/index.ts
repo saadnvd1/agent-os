@@ -91,10 +91,13 @@ export function useDeleteNote() {
   });
 }
 
+import type { HealthMeta } from "@/lib/health/config";
+
 export interface ConfigResponse {
   config: Record<string, number>;
   defaults: Record<string, number>;
   labels: Record<string, string>;
+  meta: Record<string, HealthMeta>;
 }
 
 export function useHealthConfig() {

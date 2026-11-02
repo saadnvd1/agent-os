@@ -3,6 +3,7 @@
 import { useState } from "react";
 import { useSnapshot } from "valtio";
 import { ArrowLeft, ChefHat, Plus } from "lucide-react";
+import { ListSection } from "@/components/Settings/ListSection";
 import { Button } from "@/components/ui/button";
 import {
   useRecipeDraft,
@@ -30,7 +31,7 @@ function Row({ r, onOpen }: { r: RecipeView; onOpen: () => void }) {
     <button
       type="button"
       onClick={onOpen}
-      className="border-border/60 hover:bg-foreground/[0.03] focus-visible:ring-ring flex min-h-14 w-full items-center gap-3 rounded-xl border px-3 py-2.5 text-left outline-none focus-visible:ring-2"
+      className="hover:bg-foreground/[0.03] focus-visible:ring-ring flex min-h-14 w-full items-center gap-3 px-3 py-2.5 text-left outline-none focus-visible:ring-2 focus-visible:ring-inset"
     >
       <div className="min-w-0 flex-1 space-y-0.5">
         <div className="flex min-w-0 items-center gap-2">
@@ -40,11 +41,15 @@ function Row({ r, onOpen }: { r: RecipeView; onOpen: () => void }) {
           </span>
         </div>
         <p className="text-muted-foreground truncate text-xs">
-          {r.timer
-            ? `${r.timer.description}${r.timer.enabled && r.timer.nextRunAt ? ` · next ${formatRunTime(r.timer.nextRunAt, r.timer.timezone)}` : ""}`
-            : "No timer"}
-          {last && ` · ${formatRunTime(sqlMs(last.created_at))}`}
-          {r.totals.costUsd > 0 && ` · ${money(r.totals.costUsd)} total`}
+          {[
+            r.timer
+              ? `${r.timer.description}${r.timer.enabled && r.timer.nextRunAt ? ` · next ${formatRunTime(r.timer.nextRunAt, r.timer.timezone)}` : ""}`
+              : null,
+            last ? formatRunTime(sqlMs(last.created_at)) : null,
+            r.totals.costUsd > 0 ? `${money(r.totals.costUsd)} total` : null,
+          ]
+            .filter(Boolean)
+            .join(" · ")}
         </p>
       </div>
       {last && <RunChip status={last.status} />}
@@ -185,9 +190,15 @@ export function RecipesPanel() {
               </p>
             </div>
           )}
-          {recipes.map((r) => (
-            <Row key={r.id} r={r} onOpen={() => toDetail(r.id)} />
-          ))}
+          {recipes.length > 0 && (
+            <ListSection
+              title="Saved"
+              items={recipes}
+              keyOf={(r) => r.id}
+              render={(r) => <Row r={r} onOpen={() => toDetail(r.id)} />}
+              empty=""
+            />
+          )}
         </div>
       )}
       {view.mode === "detail" && (

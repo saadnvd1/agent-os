@@ -1,11 +1,13 @@
 "use client";
 
-import { SettingToggle as Toggle } from "@/components/Settings/SettingToggle";
+import { SettingSection } from "@/components/Settings/SettingRow";
+import { SwitchSetting } from "@/components/Settings/settings-fields";
 import { useNetworkQuery, useUpdateNetwork } from "@/data/devices";
 import { TailscaleCard } from "./TailscaleCard";
 import { ConnectCard } from "./ConnectCard";
 import { ReachRow } from "@/components/Reach/ReachRow";
 
+// How devices reach this machine: Connect, Wi-Fi and Tailscale.
 export function NetworkSection({
   open,
   canManage,
@@ -24,31 +26,32 @@ export function NetworkSection({
   return (
     <div className="space-y-2">
       <ReachRow enabled={open} />
-      <ConnectCard
-        connect={data.connect}
-        canManage={canManage}
-        onToggle={(connect) => update.mutate({ connect })}
-      />
-      <TailscaleCard tailscale={data.tailscale} />
-      <Toggle
-        title="Allow devices on this Wi-Fi"
-        detail="Paired devices on the same network can connect. Use it on networks you trust: Wi-Fi traffic isn't encrypted."
-        checked={data.lan.on}
-        locked={data.lan.locked || !canManage}
-        onChange={(lan) => update.mutate({ lan })}
-      />
-      <Toggle
-        title="Require pairing on Tailscale too"
-        detail="By default anything on your tailnet is trusted. Turn this on if others share your tailnet."
-        checked={data.requirePairingOnTailnet.on}
-        locked={data.requirePairingOnTailnet.locked || !canManage}
-        onChange={(requirePairingOnTailnet) =>
-          update.mutate({ requirePairingOnTailnet })
-        }
-      />
-      {update.error && (
-        <p className="text-destructive text-xs">{update.error.message}</p>
-      )}
+      <SettingSection>
+        <ConnectCard
+          connect={data.connect}
+          canManage={canManage}
+          onToggle={(connect) => update.mutateAsync({ connect })}
+        />
+        <TailscaleCard tailscale={data.tailscale} />
+        <SwitchSetting
+          id="network-lan"
+          label="Allow devices on this Wi-Fi"
+          help="Paired devices on the same network can connect. Use it on networks you trust: Wi-Fi traffic isn't encrypted."
+          checked={data.lan.on}
+          locked={data.lan.locked || !canManage}
+          onSave={(lan) => update.mutateAsync({ lan })}
+        />
+        <SwitchSetting
+          id="network-tailnet-pairing"
+          label="Require pairing on Tailscale too"
+          help="By default anything on your tailnet is trusted. Turn this on if others share your tailnet."
+          checked={data.requirePairingOnTailnet.on}
+          locked={data.requirePairingOnTailnet.locked || !canManage}
+          onSave={(requirePairingOnTailnet) =>
+            update.mutateAsync({ requirePairingOnTailnet })
+          }
+        />
+      </SettingSection>
     </div>
   );
 }

@@ -7,10 +7,8 @@ import {
   useAddNote,
   useDeleteNote,
   useDismissAnomaly,
-  useHealthConfig,
   useHealthNotes,
   useHealthQuery,
-  useSaveConfig,
 } from "@/data/health";
 import { AREAS, AREA_LABELS, type Area } from "@/lib/health/types";
 import {
@@ -20,7 +18,9 @@ import {
 } from "@/lib/health/view";
 import { cn } from "@/lib/utils";
 import { EnvFailures } from "./EnvFailures";
+import { MachineChecks } from "./MachineChecks";
 import { SweepRuns } from "./SweepRuns";
+import { Thresholds } from "./Thresholds";
 
 const TABS = [
   "open",
@@ -29,6 +29,7 @@ const TABS = [
   "notes",
   "thresholds",
   "cleanup",
+  "machine",
 ] as const;
 type Tab = (typeof TABS)[number];
 const TAB_LABEL: Record<Tab, string> = {
@@ -38,6 +39,7 @@ const TAB_LABEL: Record<Tab, string> = {
   notes: "Notes",
   thresholds: "Thresholds",
   cleanup: "Clean-up",
+  machine: "This machine",
 };
 
 const tokens = (n: number) =>
@@ -302,85 +304,6 @@ function Notes() {
   );
 }
 
-function Thresholds() {
-  const { data } = useHealthConfig();
-  const save = useSaveConfig();
-  const [draft, setDraft] = useState<Record<string, string>>({});
-  const [errors, setErrors] = useState<Record<string, string>>({});
-  if (!data) return null;
-  const drop = (k: string) => {
-    setDraft(({ [k]: _, ...rest }) => rest);
-    setErrors(({ [k]: _, ...rest }) => rest);
-  };
-  return (
-    <div className="space-y-3">
-      <p className="text-muted-foreground text-sm">
-        When a check trips. Clear a box to go back to the default.
-      </p>
-      <ul className="border-border/60 overflow-hidden rounded-xl border">
-        {Object.keys(data.defaults).map((k) => {
-          const value = draft[k] ?? String(data.config[k]);
-          return (
-            <li
-              key={k}
-              className="border-border/60 flex items-center gap-3 border-b px-3 py-2 last:border-b-0"
-            >
-              <label htmlFor={`health-${k}`} className="min-w-0 flex-1 text-sm">
-                {data.labels[k]}
-                <span className="text-muted-foreground block text-xs">
-                  default {data.defaults[k]}
-                </span>
-              </label>
-              <span className="flex flex-col items-end gap-1">
-                <Input
-                  id={`health-${k}`}
-                  inputMode="decimal"
-                  value={value}
-                  aria-invalid={!!errors[k]}
-                  onChange={(e) => {
-                    setDraft({ ...draft, [k]: e.target.value });
-                    setErrors(({ [k]: _, ...rest }) => rest);
-                  }}
-                  onBlur={() => {
-                    if (draft[k] === undefined) return;
-                    const raw = draft[k].trim();
-                    const n = raw === "" ? null : Number(raw);
-                    if (n !== null && (!Number.isFinite(n) || n < 0))
-                      return setErrors({
-                        ...errors,
-                        [k]: "Enter a number, 0 or more.",
-                      });
-                    if (n === data.config[k]) return drop(k);
-                    save.mutate({ [k]: n }, { onSettled: () => drop(k) });
-                  }}
-                  onKeyDown={(e) => {
-                    if (e.key === "Enter") e.currentTarget.blur();
-                    if (e.key === "Escape") {
-                      drop(k);
-                      e.currentTarget.blur();
-                    }
-                  }}
-                  className="h-11 w-24 text-right tabular-nums md:h-9"
-                />
-                {errors[k] && (
-                  <span role="alert" className="text-destructive text-xs">
-                    {errors[k]}
-                  </span>
-                )}
-              </span>
-            </li>
-          );
-        })}
-      </ul>
-      {save.error && (
-        <p role="alert" className="text-destructive text-sm">
-          {save.error.message}
-        </p>
-      )}
-    </div>
-  );
-}
-
 export function HealthPanel() {
   const { data, error } = useHealthQuery();
   const dismiss = useDismissAnomaly();
@@ -445,6 +368,7 @@ export function HealthPanel() {
       {tab === "notes" && <Notes />}
       {tab === "thresholds" && <Thresholds />}
       {tab === "cleanup" && <SweepRuns />}
+      {tab === "machine" && <MachineChecks />}
     </div>
   );
 }

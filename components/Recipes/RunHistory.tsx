@@ -52,7 +52,7 @@ export function RunHistory({ runs }: { runs: RecipeRun[] }) {
                 </p>
                 <p className="text-muted-foreground truncate text-xs">
                   {[
-                    triggerLabel(r),
+                    r.trigger === "manual" ? null : triggerLabel(r),
                     r.pr_number ? `PR #${r.pr_number}` : null,
                     stats,
                   ]

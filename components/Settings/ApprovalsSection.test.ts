@@ -25,6 +25,14 @@ const state = vi.hoisted(() => ({
   audit: [] as object[],
   mutate: vi.fn(),
 }));
+vi.mock("@/components/Merge/MergeApprovalToggle", () => ({
+  MergeApprovalToggle: ({ overriddenBy }: { overriddenBy?: boolean }) =>
+    createElement(
+      "p",
+      { "data-merge": String(!!overriddenBy) },
+      "merge toggle"
+    ),
+}));
 vi.mock("@/data/approvals", () => ({
   useApprovalsModeQuery: () => ({
     isPending: false,
@@ -32,14 +40,14 @@ vi.mock("@/data/approvals", () => ({
     data: { on: state.on, audit: state.audit },
   }),
   useSetApprovalsMode: () => ({
-    mutate: state.mutate,
+    mutateAsync: state.mutate,
     isPending: false,
     error: null,
   }),
 }));
 
 const { TooltipProvider } = await import("@/components/ui/tooltip");
-const { NoApprovalsSection } = await import("./NoApprovalsSection");
+const { ApprovalsSection } = await import("./ApprovalsSection");
 const { NoApprovalsBadge } =
   await import("@/components/Approvals/NoApprovalsBadge");
 
@@ -61,7 +69,7 @@ afterEach(() => {
 const render = (el: ReturnType<typeof createElement>) =>
   act(() => root.render(el));
 const click = (el: Element | null) =>
-  act(() => {
+  act(async () => {
     el?.dispatchEvent(new window.MouseEvent("click", { bubbles: true }));
   });
 const byText = (text: string) =>
@@ -69,45 +77,76 @@ const byText = (text: string) =>
     b.textContent?.includes(text)
   ) ?? null;
 
-describe("the No approvals toggle", () => {
-  it("is off, and flipping it warns first without switching anything", () => {
-    render(createElement(NoApprovalsSection));
+describe("the Approvals section", () => {
+  beforeEach(() => {
+    state.mutate.mockResolvedValue(undefined);
+  });
+
+  it("is off, and flipping it warns first without switching anything", async () => {
+    render(createElement(ApprovalsSection));
     const toggle = host.querySelector('[role="switch"]');
     expect(toggle?.getAttribute("aria-checked")).toBe("false");
     expect(host.querySelector('[role="alertdialog"]')).toBeNull();
-    click(toggle!);
+    await click(toggle!);
     const warning = host.querySelector('[role="alertdialog"]');
     expect(warning?.textContent).toMatch(/hard lines included/);
     expect(warning?.textContent).toMatch(/permission prompts off/);
     expect(state.mutate).not.toHaveBeenCalled();
   });
 
-  it("switches on only when the warning is confirmed, and cancel backs out", () => {
-    render(createElement(NoApprovalsSection));
-    click(host.querySelector('[role="switch"]'));
-    click(byText("Cancel"));
+  it("switches on only when the warning is confirmed, and cancel backs out", async () => {
+    render(createElement(ApprovalsSection));
+    await click(host.querySelector('[role="switch"]'));
+    await click(byText("Cancel"));
     expect(host.querySelector('[role="alertdialog"]')).toBeNull();
     expect(state.mutate).not.toHaveBeenCalled();
-    click(host.querySelector('[role="switch"]'));
-    click(byText("Turn on No approvals"));
-    expect(state.mutate).toHaveBeenCalledWith(true, expect.any(Object));
+    await click(host.querySelector('[role="switch"]'));
+    await click(byText("Turn on No approvals"));
+    expect(state.mutate).toHaveBeenCalledWith(true);
   });
 
-  it("switches off at once, and lists what was approved for you", () => {
+  it("switches off at once", async () => {
+    state.on = true;
+    render(createElement(ApprovalsSection));
+    await click(host.querySelector('[role="switch"]'));
+    expect(state.mutate).toHaveBeenCalledWith(false);
+  });
+
+  it("holds the merge approval switch in the same place, greyed while the mode is on", () => {
+    render(createElement(ApprovalsSection));
+    expect(host.querySelector("[data-merge]")?.getAttribute("data-merge")).toBe(
+      "false"
+    );
+    state.on = true;
+    act(() => root.unmount());
+    root = createRoot(host);
+    render(createElement(ApprovalsSection));
+    expect(host.querySelector("[data-merge]")?.getAttribute("data-merge")).toBe(
+      "true"
+    );
+  });
+
+  it("lists what was approved in words, with a command behind Details", async () => {
     state.on = true;
     state.audit = [
       {
         id: 1,
         at: "2026-10-13 10:00:00",
-        source: "ask",
-        subject: 'money ask "Pay?"',
-        detail: "",
+        where: "A chat",
+        summary: "Ran a command",
+        details: "ssh root@host 'ls /tmp'",
       },
     ];
-    render(createElement(NoApprovalsSection));
-    expect(host.textContent).toContain('money ask "Pay?"');
-    click(host.querySelector('[role="switch"]'));
-    expect(state.mutate).toHaveBeenCalledWith(false);
+    render(createElement(ApprovalsSection));
+    expect(host.textContent).toContain("Ran a command");
+    expect(host.textContent).not.toContain("ssh root@host");
+    await click(byText("Details"));
+    expect(host.textContent).toContain("ssh root@host 'ls /tmp'");
+  });
+
+  it("says so when nothing was approved", () => {
+    render(createElement(ApprovalsSection));
+    expect(host.textContent).toContain("Nothing yet.");
   });
 });
 

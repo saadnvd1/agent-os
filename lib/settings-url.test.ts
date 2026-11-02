@@ -35,6 +35,24 @@ describe("settingsFromHref", () => {
   });
 });
 
+describe("old section keys", () => {
+  it("redirect to the section that took them over", () => {
+    expect(settingsFromHref("/?settings=setup")).toEqual({
+      open: true,
+      section: "health",
+    });
+    expect(settingsFromHref("/?settings=no-approvals")).toEqual({
+      open: true,
+      section: "approvals",
+    });
+  });
+
+  it("never reads an inherited property as a section", () => {
+    expect(settingsFromHref("/?settings=constructor").section).toBeNull();
+    expect(settingsFromHref("/?settings=__proto__").section).toBeNull();
+  });
+});
+
 describe("hrefWithSettings", () => {
   it("sets, moves and removes the section, keeping the session", () => {
     const opened = hrefWithSettings("/?session=abc#x", {

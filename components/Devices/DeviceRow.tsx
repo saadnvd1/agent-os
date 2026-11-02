@@ -25,7 +25,7 @@ export function lastSeen(s: string | null, now = Date.now()): string {
   return `${Math.round(mins / 1440)}d ago`;
 }
 
-function DeviceIcon({ ua }: { ua: string | null }) {
+export function DeviceIcon({ ua }: { ua: string | null }) {
   const className = "text-muted-foreground h-4 w-4 shrink-0";
   if (/iPad|Tablet/i.test(ua ?? "")) return <Tablet className={className} />;
   if (/iPhone|Android|Mobile/i.test(ua ?? ""))
@@ -63,7 +63,7 @@ export function DeviceRow({
   };
 
   return (
-    <div className="bg-muted/40 rounded-lg px-3 py-2.5">
+    <div className="px-3 py-2.5">
       <div className="flex items-center gap-3">
         <DeviceIcon ua={device.user_agent} />
         <div className="min-w-0 flex-1">

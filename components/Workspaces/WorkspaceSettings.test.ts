@@ -124,19 +124,19 @@ describe("WorkspaceSettings", () => {
     await render();
     expect(limit().id).toBe("task-limit-w1");
     expect(limit().disabled).toBe(true);
-    expect(limit().value).toBe("3");
-    expect(host.textContent).not.toContain("Default");
+    expect(limit().value).toBe("");
+    expect(limit().placeholder).toBe("Off");
+    expect(host.textContent).not.toContain("Reset");
   });
 
-  it("enables the number when a limit is set, and hints the default", async () => {
+  it("enables the number when a limit is set, and offers Reset to off", async () => {
     localStorage.setItem("agentOS-settings-workspace", "w2");
     await render();
     expect(limit().disabled).toBe(false);
     expect(limit().value).toBe("2");
-    expect(host.textContent).toContain("Default: off");
     expect(
       [...host.querySelectorAll("button")].some(
-        (b) => b.textContent === "Reset"
+        (b) => b.textContent === "Reset to off"
       )
     ).toBe(true);
   });

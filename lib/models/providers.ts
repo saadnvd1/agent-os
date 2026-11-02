@@ -190,5 +190,5 @@ export function describeSecretRef(ref: SecretRef | undefined): string {
     return `tokenvault ${ref.project}${ref.desc ? ` "${ref.desc}"` : ""}`;
   if (ref.kind === "keychain")
     return `Keychain ${ref.service}${ref.account ? ` (${ref.account})` : ""}`;
-  return `$${ref.name}`;
+  return "an environment variable";
 }

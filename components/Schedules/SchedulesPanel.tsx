@@ -12,6 +12,7 @@ import {
   Trash2,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import { ListSection } from "@/components/Settings/ListSection";
 import { Switch } from "@/components/ui/switch";
 import { useWorkspacesQuery } from "@/data/workspaces";
 import { useNotifySettings } from "@/data/notify";
@@ -93,7 +94,7 @@ function ScheduleRow({ s, onOpen }: { s: ScheduleView; onOpen: () => void }) {
         (e.key === "Enter" || e.key === " ") &&
         onOpen()
       }
-      className="border-border/60 hover:bg-foreground/[0.03] focus-visible:ring-ring flex min-h-14 cursor-pointer items-center gap-3 rounded-xl border px-3 py-2.5 outline-none focus-visible:ring-2"
+      className="hover:bg-foreground/[0.03] focus-visible:ring-ring flex min-h-14 cursor-pointer items-center gap-3 px-3 py-2.5 outline-none focus-visible:ring-2 focus-visible:ring-inset"
     >
       <div className="min-w-0 flex-1 space-y-0.5">
         <div className="flex min-w-0 items-center gap-2">
@@ -114,7 +115,9 @@ function ScheduleRow({ s, onOpen }: { s: ScheduleView; onOpen: () => void }) {
           {s.oneOff && ` · by ${s.createdBy.name}`}
         </p>
       </div>
-      {s.lastRun && <OutcomeChip run={s.lastRun} />}
+      {s.lastRun && !s.done_at && s.lastRun.outcome !== "started" && (
+        <OutcomeChip run={s.lastRun} />
+      )}
       {!s.done_at && <EnableSwitch s={s} />}
     </div>
   );
@@ -131,14 +134,13 @@ function Group({
 }) {
   if (rows.length === 0) return null;
   return (
-    <section className="space-y-2">
-      <h4 className="text-muted-foreground px-1 text-xs font-medium">
-        {title} · {rows.length}
-      </h4>
-      {rows.map((s) => (
-        <ScheduleRow key={s.id} s={s} onOpen={() => onOpen(s.id)} />
-      ))}
-    </section>
+    <ListSection
+      title={title}
+      items={rows}
+      keyOf={(s) => s.id}
+      render={(s) => <ScheduleRow s={s} onOpen={() => onOpen(s.id)} />}
+      empty=""
+    />
   );
 }
 

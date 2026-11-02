@@ -3,6 +3,7 @@
 import { useState } from "react";
 import { ArrowLeft } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import { ScrollTable } from "@/components/Settings/ListSection";
 import { SettingSection } from "@/components/Settings/SettingRow";
 import { SwitchSetting } from "@/components/Settings/settings-fields";
 import { formatTokens } from "@/lib/chat/context";
@@ -23,41 +24,60 @@ const WINDOWS = [
   ["d30", "30 days"],
 ] as const;
 
+export const hasUsage = (e: ExperimentView) =>
+  WINDOWS.some(([key]) => {
+    const w = e.usage[key];
+    return (
+      w.calls > 0 ||
+      w.tokens > 0 ||
+      w.costUsd > 0 ||
+      w.accepted + w.dismissed > 0
+    );
+  });
+
 function Usage({ e }: { e: ExperimentView }) {
+  if (!hasUsage(e))
+    return (
+      <p className="text-muted-foreground py-1 text-xs">
+        No usage yet. It shows here once it has run.
+      </p>
+    );
   return (
-    <table className="w-full text-xs tabular-nums">
-      <thead className="text-muted-foreground">
-        <tr>
-          <th className="py-1 text-left font-normal" />
-          <th className="py-1 text-right font-normal">Calls</th>
-          <th className="py-1 text-right font-normal">Tokens</th>
-          <th className="py-1 text-right font-normal">Cost</th>
-          {e.suggests && (
-            <th className="py-1 text-right font-normal">Accepted</th>
-          )}
-        </tr>
-      </thead>
-      <tbody>
-        {WINDOWS.map(([key, label]) => {
-          const w = e.usage[key];
-          return (
-            <tr key={key} className="border-border border-t">
-              <td className="py-1">{label}</td>
-              <td className="py-1 text-right">{w.calls}</td>
-              <td className="py-1 text-right">{formatTokens(w.tokens)}</td>
-              <td className="py-1 text-right">{usd(w.costUsd)}</td>
-              {e.suggests && (
-                <td className="py-1 text-right">
-                  {pct(w.acceptRate)}
-                  {w.accepted + w.dismissed > 0 &&
-                    ` (${w.accepted}/${w.accepted + w.dismissed})`}
-                </td>
-              )}
-            </tr>
-          );
-        })}
-      </tbody>
-    </table>
+    <ScrollTable>
+      <table className="w-full text-xs tabular-nums">
+        <thead className="text-muted-foreground">
+          <tr>
+            <th className="py-1 text-left font-normal" />
+            <th className="py-1 text-right font-normal">Calls</th>
+            <th className="py-1 text-right font-normal">Tokens</th>
+            <th className="py-1 text-right font-normal">Cost</th>
+            {e.suggests && (
+              <th className="py-1 text-right font-normal">Accepted</th>
+            )}
+          </tr>
+        </thead>
+        <tbody>
+          {WINDOWS.map(([key, label]) => {
+            const w = e.usage[key];
+            return (
+              <tr key={key} className="border-border border-t">
+                <td className="py-1">{label}</td>
+                <td className="py-1 text-right">{w.calls}</td>
+                <td className="py-1 text-right">{formatTokens(w.tokens)}</td>
+                <td className="py-1 text-right">{usd(w.costUsd)}</td>
+                {e.suggests && (
+                  <td className="py-1 text-right">
+                    {pct(w.acceptRate)}
+                    {w.accepted + w.dismissed > 0 &&
+                      ` (${w.accepted}/${w.accepted + w.dismissed})`}
+                  </td>
+                )}
+              </tr>
+            );
+          })}
+        </tbody>
+      </table>
+    </ScrollTable>
   );
 }
 
@@ -197,7 +217,7 @@ export function ExperimentsSection() {
         <SettingSection key={e.id}>
           <SwitchSetting
             id={`experiment-${e.id}`}
-            label={`${e.name} · ${e.status === "beta" ? "Beta" : "Experimental"}`}
+            label={e.status === "beta" ? `${e.name} · Beta` : e.name}
             help={e.description}
             checked={e.on}
             locked={data.locked}

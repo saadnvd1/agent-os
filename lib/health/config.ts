@@ -30,24 +30,77 @@ export const HEALTH_DEFAULTS = {
 export type HealthKey = keyof typeof HEALTH_DEFAULTS;
 export type HealthConfig = Record<HealthKey, number>;
 
-export const HEALTH_LABELS: Record<HealthKey, string> = {
-  loadRedMinutes: "Machine load red for (minutes)",
-  queueHeldMinutes: "Queued task held for (minutes)",
-  bgQuietMinutes: "Background job quiet for (minutes)",
-  portWaitMinutes: "Waiting on a port someone else holds for (minutes)",
-  pieceDupOverlap: "Plan piece matches merged work (0 to 1 overlap)",
-  restartsMax: "Server restarts allowed per window",
-  restartsWindowMinutes: "Restart window (minutes)",
-  ciSlowFallbackMinutes: "CI pending, when no history yet (minutes)",
-  armedStuckMinutes: "PR armed without merging for (minutes)",
-  serverErrorsMin: "Server errors per 10 minutes, at least",
-  serverErrorsFactor: "Server errors, times the usual rate",
-  envBurstSessions: "Environment failure: sessions in the window to alert",
-  envBurstHours: "Environment failure window (hours)",
-  envQuietDays: "Environment failure back after quiet for (days)",
-  wakeUsageCeilingPct: "Stop waking watchers above usage (%)",
-  watchersOn: "Watchers on (1) or off (0)",
+export interface HealthMeta {
+  label: string;
+  unit?: string;
+  min: number;
+  max?: number;
+  integer?: boolean;
+  // A 1/0 value shown as a switch.
+  switch?: boolean;
+}
+
+// How each threshold reads in Settings: the server owns it, so a new
+// threshold needs no client change.
+export const HEALTH_META: Record<HealthKey, HealthMeta> = {
+  loadRedMinutes: { label: "Machine load red for", unit: "min", min: 1 },
+  queueHeldMinutes: { label: "Queued task held for", unit: "min", min: 1 },
+  bgQuietMinutes: { label: "Background job quiet for", unit: "min", min: 1 },
+  portWaitMinutes: {
+    label: "Waiting on a port someone else holds for",
+    unit: "min",
+    min: 1,
+  },
+  pieceDupOverlap: {
+    label: "Plan piece matches merged work",
+    min: 0,
+    max: 1,
+    integer: false,
+  },
+  restartsMax: { label: "Server restarts allowed per window", min: 1 },
+  restartsWindowMinutes: { label: "Restart window", unit: "min", min: 1 },
+  ciSlowFallbackMinutes: {
+    label: "CI pending, when no history yet",
+    unit: "min",
+    min: 1,
+  },
+  armedStuckMinutes: {
+    label: "PR armed without merging for",
+    unit: "min",
+    min: 1,
+  },
+  serverErrorsMin: {
+    label: "Server errors per 10 minutes, at least",
+    min: 1,
+  },
+  serverErrorsFactor: {
+    label: "Server errors, times the usual rate",
+    unit: "×",
+    min: 1,
+    integer: false,
+  },
+  envBurstSessions: {
+    label: "Environment failure: sessions in the window to alert",
+    min: 1,
+  },
+  envBurstHours: { label: "Environment failure window", unit: "hours", min: 1 },
+  envQuietDays: {
+    label: "Environment failure back after quiet for",
+    unit: "days",
+    min: 1,
+  },
+  wakeUsageCeilingPct: {
+    label: "Stop waking watchers above usage",
+    unit: "%",
+    min: 1,
+    max: 100,
+  },
+  watchersOn: { label: "Watchers", min: 0, max: 1, switch: true },
 };
+
+export const HEALTH_LABELS = Object.fromEntries(
+  Object.entries(HEALTH_META).map(([k, m]) => [k, m.label])
+) as Record<HealthKey, string>;
 
 const settingKey = (k: HealthKey) => `health.${k}`;
 

@@ -3,6 +3,7 @@
 import { useEffect, useRef, useState } from "react";
 import { ArrowLeft, ChevronRight } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import { ListSection } from "@/components/Settings/ListSection";
 import { Markdown } from "@/components/Chat/Markdown";
 import {
   useAuditReportQuery,
@@ -26,12 +27,16 @@ const day = (iso: string) =>
     minute: "2-digit",
   });
 
-function stats(a: AuditListItem): string {
-  if (a.kind !== "sessions")
-    return a.findings === undefined
-      ? a.title
-      : `${a.title} · ${a.findings} findings`;
-  return `${a.sessions ?? 0} sessions · ${tokens(a.tokensRead ?? 0)} tokens · ${a.findings ?? 0} findings`;
+// The line under the title: when, then what it found.
+function detail(a: AuditListItem): string {
+  const parts = [day(a.at)];
+  if (a.kind === "sessions")
+    parts.push(
+      `${a.sessions ?? 0} sessions`,
+      `${tokens(a.tokensRead ?? 0)} tokens`
+    );
+  if (a.findings !== undefined) parts.push(`${a.findings} findings`);
+  return parts.join(" · ");
 }
 
 function AuditRow({
@@ -46,24 +51,15 @@ function AuditRow({
       type="button"
       onClick={onOpen}
       data-audit={`${audit.kind}/${audit.id}`}
-      className="border-border/60 hover:bg-foreground/[0.03] focus-visible:ring-ring flex min-h-14 w-full items-center gap-3 rounded-xl border px-3 py-2.5 text-left outline-none focus-visible:ring-2"
+      className="hover:bg-foreground/[0.03] focus-visible:ring-ring flex min-h-14 w-full items-center gap-3 px-3 py-2.5 text-left outline-none focus-visible:ring-2 focus-visible:ring-inset"
     >
       <div className="min-w-0 flex-1 space-y-0.5">
-        <div className="flex min-w-0 flex-col gap-0.5 md:flex-row md:items-center md:gap-2">
-          <span className="flex shrink-0 items-center gap-2 text-sm font-medium">
-            {day(audit.at)}
-            {audit.kind !== "sessions" && (
-              <span className="bg-muted text-muted-foreground rounded px-1.5 py-0.5 text-[11px] font-normal">
-                {audit.kind}
-              </span>
-            )}
-          </span>
-          <span className="text-muted-foreground truncate text-[11px]">
-            {stats(audit)}
-          </span>
-        </div>
+        <p className="line-clamp-2 text-sm font-medium break-words">
+          {audit.title}
+        </p>
+        <p className="text-muted-foreground text-xs">{detail(audit)}</p>
         {audit.headline && (
-          <p className="text-muted-foreground truncate text-xs">
+          <p className="text-muted-foreground line-clamp-2 text-xs break-words">
             {audit.headline}
           </p>
         )}
@@ -140,22 +136,33 @@ export function AuditsPanel() {
     return <div className="bg-muted/40 h-32 animate-pulse rounded-xl" />;
   if (audits.error)
     return <p className="text-destructive text-sm">{audits.error.message}</p>;
-  if (!audits.data?.length)
-    return (
-      <p className="text-muted-foreground text-sm">
-        No audits yet. Run <code>/session-audit</code> in a session on this
-        project to audit what your sessions spent and repeated.
-      </p>
-    );
+  const all = audits.data ?? [];
+  // A "While you were away" digest is a different thing from an audit.
+  const away = all.filter((a) => a.kind === "away");
+  const real = all.filter((a) => a.kind !== "away");
+  const key = (a: AuditListItem) => `${a.kind}/${a.id}`;
+  const row = (a: AuditListItem) => (
+    <AuditRow audit={a} onOpen={() => setOpen({ kind: a.kind, id: a.id })} />
+  );
   return (
-    <div ref={listRef} className="space-y-2">
-      {audits.data.map((a) => (
-        <AuditRow
-          key={`${a.kind}/${a.id}`}
-          audit={a}
-          onOpen={() => setOpen({ kind: a.kind, id: a.id })}
+    <div ref={listRef} className="space-y-5">
+      <ListSection
+        title="Session audits"
+        help="Where sessions spent tokens and repeated work."
+        items={real}
+        keyOf={key}
+        render={row}
+        empty="No audits yet. Run /session-audit in a session on this project to audit what your sessions spent and repeated."
+      />
+      {away.length > 0 && (
+        <ListSection
+          title="While you were away"
+          items={away}
+          keyOf={key}
+          render={row}
+          empty=""
         />
-      ))}
+      )}
     </div>
   );
 }

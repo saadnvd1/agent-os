@@ -32,9 +32,8 @@ export function AgentRoleCard({
 }) {
   const down = role.choice?.availability.state === "down";
   const analyst = role.id === "analyst";
-  const label = analyst
-    ? defaultAnalystLabel(role.default, [])
-    : `Default (${role.default.split("/").slice(1).join("/")})`;
+  const modelId = (ref: string) => ref.split("/").slice(1).join("/");
+  const label = analyst ? defaultAnalystLabel(role.default, []) : "Default";
   const blockedBy = analyst ? analystBlock : undefined;
   const inheritLabel =
     scope === "settings"
@@ -60,10 +59,11 @@ export function AgentRoleCard({
           <RoleModelSelect
             id={`agent-role-${role.id}`}
             value={value}
-            inheritLabel={
-              value === null && role.binding
-                ? `${inheritLabel} · ${role.binding.ref.split("/").slice(1).join("/")}`
-                : inheritLabel
+            inheritLabel={inheritLabel}
+            inheritDetail={
+              scope === "settings" && role.modelRole === "advise" && !analyst
+                ? undefined
+                : modelId(role.binding?.ref ?? role.default)
             }
             blockedBy={blockedBy}
             onChange={commit}

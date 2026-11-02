@@ -16,6 +16,10 @@ export function matchesQuery(query: string, ...text: (string | undefined)[]) {
   return q.split(/\s+/).every((w) => haystack.includes(w));
 }
 
+// One padding and one grid for every row: label left, control right.
+const ROW =
+  "border-foreground/5 grid min-h-11 grid-cols-[minmax(0,1fr)_auto] items-center gap-x-4 gap-y-0.5 border-t px-3 py-2.5 first:border-t-0";
+
 /**
  * One setting on a Settings page, 44px at least: label and one-line help on
  * the left, the control on the right (below the label on a phone), and a meta
@@ -33,11 +37,12 @@ export function SettingRow({
   status = "idle",
   onUndo,
   onReset,
+  resetLabel,
   below,
 }: {
   id: string;
   label: string;
-  help?: string;
+  help?: ReactNode;
   control: ReactNode;
   controlClassName?: string;
   hint?: string;
@@ -46,15 +51,15 @@ export function SettingRow({
   onUndo?: () => void;
   // Given only while the value differs from the default.
   onReset?: () => void;
+  // What Reset goes back to, in words ("squash", "on", "200k").
+  resetLabel?: string;
   below?: ReactNode;
 }) {
   const query = useContext(SettingsQueryContext);
-  if (!matchesQuery(query, label, help)) return null;
+  if (!matchesQuery(query, label, typeof help === "string" ? help : undefined))
+    return null;
   return (
-    <div
-      data-setting={id}
-      className="border-foreground/5 grid min-h-11 grid-cols-[minmax(0,1fr)_auto] items-center gap-x-4 gap-y-0.5 border-t px-3 py-2 first:border-t-0"
-    >
+    <div data-setting={id} className={ROW}>
       <div className="min-w-0">
         <label htmlFor={id} className="block text-sm font-medium">
           {label}
@@ -108,7 +113,7 @@ export function SettingRow({
                 onClick={onReset}
                 className="text-primary -my-3 -mr-1 min-h-11 px-1 hover:underline"
               >
-                Reset
+                {resetLabel ? `Reset to ${resetLabel}` : "Reset"}
               </button>
             )}
           </span>
@@ -158,7 +163,7 @@ export function SettingBlock({
   return (
     <div
       data-setting={id}
-      className="border-foreground/5 space-y-1.5 border-t px-3 py-2 first:border-t-0"
+      className="border-foreground/5 space-y-1.5 border-t px-3 py-2.5 first:border-t-0"
     >
       {label && <p className="text-sm font-medium">{label}</p>}
       {children}

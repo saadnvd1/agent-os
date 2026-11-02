@@ -9,6 +9,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
+import { TWO_LINE_TRIGGER, ValueLabel } from "@/components/Settings/ValueLabel";
 import { modelChoices } from "@/data/models";
 import type { EffectiveModels } from "@/lib/models/config";
 
@@ -21,6 +22,7 @@ export function ModelSelect({
   value,
   effective,
   inheritLabel,
+  inheritDetail,
   disabled,
   onChange,
 }: {
@@ -28,6 +30,7 @@ export function ModelSelect({
   value: string | null;
   effective: EffectiveModels | undefined;
   inheritLabel?: string;
+  inheritDetail?: string;
   disabled?: boolean;
   onChange: (ref: string | null) => void;
 }) {
@@ -41,12 +44,20 @@ export function ModelSelect({
       onValueChange={(v) => onChange(v === INHERIT ? null : v)}
       disabled={disabled}
     >
-      <SelectTrigger id={id} className="h-11 md:h-9">
-        <SelectValue />
+      <SelectTrigger id={id} className={TWO_LINE_TRIGGER}>
+        <SelectValue>
+          {value === null && inheritLabel ? (
+            <ValueLabel label={inheritLabel} detail={inheritDetail} />
+          ) : (
+            (choices.find((c) => c.ref === value)?.label ?? value)
+          )}
+        </SelectValue>
       </SelectTrigger>
       <SelectContent>
         {inheritLabel && (
-          <SelectItem value={INHERIT}>{inheritLabel}</SelectItem>
+          <SelectItem value={INHERIT}>
+            <ValueLabel label={inheritLabel} detail={inheritDetail} />
+          </SelectItem>
         )}
         {missing && <SelectItem value={value}>{value}</SelectItem>}
         {groups.map((g) => (

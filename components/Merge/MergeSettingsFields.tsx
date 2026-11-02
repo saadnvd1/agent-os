@@ -77,7 +77,6 @@ export function MergeSettingsFields({
       }
       options={[inheritOption(key, onOff(inherited[key])), ...TOGGLE]}
       defaultValue={INHERIT}
-      hint=""
       onSave={(v) => set(key, v === INHERIT ? undefined : v === "on")}
     />
   );
@@ -102,7 +101,6 @@ export function MergeSettingsFields({
           })),
         ]}
         defaultValue={INHERIT}
-        hint=""
         onSave={(v) =>
           set("method", v === INHERIT ? undefined : (v as MergeMethod))
         }
