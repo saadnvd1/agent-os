@@ -2025,6 +2025,14 @@
       "area": "Settings",
       "text": "Settings is tidier: clearer switches, shorter lists, one Approvals page, and a General page for your name and alerts.",
       "url": "https://github.com/saadnvd1/agent-os/pull/570"
+    },
+    {
+      "id": 571,
+      "date": "2026-11-02",
+      "kind": "fixed",
+      "area": "Updates",
+      "text": "You can update AgentOS by hand again on machines that deploy themselves, and Update now skips the hourly wait.",
+      "url": "https://github.com/saadnvd1/agent-os/pull/571"
     }
   ]
 }
