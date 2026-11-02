@@ -87,6 +87,8 @@ export interface Session {
   // Task priority (null reads as normal) and timed pause (lib/tasks/pause.ts):
   // pausing, paused or resuming, until when (null: until resumed).
   priority?: string | null;
+  // Set only by GET /api/sessions: a finished task whose worktree is gone.
+  worktree_removed?: boolean;
   pause_state?: "pausing" | "paused" | "resuming" | null;
   paused_until?: string | null;
   pause_id?: number | null;

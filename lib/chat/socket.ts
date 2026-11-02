@@ -32,6 +32,7 @@ import {
 import { setComposerModel } from "../models/session-model";
 import { stopChatTurn } from "./stop";
 import { clientSend } from "./client-send";
+import { startFailureMessage } from "./start-error";
 import { searchChat } from "./search";
 import { DEMO_CHAT_READS, handleDemoChat } from "./demo";
 import { titleChatFromMessage } from "../session-titles";
@@ -97,7 +98,7 @@ export function serveChatSocket(
   const fail = (err: unknown) => {
     console.error(`[chat ${sessionId}] message failed:`, err);
     if (!sessionExists(sessionId)) return gone();
-    reply(errorItem(err instanceof Error ? err.message : String(err)));
+    reply(errorItem(startFailureMessage(err)));
   };
 
   if (!sessionExists(sessionId)) return gone();
@@ -157,9 +158,12 @@ function onChatMessage(
           reply({
             type: "send_failed",
             id,
-            message: err instanceof Error ? err.message : String(err),
+            message: startFailureMessage(err),
           });
-        fail(err);
+        // A message with an id shows its failure on itself; the rest of the
+        // chat hears of it once, here.
+        if (id) console.error(`[chat ${sessionId}] send failed:`, err);
+        else fail(err);
       }
     );
     // "Session 4" is named after its first message.

@@ -8,6 +8,7 @@ import os from "os";
 import { db, type Session } from "../../db";
 import { agentEnv } from "../../agents/launch";
 import { forkBrief } from "../../fork/extras";
+import { WORKTREE_REMOVED_NOTE } from "./cwd";
 import { sessionRunningBrief } from "../../project-config/session";
 import { BUS_BRIEF } from "../../agents/brief";
 import { resolveModelForAgent } from "../../model-catalog";
@@ -196,7 +197,9 @@ export class ChatHost {
     private session: Session,
     private emit: (e: WorkerEvent) => void,
     // What a session's role adds: its brief and its own tools.
-    extras: RoleExtras = {}
+    extras: RoleExtras = {},
+    // Its worktree was removed: it runs in the project's checkout.
+    private worktreeGone = false
   ) {
     this.gate = new GuestGate((note) => {
       if (!this.busy()) return;
@@ -611,7 +614,13 @@ export class ChatHost {
     if (handOver) this.stopsUpTo = this.turnsStarted;
     if (now) this.nowPending++;
     this.stopping = null;
-    const note = this.refreshedNote ?? (this.restartedNote && RESTARTED_NOTE);
+    const note =
+      [
+        this.worktreeGone && WORKTREE_REMOVED_NOTE,
+        this.refreshedNote ?? (this.restartedNote && RESTARTED_NOTE),
+      ]
+        .filter(Boolean)
+        .join("\n") || null;
     const text = agentText(note ? `${note}\n\n${m.text}` : m.text, m.files);
     if (this.refreshedNote) {
       this.refreshedNote = null;
