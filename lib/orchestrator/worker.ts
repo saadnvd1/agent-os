@@ -19,6 +19,8 @@ import { profileFor, type Profile } from "../leads/profiles";
 import { standingToken } from "../leads/home";
 import { LEAD_TOOL_DESCRIPTIONS, LEAD_TOOL_SHAPES } from "../leads/tools";
 import { loadLeadBrief, techLeadAdditions } from "../leads/brief";
+import { loadChiefBrief } from "../leads/chief";
+import { CHIEF } from "../leads/order";
 
 const leadTools = (p: Profile): ExtraTool[] =>
   p.leadTools.map((name) => ({
@@ -27,10 +29,10 @@ const leadTools = (p: Profile): ExtraTool[] =>
     shape: LEAD_TOOL_SHAPES[name],
   }));
 
-// What an orchestrator's or a lead's chat worker starts with on top of any
-// chat: its brief, the tools its profile gives it (lib/leads/profiles),
-// permissions fixed by its role, and the guard on where it may write. The
-// orchestrator of a workspace without leads gets exactly what it always had.
+// What a standing chat's worker (the orchestrator, a lead, the chief)
+// starts with on top of any chat: its brief, the tools its profile gives it
+// (lib/leads/profiles), permissions fixed by its role, and the guard on
+// where it may write. The orchestrator of a workspace without leads gets exactly what it always had.
 export async function orchestratorExtras(
   session: Session
 ): Promise<RoleExtras> {
@@ -39,6 +41,7 @@ export async function orchestratorExtras(
   const profile = profileFor(session, leads);
   if (!profile) throw new Error("This session has no tool profile yet");
   const tech = profile.kind === "tech";
+  const chief = profile.kind === CHIEF;
   const extra = leadTools(profile);
   const baseUrl = agentEnv(session.id).AGENTOS_URL;
   const base = orchestratorPermissions(
@@ -61,7 +64,9 @@ export async function orchestratorExtras(
           session,
           leads ? techLeadAdditions(session) : undefined
         )
-      : await loadLeadBrief(session, profile),
+      : chief
+        ? await loadChiefBrief(session, profile)
+        : await loadLeadBrief(session, profile),
     mcpServers: {
       [ORCHESTRATOR_SERVER]: orchestratorTools(
         httpToolCaller(baseUrl, workspaceId, standingToken(session.id)),

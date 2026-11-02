@@ -17,6 +17,7 @@ import {
 } from "./direction";
 import { leadTitle } from "./home";
 import { latestMemo } from "./memos";
+import { CHIEF } from "./order";
 import { profileFor } from "./profiles";
 import { hasLeads } from "./settings";
 import type { DirectionPin, LeadKind, LeadMemo, PinProposal } from "./types";
@@ -49,7 +50,8 @@ export function directionLead(sessionId: string): DirectionLead | null {
     Pick<Session, "id" | "role" | "lead_kind" | "workspace_id"> | undefined;
   if (!s?.workspace_id) return null;
   const profile = profileFor(s, hasLeads(s.workspace_id));
-  if (!profile?.leadTools.length) return null;
+  // The chief has no direction of its own: it reads the leads'.
+  if (!profile?.leadTools.length || profile.kind === CHIEF) return null;
   return { sessionId: s.id, workspaceId: s.workspace_id, kind: profile.kind };
 }
 

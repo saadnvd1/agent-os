@@ -29,6 +29,7 @@ import { TECH, type LeadKind } from "./types";
 import { markLeadsEnabled } from "./settings";
 import { getCharter, leadAreas, putCharter } from "./charters";
 import { charterTemplate } from "./templates";
+import { addChiefSweep } from "./sweep";
 import type { TeamMemberView } from "../orchestrator/ask-view";
 
 export { byLeadOrder } from "./order";
@@ -45,8 +46,20 @@ export const standingDir = (
   s: Pick<Session, "role" | "lead_kind" | "workspace_id">
 ) => leadDir(s.workspace_id ?? "", leadKindOf(s) ?? "chief");
 
+export function getChief(workspaceId: string): Session | null {
+  return (
+    (db
+      .prepare(
+        `SELECT * FROM session_rows WHERE ${sqlChief()} AND workspace_id = ?`
+      )
+      .get(workspaceId) as Session | undefined) ?? null
+  );
+}
+
+// A team member by kind: a department's lead, or "chief" for the chief.
 export function getLead(workspaceId: string, kind: LeadKind): Session | null {
   if (kind === TECH) return getOrchestrator(workspaceId);
+  if (kind === CHIEF) return getChief(workspaceId);
   return (
     (db
       .prepare(
@@ -93,31 +106,54 @@ function claimTech(workspaceId: string): Session {
   return getOrchestrator(workspaceId)!;
 }
 
-function createLead(workspaceId: string, kind: LeadKind): Session {
-  const existing = getLead(workspaceId, kind);
-  if (existing) return existing;
+// A new standing chat of the workspace, pinned, in its own folder: a lead
+// of a department (`department`), or the chief (none). Two at once still
+// make one: the unique index for its role and kind decides.
+function insertStanding(
+  workspaceId: string,
+  role: "lead" | "chief",
+  kind: LeadKind,
+  department: LeadKind | null
+): void {
   const workspace = getWorkspace(workspaceId)!;
-  seedCharter(workspaceId, kind);
   const dir = leadDir(workspaceId, kind);
   fs.mkdirSync(dir, { recursive: true });
   const id = randomUUID();
-  // Two at once still make one: the unique (workspace, kind) index decides.
   db.prepare(
     `INSERT OR IGNORE INTO sessions (id, name, tmux_name, working_directory, model,
        group_path, agent_type, auto_approve, project_id, host_id, view, chat_access,
        role, lead_kind, lead_since, workspace_id, pinned)
      VALUES (?, ?, ?, ?, ?, 'sessions', 'claude', 0, NULL, 'local', 'chat', 'ask',
-       'lead', ?, datetime('now'), ?, 1)`
+       ?, ?, datetime('now'), ?, 1)`
   ).run(
     id,
     `${workspace.name} ${leadTitle(workspaceId, kind)}`,
     `claude-${id}`,
     dir,
     resolveRoleOrDefault("orchestrator", { workspaceId }).model,
-    kind,
+    role,
+    department,
     workspaceId
   );
+}
+
+function createLead(workspaceId: string, kind: LeadKind): Session {
+  const existing = getLead(workspaceId, kind);
+  if (existing) return existing;
+  seedCharter(workspaceId, kind);
+  insertStanding(workspaceId, "lead", kind, kind);
   return getLead(workspaceId, kind)!;
+}
+
+// The workspace's chief of staff, made once by "Add leads", with its daily
+// read-only sweep. A sweep the owner later removed isn't put back.
+function createChief(workspaceId: string): Session {
+  const existing = getChief(workspaceId);
+  if (existing) return existing;
+  insertStanding(workspaceId, "chief", CHIEF, null);
+  const chief = getChief(workspaceId)!;
+  addChiefSweep(workspaceId, chief.id);
+  return chief;
 }
 
 export function checkKinds(kinds: unknown): LeadKind[] {
@@ -125,16 +161,20 @@ export function checkKinds(kinds: unknown): LeadKind[] {
     throw new Error(
       "Each lead is a short lowercase name: letters, digits and dashes"
     );
+  if (kinds.includes(CHIEF))
+    throw new Error("Every workspace with leads has a chief already");
   return [...new Set(kinds)].filter((k) => k !== TECH);
 }
 
-// "Add leads": the workspace gets its Tech lead (its orchestrator, made if
-// it has none) and the leads picked. Safe to run again; nothing made twice.
+// "Add leads": the workspace gets its chief of staff, its Tech lead (its
+// orchestrator, made if it has none) and the leads picked. Safe to run
+// again; nothing made twice. The only place a chief is made.
 export function addLeads(workspaceId: string, kinds: LeadKind[]): Session[] {
   if (!getWorkspace(workspaceId)) throw new Error("Unknown workspace");
   const picked = checkKinds(kinds);
   markLeadsEnabled(workspaceId);
   claimTech(workspaceId);
+  createChief(workspaceId);
   for (const kind of picked) createLead(workspaceId, kind);
   return listLeads(workspaceId);
 }
@@ -200,11 +240,7 @@ export function leadViews(workspaceId: string): LeadView[] {
 // What the sidebar draws for a workspace with leads: its chief, when it has
 // one, then its leads in order.
 export function teamViews(workspaceId: string): TeamMemberView[] {
-  const chief = db
-    .prepare(
-      `SELECT id FROM session_rows WHERE workspace_id = ? AND ${sqlChief()}`
-    )
-    .get(workspaceId) as { id: string } | undefined;
+  const chief = getChief(workspaceId);
   return [
     ...(chief
       ? [{ kind: CHIEF, title: "Chief of staff", sessionId: chief.id }]

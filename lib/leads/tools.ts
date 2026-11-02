@@ -1,13 +1,19 @@
 // The tool calls of a workspace's standing sessions, as the server answers
 // them: the caller's profile decides which tools it has, a lead's starts
-// and stops stay inside its area, and what it does is recorded as its own.
+// and stops stay inside its area, the chief acts only when the owner asks
+// (./chief.ts) and the lead whose area it touched is told, and what each
+// does is recorded as its own.
 
 import { z } from "zod";
 import type { Session } from "@/lib/db/types";
 import { isToolName, runTool } from "../orchestrator/serve";
 import { owner } from "../owner";
 import { asActor } from "./actor";
-import { areaRefusal } from "./area";
+import { actedOn, areaRefusal } from "./area";
+import { notifyAreaAction } from "./area-notify";
+import { chiefRefusal } from "./chief";
+import { companyText, companyThread } from "./company";
+import { CHIEF } from "./order";
 import { currentDirection, openProposals, proposePin } from "./direction";
 import { leadTitle, listLeads } from "./home";
 import { messageLead } from "./mail";
@@ -77,6 +83,15 @@ export const LEAD_TOOL_SHAPES = {
         "Ids of your pinned direction this relies on. The server quotes the owner's words with them; without one, a claim that the owner approved something reads as unattested"
       ),
   },
+  company: {
+    thread: z
+      .string()
+      .trim()
+      .min(1)
+      .max(120)
+      .optional()
+      .describe("A thread's name from the list, to read its messages"),
+  },
 } satisfies Record<LeadToolName, z.ZodRawShape>;
 
 export const LEAD_TOOL_DESCRIPTIONS: Record<LeadToolName, string> = {
@@ -88,6 +103,8 @@ export const LEAD_TOOL_DESCRIPTIONS: Record<LeadToolName, string> = {
     "The pinned direction in force for you or another lead of this workspace (newest first), with your open proposals and memo.",
   message_lead:
     "Write to another lead of this workspace on a thread (one per topic). It arrives in their chat, fenced as a lead's words, with the pins you cite quoted by the server. A few messages an hour per thread; past that it goes to the owner as an ask, so don't retry.",
+  company:
+    "This workspace's leads from their records, never their chats: each one's pinned direction, memo, recent decisions, open asks and work, and the headers of the threads between them. With thread, that thread's messages.",
 };
 
 function parseLeadArgs<T extends LeadToolName>(tool: T, args: unknown) {
@@ -148,6 +165,8 @@ function runLeadTool(
     }
     case "direction": {
       const lead = parseLeadArgs(tool, raw).lead ?? kind;
+      if (lead === CHIEF)
+        throw new Error("Name the lead whose direction to read");
       if (!isLeadKind(lead)) throw new Error(`No lead "${lead}"`);
       if (!listLeads(w).some((s) => leadKindOf(s) === lead))
         throw new Error(`This workspace has no ${lead} lead`);
@@ -155,6 +174,10 @@ function runLeadTool(
     }
     case "message_lead":
       return messageLead(w, caller, kind, parseLeadArgs(tool, raw));
+    case "company": {
+      const { thread } = parseLeadArgs(tool, raw);
+      return thread ? companyThread(w, thread) : companyText(w);
+    }
   }
 }
 
@@ -178,6 +201,9 @@ export async function runStandingTool(
     throw new NotYours(
       `${tool} isn't one of your tools as ${leadTitle(w, profile.kind)}: it's the Tech lead's. Hand it over with message_lead (to "tech").`
     );
+  const chief = profile.kind === CHIEF;
+  const held = chief ? chiefRefusal(w, caller, tool) : null;
+  if (held) throw new Error(held);
   if (isLeadToolName(tool))
     return runLeadTool(w, caller, profile.kind, tool, args);
   if (!isToolName(tool)) throw new UnknownTool("Unknown tool");
@@ -189,5 +215,9 @@ export async function runStandingTool(
     ? await leadStartRefusal(w, profile.kind, tool, args)
     : null;
   if (taken) throw new Error(taken);
-  return asActor(caller, () => runTool(w, tool, args ?? {}));
+  // Read before it runs: a stop or archive can take the target away.
+  const touched = chief ? actedOn(w, tool, args) : null;
+  const out = await asActor(caller, () => runTool(w, tool, args ?? {}));
+  if (touched) await notifyAreaAction(w, CHIEF, touched.project, touched.what);
+  return out;
 }

@@ -15,6 +15,7 @@ import {
   type Schedule,
   type ScheduleRun,
 } from "./store";
+import { chiefSlotSkip } from "../leads/sweep";
 
 // How each kind starts its work, and whether a run is still going. Real
 // ones in ./start; tests pass their own. `start` calls onSession as soon as
@@ -120,6 +121,10 @@ export async function runSlot(
   const target = targetProblem(schedule);
   if (target) return fail(target);
   if (pausedFor(schedule)) return paused();
+  // A chief's scheduled turn is optional reading: it gives way to the
+  // usage window. Run now still runs it.
+  const save = trigger === "manual" ? null : chiefSlotSkip(schedule);
+  if (save) return done("skipped", joined(caughtUp, save));
   if (trigger !== "manual" && !oneOff) {
     const previous = lastStarted(schedule.id, runId);
     if (previous) {

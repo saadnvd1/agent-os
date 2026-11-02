@@ -38,6 +38,7 @@ import { sentPrompts } from "@/lib/chat/history";
 import { quoteInsert, quoteMarkdown } from "@/lib/chat/quote";
 import { OrchestratorBar } from "@/components/Orchestrator/OrchestratorBar";
 import { DirectionStrip } from "@/components/Leads/DirectionStrip";
+import { ChiefStrip } from "@/components/Leads/ChiefStrip";
 import { DirectionChatContext } from "@/components/Leads/direction-context";
 import { useDirection } from "@/components/Leads/useDirection";
 import { ActivityLine } from "./Activity";
@@ -548,6 +549,7 @@ export function ChatPanel({
     >
       {orchestratorOf && <OrchestratorBar workspaceId={orchestratorOf} />}
       {direction && <DirectionStrip chat={direction} sessionId={sessionId} />}
+      {standing && <ChiefStrip sessionId={sessionId} standing={standing} />}
       <div ref={scrollRef} className="relative min-h-0 flex-1">
         <RowState.Provider value={rowState}>
           <Background.Provider value={background}>

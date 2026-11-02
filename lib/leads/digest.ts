@@ -139,20 +139,25 @@ function notesSection(w: string, kind: LeadKind): Section {
 }
 
 // A lead's whole digest. Tech's (`tech`) is only what its own digest lacks:
-// direction, memo, proposals and mail.
+// direction, memo, proposals and mail. The chief's has no direction or memo
+// of its own; it reads the leads' with company.
 export function buildLeadDigest(
   w: string,
   kind: LeadKind,
-  opts: { sessionId: string; tech?: boolean },
+  opts: { sessionId: string; tech?: boolean; chief?: boolean },
   budgetTokens = opts.tech ? TECH_LEAD_TOKENS : DIGEST_TOKENS
 ): string {
   const head = opts.tech
     ? `## Your direction as ${leadTitle(w, kind)}`
     : "## Where things stand (read from AgentOS's database as you started)";
   const sections = [
-    directionSection(w, kind),
-    memoSection(w, kind),
-    proposalsSection(w, kind),
+    ...(opts.chief
+      ? []
+      : [
+          directionSection(w, kind),
+          memoSection(w, kind),
+          proposalsSection(w, kind),
+        ]),
     mailSection(w, kind),
     ...(opts.tech
       ? []

@@ -24,6 +24,7 @@ import { addNote } from "../orchestrator/notes";
 import { resolveProposals } from "./direction";
 import { addLeads, getLead, leadTitle, seedCharter } from "./home";
 import { latestMemo } from "./memos";
+import { CHIEF } from "./order";
 import { isLeadKind, isStandingRole, sqlNoRole } from "./roles";
 import { TECH, type DirectionPin, type LeadKind } from "./types";
 
@@ -40,6 +41,8 @@ function refusal(s: Session | undefined, kind: LeadKind): string | null {
   if (kind === TECH)
     return "The Tech lead is the workspace's orchestrator; adopt another kind";
   if (!isLeadKind(kind)) return `"${kind}" isn't a lead's name`;
+  if (kind === CHIEF)
+    return "The chief of staff is made by Add leads, not adopted";
   if (isStandingRole(s.role)) return "That session already heads something";
   if (s.view !== "chat" || s.agent_type !== "claude")
     return "Only a Claude chat session can be adopted as a lead";

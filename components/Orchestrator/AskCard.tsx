@@ -1,5 +1,6 @@
 "use client";
 
+import { CHIEF } from "@/lib/leads/order";
 import { TECH } from "@/lib/leads/types";
 import { useState, useSyncExternalStore } from "react";
 import { Check, CornerDownLeft, ExternalLink, X } from "lucide-react";
@@ -87,7 +88,7 @@ export function AskCard({
       </div>
       {ask.leadKind !== TECH && (
         <p className="text-muted-foreground text-[11px] capitalize">
-          {ask.leadKind} lead
+          {ask.leadKind === CHIEF ? "chief of staff" : `${ask.leadKind} lead`}
         </p>
       )}
       {ask.why && (
