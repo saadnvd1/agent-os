@@ -94,7 +94,7 @@ export type UpdateRefusal =
   | "up_to_date"
   | "unknown"
   | "no_restart"
-  | "managed"
+  | "deploying"
   | "disk"
   | "forbidden";
 
@@ -118,6 +118,12 @@ export interface UpdateView {
   canUpdate: { ok: boolean; code?: UpdateRefusal; reason?: string };
   run: UpdateRun | null;
   pending: { requestedAt: number } | null;
+  /** autodeploy deploys this checkout (its heartbeat is fresh). */
+  managed: boolean;
+  /** An Update now click waiting for autodeploy to pick it up. */
+  queued: { requestedAt: number } | null;
+  /** What the server said about the click that produced this view. */
+  message?: string;
   working: { sessions: number; reviews: number; setups: number };
   auto?: AutoUpdateView;
 }
@@ -126,6 +132,7 @@ export type BannerState =
   | "hidden"
   | "available"
   | "pending"
+  | "queued"
   | "running"
   | "failed"
   | "built"
@@ -173,8 +180,8 @@ export function bannerState({
     )
       return "updated";
   }
+  if (view.queued) return "queued";
   if (view.pending) return "pending";
-  if (view.canUpdate.code === "managed") return "hidden";
   if (
     view.available &&
     view.bannerEnabled &&
@@ -184,6 +191,9 @@ export function bannerState({
     return "available";
   return "hidden";
 }
+
+export const MANAGED_NOTE =
+  "Updates on this machine are deployed by autodeploy. Update now deploys it within a minute.";
 
 export const workingTotal = (w: UpdateView["working"]) =>
   w.sessions + w.reviews + w.setups;

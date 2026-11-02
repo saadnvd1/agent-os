@@ -10,6 +10,7 @@ import { useDismissedUpdate } from "@/hooks/useDismissedUpdate";
 import { useReloadWhenUpdated } from "@/hooks/useReloadWhenUpdated";
 import {
   bannerState,
+  MANAGED_NOTE,
   type BannerState,
   type UpdateView,
 } from "@/lib/updates/banner";
@@ -72,6 +73,10 @@ export function UpdateToastView({
   if (state === "available") text = <>AgentOS {latest?.version} is available</>;
   else if (state === "pending")
     text = <>AgentOS will update when nothing is working</>;
+  else if (state === "queued")
+    text = (
+      <>Updating AgentOS to {latest?.version}. It deploys within a minute.</>
+    );
   else if (state === "built")
     text = <>Built {run?.toVersion}. Restart AgentOS to finish updating.</>;
   else if (failed) text = <>The update didn&apos;t finish. {run?.error}</>;
@@ -110,7 +115,7 @@ export function UpdateToastView({
       )}
     >
       <span className="flex h-6 shrink-0 items-center">
-        {state === "running" ? (
+        {state === "running" || state === "queued" ? (
           <Loader2 className="text-muted-foreground h-4 w-4 animate-spin" />
         ) : (
           <ArrowUpCircle
@@ -130,6 +135,9 @@ export function UpdateToastView({
               {view.canUpdate.reason}
             </p>
           )}
+        {state === "available" && view.managed && view.canUpdate.ok && (
+          <p className="text-muted-foreground text-xs">{MANAGED_NOTE}</p>
+        )}
         {notesOpen && latest && (
           <ul className="text-muted-foreground list-disc space-y-0.5 pl-4 text-xs">
             {latest.notes.map((n, i) => (
@@ -138,9 +146,9 @@ export function UpdateToastView({
           </ul>
         )}
         <div className="flex flex-wrap items-center gap-x-3 gap-y-1">
-          {(state === "available" || state === "pending") && (
-            <UpdateActions view={view} />
-          )}
+          {(state === "available" ||
+            state === "pending" ||
+            state === "queued") && <UpdateActions view={view} />}
           {state === "running" && elapsed > SLOW_MS && (
             <Button size="sm" onClick={() => window.location.reload()}>
               Reload
@@ -243,7 +251,9 @@ export function UpdateToast() {
       ? `running:${view?.run?.id}`
       : computed === "pending"
         ? `pending:${view?.pending?.requestedAt}`
-        : null;
+        : computed === "queued"
+          ? `queued:${view?.queued?.requestedAt}`
+          : null;
   const state = key && key === closed ? "hidden" : computed;
 
   const { dismissVersion, dismissRun } = dismissed;

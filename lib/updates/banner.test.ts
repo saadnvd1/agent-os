@@ -20,6 +20,8 @@ const view = (over: Partial<UpdateView> = {}): UpdateView => ({
   canUpdate: { ok: true },
   run: null,
   pending: null,
+  managed: false,
+  queued: null,
   working: { sessions: 0, reviews: 0, setups: 0 },
   ...over,
 });
@@ -34,9 +36,14 @@ const run = (phase: UpdateRun["phase"]): UpdateRun => ({
 const none = { dismissedVersion: null, dismissedRun: null };
 
 describe("bannerState", () => {
-  it("offers nothing on a machine its deploy job manages", () => {
-    const managed = view({ canUpdate: { ok: false, code: "managed" } });
-    expect(bannerState({ view: managed, ...none })).toBe("hidden");
+  it("offers Update now on a machine its deploy job manages", () => {
+    const managed = view({ managed: true });
+    expect(bannerState({ view: managed, ...none })).toBe("available");
+  });
+
+  it("shows a queued request until the build changes", () => {
+    const queued = view({ managed: true, queued: { requestedAt: 5 } });
+    expect(bannerState({ view: queued, ...none })).toBe("queued");
   });
 
   it("shows an available version", () => {

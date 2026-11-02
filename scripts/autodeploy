@@ -9,7 +9,11 @@
 # Restarts are spaced AGENTOS_MIN_GAP seconds apart (an hour; 0 turns it
 # off): a head that lands inside the gap waits and is deployed, whatever it
 # has become by then, when the gap ends. A commit message with [deploy-now]
-# (in any commit the deploy would take) skips the gap. Each hold logs one line:
+# (in any commit the deploy would take) skips the gap, and so does the request
+# file $state/now, which the in-app Update now button writes
+# (lib/updates/run.ts requestDeploy): it also skips the settle wait, is removed
+# once the deploy ran or origin/main is already deployed, and is ignored when
+# older than 30 minutes. Each hold logs one line:
 #   HELD <sha> <seconds> left in the restart gap (since <last restart sha>)
 # Another machine (a server) runs it with AGENTOS_PUBLISH=0: deploy
 # only, and its own AGENTOS_RESTART. Only one machine publishes to npm.
@@ -54,12 +58,26 @@ done
 mkdir "$state/lock" 2>/dev/null || exit 0
 trap 'rmdir "$state/lock"' EXIT
 
+# An "Update now" click (lib/updates/run.ts requestDeploy) leaves this file.
+now_file="$state/now"
+want_now=0
+if [ -f "$now_file" ]; then
+  if [ -n "$(find "$now_file" -maxdepth 0 -mmin +30)" ]; then
+    rm -f "$now_file"
+  else
+    want_now=1
+  fi
+fi
+
 git fetch -q origin main
 head=$(git rev-parse origin/main)
 deployed=$(cat "$state/deployed" 2>/dev/null || true)
 published=$(cat "$state/published" 2>/dev/null || true)
 [ "${AGENTOS_PUBLISH:-1}" = 0 ] && published=$head
-[ "$head" = "$deployed" ] && [ "$head" = "$published" ] && exit 0
+if [ "$head" = "$deployed" ]; then
+  rm -f "$now_file"
+  [ "$head" = "$published" ] && exit 0
+fi
 log() { echo "$(date '+%Y-%m-%d %-I:%M %p') $*"; }
 
 # shellcheck source=lib/generated.sh
@@ -75,6 +93,7 @@ if [ "$head" != "$deployed" ] && [ -n "$deployed" ] &&
   git merge -q --ff-only "$head" 2>/dev/null; then
   deployed=$head
   git rev-parse HEAD > "$state/deployed"
+  rm -f "$now_file"
   [ "$head" = "$published" ] && exit 0
 fi
 
@@ -82,7 +101,7 @@ fi
 # minutes) waits for the next run, so a burst is one build and one restart.
 # Its commit time is the merge's, so this never holds a deploy forever.
 settle="${AGENTOS_SETTLE:-120}"
-if [ "$head" != "$deployed" ] && [ "$settle" -gt 0 ] &&
+if [ "$head" != "$deployed" ] && [ "$settle" -gt 0 ] && [ "$want_now" = 0 ] &&
   [ $(( $(date +%s) - $(git log -1 --format=%ct "$head") )) -lt "$settle" ]; then
   exit 0
 fi
@@ -98,6 +117,8 @@ if [ "$head" != "$deployed" ] && [ "$gap" -gt 0 ]; then
     msgs=$(git log --format=%B "${deployed:+$deployed..}$head" 2>/dev/null || git log -1 --format=%B "$head")
     if printf '%s' "$msgs" | grep -qF '[deploy-now]'; then
       log "Restart gap skipped for ${head:0:7}: [deploy-now]"
+    elif [ "$want_now" = 1 ]; then
+      log "Restart gap skipped for ${head:0:7}: update requested"
     else
       # Once per head, not once per minute, so the log counts holds.
       if [ "$(cat "$state/held" 2>/dev/null)" != "$head" ]; then
@@ -136,6 +157,7 @@ if [ "$head" != "$deployed" ]; then
   # The pull takes what landed while it waited, too.
   git rev-parse HEAD > "$state/deployed"
   date +%s > "$state/restarted"
+  rm -f "$now_file"
   # A link into an older clone would run an old aos on this machine.
   scripts/sync-cli-links || log "CLI link sync failed"
 fi

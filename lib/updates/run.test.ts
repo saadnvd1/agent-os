@@ -59,6 +59,7 @@ const deps = (): import("./run").RunDeps => ({
   freeBytes: () => free,
   managed: () => managed,
   deployLocked: () => deployLocked,
+  requestFile: path.join(dir, "autodeploy", "now"),
   busy: async () => busyNow,
   dbFile: null,
   backupDir: null,
@@ -404,18 +405,36 @@ describe("automatic updates", () => {
     expect(state().toVersion).toBe("v-older");
   });
 
-  it("a manual run is refused on a machine autodeploy manages, or while it deploys", async () => {
+  it("on a machine autodeploy manages, a click writes its request instead of starting an update", async () => {
     managed = true;
-    expect(await run.startUpdate({ when: "now" }, deps())).toMatchObject({
-      ok: false,
-      code: "managed",
-    });
-    managed = false;
+    restart = null;
+    const r = await run.startUpdate({ when: "now" }, deps());
+    expect(r).toMatchObject({ ok: true, queued: true, pending: false });
+    expect(r.ok && r.message).toContain("within about a minute");
+    expect(spawned).toHaveLength(0);
+    expect(fs.existsSync(path.join(dir, "state.json"))).toBe(false);
+    expect(run.readQueued(deps())).toEqual({ requestedAt: now });
+    expect(
+      fs.readdirSync(path.join(dir, "autodeploy")).filter((f) => f !== "now")
+    ).toEqual([]);
+  });
+
+  it("a request goes stale after 30 minutes", async () => {
+    managed = true;
+    await run.startUpdate({ when: "idle" }, deps());
+    now += 31 * 60_000;
+    expect(run.readQueued(deps())).toBeNull();
+  });
+
+  it("is refused while autodeploy is deploying", async () => {
+    managed = true;
     deployLocked = true;
     expect(await run.startUpdate({ when: "now" }, deps())).toMatchObject({
       ok: false,
-      code: "managed",
+      code: "deploying",
+      error: expect.stringContaining("deploy is running"),
     });
+    expect(run.readQueued(deps())).toBeNull();
     expect(spawned).toHaveLength(0);
   });
 

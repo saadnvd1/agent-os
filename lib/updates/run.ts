@@ -15,6 +15,7 @@ import { git } from "@/lib/git-exec";
 import { buildId } from "@/lib/build";
 import { agentosHome } from "@/lib/agentos-home";
 import { dbPath } from "@/lib/db/path";
+import { readDeployRequest, writeDeployRequest } from "./request";
 import {
   isActivePhase,
   workingTotal,
@@ -87,6 +88,8 @@ export interface RunDeps {
   managed: () => boolean;
   /** True while scripts/autodeploy is deploying (its lock directory exists). */
   deployLocked: () => boolean;
+  /** The file an Update now click leaves for scripts/autodeploy. */
+  requestFile: string;
   /** What a restart would interrupt, as short labels; empty when nothing. */
   busy: () => Promise<string[]>;
   /** The database the runner backs up first, and where to. */
@@ -217,6 +220,7 @@ export function realRunDeps(): RunDeps {
       }
     },
     deployLocked: () => fs.existsSync(agentosHome("autodeploy", "lock")),
+    requestFile: agentosHome("autodeploy", "now"),
     busy: busyLabels,
     dbFile: path.resolve(dbPath()),
     backupDir: agentosHome("backups"),
@@ -358,12 +362,13 @@ export async function preflight(
       error:
         "AgentOS isn't running from a git checkout, so it can't update itself.",
     };
-  if (deps.managed() || deps.deployLocked())
+  if (deps.deployLocked())
     return {
-      code: "managed",
-      error:
-        "This machine is updated by its own deploy job, so updating from here would race it. It deploys new versions by itself.",
+      code: "deploying",
+      error: "A deploy is running on this machine now. Try again when it ends.",
     };
+  // autodeploy owns restarts, disk and the restart command on a machine it manages.
+  const managed = deps.managed();
   const run = readRun(deps);
   if (run && isActivePhase(run.phase))
     return {
@@ -404,6 +409,7 @@ export async function preflight(
     };
   if (!check.available)
     return { code: "up_to_date", error: "AgentOS is up to date." };
+  if (managed) return null;
   if (!(await deps.restartCommand()))
     return { code: "no_restart", error: NO_RESTART };
   const free = deps.freeBytes();
@@ -418,8 +424,12 @@ export async function preflight(
 
 // ── starting ─────────────────────────────────────────────────────────────
 
+export const QUEUED_MESSAGE =
+  "Queued for autodeploy. It will deploy within about a minute.";
+
 export type StartResult =
-  { ok: true; pending: boolean } | ({ ok: false } & Refusal);
+  | { ok: true; pending: boolean; queued?: boolean; message?: string }
+  | ({ ok: false } & Refusal);
 
 /** Takes the right to start, atomically, so two requests can't both run. */
 function claimStart(deps: Pick<RunDeps, "stateFile" | "now">): boolean {
@@ -484,6 +494,12 @@ async function begin(
   await discardGenerated(deps);
   const refused = await preflight(result, deps);
   if (refused) return { ok: false, ...refused };
+  // autodeploy deploys this checkout: starting a second updater would race
+  // it, so the click goes to it as a request instead.
+  if (deps.managed()) {
+    writeDeployRequest(deps.requestFile, deps.now());
+    return { ok: true, pending: false, queued: true, message: QUEUED_MESSAGE };
+  }
   if (when === "idle") {
     deps.putSetting(
       PENDING_KEY,
@@ -552,6 +568,9 @@ export function readPending(
   deps.putSetting(PENDING_KEY, null);
   return null;
 }
+
+export const readQueued = (deps: Pick<RunDeps, "requestFile" | "now">) =>
+  readDeployRequest(deps.requestFile, deps.now());
 
 export const cancelPending = (
   deps: Pick<RunDeps, "putSetting"> = realRunDeps()
