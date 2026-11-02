@@ -241,3 +241,33 @@ describe("autodeploy publish", () => {
     expect(fs.existsSync(lock)).toBe(false);
   });
 });
+
+describe("autodeploy and an in-app update", () => {
+  it("exits quietly while an update is in progress, and deploys once it's done", () => {
+    const t = setup();
+    t.commit("a");
+    fs.mkdirSync(path.join(t.home, ".agent-os"), { recursive: true });
+    const file = path.join(t.home, ".agent-os/agent-os-update.json");
+    fs.writeFileSync(file, JSON.stringify({ id: "r", phase: "pulling" }));
+    expect(t.run()).toBe("");
+    expect(t.restarts()).toBe(0);
+    expect(fs.existsSync(path.join(t.state, "deployed"))).toBe(false);
+    // The heartbeat still says this machine is managed.
+    expect(fs.existsSync(path.join(t.state, "heartbeat"))).toBe(true);
+    fs.writeFileSync(file, JSON.stringify({ id: "r", phase: "done" }));
+    t.run();
+    expect(t.restarts()).toBe(1);
+  });
+
+  it("ignores the state file of a run that died long ago", () => {
+    const t = setup();
+    t.commit("a");
+    fs.mkdirSync(path.join(t.home, ".agent-os"), { recursive: true });
+    const file = path.join(t.home, ".agent-os/agent-os-update.json");
+    fs.writeFileSync(file, JSON.stringify({ id: "r", phase: "building" }));
+    const old = new Date(Date.now() - 60 * 60_000);
+    fs.utimesSync(file, old, old);
+    t.run();
+    expect(t.restarts()).toBe(1);
+  });
+});

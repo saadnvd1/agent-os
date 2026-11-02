@@ -1,7 +1,7 @@
 // The /api/updates payload: the cached check, the run, what's pending,
 // whether the caller may start an update, and what automatic updates are doing.
 
-import { isActivePhase, type UpdateView } from "./banner";
+import { isActivePhase, type UpdateRun, type UpdateView } from "./banner";
 import { cachedCheck, checkForUpdate, reconcile } from "./check";
 import {
   autoView,
@@ -26,6 +26,27 @@ const redact = (lines: string[]) =>
       .replace(/\b[A-Za-z0-9_-]{32,}\b/g, "***")
   );
 
+/**
+ * A failed or rolled-back run stops mattering once the running build has the
+ * commit it tried (autodeploy, or someone, put it or something newer there).
+ */
+export async function runSuperseded(
+  run: UpdateRun | null,
+  deps: Pick<RunDeps, "git" | "buildId">
+): Promise<boolean> {
+  if (!run?.to || (run.phase !== "failed" && run.phase !== "rolled_back"))
+    return false;
+  const build = deps.buildId();
+  if (!/^[0-9a-f]{7,40}$/.test(build)) return false;
+  if (build === run.to) return true;
+  try {
+    await deps.git(["merge-base", "--is-ancestor", run.to, build]);
+    return true;
+  } catch {
+    return false;
+  }
+}
+
 export async function updateView(
   { mayUpdate }: { mayUpdate: boolean },
   deps: RunDeps = realRunDeps()
@@ -45,11 +66,12 @@ export async function updateView(
       .result;
   check = await reconcile(check, deps.check);
   // The log can carry paths and remote URLs; only a device that may update sees it.
-  const run =
-    stored &&
-    (stored.phase === "failed" ||
-      stored.phase === "built" ||
-      stored.phase === "rolled_back")
+  const run = (await runSuperseded(stored, deps))
+    ? null
+    : stored &&
+        (stored.phase === "failed" ||
+          stored.phase === "built" ||
+          stored.phase === "rolled_back")
       ? {
           ...stored,
           log: mayUpdate

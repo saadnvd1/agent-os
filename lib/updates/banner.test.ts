@@ -34,6 +34,11 @@ const run = (phase: UpdateRun["phase"]): UpdateRun => ({
 const none = { dismissedVersion: null, dismissedRun: null };
 
 describe("bannerState", () => {
+  it("offers nothing on a machine its deploy job manages", () => {
+    const managed = view({ canUpdate: { ok: false, code: "managed" } });
+    expect(bannerState({ view: managed, ...none })).toBe("hidden");
+  });
+
   it("shows an available version", () => {
     expect(bannerState({ view: view(), ...none })).toBe("available");
   });

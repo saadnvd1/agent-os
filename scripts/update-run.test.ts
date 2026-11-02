@@ -78,20 +78,27 @@ describe("scripts/update-run.mjs", () => {
 
 // A stand-in for the restarted server: its build comes from a file the fake
 // redeploy writes, and its startedAt can be made to change (a crash loop).
-async function fakeServer(opts: { restarts?: boolean } = {}) {
+async function fakeServer(
+  opts: { restarts?: boolean; switchAt?: number } = {}
+) {
   let n = 0;
+  let calls = 0;
   const server = http.createServer((req, res) => {
-    const build = fs.readFileSync(path.join(dir, "build"), "utf8").trim();
+    let build = fs.readFileSync(path.join(dir, "build"), "utf8").trim();
     res.setHeader("content-type", "application/json");
-    if (req.url === "/api/updates/health")
+    if (req.url === "/api/updates/health") {
+      // Something else (a deploy job) restarts it into another build.
+      const other = opts.switchAt !== undefined && calls++ >= opts.switchAt;
+      if (other) build = "other";
       return res.end(
         JSON.stringify({
           ok: true,
           build,
-          startedAt: opts.restarts ? `s${n++}` : "s",
+          startedAt: opts.restarts ? `s${n++}` : other ? "s-other" : "s",
           migrations: { known: 3, applied: 3 },
         })
       );
+    }
     res.end("{}");
   });
   await new Promise<void>((r) => server.listen(0, "127.0.0.1", r));
@@ -165,6 +172,57 @@ describe("scripts/update-run.mjs checks the new server", () => {
       expect(s.outcome).toBe("broken");
       expect(s.error).toContain("crash loop");
       expect(rolled()).toBe("--rollback --to a");
+    } finally {
+      await srv.close();
+    }
+  });
+
+  it("a restart into a different build is left alone: no rollback, nothing marked", async () => {
+    fs.writeFileSync(path.join(dir, "next-build"), "new");
+    fs.writeFileSync(path.join(dir, "rollback-works"), "");
+    const srv = await fakeServer({ switchAt: 2 });
+    try {
+      const s = await go(REDEPLOY, "x", verifying(srv.port, "new"));
+      expect(s).toMatchObject({ phase: "failed", outcome: "interrupted" });
+      expect(s.error).toContain("something else restarted it");
+      expect(rolled()).toBeNull();
+    } finally {
+      await srv.close();
+    }
+  });
+
+  it("a rollback records the build it went back to as autodeploy's deployed marker", async () => {
+    fs.writeFileSync(path.join(dir, "next-build"), "stale");
+    fs.writeFileSync(path.join(dir, "rollback-works"), "");
+    const state = path.join(dir, "autodeploy");
+    fs.mkdirSync(state);
+    fs.writeFileSync(path.join(state, "deployed"), "f5054a0\n");
+    const srv = await fakeServer();
+    try {
+      const s = await go(REDEPLOY, "x", {
+        ...verifying(srv.port, "new"),
+        AGENTOS_AUTODEPLOY_DIR: state,
+      });
+      expect(s.outcome).toBe("rolled_back");
+      expect(fs.readFileSync(path.join(state, "deployed"), "utf8").trim()).toBe(
+        "a"
+      );
+    } finally {
+      await srv.close();
+    }
+  });
+
+  it("a rollback on a machine without autodeploy creates no marker", async () => {
+    fs.writeFileSync(path.join(dir, "next-build"), "stale");
+    fs.writeFileSync(path.join(dir, "rollback-works"), "");
+    const state = path.join(dir, "autodeploy");
+    const srv = await fakeServer();
+    try {
+      await go(REDEPLOY, "x", {
+        ...verifying(srv.port, "new"),
+        AGENTOS_AUTODEPLOY_DIR: state,
+      });
+      expect(fs.existsSync(state)).toBe(false);
     } finally {
       await srv.close();
     }

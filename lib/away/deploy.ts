@@ -33,6 +33,14 @@ export const HEALTH_GRACE_MS = 3 * 60 * 1000;
 export const GAP_MARGIN_MS = 10 * 60 * 1000;
 const DEFAULT_GAP_S = 3600;
 
+type HealthAnswer = {
+  ok: boolean;
+  why?: string;
+  startedAt?: number;
+  // The commit the running server was built from, when it says.
+  build?: string;
+};
+
 export interface DeployDeps {
   // When the deploy last restarted the server, in ms; null when unknown.
   restartedAt: (file: string) => number | null;
@@ -43,9 +51,7 @@ export interface DeployDeps {
   contains: (repo: string, tip: string, sha: string) => Promise<boolean>;
   // startedAt, when the server says when it started (AgentOS's
   // /api/health does), so a deploy that never restarted it is caught.
-  health: (
-    url: string
-  ) => Promise<{ ok: boolean; why?: string; startedAt?: number }>;
+  health: (url: string) => Promise<HealthAnswer>;
   // When GitHub made the merge commit, in ms (0 when unknown): the time a
   // restart has to come after. Not when AgentOS noticed the merge, which
   // can be after a restart that already took it.
@@ -78,18 +84,25 @@ async function contains(
   return ancestor();
 }
 
-async function health(
-  url: string
-): Promise<{ ok: boolean; why?: string; startedAt?: number }> {
+async function health(url: string): Promise<HealthAnswer> {
   try {
     const res = await fetch(url, { signal: AbortSignal.timeout(5000) });
     if (!res.ok) return { ok: false, why: `HTTP ${res.status}` };
     const body = (await res.json().catch(() => null)) as {
       startedAt?: unknown;
+      build?: unknown;
     } | null;
     const startedAt =
       typeof body?.startedAt === "string" ? Date.parse(body.startedAt) : NaN;
-    return Number.isFinite(startedAt) ? { ok: true, startedAt } : { ok: true };
+    const build =
+      typeof body?.build === "string" && SHA.test(body.build)
+        ? body.build
+        : undefined;
+    return {
+      ok: true,
+      ...(Number.isFinite(startedAt) ? { startedAt } : {}),
+      ...(build ? { build } : {}),
+    };
   } catch (error) {
     return {
       ok: false,
@@ -161,6 +174,20 @@ async function judge(
     if (!config.health) return { state: "ok", detail: `${short} deployed` };
     const url = healthUrl(config.health);
     const answer = await deps.health(url);
+    // autodeploy's marker can name a build that isn't running (a rolled-back
+    // update); what the server says it runs decides.
+    if (
+      answer.ok &&
+      answer.build &&
+      !(await deps.contains(input.repo, answer.build, mergeSha))
+    ) {
+      if (input.now - deployed.at < HEALTH_GRACE_MS)
+        return { state: "pending" };
+      return {
+        state: "failed",
+        detail: `not deployed: the server is running ${answer.build.slice(0, 7)}, which doesn't have ${short}`,
+      };
+    }
     const merged =
       answer.ok && answer.startedAt !== undefined
         ? await deps.committedAt(input.repo, mergeSha)

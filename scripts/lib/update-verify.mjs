@@ -39,6 +39,9 @@ async function health(base, expect) {
   if (expect && build && build !== expect && !build.startsWith("v"))
     return {
       ok: false,
+      wrongBuild: true,
+      build,
+      startedAt,
       why: `it is running ${String(build).slice(0, 7)}, not ${expect.slice(0, 7)}`,
     };
   if (migrations && migrations.applied < migrations.known)
@@ -77,6 +80,14 @@ export async function verifyServer({ port, expect, env = process.env }) {
   for (let i = 0; i < checks; i++) {
     await sleep(every);
     const again = await health(base, expect);
+    // The expected build was up; now another one answers. Something else
+    // (a deploy job) restarted it: not a crash, and not ours to roll back over.
+    if (!again.ok && again.wrongBuild)
+      return {
+        ok: false,
+        otherRestart: true,
+        why: `something else restarted it into ${String(again.build).slice(0, 7)}, not ${expect.slice(0, 7)}`,
+      };
     if (!again.ok)
       return { ok: false, why: `it stopped answering: ${again.why}` };
     if (

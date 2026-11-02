@@ -94,6 +94,7 @@ export type UpdateRefusal =
   | "up_to_date"
   | "unknown"
   | "no_restart"
+  | "managed"
   | "disk"
   | "forbidden";
 
@@ -173,6 +174,7 @@ export function bannerState({
       return "updated";
   }
   if (view.pending) return "pending";
+  if (view.canUpdate.code === "managed") return "hidden";
   if (
     view.available &&
     view.bannerEnabled &&
