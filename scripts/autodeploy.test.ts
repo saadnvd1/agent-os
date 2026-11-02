@@ -1,3 +1,4 @@
+import os from "os";
 import { execFileSync } from "child_process";
 import * as fs from "fs";
 import * as path from "path";
@@ -101,6 +102,17 @@ describe("autodeploy heartbeat", () => {
     fs.utimesSync(beat, new Date(0), new Date(0));
     expect(t.run()).toBe("");
     expect(Date.now() - fs.statSync(beat).mtimeMs).toBeLessThan(60_000);
+  });
+
+  it("names the host and the checkout it deploys", () => {
+    const t = setup();
+    t.commit("a");
+    t.run();
+    const [host, dir] = fs
+      .readFileSync(path.join(t.state, "heartbeat"), "utf-8")
+      .split("\n");
+    expect(host).toBe(os.hostname());
+    expect(fs.realpathSync(dir)).toBe(fs.realpathSync(t.clone));
   });
 });
 

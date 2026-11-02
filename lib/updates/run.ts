@@ -15,6 +15,7 @@ import { git } from "@/lib/git-exec";
 import { buildId } from "@/lib/build";
 import { agentosHome } from "@/lib/agentos-home";
 import { dbPath } from "@/lib/db/path";
+import { autodeployManaged } from "./managed";
 import { readDeployRequest, writeDeployRequest } from "./request";
 import {
   isActivePhase,
@@ -58,8 +59,6 @@ const exec = promisify(execFile);
 export const STALE_RUN_MS = 30 * 60_000;
 /** A runner that hasn't written for this long, and whose pid is gone, was cut off. */
 export const HEARTBEAT_STALE_MS = 2 * 60_000;
-/** autodeploy touches its heartbeat every minute or two; older means it stopped. */
-const MANAGED_FRESH_MS = 15 * 60_000;
 /** A refused automatic update isn't asked about again for this long. */
 const AUTO_REFUSED_MS = 30 * 60_000;
 export const PENDING_EXPIRES_MS = 24 * 60 * 60_000;
@@ -211,14 +210,7 @@ export function realRunDeps(): RunDeps {
         return null;
       }
     },
-    managed: () => {
-      try {
-        const at = fs.statSync(agentosHome("autodeploy", "heartbeat")).mtimeMs;
-        return Date.now() - at < MANAGED_FRESH_MS;
-      } catch {
-        return false;
-      }
-    },
+    managed: () => autodeployManaged(agentosHome("autodeploy", "heartbeat")),
     deployLocked: () => fs.existsSync(agentosHome("autodeploy", "lock")),
     requestFile: agentosHome("autodeploy", "now"),
     busy: busyLabels,

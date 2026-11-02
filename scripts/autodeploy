@@ -34,9 +34,11 @@ fi
 state="$HOME/.agent-os/autodeploy"
 mkdir -p "$state"
 # Tells the server this checkout is deployed from here, so its own automatic
-# updates stand aside (lib/updates/run.ts managedByAutodeploy). Before the
+# updates stand aside (lib/updates/managed.ts). Before the
 # lock: a long deploy still counts as managing it.
-touch "$state/heartbeat"
+# It names this host and checkout, so a copy on another machine or clone
+# doesn't pass for it.
+printf '%s\n%s\n' "$(hostname)" "$PWD" > "$state/heartbeat"
 # An in-app update (lib/updates/run.ts) in progress owns this checkout: its
 # pull would meet ours mid-way. Its state file is rewritten every 15 seconds,
 # so an old one is a run that died. Quiet exit; the next minute retries.

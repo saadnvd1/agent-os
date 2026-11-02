@@ -405,6 +405,26 @@ describe("automatic updates", () => {
     expect(state().toVersion).toBe("v-older");
   });
 
+  it("on a machine without autodeploy, a click starts the updater at once and writes no request", async () => {
+    managed = false;
+    const r = await run.startUpdate({ when: "now" }, deps());
+    expect(r).toMatchObject({ ok: true, pending: false });
+    expect(r.ok && "queued" in r && r.queued).toBeFalsy();
+    expect(spawned).toHaveLength(1);
+    expect(fs.existsSync(path.join(dir, "now"))).toBe(false);
+  });
+
+  it("a request file left on a machine without autodeploy doesn't show as queued", async () => {
+    const { writeDeployRequest } = await import("./request");
+    const { updateView } = await import("./view");
+    writeDeployRequest(path.join(dir, "autodeploy", "now"), now);
+    expect((await updateView({ mayUpdate: true }, deps())).queued).toBeNull();
+    managed = true;
+    expect((await updateView({ mayUpdate: true }, deps())).queued).toEqual({
+      requestedAt: now,
+    });
+  });
+
   it("on a machine autodeploy manages, a click writes its request instead of starting an update", async () => {
     managed = true;
     restart = null;
