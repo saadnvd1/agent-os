@@ -1,5 +1,6 @@
 "use client";
 
+import { isTechRole } from "@/lib/leads/roles";
 import { useEffect, useMemo, useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -226,7 +227,7 @@ export function ScheduleForm({
     .filter(
       (s) =>
         !s.archived_at &&
-        s.role !== "orchestrator" &&
+        !isTechRole(s.role) &&
         (!s.task_status || s.task_status === "running") &&
         (s.workspace_id ??
           (s.project_id ? projectWs.get(s.project_id) : null)) === workspace

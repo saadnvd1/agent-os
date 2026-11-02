@@ -1,5 +1,6 @@
 "use client";
 
+import { isStandingRole, isTechRole } from "@/lib/leads/roles";
 import { useCallback, useEffect, useMemo } from "react";
 import { useSnapshot } from "valtio";
 import type { Session } from "@/lib/db";
@@ -92,7 +93,7 @@ export function useSidebarData(
     const taskStates: Record<string, TaskState> = {};
     for (const t of tasks) taskStates[t.id] = t.state;
     const projectName = (s: Session) =>
-      s.role === "orchestrator"
+      isTechRole(s.role)
         ? `Orchestrator · ${workspaceName.get(s.workspace_id ?? "") ?? ""}`
         : (byId.get(s.project_id ?? "")?.name ?? "");
     const common = {
@@ -167,7 +168,11 @@ export function useSidebarData(
     const counts = new Map<string, number>();
     for (const s of sessions) {
       const ws = byId.get(s.project_id ?? "");
-      if (s.role || !ws || sessionStatuses?.[s.id]?.status !== "running")
+      if (
+        isStandingRole(s.role) ||
+        !ws ||
+        sessionStatuses?.[s.id]?.status !== "running"
+      )
         continue;
       counts.set(ws, (counts.get(ws) ?? 0) + 1);
     }
@@ -226,7 +231,7 @@ export function useSidebarData(
   // Orchestrator session id -> the workspace it serves, for tags and chips.
   const orchestratorKey = JSON.stringify(
     sessions
-      .filter((s) => s.role === "orchestrator")
+      .filter((s) => isTechRole(s.role))
       .map((s) => [
         s.id,
         workspaces.find((w) => w.id === s.workspace_id)?.name ?? s.name,

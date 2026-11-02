@@ -1,6 +1,7 @@
 // The sidebar's one flat list, sorted onto shelves: the workspace's pinned
 // orchestrator, Pinned, the user's groups, Needs you, Working, In review,
 // Ongoing, Snoozed, then Done. Client-safe: no database.
+import { isStandingRole } from "../leads/roles";
 import type { Session } from "@/lib/db/types";
 import { fromSqliteTime } from "@/lib/session-meta";
 import type { PrStage } from "@/lib/tasks/pr-stage";
@@ -384,7 +385,7 @@ export function buildShelves(input: ShelfInput): Shelves {
     // Named on a row outside its group (Pinned, Done); inside, the header says it.
     if (mine) row.groupName = mine.group.name;
     if (pinned && current) shelves.orchestrators.push(row);
-    else if (pinned && role !== "orchestrator") shelves.pinned.push(row);
+    else if (pinned && !isStandingRole(role)) shelves.pinned.push(row);
     else {
       const shelf = statusShelf(row, now);
       // Membership beats status. Only finished work goes on to Done (it keeps
@@ -468,8 +469,7 @@ export function inWorkspace(
   workspaceId: string | null
 ): boolean {
   if (!workspaceId) return true;
-  if (session.role === "orchestrator")
-    return session.workspace_id === workspaceId;
+  if (isStandingRole(session.role)) return session.workspace_id === workspaceId;
   const byProject = session.project_id ? workspaceOf(session.project_id) : null;
   return (byProject ?? session.workspace_id) === workspaceId;
 }

@@ -4,6 +4,7 @@
  * the recipient's tmux pane, which works for any agent CLI.
  */
 
+import { isTechRole } from "../leads/roles";
 import { db, type Session } from "../db";
 import { statusDetector } from "../status-detector";
 import { chatState, sendChatConfirmed } from "../chat/runner";
@@ -93,7 +94,7 @@ async function peerState(
 }
 
 const orchestratorOf = (s: Session) =>
-  s.role === "orchestrator" && s.workspace_id
+  isTechRole(s.role) && s.workspace_id
     ? (getWorkspace(s.workspace_id)?.name ?? "a workspace")
     : null;
 
@@ -130,7 +131,7 @@ export async function listPeers(callerId?: string): Promise<Peer[]> {
             group: groups.get(s.session_group_id),
           }),
         ...(callerWorkspace &&
-          s.role === "orchestrator" &&
+          isTechRole(s.role) &&
           s.workspace_id === callerWorkspace && { yours: true }),
       };
     })

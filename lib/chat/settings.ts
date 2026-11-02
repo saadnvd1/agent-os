@@ -3,6 +3,7 @@
  * per-session settings that go with them: the model and the access level.
  */
 
+import { isStandingRole } from "../leads/roles";
 import { effectiveChatAccess, noApprovalsOn } from "../approvals/no-approvals";
 import os from "os";
 import { agentLabel } from "../agent-options";
@@ -330,7 +331,7 @@ export async function setChatAccess(
 ): Promise<void> {
   if (!CHAT_ACCESS.includes(access)) return;
   // An orchestrator's access is fixed by its role.
-  if (getSession(sessionId).role === "orchestrator") return;
+  if (isStandingRole(getSession(sessionId).role)) return;
   db.prepare(`UPDATE sessions SET chat_access = ? WHERE id = ?`).run(
     access,
     sessionId
@@ -341,7 +342,7 @@ export async function setChatAccess(
 
 // An orchestrator's permission mode is fixed by its role.
 const canPlan = (s: Session) =>
-  s.role !== "orchestrator" && chatDriverFor(s.agent_type)?.plan !== false;
+  !isStandingRole(s.role) && chatDriverFor(s.agent_type)?.plan !== false;
 
 // Plan mode: the agent reads and plans, and changes nothing until the plan
 // is carried out. Now if a conversation is live, and for every next start.

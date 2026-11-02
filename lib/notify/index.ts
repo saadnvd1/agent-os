@@ -5,6 +5,7 @@
  * Needs-you list has those.
  */
 
+import { isStandingRole } from "../leads/roles";
 import { db, type Session } from "../db";
 import { Limiter, type Outcome } from "./limiter";
 import { holdForBatch, msToNextSweep } from "../away/state";
@@ -167,7 +168,7 @@ export async function notifyFrom(
   const body = text.trim();
   if (!body) throw new Error("Nothing to send");
   if (
-    session?.role === "orchestrator" &&
+    isStandingRole(session?.role) &&
     session.workspace_id &&
     holdForBatch(session.workspace_id, session.id, body)
   )

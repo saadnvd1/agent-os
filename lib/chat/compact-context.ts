@@ -5,6 +5,7 @@
  * deploy restarted the worker too.
  */
 
+import { isStandingRole } from "../leads/roles";
 import os from "node:os";
 import { statusPorcelain } from "../git-exec";
 import { db, type Session } from "../db";
@@ -33,7 +34,7 @@ export async function compactContext(sessionId: string): Promise<string> {
     .get(sessionId) as
     Pick<Session, "working_directory" | "task_prompt" | "role"> | undefined;
   // An orchestrator starts fresh instead of compacting.
-  if (!session || session.role === "orchestrator") return "";
+  if (!session || isStandingRole(session.role)) return "";
   const tools = lastItems(sessionId, 400, "tool").filter(
     (i) => i.kind === "tool"
   );

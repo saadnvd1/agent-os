@@ -6,6 +6,7 @@
  * machine's own record (started_by), never anything the other machine names.
  */
 
+import { sqlStanding } from "../leads/roles";
 import { db, type Session } from "../db";
 import { sendMessage } from "../bus";
 import type { HostLink } from "../hosts/remote-api";
@@ -29,7 +30,7 @@ interface Pulled {
 }
 
 // Held means an orchestrator started it, as isHeldRemote reads it (contract/held-calls.ts).
-const HELD_BY = `started_by IN (SELECT id FROM sessions WHERE role = 'orchestrator')`;
+const HELD_BY = `started_by IN (SELECT id FROM sessions WHERE ${sqlStanding()})`;
 
 const heldMirror = (hostId: string, id: string) =>
   db

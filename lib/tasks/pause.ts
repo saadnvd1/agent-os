@@ -13,6 +13,7 @@
  * the sweep re-drives each state after a restart.
  */
 
+import { isStandingRole } from "../leads/roles";
 import { db, type Session, type TaskPause } from "../db";
 import { toSqliteTime } from "../session-meta";
 import { endPause, endPauseOnFinish, formatUntil } from "./pause-hold";
@@ -102,7 +103,7 @@ function factsOf(s: Session): PauseFacts {
     .get(s.id);
   return {
     isTask: !!s.task_status,
-    isOrchestrator: s.role === "orchestrator",
+    isOrchestrator: isStandingRole(s.role),
     isQuickChange: !!s.quick_of,
     isRemote: isRemoteHost(s.host_id) || !!s.peer_mirror,
     taskStatus: s.task_status ?? null,

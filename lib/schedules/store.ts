@@ -1,3 +1,4 @@
+import { isTechRole } from "../leads/roles";
 import { randomUUID } from "crypto";
 import { db, type Session } from "../db";
 import { getProject } from "../projects";
@@ -124,7 +125,7 @@ export function upcomingOneOffs(workspaceId?: string | null): Schedule[] {
 
 // Turns a one-off off once its run settled. True only for the call that did.
 const byOrchestrator = (sessionId: string | null | undefined) =>
-  !!sessionId && getSessionRow(sessionId)?.role === "orchestrator";
+  !!sessionId && isTechRole(getSessionRow(sessionId)?.role);
 
 export function finishOneOff(id: string, now = Date.now()): boolean {
   return (
@@ -195,7 +196,7 @@ export function sessionTargetProblem(
   const gone = goneReason(session);
   if (gone || !session) return gone;
   if (session.archived_at) return "session archived";
-  if (session.role === "orchestrator")
+  if (isTechRole(session.role))
     return "the orchestrator takes orchestrator schedules, not messages";
   // Messages aren't relayed to another machine's sessions (runner.ts).
   if (session.peer_mirror && !session.task_prompt)

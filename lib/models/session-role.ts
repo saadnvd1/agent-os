@@ -1,3 +1,4 @@
+import { isStandingRole } from "../leads/roles";
 import { orchestratorOf } from "../tasks/starter";
 import type { ModelRole } from "./roles";
 
@@ -9,7 +10,7 @@ export function sessionRole(session: {
   plan_phase?: string | null;
   started_by?: string | null;
 }): ModelRole {
-  if (session.role === "orchestrator") return "orchestrator";
+  if (isStandingRole(session.role)) return "orchestrator";
   // Work an orchestrator started is implementation, not a person's session.
   if (!session.task_status)
     return orchestratorOf(session.started_by) ? "implement" : "interactive";

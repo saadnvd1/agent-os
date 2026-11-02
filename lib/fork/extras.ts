@@ -1,5 +1,6 @@
 /** What a chat worker adds for fork parents and children. */
 
+import { isStandingRole } from "../leads/roles";
 import os from "os";
 import type { Session } from "../db";
 import type { ToolGuard } from "../chat/driver";
@@ -16,7 +17,7 @@ const expand = (p: string) => p.replace(/^~(?=$|\/)/, os.homedir());
 // parent, so their prompts match as far as they can).
 export function forkBrief(session: Session): string | null {
   if (getChild(session.id)) return CHILD_BRIEF;
-  if (!forksOn() || session.role === "orchestrator" || session.view !== "chat")
+  if (!forksOn() || isStandingRole(session.role) || session.view !== "chat")
     return null;
   return PARENT_BRIEF;
 }

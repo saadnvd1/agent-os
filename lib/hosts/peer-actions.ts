@@ -5,6 +5,7 @@
  * (the menu shows the same reasons: lib/hosts/remote-menu.ts).
  */
 
+import { isPeerStanding } from "../leads/roles";
 import { db, type Session } from "../db";
 import { stopChat } from "../chat/runner";
 import { deleteItems } from "../chat/store";
@@ -151,7 +152,7 @@ export async function doneOnPeer(
     throw new Error(
       `${session.name} is a task on ${link.hostName}: sign it off or drop it in Tasks there.`
     );
-  if (there.role)
+  if (isPeerStanding(there.role))
     throw new Error(`${session.name} isn't marked done on ${link.hostName}.`);
   const { outcome } = await hostApi<{
     outcome?: { text?: unknown; worktree?: { action?: unknown } };

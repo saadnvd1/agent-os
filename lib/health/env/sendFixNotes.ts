@@ -1,4 +1,5 @@
 import { db } from "@/lib/db";
+import type { SessionRole } from "@/lib/db/types";
 import { MIN } from "../types";
 import { fixFor } from "./fixText";
 import { classById } from "./classes";
@@ -10,11 +11,11 @@ export const STALE_MS = 120 * MIN;
 export interface NoteDeps {
   send: (sessionId: string, body: string) => Promise<void>;
   // Waiting on a person: an approval or a question.
-  blocked: (sessionId: string, role: "orchestrator" | null) => boolean;
+  blocked: (sessionId: string, role: SessionRole | null) => boolean;
 }
 
 interface Target {
-  role: "orchestrator" | null;
+  role: SessionRole | null;
   archived_at: string | null;
   task_status: string | null;
   pause_state: string | null;

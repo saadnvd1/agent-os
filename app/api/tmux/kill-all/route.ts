@@ -1,3 +1,4 @@
+import { isStandingRole } from "@/lib/leads/roles";
 import { NextResponse } from "next/server";
 import { getDb, queries, type Session } from "@/lib/db";
 import { getManagedSessionPattern } from "@/lib/providers/registry";
@@ -36,7 +37,7 @@ export async function POST() {
     // Delete every session from the database but the workspaces'
     // orchestrators, which are never swept.
     const dbSessions = (queries.getAllSessions(db).all() as Session[]).filter(
-      (s) => s.role !== "orchestrator"
+      (s) => !isStandingRole(s.role)
     );
     for (const session of dbSessions) {
       try {

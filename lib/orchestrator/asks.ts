@@ -18,6 +18,8 @@ import { addNote } from "./notes";
 import { cleanTitle, classifyKind, titleSubject } from "./ask-text";
 import { revokePasskey } from "../security/passkeys";
 import type { AskKind } from "./ask-view";
+import { TECH, type LeadKind } from "../leads/types";
+import { leadKindOf } from "../leads/roles";
 import { owner, ownerUi } from "../owner";
 
 export { ASK_KINDS, type AskKind } from "./ask-view";
@@ -79,6 +81,9 @@ export interface AskRow {
   // "orchestrator" for a merge ask it raised with ask_owner; null when the
   // gates, the brakes or AgentOS raised or last wrote it.
   raised_by: string | null;
+  // The lead it is for (lib/leads): "tech", the orchestrator, unless a lead
+  // raised it. Two leads on one subject share the first one's ask.
+  lead_kind: LeadKind;
 }
 
 export type AskAnswer =
@@ -165,6 +170,7 @@ export function raiseAsk(input: {
   sha?: string | null;
   brakeKey?: string | null;
   raisedBy?: "orchestrator" | null;
+  leadKind?: LeadKind;
 }): { ask: AskRow; created: boolean } {
   const title = cleanTitle(input.title);
   if (!title) throw new Error("An ask needs a title");
@@ -197,8 +203,8 @@ export function raiseAsk(input: {
     if (refused) throw new AskRefused(refused);
     const { lastInsertRowid } = db
       .prepare(
-        `INSERT INTO orchestrator_asks (workspace_id, subject, kind, title, detail, link, sha, brake_key, raised_by)
-         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`
+        `INSERT INTO orchestrator_asks (workspace_id, subject, kind, title, detail, link, sha, brake_key, raised_by, lead_kind)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
       )
       .run(
         input.workspaceId,
@@ -209,7 +215,8 @@ export function raiseAsk(input: {
         link,
         sha,
         brakeKey,
-        raisedBy
+        raisedBy,
+        input.leadKind ?? TECH
       );
     return {
       ask: getAsk(input.workspaceId, Number(lastInsertRowid))!,
@@ -254,15 +261,32 @@ export function openAsks(workspaceId: string): AskRow[] {
     .all(workspaceId) as AskRow[];
 }
 
-export function openAskCount(workspaceId: string | null | undefined): number {
+export function openAskCount(
+  workspaceId: string | null | undefined,
+  leadKind?: LeadKind
+): number {
   if (!workspaceId) return 0;
+  const lead = leadKind === undefined ? "" : " AND lead_kind = ?";
   return (
     db
       .prepare(
-        `SELECT COUNT(*) AS n FROM orchestrator_asks WHERE workspace_id = ? AND status = 'open'`
+        `SELECT COUNT(*) AS n FROM orchestrator_asks WHERE workspace_id = ? AND status = 'open'${lead}`
       )
-      .get(workspaceId) as { n: number }
+      .get(workspaceId, ...(leadKind === undefined ? [] : [leadKind])) as {
+      n: number;
+    }
   ).n;
+}
+
+// The open asks a standing session answers for: its own lead's. The chief
+// heads no department, so none are its.
+export function standingAskCount(s: {
+  role: string | null;
+  lead_kind?: string | null;
+  workspace_id?: string | null;
+}): number {
+  const kind = leadKindOf(s);
+  return kind ? openAskCount(s.workspace_id, kind) : 0;
 }
 
 const short = (sha: string | null) => (sha ? sha.slice(0, 7) : "its head");

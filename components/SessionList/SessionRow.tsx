@@ -1,5 +1,6 @@
 "use client";
 
+import { isTechRole } from "@/lib/leads/roles";
 import { AGENT_ROLE_DEFS, isAgentRole } from "@/lib/models/agent-roles";
 import { isFork } from "@/lib/sessions/fork";
 import { memo, useState } from "react";
@@ -173,7 +174,7 @@ export const SessionRow = memo(function SessionRow({
           }
         />
       </RowShell>
-      {session.role === "orchestrator" && row.need && (
+      {isTechRole(session.role) && row.need && (
         <OrchestratorAsks workspaceId={session.workspace_id} />
       )}
       {(row.workers.length > 0 || !!row.quick?.length) && (

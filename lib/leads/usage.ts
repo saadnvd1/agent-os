@@ -1,5 +1,5 @@
 import { db } from "@/lib/db";
-import { leadKindOf } from "./roles";
+import { leadKindOf, sqlStanding } from "./roles";
 import type { LeadUsage } from "./types";
 
 // What each standing chat in a workspace spent since `sinceMs`, from the
@@ -19,7 +19,7 @@ export function leadUsage(workspaceId: string, sinceMs: number): LeadUsage[] {
        LEFT JOIN usage_calls c ON c.session_id = s.id
          AND c.at >= MAX(?, COALESCE(
            CAST(strftime('%s', s.lead_since) AS INTEGER) * 1000, 0))
-       WHERE s.workspace_id = ? AND s.role IN ('orchestrator', 'lead', 'chief')
+       WHERE s.workspace_id = ? AND ${sqlStanding("s.role")}
        GROUP BY s.id
        ORDER BY s.role, s.lead_kind`
     )

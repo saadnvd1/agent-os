@@ -1,5 +1,6 @@
 "use client";
 
+import { isTechRole } from "@/lib/leads/roles";
 import { Repeat, Layers, Pause, Hourglass } from "lucide-react";
 import { HostBadge } from "@/components/Hosts";
 import { rowGroup } from "@/lib/recipes/chip";
@@ -35,7 +36,7 @@ export function RowSubtitle({
   const ctx = useRowContext();
   // What its processes use, on a busy session: "3.1 cores · 4.2 GB".
   const usage = useSessionUsage(session.id);
-  if (session.role === "orchestrator") {
+  if (isTechRole(session.role)) {
     const ws = session.workspace_id ?? "";
     const overview = ctx.orchestrators.find((o) => o.workspaceId === ws);
     const parts = headerParts({

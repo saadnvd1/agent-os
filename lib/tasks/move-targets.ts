@@ -74,7 +74,7 @@ export function movableSession(s: {
     moving: s.task_status === "moving",
     movedTo: s.moved_to,
     branch: s.branch_name,
-    pinnedHere: !!s.lh_card_id || !!s.role,
+    pinnedHere: !!s.lh_card_id || isStandingRole(s.role),
   };
 }
 
@@ -95,3 +95,4 @@ export function movableTask(t: {
     pinnedHere: !!t.cardUrl,
   };
 }
+import { isStandingRole } from "../leads/roles";

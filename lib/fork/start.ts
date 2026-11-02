@@ -5,6 +5,7 @@
  * holds a slot never waits on its own children.
  */
 
+import { isStandingRole, RoleLabel } from "../leads/roles";
 import os from "os";
 import { randomUUID } from "crypto";
 import { db, queries, type Session } from "../db";
@@ -66,8 +67,8 @@ export function refusal(parent: Session | undefined): string | null {
   if (!forksOn()) return FORKS_OFF;
   if (!parent) return "Unknown session";
   if (getChild(parent.id)) return "A fork child can't fork";
-  if (parent.role === "orchestrator")
-    return "An orchestrator doesn't fork: start tasks or sessions instead";
+  if (isStandingRole(parent.role))
+    return `${RoleLabel(parent.role)} doesn't fork: start tasks or sessions instead`;
   if (parent.archived_at) return "That session is archived";
   if (parent.view !== "chat") return "Forks work from a chat session";
   if (parent.host_id && parent.host_id !== "local")

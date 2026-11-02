@@ -5,6 +5,7 @@
  * The preview says what will happen to each before anything does.
  */
 
+import { sqlNoRole, isStandingRole, roleLabel } from "../leads/roles";
 import { db, type Session } from "../db";
 import { getProject } from "../projects";
 import { workspaceProjects } from "../orchestrator/brief";
@@ -52,7 +53,7 @@ function scopeSessions(scope: DoneScope): Session[] {
     .prepare(
       `SELECT * FROM session_rows
        WHERE project_id IN (${projectIds.map(() => "?").join(", ")})
-         AND role IS NULL AND archived_at IS NULL
+         AND ${sqlNoRole()} AND archived_at IS NULL
          -- A linked machine's own sessions are cleaned up there.
          AND peer_mirror = 0
          -- A task another machine's orchestrator moved here is its to finish.
@@ -80,9 +81,9 @@ export async function idleSessions(
 export function scopeOf(session: Session): DoneScope {
   // An orchestrator acts through its tools, which Pause holds and which are
   // logged; aos would reach the same sessions past both.
-  if (session.role === "orchestrator")
+  if (isStandingRole(session.role))
     throw new Error(
-      `${session.name} is an orchestrator: it moves, finishes and stops sessions with its move, done and stop tools, not aos`
+      `${session.name} is ${roleLabel(session.role)}: it moves, finishes and stops sessions with its move, done and stop tools, not aos`
     );
   const project = session.project_id ? getProject(session.project_id) : null;
   if (!project || project.is_uncategorized)
