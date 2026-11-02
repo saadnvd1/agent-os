@@ -136,6 +136,7 @@ export function SessionList({
       queuedByWorkspace: data.queuedByWorkspace,
       rollups: data.rollupByOrchestrator,
       orchestratorNames: data.orchestratorNames,
+      team: data.team,
       cardUrl: data.taskCardUrl,
     }),
     [
@@ -150,6 +151,7 @@ export function SessionList({
       data.queuedByWorkspace,
       data.rollupByOrchestrator,
       data.orchestratorNames,
+      data.team,
       data.taskCardUrl,
     ]
   );

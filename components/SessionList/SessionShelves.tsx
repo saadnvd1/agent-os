@@ -17,6 +17,9 @@ import { SessionRow } from "./SessionRow";
 import { GroupShelves } from "./GroupShelves";
 import { OrchestratorPinRow, OrchestratorStartRow } from "./OrchestratorPinRow";
 import { QueuedRow } from "./QueuedRow";
+import { TeamRow } from "./TeamRow";
+import { useRowContext } from "./RowContext";
+import { headItems } from "@/lib/sidebar/orchestrator-row";
 import type { QueuedRow as QueuedRowData } from "@/lib/sidebar/queued";
 
 // A shelf's header. Only groups that aren't a state (a machine, the line,
@@ -111,6 +114,8 @@ export function MachineShelves({ groups }: { groups: MachineGroup[] }) {
 
 // The pinned orchestrator (or a row to start one), then Pinned, Needs you,
 // Working, In review, Queued, Ongoing, Snoozed and Done: once for the whole list.
+// With Leads on, a workspace's team in place of its orchestrator: a card per
+// member, or one row each under All workspaces (foldTeams).
 export function SessionShelves({
   shelves,
   queued,
@@ -119,6 +124,7 @@ export function SessionShelves({
   snoozedCollapsed,
   donePages,
   workspaceNames,
+  foldTeams = false,
 }: {
   shelves: Shelves;
   queued: QueuedRowData[];
@@ -127,7 +133,9 @@ export function SessionShelves({
   snoozedCollapsed: boolean;
   donePages: number;
   workspaceNames?: Map<string, string>;
+  foldTeams?: boolean;
 }) {
+  const ctx = useRowContext();
   const folds = { doneCollapsed, snoozedCollapsed, donePages };
   const shown = shelves.done.slice(0, doneLimit(donePages));
   const hidden = shelves.done.length - shown.length;
@@ -156,9 +164,22 @@ export function SessionShelves({
     <>
       {shelves.orchestrators.length + toStart.length > 0 && (
         <section aria-label="Orchestrator" className="space-y-1 pt-2">
-          {shelves.orchestrators.map((r) => (
-            <OrchestratorPinRow key={r.session.id} row={r} />
-          ))}
+          {headItems(shelves.orchestrators, ctx.team, foldTeams).map((h) =>
+            h.kind === "row" ? (
+              <OrchestratorPinRow key={h.row.session.id} row={h.row} />
+            ) : h.kind === "team" ? (
+              <TeamRow
+                key={`team:${h.workspaceId}`}
+                workspaceId={h.workspaceId}
+                rows={h.rows}
+              />
+            ) : (
+              <ShelfLabel
+                key={`label:${h.workspaceId}`}
+                label={`${ctx.workspaceNames.get(h.workspaceId) ?? "Workspace"} · team`}
+              />
+            )
+          )}
           {toStart.map((w) => (
             <OrchestratorStartRow key={w.workspaceId} {...w} />
           ))}

@@ -44,6 +44,14 @@ export interface QuestionView {
   createdAt: string;
 }
 
+// One of a workspace's chief and leads, as the sidebar draws it.
+export interface TeamMemberView {
+  // A lead's department, or "chief".
+  kind: string;
+  title: string;
+  sessionId: string;
+}
+
 export interface OrchestratorOverview {
   workspaceId: string;
   sessionId: string | null;
@@ -55,4 +63,7 @@ export interface OrchestratorOverview {
   dismissed: string[];
   // Learning cards waiting on him; none while the experiment is off.
   cards: PendingCardView[];
+  // Its chief and leads in order, while Leads is on and it has added them.
+  // Absent otherwise, and the sidebar draws it as before leads.
+  team?: TeamMemberView[];
 }

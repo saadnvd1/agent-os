@@ -3,6 +3,7 @@
 import { Lightbulb } from "lucide-react";
 import { useCallback, useRef, useState, type ReactNode } from "react";
 import type { SidebarRow } from "@/lib/sidebar/shelves";
+import type { MemberDot, TeamMember } from "@/lib/sidebar/orchestrator-row";
 import { cn } from "@/lib/utils";
 
 // Amber when it needs you, red when it failed, green while it works, and a
@@ -34,6 +35,64 @@ export function NestRail({ children }: { children: ReactNode }) {
     <div className="border-foreground/10 ml-3.5 border-l pl-1.5">
       {children}
     </div>
+  );
+}
+
+// Each department's own colour; the chief is round, in the app's primary.
+const LEAD_COLOR: Record<string, string> = {
+  chief: "bg-primary rounded-full",
+  tech: "bg-slate-500",
+  marketing: "bg-fuchsia-600",
+  product: "bg-sky-600",
+};
+
+const MEMBER_DOT: Record<MemberDot, string> = {
+  failed: "bg-red-500",
+  asks: "bg-amber-500",
+  working: "bg-green-500",
+  replied: "bg-primary",
+  idle: "bg-muted-foreground/60",
+};
+
+// A chief's or lead's letter: on its team card (md), in a team row's stack
+// and on the rows it started (sm). The dot says what it's doing.
+export function LeadAvatar({
+  member,
+  size = "sm",
+  dot,
+  label,
+}: {
+  member: Pick<TeamMember, "kind" | "letter" | "title">;
+  size?: "sm" | "md";
+  dot?: MemberDot;
+  label?: string;
+}) {
+  return (
+    <span
+      role="img"
+      aria-label={label ?? member.title}
+      className={cn(
+        "relative grid shrink-0 place-items-center font-extrabold text-white",
+        size === "md"
+          ? "h-[26px] w-[26px] rounded-[7px] text-[11.5px]"
+          : "h-[17px] w-[17px] rounded-[5px] text-[9px]",
+        LEAD_COLOR[member.kind] ?? "bg-zinc-500"
+      )}
+    >
+      {member.letter}
+      {dot && (
+        <span
+          aria-hidden
+          className={cn(
+            "border-sidebar-background absolute rounded-full",
+            size === "md"
+              ? "-top-[3px] -right-[3px] h-2.5 w-2.5 border-2"
+              : "-top-[2px] -right-[2px] h-[7px] w-[7px] border-[1.5px]",
+            MEMBER_DOT[dot]
+          )}
+        />
+      )}
+    </span>
   );
 }
 

@@ -5,10 +5,12 @@ import { describe, expect, it } from "vitest";
 import {
   ROLE_DECISIONS,
   STANDING_ROLES,
+  isChiefRole,
   isLeadRole,
   isPeerStanding,
   isStandingRole,
   isTechRole,
+  sqlChief,
   sqlLead,
   sqlNoRole,
   sqlStanding,
@@ -105,6 +107,8 @@ const HELPERS = {
   sqlTech: "tech",
   isLeadRole: "lead",
   sqlLead: "lead",
+  isChiefRole: "chief",
+  sqlChief: "chief",
   sqlNoRole: "worker",
   isPeerStanding: "peer",
 } as const;
@@ -147,7 +151,7 @@ const SITES: Record<string, Partial<Record<Decision, number>>> = {
   "lib/hosts/peer-actions.ts": { peer: 1 },
   "lib/hosts/peer-sessions.ts": { peer: 1 },
   "lib/leads/adopt.ts": { standing: 1, worker: 1 },
-  "lib/leads/home.ts": { lead: 2, standing: 1 },
+  "lib/leads/home.ts": { chief: 1, lead: 2, standing: 1 },
   "lib/leads/profiles.ts": { lead: 1, tech: 1 },
   "lib/leads/usage.ts": { standing: 1 },
   "lib/learning-cards/input.ts": { standing: 1 },
@@ -250,6 +254,12 @@ describe("role decisions", () => {
       lead: true,
       chief: false,
     });
+    expect(table(isChiefRole)).toEqual({
+      none: false,
+      orchestrator: false,
+      lead: false,
+      chief: true,
+    });
     expect(Object.keys(ROLE_DECISIONS.standing).sort()).toEqual(
       ["none", ...STANDING_ROLES].sort()
     );
@@ -268,6 +278,7 @@ describe("role decisions", () => {
       expect(sql(sqlNoRole("r"), r)).toBe(!isStandingRole(r));
       expect(sql(sqlTech("r"), r)).toBe(isTechRole(r));
       expect(sql(sqlLead("r"), r)).toBe(isLeadRole(r));
+      expect(sql(sqlChief("r"), r)).toBe(isChiefRole(r));
     }
     db.close();
   });
