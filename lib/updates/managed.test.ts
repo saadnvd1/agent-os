@@ -1,7 +1,7 @@
-import { afterEach, beforeEach, describe, expect, it } from "vitest";
+import { beforeEach, describe, expect, it } from "vitest";
 import fs from "fs";
-import os from "os";
 import path from "path";
+import { tempDir } from "@/lib/test-temp";
 import { autodeployManaged, MANAGED_FRESH_MS } from "./managed";
 
 let dir: string;
@@ -14,10 +14,9 @@ const beat = (host: string, cwd: string, ageMs = 0) => {
 };
 
 beforeEach(() => {
-  dir = fs.mkdtempSync(path.join(os.tmpdir(), "managed-"));
+  dir = tempDir("aos-managed-");
   file = path.join(dir, "heartbeat");
 });
-afterEach(() => fs.rmSync(dir, { recursive: true, force: true }));
 
 describe("autodeployManaged", () => {
   it("is true for a fresh beat from this host and checkout", () => {
