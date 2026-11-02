@@ -4,6 +4,7 @@
  * Everything else is skipped with the reason.
  */
 
+import { isStandingRole, roleLabel } from "../leads/roles";
 import fs from "fs";
 import { db, type Session } from "../db";
 import { fromSqliteTime } from "../session-meta";
@@ -67,7 +68,7 @@ export async function findSettled(
     if (!isSettled(s) || !isAgentOSWorktree(dir) || !fs.existsSync(dir))
       continue;
     const skip = async (): Promise<string | null> => {
-      if (s.role) return "an orchestrator's";
+      if (isStandingRole(s.role)) return `${roleLabel(s.role)}'s`;
       if (s.pinned) return "pinned";
       if (s.moved_to)
         return "its task moved to another machine and may come back";

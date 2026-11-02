@@ -5,6 +5,7 @@
  * refuses and lists them, like any other name.
  */
 
+import { isTechRole } from "../leads/roles";
 import type { Session } from "../db";
 import { sessionWorkspace } from "../models/resolve";
 
@@ -60,7 +61,7 @@ export function resolveRoleAlias<T extends RoleSession>(
   const workspace = caller ? sessionWorkspace(caller) : null;
   if (role === "supervisor" && workspace) {
     const orchestrator = others.find(
-      (s) => s.role === "orchestrator" && s.workspace_id === workspace
+      (s) => isTechRole(s.role) && s.workspace_id === workspace
     );
     if (orchestrator) return { ok: true, session: orchestrator };
   }

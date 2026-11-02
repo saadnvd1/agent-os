@@ -1,3 +1,4 @@
+import { isTechRole } from "../../leads/roles";
 import type { Session } from "../../db";
 import type { ChatStartOptions } from "../driver";
 import { refreshSettings } from "../refresh";
@@ -40,7 +41,7 @@ export async function roleExtras(session: Session): Promise<RoleExtras> {
 }
 
 async function ownExtras(session: Session): Promise<RoleExtras> {
-  if (session.role === "orchestrator")
+  if (isTechRole(session.role))
     return (await import("../../orchestrator/worker")).orchestratorExtras(
       session
     );

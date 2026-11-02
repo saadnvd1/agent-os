@@ -2,6 +2,7 @@
 // calling task, chat or orchestrator; null for a person), parent_session_id
 // the session it came from, started_via how it began.
 
+import { isStandingRole } from "../leads/roles";
 import path from "path";
 import { db } from "../db";
 import { setPlacement } from "../db/session-parts";
@@ -86,7 +87,7 @@ export function starterOf(
   return {
     startedBy: caller.id,
     parentSessionId: caller.id,
-    startedVia: caller.role === "orchestrator" ? "orchestrator" : "session",
+    startedVia: isStandingRole(caller.role) ? "orchestrator" : "session",
   };
 }
 
@@ -104,7 +105,7 @@ export function orchestratorOf(startedBy: string | null | undefined) {
       .get(id) as
       { role: string | null; started_by: string | null } | undefined;
     if (!row) return null;
-    if (row.role === "orchestrator") return id;
+    if (isStandingRole(row.role)) return id;
     id = row.started_by;
   }
   return null;

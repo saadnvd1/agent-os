@@ -1,6 +1,7 @@
 // Archived sessions: out of the sidebar, the needs-you count and the
 // orchestrator's view, but kept with their history and chat items.
 
+import { isStandingRole, roleNoun } from "../leads/roles";
 import fs from "fs";
 import { db, queries, type Session } from "../db";
 import { statusOf } from "../orchestrator/facts";
@@ -102,9 +103,9 @@ export async function archiveChecked(
   const s = queries.getSession(db).get(id) as Session | undefined;
   if (!s) throw new Error("Session not found");
   if (s.archived_at) throw new Error(`${s.name} is already archived`);
-  if (s.role === "orchestrator")
+  if (isStandingRole(s.role))
     throw new Error(
-      `${s.name} is a workspace's orchestrator; it can't be archived`
+      `${s.name} is a workspace's ${roleNoun(s.role)}; it can't be archived`
     );
   if (peerSessionLink(s))
     throw new Error(`${s.name} runs on another machine: archive it there`);

@@ -649,6 +649,7 @@ export function ChatPanel({
         {orchestratorOf && (
           <NeedsYouStrip
             workspaceId={orchestratorOf}
+            sessionId={sessionId}
             chatWaiting={state === "waiting"}
             onGo={(item) => {
               if (item.kind === "ask") needsYouFocusActions.ask(item.ask.id);

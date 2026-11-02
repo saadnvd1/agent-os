@@ -6,6 +6,7 @@
  * an orchestrator made can be cancelled here: Saad's are his to change.
  */
 
+import { isTechRole } from "../leads/roles";
 import {
   archiveSchedule,
   createSchedule,
@@ -25,7 +26,7 @@ const line = (s: Schedule) =>
   `${s.id.slice(0, 8)}  ${s.name}: ${formatRunTime(s.run_at ?? 0, s.timezone)} (${relativeTime(s.run_at ?? 0)})`;
 
 const madeByOrchestrator = (s: Schedule) =>
-  getSessionRow(s.created_by_session_id ?? "")?.role === "orchestrator";
+  isTechRole(getSessionRow(s.created_by_session_id ?? "")?.role);
 
 export function remindMe(
   w: string,

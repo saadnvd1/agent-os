@@ -4,6 +4,7 @@
  * counts come from the live session statuses on the client.
  */
 
+import { sqlNoRole } from "../leads/roles";
 import { demoMode } from "../security/demo";
 import { db } from "../db";
 import { listWorkspaces } from "../workspaces";
@@ -26,7 +27,7 @@ function inReview(workspaceId: string): number {
     db
       .prepare(
         `SELECT COUNT(*) AS n FROM session_rows s JOIN projects p ON p.id = s.project_id
-         WHERE p.workspace_id = ? AND s.role IS NULL
+         WHERE p.workspace_id = ? AND ${sqlNoRole("s.role")}
            AND s.task_status = 'running' AND s.pr_status = 'open'`
       )
       .get(workspaceId) as { n: number }
@@ -58,6 +59,7 @@ export function orchestratorOverview(): OrchestratorOverview[] {
           // A demo answers without a passkey (its orchestrator never runs).
           presence: !demoMode() && PRESENCE_KINDS.includes(a.kind),
           createdAt: a.created_at,
+          leadKind: a.lead_kind,
         };
       }),
       questions: openQuestions(w.id),

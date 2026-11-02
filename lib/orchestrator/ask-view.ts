@@ -30,6 +30,8 @@ export interface AskView {
   binding: string;
   presence: boolean;
   createdAt: string;
+  // The lead it is for: "tech" (the orchestrator) unless a lead raised it.
+  leadKind: string;
 }
 
 // A question the orchestrator put to Saad in chat, open until answered.

@@ -1,3 +1,4 @@
+import { isStandingRole } from "../leads/roles";
 import fs from "fs";
 import os from "os";
 import path from "path";
@@ -35,7 +36,7 @@ export function mentionRoots(sessionId: string): MentionRoot[] | null {
         working_directory: string;
       }
     | undefined;
-  if (session?.role !== "orchestrator") return null;
+  if (!isStandingRole(session?.role)) return null;
 
   // Never the home folder or the whole disk: a project pointed there would
   // list everything under it, dotfiles and keys included.

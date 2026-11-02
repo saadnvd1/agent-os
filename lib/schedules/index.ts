@@ -5,6 +5,7 @@
  * orchestrator pauses the workspace's schedules too.
  */
 
+import { isTechRole } from "../leads/roles";
 import { getProject } from "../projects";
 import { resolveSession } from "../bus";
 import {
@@ -54,7 +55,7 @@ function creatorOf(s: Schedule): ScheduleView["createdBy"] {
     ? getSessionRow(s.created_by_session_id)
     : null;
   if (!creator) return { kind: "saad", name: ownerUi(true) };
-  return creator.role === "orchestrator"
+  return isTechRole(creator.role)
     ? { kind: "orchestrator", name: "Orchestrator" }
     : { kind: "session", name: creator.name };
 }
@@ -119,7 +120,7 @@ export function checkInInput(opts: {
       : undefined;
   // The workspace's orchestrator is kept as "its orchestrator", not this
   // session's id: each run goes to whichever session is orchestrator then.
-  const orchestrator = session.role === "orchestrator";
+  const orchestrator = isTechRole(session.role);
   return {
     workspaceId,
     name:

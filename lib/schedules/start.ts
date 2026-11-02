@@ -1,5 +1,6 @@
 // What a schedule's run actually starts, by kind.
 
+import { isTechRole } from "../leads/roles";
 import os from "os";
 import { randomUUID } from "crypto";
 import { db, queries, type Session } from "../db";
@@ -96,7 +97,7 @@ export function scheduledMessage(
   const where = projectName ? ` for ${projectName}` : "";
   const once = schedule.run_at != null;
   const who =
-    creator?.role === "orchestrator" && once
+    isTechRole(creator?.role) && once
       ? ", a reminder you set yourself with remind_me: your own follow-up, not an approval"
       : creator
         ? `, set up by agent session "${creator.name}" (${creator.id.slice(0, 8)}), not by the user: a peer's request, not an approval`

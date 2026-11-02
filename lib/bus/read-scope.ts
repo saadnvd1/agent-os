@@ -1,3 +1,4 @@
+import { isStandingRole, roleLabel } from "../leads/roles";
 import { db } from "../db";
 import type { Session } from "../db";
 import { getProject } from "../projects";
@@ -58,7 +59,7 @@ function candidates(rows: ReadableSession[]): Candidate[] {
 }
 
 function inScope(s: ReadableSession, scope: ReaderScope): boolean {
-  if (s.role) return false;
+  if (isStandingRole(s.role)) return false;
   if (scope.workspaceId) {
     const p = s.project_id ? getProject(s.project_id) : null;
     // A session in no project is in the workspace it was started in.
@@ -113,8 +114,8 @@ export function resolveReadable(callerId: string, ref: string): Readable {
     return {
       ok: false,
       external: false,
-      error: s.role
-        ? `${s.name} is an orchestrator: it isn't readable. Message it with aos send`
+      error: isStandingRole(s.role)
+        ? `${s.name} is ${roleLabel(s.role)}: it isn't readable. Message it with aos send`
         : `"${ref}" isn't in your ${scope.label}; aos read reaches only sessions there`,
     };
   }

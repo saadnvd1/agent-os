@@ -1,5 +1,6 @@
 "use client";
 
+import { isStandingRole } from "@/lib/leads/roles";
 import { useQuery } from "@tanstack/react-query";
 import { useSessionsQuery } from "@/data/sessions/queries";
 import { useProjectsQuery } from "@/data/projects/queries";
@@ -23,7 +24,7 @@ export function useWorkspaceRunning(workspaceId: string): number {
   );
   return (sessions?.sessions ?? []).filter(
     (s) =>
-      !s.role &&
+      !isStandingRole(s.role) &&
       s.project_id &&
       members.has(s.project_id) &&
       statuses?.statuses[s.id]?.status === "running"

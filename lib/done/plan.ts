@@ -4,6 +4,7 @@
  * single done acts on it; the bulk preview shows it.
  */
 
+import { isStandingRole, roleNoun } from "../leads/roles";
 import { db, stackQueries as sq, type Session } from "../db";
 import type { TaskPR } from "../tasks";
 import { prFor } from "../tasks/session";
@@ -90,8 +91,10 @@ export async function planDone(
   s: Session,
   callerId?: string | null
 ): Promise<DonePlan> {
-  if (s.role === "orchestrator")
-    return refuse(`${s.name} is a workspace's orchestrator; it can't be done`);
+  if (isStandingRole(s.role))
+    return refuse(
+      `${s.name} is a workspace's ${roleNoun(s.role)}; it can't be done`
+    );
   if (s.archived_at) return refuse(`${s.name} is already archived`);
   if (callerId && callerId === s.id)
     return refuse("A session can't mark itself done");
