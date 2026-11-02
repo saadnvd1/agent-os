@@ -7,8 +7,7 @@ import { leadKeys, useDirectionAction, useLeadDirection } from "@/data/leads";
 import type { DirectionChat } from "./direction-context";
 
 // The direction of a standing chat, or null when it has none (the server
-// answers null with Leads off: the experiment is unlisted, so the client's
-// list doesn't carry it). Proposals and memos arrive from the lead's tool
+// answers null with Leads off, so its answer is the one gate). Proposals and memos arrive from the lead's tool
 // calls, so it reloads when a turn ends.
 export function useDirection(
   sessionId: string,

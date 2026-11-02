@@ -17,3 +17,16 @@ export const byLeadOrder = (a: string, b: string) =>
 // What a member's avatar says: C, T, M, P, or a custom kind's first letter.
 export const memberLetter = (kind: string): string =>
   kind === CHIEF ? "C" : (kind[0] ?? "?").toUpperCase();
+
+// A custom lead's kind from the name typed for it ("Design lead" -> design),
+// or null when nothing usable is left.
+export function kindFromName(name: string): string | null {
+  const kind = name
+    .toLowerCase()
+    .replace(/\blead\s*$/, "")
+    .replace(/[^a-z0-9]+/g, "-")
+    .replace(/^[^a-z]+|-+$/g, "")
+    .slice(0, 32)
+    .replace(/-+$/, "");
+  return kind && kind !== CHIEF ? kind : null;
+}

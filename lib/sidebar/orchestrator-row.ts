@@ -7,7 +7,7 @@ import type {
   OrchestratorOverview,
   TeamMemberView,
 } from "../orchestrator/ask-view";
-import { TECH } from "../leads/types";
+import { BUILT_IN_KINDS, TECH } from "../leads/types";
 import { CHIEF, leadRank, memberLetter } from "../leads/order";
 import type { SidebarRow } from "./shelves";
 
@@ -164,18 +164,51 @@ export function teamRowText(
   };
 }
 
+// An idle member's line when there's nothing else to say: the chief is
+// quiet, and a new lead has no direction to work from yet.
+export function memberIdleText(
+  member: Pick<TeamMember, "kind" | "pins">,
+  state: OrchestratorState,
+  asks: number
+): string | null {
+  if (state !== "Idle" || asks > 0) return null;
+  if (member.kind === CHIEF) return "Nothing needs you · all quiet";
+  if (member.kind !== TECH && member.pins === 0)
+    return "New · no direction yet";
+  return null;
+}
+
+// The shipped leads each team doesn't have yet, offered as dashed "Add lead"
+// rows under it.
+export function addableKinds(
+  team: ReadonlyMap<string, Pick<TeamMember, "workspaceId" | "kind">>
+): Map<string, string[]> {
+  const has = new Map<string, Set<string>>();
+  for (const m of team.values())
+    has.set(m.workspaceId, (has.get(m.workspaceId) ?? new Set()).add(m.kind));
+  const out = new Map<string, string[]>();
+  for (const [ws, kinds] of has) {
+    const missing = BUILT_IN_KINDS.filter((k) => !kinds.has(k));
+    if (missing.length) out.set(ws, missing);
+  }
+  return out;
+}
+
 export type HeadItem =
   | { kind: "row"; row: SidebarRow }
   | { kind: "label"; workspaceId: string }
-  | { kind: "team"; workspaceId: string; rows: SidebarRow[] };
+  | { kind: "team"; workspaceId: string; rows: SidebarRow[] }
+  | { kind: "add"; workspaceId: string; leadKind: string };
 
 // What the top of the list draws from the pinned heads (already in team
 // order). A workspace without a team keeps its one card. A team gets a label
-// and a card per member, or, folded under All workspaces, one row.
+// and a card per member, then a dashed row per lead it could add; folded
+// under All workspaces, one row.
 export function headItems(
   rows: readonly SidebarRow[],
   team: ReadonlyMap<string, { workspaceId: string }>,
-  fold: boolean
+  fold: boolean,
+  addable: ReadonlyMap<string, readonly string[]> = new Map()
 ): HeadItem[] {
   const items: HeadItem[] = [];
   const teams = new Map<string, SidebarRow[]>();
@@ -196,5 +229,28 @@ export function headItems(
     } else known.push(row);
     if (!fold) items.push({ kind: "row", row });
   }
-  return items;
+  if (fold) return items;
+  return items.flatMap((item, i) => {
+    const ws =
+      item.kind === "row"
+        ? team.get(item.row.session.id)?.workspaceId
+        : undefined;
+    const next = items[i + 1];
+    const last =
+      ws !== undefined &&
+      !(
+        next?.kind === "row" &&
+        team.get(next.row.session.id)?.workspaceId === ws
+      );
+    return last
+      ? [
+          item,
+          ...(addable.get(ws) ?? []).map((leadKind): HeadItem => ({
+            kind: "add",
+            workspaceId: ws,
+            leadKind,
+          })),
+        ]
+      : [item];
+  });
 }

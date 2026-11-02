@@ -23,7 +23,7 @@ export const DirectionStrip = memo(function DirectionStrip({
   const waiting = view.proposals.length;
   const review = waiting > 0 || view.switchPending;
   return (
-    <div className="mx-auto w-full max-w-3xl px-3 pt-3">
+    <div className="mx-auto w-full max-w-3xl px-3 pt-2 md:pt-3">
       <div className="border-primary/30 bg-primary/[0.04] rounded-xl border">
         <button
           type="button"
@@ -47,7 +47,7 @@ export const DirectionStrip = memo(function DirectionStrip({
                 </span>
               </>
             ) : (
-              <span className="text-muted-foreground block text-xs">
+              <span className="text-muted-foreground block truncate text-xs md:whitespace-normal">
                 None pinned yet. Pin any of your messages from its actions.
               </span>
             )}

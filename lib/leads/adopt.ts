@@ -25,7 +25,8 @@ import { resolveProposals } from "./direction";
 import { addLeads, getLead, leadTitle, seedCharter } from "./home";
 import { latestMemo } from "./memos";
 import { CHIEF } from "./order";
-import { isLeadKind, isStandingRole, sqlNoRole } from "./roles";
+import { isLeadKind, sqlNoRole } from "./roles";
+import { adoptRefusal } from "./adoptable";
 import { TECH, type DirectionPin, type LeadKind } from "./types";
 
 // How many of the owner's last messages the handover offers as pins.
@@ -43,15 +44,7 @@ function refusal(s: Session | undefined, kind: LeadKind): string | null {
   if (!isLeadKind(kind)) return `"${kind}" isn't a lead's name`;
   if (kind === CHIEF)
     return "The chief of staff is made by Add leads, not adopted";
-  if (isStandingRole(s.role)) return "That session already heads something";
-  if (s.view !== "chat" || s.agent_type !== "claude")
-    return "Only a Claude chat session can be adopted as a lead";
-  if (s.task_status || s.worktree_path)
-    return "A task's session can't be a lead";
-  if (s.archived_at) return "Unarchive the session first";
-  if (s.host_id && s.host_id !== "local")
-    return "Only a session on this machine can be adopted";
-  return null;
+  return adoptRefusal(s);
 }
 
 function handover(sessionId: string, title: string): string {

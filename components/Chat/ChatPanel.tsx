@@ -39,6 +39,7 @@ import { quoteInsert, quoteMarkdown } from "@/lib/chat/quote";
 import { OrchestratorBar } from "@/components/Orchestrator/OrchestratorBar";
 import { DirectionStrip } from "@/components/Leads/DirectionStrip";
 import { ChiefStrip } from "@/components/Leads/ChiefStrip";
+import { LeadSwitcher } from "@/components/Leads/LeadSwitcher";
 import { DirectionChatContext } from "@/components/Leads/direction-context";
 import { useDirection } from "@/components/Leads/useDirection";
 import { ActivityLine } from "./Activity";
@@ -547,6 +548,7 @@ export function ChatPanel({
       data-composer-scope
       className="flex h-full min-h-0 flex-col outline-none"
     >
+      {standing && <LeadSwitcher sessionId={sessionId} />}
       {orchestratorOf && <OrchestratorBar workspaceId={orchestratorOf} />}
       {direction && <DirectionStrip chat={direction} sessionId={sessionId} />}
       {standing && <ChiefStrip sessionId={sessionId} standing={standing} />}

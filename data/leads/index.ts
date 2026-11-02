@@ -5,11 +5,15 @@ import type {
 } from "@/lib/leads/direction-view";
 import type { LeadThreadView } from "@/lib/leads/thread-view";
 import type { ChiefView } from "@/lib/leads/chief";
+import type { LeadSetupView } from "@/lib/leads/setup";
+import { orchestratorKeys } from "@/data/orchestrators";
+import { sessionKeys } from "@/data/sessions/keys";
 
 export const leadKeys = {
   direction: (sessionId: string) => ["leads", "direction", sessionId] as const,
   chief: (sessionId: string) => ["leads", "chief", sessionId] as const,
   thread: (q: object, all: boolean) => ["leads", "thread", q, all] as const,
+  setup: (workspaceId: string) => ["leads", "setup", workspaceId] as const,
 };
 
 async function json<T>(res: Response): Promise<T> {
@@ -120,5 +124,50 @@ export function useLeadThread(
       ).thread;
     },
     staleTime: 30000,
+  });
+}
+
+// What "Add leads" offers for a workspace: its kinds, and chats to adopt.
+export function useLeadSetup(workspaceId: string | null) {
+  return useQuery({
+    queryKey: leadKeys.setup(workspaceId ?? ""),
+    queryFn: async () =>
+      (
+        await json<{ setup: LeadSetupView }>(
+          await fetch(
+            `/api/leads/setup?workspaceId=${encodeURIComponent(workspaceId!)}`
+          )
+        )
+      ).setup,
+    enabled: !!workspaceId,
+  });
+}
+
+// "Add leads" with what was picked: new leads first (which also makes the
+// chief and the Tech lead), then each chat adopted in turn. A failed
+// adoption doesn't undo the rest; its reason comes back.
+export function useAddLeads(workspaceId: string) {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async (input: {
+      kinds: string[];
+      adopt: { sessionId: string; kind: string }[];
+    }) => {
+      await json(await post("/api/leads", { workspaceId, kinds: input.kinds }));
+      const failed: string[] = [];
+      for (const a of input.adopt) {
+        const res = await post("/api/leads/adopt", { workspaceId, ...a });
+        if (!res.ok) {
+          const body = await res.json().catch(() => ({}));
+          failed.push(body.error || `Couldn't adopt (${res.status})`);
+        }
+      }
+      return { failed };
+    },
+    onSettled: () => {
+      void qc.invalidateQueries({ queryKey: ["leads"] });
+      void qc.invalidateQueries({ queryKey: orchestratorKeys.all });
+      void qc.invalidateQueries({ queryKey: sessionKeys.all });
+    },
   });
 }

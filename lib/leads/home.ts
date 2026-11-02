@@ -30,6 +30,7 @@ import { markLeadsEnabled } from "./settings";
 import { getCharter, leadAreas, putCharter } from "./charters";
 import { charterTemplate } from "./templates";
 import { addChiefSweep } from "./sweep";
+import { currentDirection } from "./direction";
 import type { TeamMemberView } from "../orchestrator/ask-view";
 
 export { byLeadOrder } from "./order";
@@ -247,7 +248,12 @@ export function teamViews(workspaceId: string): TeamMemberView[] {
       : []),
     ...listLeads(workspaceId).map((s) => {
       const kind = leadKindOf(s) ?? TECH;
-      return { kind, title: leadTitle(workspaceId, kind), sessionId: s.id };
+      return {
+        kind,
+        title: leadTitle(workspaceId, kind),
+        sessionId: s.id,
+        pins: currentDirection(workspaceId, kind).length,
+      };
     }),
   ];
 }

@@ -15,6 +15,7 @@ import {
   Pencil,
   Plus,
   Trash2,
+  Users,
   Workflow,
 } from "lucide-react";
 import * as DM from "@/components/ui/dropdown-menu";
@@ -35,6 +36,9 @@ import { schedulesUiActions } from "@/stores/schedulesUi";
 import { recipesUiActions } from "@/stores/recipesUi";
 import { useCreateGroup } from "@/data/session-groups";
 import { useAddExistingProject } from "@/components/Projects/AddProject/useAddExistingProject";
+import { useExperiment } from "@/data/experiments";
+import { useOrchestratorOverview } from "@/data/orchestrators";
+import { leadsUiActions } from "@/stores/leadsUi";
 
 const icon = "mr-2 h-3.5 w-3.5";
 
@@ -54,6 +58,8 @@ export function WorkspaceSwitcher({
   const createGroup = useCreateGroup();
   const [dialog, setDialog] = useState<"new" | "rename" | "group" | null>(null);
   const name = current?.name ?? "All workspaces";
+  const leadsOn = useExperiment("leads");
+  const team = useOrchestratorOverview(current?.id ?? null)?.team;
 
   return (
     <>
@@ -126,8 +132,17 @@ export function WorkspaceSwitcher({
                 onClick={() => orchestratorOpenActions.request(current.id)}
               >
                 <Workflow className={icon} />
-                Orchestrator
+                {team ? "Tech lead" : "Orchestrator"}
               </DM.DropdownMenuItem>
+              {leadsOn && (
+                <DM.DropdownMenuItem
+                  onClick={() => leadsUiActions.openAdd(current.id)}
+                  className="min-h-11 md:min-h-0"
+                >
+                  <Users className={icon} />
+                  {team ? "Leads…" : "Add leads…"}
+                </DM.DropdownMenuItem>
+              )}
               <DM.DropdownMenuItem
                 onClick={() => recipesUiActions.open(current.id)}
               >
