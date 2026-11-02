@@ -1,4 +1,5 @@
 import type { SessionRole } from "@/lib/db/types";
+import { CHIEF as CHIEF_KIND } from "./order";
 import { TECH, type LeadKind } from "./types";
 
 // Client-safe: no database. Every check of `sessions.role` goes through one of
@@ -123,3 +124,9 @@ export const isLeadKind = (v: unknown): v is LeadKind =>
 // any role it reports is standing there.
 export const isPeerStanding = (role: unknown): boolean =>
   typeof role === "string" ? role !== "" : role != null;
+
+// The team member a standing session is: its lead kind, or "chief".
+export const memberKind = (s: {
+  role: string | null;
+  lead_kind?: string | null;
+}): LeadKind | null => (isChiefRole(s.role) ? CHIEF_KIND : leadKindOf(s));

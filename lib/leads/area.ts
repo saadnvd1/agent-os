@@ -63,7 +63,7 @@ export function areaRefusal(
   }
   // Not one of the workspace's projects (a session in none): not its area.
   if (!project)
-    return `That isn't in a project of your area, so ${tool} is refused. Hand it to the Tech lead with send.`;
+    return `That isn't in a project of your area, so ${tool} is refused. Hand it to the Tech lead with message_lead.`;
   const areas = leadAreas(workspaceId, kind);
   const owns = areas.some(
     (a) =>
@@ -73,5 +73,5 @@ export function areaRefusal(
   );
   if (owns) return null;
   const title = leadTitle(workspaceId, kind);
-  return `"${project.name}" isn't in your area as ${title}, so ${tool} is refused there. Hand the work to the Tech lead with send, or ask the owner to add the project to your area.`;
+  return `"${project.name}" isn't in your area as ${title}, so ${tool} is refused there. Hand the work to the Tech lead with message_lead, or ask the owner to add the project to your area.`;
 }

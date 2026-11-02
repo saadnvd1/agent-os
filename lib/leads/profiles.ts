@@ -9,7 +9,12 @@ import type { LeadKind } from "./types";
 import { TECH } from "./types";
 
 // A lead's own tools, on top of the orchestrator's (./tools.ts).
-export const LEAD_TOOLS = ["update_memo", "propose_pin", "direction"] as const;
+export const LEAD_TOOLS = [
+  "update_memo",
+  "propose_pin",
+  "direction",
+  "message_lead",
+] as const;
 export type LeadToolName = (typeof LEAD_TOOLS)[number];
 export const isLeadToolName = (t: unknown): t is LeadToolName =>
   typeof t === "string" && (LEAD_TOOLS as readonly string[]).includes(t);

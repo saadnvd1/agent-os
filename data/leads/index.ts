@@ -3,9 +3,11 @@ import type {
   DirectionAction,
   LeadDirectionView,
 } from "@/lib/leads/direction-view";
+import type { LeadThreadView } from "@/lib/leads/thread-view";
 
 export const leadKeys = {
   direction: (sessionId: string) => ["leads", "direction", sessionId] as const,
+  thread: (q: object, all: boolean) => ["leads", "thread", q, all] as const,
 };
 
 async function json<T>(res: Response): Promise<T> {
@@ -66,5 +68,38 @@ export function useConfirmPins(sessionId: string) {
     }) => json<unknown>(await post("/api/leads/proposals", input)),
     onSettled: () =>
       qc.invalidateQueries({ queryKey: leadKeys.direction(sessionId) }),
+  });
+}
+
+// A thread between two leads, up to the message a card stands for (all of
+// it once opened). Mail arrives with turns, so it's read again when stale.
+export function useLeadThread(
+  q: {
+    workspaceId: string;
+    thread: string;
+    a: string;
+    b: string;
+    upTo?: number;
+  },
+  all: boolean
+) {
+  return useQuery({
+    queryKey: leadKeys.thread(q, all),
+    queryFn: async () => {
+      const params = new URLSearchParams({
+        workspaceId: q.workspaceId,
+        thread: q.thread,
+        a: q.a,
+        b: q.b,
+        ...(q.upTo ? { upTo: String(q.upTo) } : {}),
+        ...(all ? { all: "1" } : {}),
+      });
+      return (
+        await json<{ thread: LeadThreadView | null }>(
+          await fetch(`/api/leads/threads?${params}`)
+        )
+      ).thread;
+    },
+    staleTime: 30000,
   });
 }

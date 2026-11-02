@@ -19,6 +19,8 @@ import { PlanCard } from "./PlanCard";
 import { UserTurn } from "./EventRow";
 import { EventGroup } from "./EventTurns";
 import { NewDivider } from "./NewDivider";
+import { MailToolCard } from "@/components/Leads/ThreadCard";
+import { isMailTool } from "@/lib/chat/turns";
 import {
   AssistantMessage,
   CommandOutput,
@@ -100,6 +102,8 @@ function Item({
     case "tool":
       return item.name === "Skill" ? (
         <SkillChip item={item} />
+      ) : isMailTool(item.name) ? (
+        <MailToolCard tool={item} />
       ) : STANDALONE_TOOLS.has(item.name) ? (
         <SubagentCard item={item} />
       ) : null;

@@ -117,6 +117,6 @@ export function keepToolLines(
     .join("\n")
     .replace(TOOL_REFS, (_, list: string) => {
       const kept = list.split(", ").filter((ref) => has(REF.exec(ref)![1]));
-      return `(${kept.length ? kept.join(", ") : "hand it to the Tech lead with send"})`;
+      return `(${kept.length ? kept.join(", ") : "hand it to the Tech lead with message_lead"})`;
     });
 }

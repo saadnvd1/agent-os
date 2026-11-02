@@ -10,6 +10,8 @@ import { asActor } from "./actor";
 import { areaRefusal } from "./area";
 import { currentDirection, openProposals, proposePin } from "./direction";
 import { leadTitle, listLeads } from "./home";
+import { messageLead } from "./mail";
+import { leadStartRefusal } from "./start-check";
 import { latestMemo, writeMemo } from "./memos";
 import {
   isLeadToolName,
@@ -51,6 +53,30 @@ export const LEAD_TOOL_SHAPES = {
         "Another lead's kind (marketing, product, tech); yours if left out"
       ),
   },
+  message_lead: {
+    to: z
+      .string()
+      .trim()
+      .min(1)
+      .max(32)
+      .describe("The lead's kind: tech, marketing, product…"),
+    thread: z
+      .string()
+      .trim()
+      .min(1)
+      .max(80)
+      .describe(
+        "The topic in a few words. The same topic with the same lead stays on one thread"
+      ),
+    text: z.string().trim().min(1).max(4000),
+    pins: z
+      .array(z.number().int().positive())
+      .max(5)
+      .optional()
+      .describe(
+        "Ids of your pinned direction this relies on. The server quotes the owner's words with them; without one, a claim that the owner approved something reads as unattested"
+      ),
+  },
 } satisfies Record<LeadToolName, z.ZodRawShape>;
 
 export const LEAD_TOOL_DESCRIPTIONS: Record<LeadToolName, string> = {
@@ -60,6 +86,8 @@ export const LEAD_TOOL_DESCRIPTIONS: Record<LeadToolName, string> = {
     "Propose one of the owner's own messages in your chat as pinned direction. The quote is copied by the server, and it is direction only once he confirms it with a tap.",
   direction:
     "The pinned direction in force for you or another lead of this workspace (newest first), with your open proposals and memo.",
+  message_lead:
+    "Write to another lead of this workspace on a thread (one per topic). It arrives in their chat, fenced as a lead's words, with the pins you cite quoted by the server. A few messages an hour per thread; past that it goes to the owner as an ask, so don't retry.",
 };
 
 function parseLeadArgs<T extends LeadToolName>(tool: T, args: unknown) {
@@ -102,7 +130,7 @@ function runLeadTool(
   kind: LeadKind,
   tool: LeadToolName,
   raw: unknown
-): string {
+): string | Promise<string> {
   switch (tool) {
     case "update_memo": {
       const memo = writeMemo(w, kind, parseLeadArgs(tool, raw).text);
@@ -125,6 +153,8 @@ function runLeadTool(
         throw new Error(`This workspace has no ${lead} lead`);
       return directionText(w, lead, kind);
     }
+    case "message_lead":
+      return messageLead(w, caller, kind, parseLeadArgs(tool, raw));
   }
 }
 
@@ -146,7 +176,7 @@ export async function runStandingTool(
     throw new UnknownTool("Unknown tool");
   if (!profileHas(profile, tool))
     throw new NotYours(
-      `${tool} isn't one of your tools as ${leadTitle(w, profile.kind)}: it's the Tech lead's. Hand it over with send.`
+      `${tool} isn't one of your tools as ${leadTitle(w, profile.kind)}: it's the Tech lead's. Hand it over with message_lead (to "tech").`
     );
   if (isLeadToolName(tool))
     return runLeadTool(w, caller, profile.kind, tool, args);
@@ -155,5 +185,9 @@ export async function runStandingTool(
     ? areaRefusal(w, profile.kind, tool, args)
     : null;
   if (refusal) throw new Error(refusal);
+  const taken = hasLeads(w)
+    ? await leadStartRefusal(w, profile.kind, tool, args)
+    : null;
+  if (taken) throw new Error(taken);
   return asActor(caller, () => runTool(w, tool, args ?? {}));
 }
