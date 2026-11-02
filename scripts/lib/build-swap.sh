@@ -7,6 +7,9 @@
 # .next-prev for one rollback. A failed build never touches .next.
 # Sourced by scripts/redeploy; run from the repository root.
 
+# shellcheck source=generated.sh
+source scripts/lib/generated.sh
+
 LIVE=.next
 NEXT_BUILD=.next-build
 PREV=.next-prev
@@ -47,6 +50,7 @@ build_beside() {
   [ -d "$LIVE/types.building" ] && mv "$LIVE/types.building" "$LIVE/types"
   for f in "${REWRITTEN[@]}"; do [ -f "$saved/$f" ] && cp -p "$saved/$f" "$f"; done
   rm -rf "$saved"
+  discard_generated
   # `next build` exits non-zero on a type error, so a build that got here
   # typechecked; a missing BUILD_ID means it stopped short anyway.
   if [ "$status" = 0 ] && [ ! -s "$NEXT_BUILD/BUILD_ID" ]; then

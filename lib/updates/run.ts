@@ -32,6 +32,7 @@ import {
   type CheckDeps,
   type CheckResult,
 } from "./check";
+import { generatedFiles, splitDirty } from "./generated";
 import { decideAutoUpdate, pickTarget, type AutoDecision } from "./auto";
 import {
   attemptOf,
@@ -325,6 +326,16 @@ export type Refusal = { code: UpdateRefusal; error: string };
 export const NO_RESTART =
   "This server can't restart itself, so an update would leave the old build running on new files. Set AGENTOS_RESTART to its restart command, or start it with agent-os start (started at login on Linux: run agent-os enable again to update its service).";
 
+/** A build leaves these modified; the pull would refuse to overwrite them. */
+export async function discardGenerated(deps: RunDeps): Promise<void> {
+  const { generated } = splitDirty(
+    await deps.git(["status", "--porcelain", "--untracked-files=no"]),
+    generatedFiles(deps.cwd)
+  );
+  if (generated.length)
+    await deps.git(["checkout", "--", ...generated]).catch(() => {});
+}
+
 export async function preflight(
   check: CheckResult | null,
   deps: RunDeps
@@ -356,12 +367,10 @@ export async function preflight(
       error:
         "Another update or deploy is building. Try again when it finishes.",
     };
-  const dirty = (
-    await deps.git(["status", "--porcelain", "--untracked-files=no"])
-  )
-    .split("\n")
-    .map((l) => l.slice(3).trim())
-    .filter(Boolean);
+  const dirty = splitDirty(
+    await deps.git(["status", "--porcelain", "--untracked-files=no"]),
+    generatedFiles(deps.cwd)
+  ).blocking;
   if (dirty.length)
     return {
       code: "dirty",
@@ -463,6 +472,7 @@ async function begin(
       code: "unknown",
       error: `Couldn't look for updates: ${result.error}`,
     };
+  await discardGenerated(deps);
   const refused = await preflight(result, deps);
   if (refused) return { ok: false, ...refused };
   if (when === "idle") {

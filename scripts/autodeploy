@@ -51,6 +51,10 @@ published=$(cat "$state/published" 2>/dev/null || true)
 [ "$head" = "$deployed" ] && [ "$head" = "$published" ] && exit 0
 log() { echo "$(date '+%Y-%m-%d %-I:%M %p') $*"; }
 
+# shellcheck source=lib/generated.sh
+source scripts/lib/generated.sh
+discard_generated
+
 # A head that differs from the deployed one only in the changelog file needs
 # a pull, not a build or a restart: the file is read from disk when asked.
 changelog=content/whats-new.json
