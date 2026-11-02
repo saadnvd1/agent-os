@@ -1985,6 +1985,30 @@
       "area": "Settings",
       "text": "More settings now save as you change them, and revoking a passkey or link asks inline instead of with a browser pop-up.",
       "url": "https://github.com/saadnvd1/agent-os/pull/563"
+    },
+    {
+      "id": 564,
+      "date": "2026-11-02",
+      "kind": "fixed",
+      "area": "Updates",
+      "text": "Updating AgentOS no longer rolls back a good update when the machine's automatic deploy restarts the server at the same moment.",
+      "url": "https://github.com/saadnvd1/agent-os/pull/564"
+    },
+    {
+      "id": 565,
+      "date": "2026-11-02",
+      "kind": "improved",
+      "area": "Settings",
+      "text": "The Workspaces settings page now shows one workspace at a time, in clear groups, with rules you can read in full and edit in place.",
+      "url": "https://github.com/saadnvd1/agent-os/pull/565"
+    },
+    {
+      "id": 568,
+      "date": "2026-11-02",
+      "kind": "fixed",
+      "area": "Sidebar",
+      "text": "Renaming a session for the first time no longer closes the name box before you can type.",
+      "url": "https://github.com/saadnvd1/agent-os/pull/568"
     }
   ]
 }
