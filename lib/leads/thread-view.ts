@@ -5,10 +5,10 @@
 
 import { z } from "zod";
 import { experimentOn } from "../experiments";
-import { openBySubject } from "../orchestrator/asks";
 import { AREA_THREAD } from "./area-notify";
 import { getPin } from "./direction";
 import { leadTitle } from "./home";
+import { openHoldAsk } from "./held";
 import { threadAskSubject } from "./mail";
 import { threadUpTo } from "./messages";
 import { hasLeads } from "./settings";
@@ -90,7 +90,7 @@ export function threadView(
       titles.set(kind, { kind, title: leadTitle(w, kind) });
     return titles.get(kind)!;
   };
-  const held = openBySubject(w, threadAskSubject(q.a, q.b, q.thread));
+  const held = openHoldAsk(w, threadAskSubject(q.a, q.b, q.thread));
   return {
     thread: q.thread,
     members: [member(opened.from), member(opened.to)],

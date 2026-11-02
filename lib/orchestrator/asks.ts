@@ -27,6 +27,12 @@ const tellLead = (workspaceId: string, kind: LeadKind, line: string) =>
     .then((m) => m.tellLead(workspaceId, kind, line))
     .catch((e) => console.error(`Ask answer for the ${kind} lead:`, e));
 
+// A lead-thread ask holds a lead's message; the answer settles it.
+const settleHeld = (ask: AskRow, action: AskAnswer["action"]) =>
+  import("../leads/held")
+    .then((m) => m.settleHeldAsk(ask, action))
+    .catch((e) => console.error("Held lead mail:", e));
+
 export { ASK_KINDS, type AskKind } from "./ask-view";
 
 // The kinds the orchestrator raises itself; gate and brake asks come from
@@ -365,6 +371,8 @@ export function answerAsk(
     if (ask.kind === "passkey") settlePasskeyAsk(ask, answer.action);
     else if (!ownLead) queueEvent(workspaceId, answerKey(id), null, line);
   })();
+  if (ask.subject.startsWith("lead-thread:"))
+    void settleHeld(ask, answer.action);
   if (ownLead && ask.kind !== "passkey")
     void tellLead(workspaceId, ownLead, line);
   // An auto-approval is noted once, by recordAutoApproval.
