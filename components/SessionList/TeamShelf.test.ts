@@ -197,16 +197,48 @@ describe("a workspace with leads", () => {
     expect(plain.querySelector('[aria-label="Via Tech lead"]')).not.toBeNull();
   });
 
-  it("folds into one row under All workspaces, which opens the workspace", async () => {
-    await render(sessions, value, true);
-    const rows = host.querySelectorAll("[data-team-row]");
-    expect(rows).toHaveLength(1);
-    expect(rows[0].textContent).toBe(
+  it("opens the chief from the card and a member from its avatar, staying in All workspaces", async () => {
+    const onSelect = vi.fn();
+    sidebarUi.workspaceId = null;
+    await render(sessions, { ...value, onSelect }, true);
+    const row = host.querySelector("[data-team-row]") as HTMLElement;
+    expect(row.textContent).toBe(
       "WorkstakCTMP2 needs you · 1 running · 1 in review"
     );
     for (const id of ["ch", "o1", "mk", "pr"])
       expect(host.querySelector(`[data-session-row="${id}"]`)).toBeNull();
-    act(() => (rows[0] as HTMLElement).click());
-    expect(sidebarUi.workspaceId).toBe("w1");
+    act(() => row.click());
+    expect(onSelect).toHaveBeenLastCalledWith("ch");
+    act(() =>
+      (host.querySelector('[data-member="mk"]') as HTMLElement).click()
+    );
+    expect(onSelect).toHaveBeenCalledTimes(2);
+    expect(onSelect).toHaveBeenLastCalledWith("mk");
+    expect(sidebarUi.workspaceId).toBeNull();
+  });
+
+  it("opens the orchestrator when the team has no chief", async () => {
+    const onSelect = vi.fn();
+    const noChief = teamMembers([
+      {
+        workspaceId: "w1",
+        team: [
+          { kind: "tech", title: "Tech lead", sessionId: "o1" },
+          { kind: "marketing", title: "Marketing lead", sessionId: "mk" },
+        ],
+      },
+    ]);
+    await render(sessions, { ...value, team: noChief, onSelect }, true);
+    act(() => (host.querySelector("[data-team-row]") as HTMLElement).click());
+    expect(onSelect).toHaveBeenLastCalledWith("o1");
+  });
+
+  it("highlights the card while a member's chat is open", async () => {
+    await render(sessions, { ...value, activeSessionId: "mk" }, true);
+    const row = host.querySelector("[data-team-row]")!;
+    expect(row.getAttribute("aria-current")).toBe("true");
+    expect(
+      host.querySelector('[data-member="mk"]')!.getAttribute("aria-current")
+    ).toBe("true");
   });
 });
