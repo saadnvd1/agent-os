@@ -1,7 +1,7 @@
 "use client";
 
 import { Lightbulb } from "lucide-react";
-import { useEffect, useRef, useState, type ReactNode } from "react";
+import { useCallback, useRef, useState, type ReactNode } from "react";
 import type { SidebarRow } from "@/lib/sidebar/shelves";
 import { cn } from "@/lib/utils";
 
@@ -61,11 +61,43 @@ export function CardBadge({ count }: { count: number }) {
   );
 }
 
-// For a menu's onCloseAutoFocus: while a rename is open, the input keeps the
-// focus instead of the menu's trigger getting it back.
-export const keepRenameFocus = (renaming: boolean) => (e: Event) => {
-  if (renaming) e.preventDefault();
+const RENAME_INPUT = "input[data-rename-input]";
+
+function focusRename(el: HTMLInputElement) {
+  el.focus();
+  el.select();
+}
+
+// For a menu's onCloseAutoFocus: while a rename input is open it takes the
+// focus the menu would hand back to its trigger. Reads the DOM, not state, so
+// it can't see a render that hasn't landed yet.
+export const keepRenameFocus = (e: Event) => {
+  const el = document.querySelector<HTMLInputElement>(RENAME_INPUT);
+  if (!el) return;
+  e.preventDefault();
+  focusRename(el);
 };
+
+// Props for a rename input that was opened from a menu. While the menu is
+// still on screen it traps focus, so the input waits for keepRenameFocus; a
+// blur before the input has held focus once is never a commit.
+export function useRenameInput(onDone: () => void) {
+  const hadFocus = useRef(false);
+  const ref = useCallback((el: HTMLInputElement | null) => {
+    hadFocus.current = false;
+    if (el && !document.querySelector('[role="menu"]')) focusRename(el);
+  }, []);
+  return {
+    ref,
+    "data-rename-input": "",
+    onFocus: () => {
+      hadFocus.current = true;
+    },
+    onBlur: () => {
+      if (hadFocus.current) onDone();
+    },
+  };
+}
 
 export function RowRename({
   initial,
@@ -75,41 +107,13 @@ export function RowRename({
   onDone: (name: string | null) => void;
 }) {
   const [value, setValue] = useState(initial);
-  const ref = useRef<HTMLInputElement>(null);
-  const hadFocus = useRef(false);
-  // The menu closing hands focus back to its trigger (RowShell stops that
-  // while renaming); keep taking it until we hold it, then leave it alone.
-  useEffect(() => {
-    const take = () => {
-      const el = ref.current;
-      if (!el || hadFocus.current) return;
-      el.focus();
-      if (document.activeElement === el) {
-        hadFocus.current = true;
-        el.select();
-      }
-    };
-    take();
-    const t = setInterval(take, 50);
-    const stop = setTimeout(() => clearInterval(t), 1000);
-    return () => {
-      clearInterval(t);
-      clearTimeout(stop);
-    };
-  }, []);
+  const input = useRenameInput(() => onDone(value.trim() || null));
   return (
     <input
-      ref={ref}
+      {...input}
       value={value}
       aria-label="Session name"
       onChange={(e) => setValue(e.target.value)}
-      onFocus={() => {
-        hadFocus.current = true;
-      }}
-      onBlur={() => {
-        // Only once we've held focus: the menu closing hands it to its trigger.
-        if (hadFocus.current) onDone(value.trim() || null);
-      }}
       onKeyDown={(e) => {
         e.stopPropagation();
         if (e.key === "Enter") onDone(value.trim() || null);

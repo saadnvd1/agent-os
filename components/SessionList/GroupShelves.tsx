@@ -17,6 +17,7 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import { cn } from "@/lib/utils";
+import { keepRenameFocus, useRenameInput } from "./RowParts";
 import { SessionRow } from "./SessionRow";
 import { useDropZone } from "./useGroupDrag";
 
@@ -48,18 +49,18 @@ function GroupHeader({
       update.mutate({ id: group.id, name: next });
     else setName(group.name);
   };
+  const renameInput = useRenameInput(() => commit());
 
   if (renaming)
     return (
       <div className="px-2.5 pt-3.5 pb-1.5">
         <Input
-          autoFocus
+          {...renameInput}
           value={name}
           maxLength={60}
           aria-label="Group name"
           className="h-11 md:h-8"
           onChange={(e) => setName(e.target.value)}
-          onBlur={commit}
           onKeyDown={(e) => {
             if (e.key === "Enter") commit();
             if (e.key === "Escape") {
@@ -112,7 +113,11 @@ function GroupHeader({
             <MoreHorizontal className="h-4 w-4" />
           </button>
         </DropdownMenuTrigger>
-        <DropdownMenuContent align="end" className="w-44">
+        <DropdownMenuContent
+          align="end"
+          className="w-44"
+          onCloseAutoFocus={keepRenameFocus}
+        >
           <DropdownMenuItem
             className="min-h-11 md:min-h-8"
             onSelect={() => setRenaming(true)}

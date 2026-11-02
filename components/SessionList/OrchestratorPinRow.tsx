@@ -160,7 +160,7 @@ export const OrchestratorPinRow = memo(function OrchestratorPinRow({
         <DM.DropdownMenuContent
           align="end"
           className={ROW_MENU_CONTENT}
-          onCloseAutoFocus={keepRenameFocus(renaming)}
+          onCloseAutoFocus={keepRenameFocus}
           onClick={(e) => e.stopPropagation()}
         >
           {menu("dropdown")}
@@ -175,7 +175,7 @@ export const OrchestratorPinRow = memo(function OrchestratorPinRow({
         <CM.ContextMenuTrigger asChild>{content}</CM.ContextMenuTrigger>
         <CM.ContextMenuContent
           className={ROW_MENU_CONTENT}
-          onCloseAutoFocus={keepRenameFocus(renaming)}
+          onCloseAutoFocus={keepRenameFocus}
         >
           {menu("context")}
         </CM.ContextMenuContent>
