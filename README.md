@@ -10,6 +10,12 @@ and check on all of it from your phone.
   <img alt="AgentOS: sessions grouped by state, a chat with its plan, steps and diffs, and the git panel" src="screenshots/hero.png">
 </picture>
 
+<p align="center">
+  <a href="https://youtu.be/JAukzHLTM5Y"><img alt="Watch the AgentOS video: You're the boss. They do the work." src="screenshots/video-boss.jpg" width="640"></a>
+  <br>
+  <a href="https://youtu.be/JAukzHLTM5Y">▶ Watch: what AgentOS does, in about a minute</a>
+</p>
+
 ## What it does
 
 - **An orchestrator for each workspace.** A chat that starts tasks, answers blocked agents, and merges pull requests only through gates. Anything that is yours to decide waits as an ask. [More](docs/reference/orchestrator.md)
