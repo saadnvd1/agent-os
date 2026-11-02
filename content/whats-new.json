@@ -1937,6 +1937,14 @@
       "area": "Chat",
       "text": "Cancelled questions from GitHub Copilot chats now clear right away instead of staying on screen.",
       "url": "https://github.com/saadnvd1/agent-os/pull/552"
+    },
+    {
+      "id": 555,
+      "date": "2026-11-02",
+      "kind": "fixed",
+      "area": "Updates",
+      "text": "Automatic updates no longer get stuck after the first one because of a file the build rewrites.",
+      "url": "https://github.com/saadnvd1/agent-os/pull/555"
     }
   ]
 }
