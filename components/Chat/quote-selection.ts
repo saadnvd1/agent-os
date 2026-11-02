@@ -103,9 +103,13 @@ export interface Placement {
 
 // Where the floating button goes, kept inside the visible chat (`view`),
 // which ends above the composer. Null when the selection is scrolled out.
-export function placeQuote(sel: Box, view: Box, size = 48): Placement | null {
+export function placeQuote(
+  sel: Box,
+  view: Box,
+  size = 48,
+  half = 60
+): Placement | null {
   if (sel.bottom < view.top || sel.top > view.bottom) return null;
-  const half = 60;
   const mid = (sel.left + sel.right) / 2;
   const x = Math.min(Math.max(mid, view.left + half), view.right - half);
   if (sel.top - size >= view.top) return { x, y: sel.top, side: "above" };

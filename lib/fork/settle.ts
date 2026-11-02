@@ -22,6 +22,7 @@ import {
   updateResult,
   childrenOf,
   findChild,
+  isNonAnswer,
   markDeliveredIds,
 } from "./ledger";
 import { FORK_LIMITS } from "./options";
@@ -120,7 +121,11 @@ export async function returnChild(
   if (!row) throw new Error("Only a fork child can return a result");
   const body = text.trim();
   if (!body) throw new Error('Give the result: aos return "<result>"');
-  const outcome: ChildOutcome = failed ? "failed" : "ok";
+  const outcome: ChildOutcome = failed
+    ? "failed"
+    : isNonAnswer(body)
+      ? "empty"
+      : "ok";
   if (
     await settleAndDeliver(childId, {
       outcome,
@@ -205,10 +210,9 @@ export async function lookAtChild(row: ChildRow, now: number): Promise<void> {
   // It asked its parent something and is waiting for the answer.
   if (openWaits().some((w) => w.waiter_id === row.child_session_id)) return;
   const reply = lastReply(row.child_session_id);
-  if (!reply) return;
   await settleAndDeliver(row.child_session_id, {
-    outcome: "ok",
-    summary: summaryOf(reply),
+    outcome: isNonAnswer(reply) ? "empty" : "ok",
+    summary: reply ? summaryOf(reply) : "ended without a result",
     result: reply,
     kind: "implicit",
   });

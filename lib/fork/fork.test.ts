@@ -284,6 +284,31 @@ describe("how a child ends", () => {
     expect(row.summary).toBe("revised");
   });
 
+  it("settles a bare flag or blank result as empty, never done", async () => {
+    for (const text of ["--help", "-h", "  \n"]) {
+      const { id } = await one();
+      if (text.trim()) await returnChild(id, text, false);
+      else {
+        status.set(id, "idle");
+        const t0 = Date.now();
+        await lookAtChild(ledger.getChild(id)!, t0);
+        await lookAtChild(
+          ledger.getChild(id)!,
+          t0 + FORK_LIMITS.implicitGraceMs + 1000
+        );
+      }
+      const row = ledger.getChild(id)!;
+      expect(row.state).toBe("settled");
+      expect(row.outcome).toBe("empty");
+    }
+  });
+
+  it("keeps a sentence that starts with dashes as an answer", async () => {
+    const { id } = await one();
+    await returnChild(id, "--x means y", false);
+    expect(ledger.getChild(id)!.outcome).toBe("ok");
+  });
+
   it("only one of two racing settles wins", async () => {
     const { id } = await one();
     const [a, b] = await Promise.all([

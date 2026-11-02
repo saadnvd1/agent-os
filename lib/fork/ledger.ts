@@ -176,6 +176,11 @@ export function summaryOf(text: string): string {
   return one.length <= max ? one : `${one.slice(0, max - 1)}…`;
 }
 
+// A result that says nothing: blank, or one bare flag (`--help`) a child took
+// for its answer. A quoted sentence that starts with dashes is still an answer.
+export const isNonAnswer = (text: string | null | undefined): boolean =>
+  !text?.trim() || /^--?[a-z][a-z-]*$/i.test(text.trim());
+
 export const capResult = (text: string): string =>
   text.length <= FORK_LIMITS.resultChars
     ? text

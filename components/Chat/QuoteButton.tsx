@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useId, useState, type RefObject } from "react";
-import { Quote } from "lucide-react";
+import { GitFork, Quote } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { useCoarsePointer } from "./composer/useCoarsePointer";
 import { useKeybindings } from "@/hooks/useKeybindings";
@@ -19,7 +19,7 @@ interface Picked {
   at: Placement | null;
 }
 
-function readSelection(root: HTMLElement): Picked | null {
+function readSelection(root: HTMLElement, half?: number): Picked | null {
   const sel = window.getSelection();
   const pick = sel && quotePick(sel, root);
   if (!pick) return null;
@@ -30,7 +30,10 @@ function readSelection(root: HTMLElement): Picked | null {
     left: Math.min(...rects.map((r) => r.left)),
     right: Math.max(...rects.map((r) => r.right)),
   };
-  return { text: pick.text, at: placeQuote(box, root.getBoundingClientRect()) };
+  return {
+    text: pick.text,
+    at: placeQuote(box, root.getBoundingClientRect(), undefined, half),
+  };
 }
 
 // "Quote" for a selection in a reply. With a mouse it floats over the
@@ -39,12 +42,16 @@ function readSelection(root: HTMLElement): Picked | null {
 export function QuoteButton({
   rootRef,
   onQuote,
+  onFork,
 }: {
   rootRef: RefObject<HTMLElement | null>;
   onQuote: (text: string) => void;
+  // Only given while forks are on: a second button beside Quote.
+  onFork?: (text: string) => void;
 }) {
   const [picked, setPicked] = useState<Picked | null>(null);
   const coarse = useCoarsePointer();
+  const wide = !!onFork;
 
   useEffect(() => {
     let frame = 0;
@@ -52,7 +59,7 @@ export function QuoteButton({
       cancelAnimationFrame(frame);
       frame = requestAnimationFrame(() => {
         const root = rootRef.current;
-        setPicked(root ? readSelection(root) : null);
+        setPicked(root ? readSelection(root, wide ? 110 : undefined) : null);
       });
     };
     document.addEventListener("selectionchange", update);
@@ -62,7 +69,7 @@ export function QuoteButton({
       document.removeEventListener("selectionchange", update);
       window.removeEventListener("scroll", update, true);
     };
-  }, [rootRef]);
+  }, [rootRef, wide]);
 
   const shown = !!picked && (coarse || !!picked.at);
   const quote = quoteAction(picked?.text, {
@@ -70,27 +77,58 @@ export function QuoteButton({
     clearSelection: () => window.getSelection()?.removeAllRanges(),
     hide: () => setPicked(null),
   });
+  const fork = quoteAction(picked?.text, {
+    onQuote: onFork ?? onQuote,
+    clearSelection: () => window.getSelection()?.removeAllRanges(),
+    hide: () => setPicked(null),
+  });
   // One source per button: each open chat pane has its own.
-  useKeybindings(`chat-quote:${useId()}`, [quoteEnter(shown, quote)]);
+  useKeybindings(`chat-quote:${useId()}`, [
+    quoteEnter(shown, quote),
+    ...(onFork
+      ? [{ ...quoteEnter(shown, fork), id: "chat.fork", keys: "f" }]
+      : []),
+  ]);
 
   if (!picked) return null;
+  const pill =
+    "bg-card popover-surface hover:bg-muted flex min-h-11 items-center gap-1.5 rounded-full px-3.5 text-sm font-medium md:min-h-8 md:px-3 pointer-coarse:min-h-11";
   const button = (
-    <button
-      type="button"
-      // Pressing it mustn't clear the selection before it's read.
-      onMouseDown={(e) => e.preventDefault()}
-      onClick={quote}
-      className="bg-card popover-surface hover:bg-muted flex min-h-11 items-center gap-1.5 rounded-full px-3.5 text-sm font-medium md:min-h-8 md:px-3 pointer-coarse:min-h-11"
-    >
-      <Quote className="h-3.5 w-3.5" />
-      Quote
-      <kbd
-        aria-hidden
-        className="text-muted-foreground bg-muted hidden rounded px-1 font-mono text-[10px] leading-4 md:inline"
+    <div className="flex items-center gap-1.5">
+      <button
+        type="button"
+        // Pressing it mustn't clear the selection before it's read.
+        onMouseDown={(e) => e.preventDefault()}
+        onClick={quote}
+        className={pill}
       >
-        ↵
-      </kbd>
-    </button>
+        <Quote className="h-3.5 w-3.5" />
+        Quote
+        <kbd
+          aria-hidden
+          className="text-muted-foreground bg-muted hidden rounded px-1 font-mono text-[10px] leading-4 md:inline"
+        >
+          ↵
+        </kbd>
+      </button>
+      {onFork && (
+        <button
+          type="button"
+          onMouseDown={(e) => e.preventDefault()}
+          onClick={fork}
+          className={pill}
+        >
+          <GitFork className="h-3.5 w-3.5" />
+          Fork
+          <kbd
+            aria-hidden
+            className="text-muted-foreground bg-muted hidden rounded px-1 font-mono text-[10px] leading-4 md:inline"
+          >
+            F
+          </kbd>
+        </button>
+      )}
+    </div>
   );
   if (coarse)
     return <div className="mb-2 flex justify-center select-none">{button}</div>;

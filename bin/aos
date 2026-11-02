@@ -47,15 +47,6 @@ const usage = `aos: talk to other agent sessions in AgentOS
   aos wait children --all|--any [--timeout 30m]
                                      end your turn and be woken with fork results
   aos return [--failed] "<result>"   from a fork child: hand in your result
-  aos fork [--worktree] [--label name] "<instruction>" ["<instruction>" ...]
-                                     (Settings → Experimental → Forks) start background
-                                     copies of this session that know what it knows; it
-                                     returns at once and results arrive as a message
-  aos children [<n>] [--stats]       your forks and their results; a number shows one in full
-  aos cancel <n>|--all               stop forks
-  aos wait children --all|--any [--timeout 30m]
-                                     end your turn and be woken with fork results
-  aos return [--failed] "<result>"   from a fork child: hand in your result
   aos inbox                          read messages sent to you
   aos history <session>              your conversation with a session
   aos read <session> [--turns N | --lines N] [--all] [--grep text] [--json]

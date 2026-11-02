@@ -55,6 +55,7 @@ function Item({
       return (
         <UserTurn
           item={item}
+          onQuote={actions.onQuote}
           onUndo={
             item.checkpoint && actions.onUndo
               ? () => actions.onUndo?.(item.id)

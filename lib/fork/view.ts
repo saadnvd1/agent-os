@@ -13,6 +13,7 @@ export const childView = (c: ChildRow): ChildView => ({
   hold: c.hold,
   outcome: c.outcome,
   summary: c.summary,
+  excerpt: c.result ? c.result.slice(0, 600) : null,
   resultKind: c.result_kind,
   worktree: !!c.worktree,
   fellBack: !!c.fell_back,
@@ -61,6 +62,7 @@ export interface ForkStats {
   ok: number;
   failed: number;
   cancelled: number;
+  empty: number;
   implicit: number;
   fellBack: number;
   medianSeconds: number | null;
@@ -83,6 +85,7 @@ export function statsOf(rows: ChildRow[]): ForkStats {
     ok: done.filter((c) => c.outcome === "ok").length,
     failed: done.filter((c) => c.outcome === "failed").length,
     cancelled: done.filter((c) => c.outcome === "cancelled").length,
+    empty: done.filter((c) => c.outcome === "empty").length,
     implicit: done.filter(
       (c) => c.result_kind === "implicit" && c.outcome === "ok"
     ).length,
@@ -106,7 +109,7 @@ export function statsText(s: ForkStats): string {
   const pct = (n: number) =>
     s.settled ? `${Math.round((n / s.settled) * 100)}%` : "-";
   return [
-    `${s.children} children, ${s.settled} settled (${s.ok} ok, ${s.failed} failed, ${s.cancelled} cancelled)`,
+    `${s.children} children, ${s.settled} settled (${s.ok} ok, ${s.failed} failed, ${s.cancelled} cancelled, ${s.empty} no result)`,
     `returned without aos return: ${s.implicit} (${pct(s.implicit)}); started from a brief, not a fork: ${s.fellBack}`,
     `median time to settle: ${s.medianSeconds ?? "-"}s`,
     `tokens: ${s.tokensIn} in, ${s.tokensOut} out, ${s.cacheRead} cache read`,

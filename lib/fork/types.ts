@@ -1,7 +1,9 @@
 export type ChildState =
   "queued" | "starting" | "running" | "needs_input" | "settled";
 
-export type ChildOutcome = "ok" | "failed" | "cancelled";
+// `empty`: it ended, but with nothing to read (blank, or a bare flag like
+// "--help"), so it isn't shown as a finished answer.
+export type ChildOutcome = "ok" | "failed" | "cancelled" | "empty";
 
 // `implicit`: the child's turn ended without `aos return`, so its final
 // answer stands in (kept apart so stats can tell them).
@@ -59,6 +61,8 @@ export interface ChildView {
   hold: string | null;
   outcome: ChildOutcome | null;
   summary: string | null;
+  // The start of its result, for the card in the parent's chat.
+  excerpt: string | null;
   resultKind: ResultKind | null;
   worktree: boolean;
   fellBack: boolean;

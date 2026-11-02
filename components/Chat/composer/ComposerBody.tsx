@@ -32,6 +32,7 @@ import { offeredSuggestion } from "@/lib/chat/suggestion";
 import { historyStep } from "@/lib/chat/history";
 import { markdownParagraphs } from "@/lib/chat/quote";
 import { insertMarkdown } from "./insert";
+import { ForkHeader, type ForkComposer } from "./ForkHeader";
 import { useCoarsePointer } from "./useCoarsePointer";
 import { useMentions } from "./useMentions";
 import { Attachments } from "./Attachments";
@@ -52,6 +53,9 @@ export interface ComposerProps {
   running: boolean;
   disabled?: boolean;
   placeholder: string;
+  // The send button's label, when Enter does something else than send.
+  // Fork mode: the quote chip, pill and own-checkout choice.
+  fork?: ForkComposer;
   onSend: (text: string, images: ChatImage[], files: ChatFile[]) => void;
   // Where attached files are kept: the session's id, or "draft" before one exists.
   attachScope: string;
@@ -94,6 +98,7 @@ export function ComposerBody({
   running,
   disabled,
   placeholder,
+  fork,
   onSend,
   onStop,
   commands = [],
@@ -270,7 +275,11 @@ export function ComposerBody({
   const { dragging, dropProps, addFiles } = attach;
 
   const empty =
-    !text.trim() && !images.length && !files.length && !attach.uploads.length;
+    !fork?.quote &&
+    !text.trim() &&
+    !images.length &&
+    !files.length &&
+    !attach.uploads.length;
   const submit = () => {
     if (empty || disabled || attach.uploading) return;
     const used = leadingCommand(text)?.slice(1);
@@ -358,9 +367,10 @@ export function ComposerBody({
         {...dropProps}
         className={cn(
           "bg-card popover-surface rounded-2xl p-2 transition-shadow",
-          dragging && "ring-primary ring-2"
+          (dragging || fork) && "ring-primary ring-2"
         )}
       >
+        {fork && <ForkHeader fork={fork} />}
         <Attachments
           images={images}
           files={files}
@@ -393,6 +403,8 @@ export function ComposerBody({
           onStop={onStop}
           canSend={!disabled && !empty && !attach.uploading}
           onSend={submit}
+          sendLabel={fork ? "Start fork" : undefined}
+          fork={fork}
         />
       </div>
     </div>

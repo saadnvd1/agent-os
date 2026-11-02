@@ -34,7 +34,12 @@ async function send(parentId: string, deliveryId: string, rows: ChildRow[]) {
     text,
     queue: true,
     from: "AgentOS",
-    origin: { kind: "event", label: "Forks", body },
+    origin: {
+      kind: "event",
+      label: "Forks",
+      body,
+      forks: { parent: parentId, ids: rows.map((c) => c.child_session_id) },
+    },
   });
   markDelivered(deliveryId);
 }

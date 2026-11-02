@@ -3,6 +3,8 @@
 import { useRef, useState } from "react";
 import {
   ArrowUp,
+  Folder,
+  GitFork,
   Paperclip,
   ListChecks,
   MonitorUp,
@@ -41,6 +43,8 @@ export function Toolbar({
   onStop,
   canSend,
   onSend,
+  sendLabel = "Send",
+  fork,
 }: {
   plain: boolean;
   onTogglePlain: () => void;
@@ -65,6 +69,9 @@ export function Toolbar({
   onStop: () => void;
   canSend: boolean;
   onSend: () => void;
+  sendLabel?: string;
+  // Fork mode: the own-checkout choice, and a send button that says what it does.
+  fork?: { own: boolean; onOwn: () => void };
 }) {
   const fileRef = useRef<HTMLInputElement>(null);
   const formatting = plain ? "Formatting off" : "Formatting on";
@@ -103,7 +110,7 @@ export function Toolbar({
           e.target.value = "";
         }}
       />
-      {canCapture && (
+      {canCapture && !fork && (
         <Button
           type="button"
           variant="ghost"
@@ -135,10 +142,28 @@ export function Toolbar({
           <span className={plan ? "" : "hidden sm:inline"}>Plan</span>
         </button>
       )}
-      {onSetAccess && access && (
+      {fork && (
+        <button
+          type="button"
+          aria-pressed={fork.own}
+          title="Own checkout lets the fork edit code; off, it reads this checkout and leaves it alone"
+          onMouseDown={(e) => e.preventDefault()}
+          onClick={fork.onOwn}
+          className={cn(
+            "flex h-10 shrink-0 items-center gap-1 rounded-lg px-2 text-xs",
+            fork.own
+              ? "bg-primary/10 text-primary"
+              : "text-muted-foreground hover:text-foreground hover:bg-foreground/[0.05]"
+          )}
+        >
+          <Folder className="h-3.5 w-3.5" />
+          {fork.own ? "Own checkout" : "Reads only"}
+        </button>
+      )}
+      {!fork && onSetAccess && access && (
         <AccessPicker access={access} onPick={onSetAccess} />
       )}
-      {onSetModel && (
+      {!fork && onSetModel && (
         <ModelPicker
           models={models}
           model={model}
@@ -150,7 +175,7 @@ export function Toolbar({
         />
       )}
       <span className="flex-1" />
-      {accessory}
+      {!fork && accessory}
       <Button
         type="button"
         variant="ghost"
@@ -183,14 +208,25 @@ export function Toolbar({
         <Button
           type="button"
           size="icon"
-          aria-label="Send"
-          className="h-10 w-10 shrink-0 rounded-xl"
+          aria-label={sendLabel}
+          title={sendLabel}
+          className={cn(
+            "h-10 shrink-0 rounded-xl",
+            fork ? "w-auto gap-1.5 px-3.5" : "w-10"
+          )}
           disabled={!canSend}
           // Tapping send mustn't blur the editor and drop the keyboard.
           onMouseDown={(e) => e.preventDefault()}
           onClick={onSend}
         >
-          <ArrowUp className="h-4 w-4" />
+          {fork ? (
+            <>
+              <GitFork className="h-3.5 w-3.5" />
+              Start fork
+            </>
+          ) : (
+            <ArrowUp className="h-4 w-4" />
+          )}
         </Button>
       )}
     </div>

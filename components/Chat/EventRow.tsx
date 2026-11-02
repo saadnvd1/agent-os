@@ -13,6 +13,7 @@ import {
 } from "lucide-react";
 import type { ChatItem, ChatOrigin, ChatOriginKind } from "@/lib/chat/events";
 import { eventParts, originOf } from "@/lib/chat/origin";
+import { ForkResults } from "./ForkResults";
 import { SessionAnchor } from "./SessionAnchor";
 import { cn } from "@/lib/utils";
 import { UserMessage } from "./Messages";
@@ -155,13 +156,24 @@ function Row({
 export function EventRow({
   item,
   origin,
+  onQuote,
 }: {
   item: UserItem;
   origin: ChatOrigin;
+  onQuote?: (text: string) => void;
 }) {
   const { body, decided } = eventParts(item, origin);
   const decidedLabel = `${ownerInUi(useOwnerName(), true)} decided`;
   const decision = origin.kind === "decision";
+  if (origin.forks)
+    return (
+      <ForkResults
+        parent={origin.forks.parent}
+        ids={origin.forks.ids}
+        fallback={body}
+        onQuote={onQuote}
+      />
+    );
   return (
     <div className="flex flex-col gap-1">
       {decided.map((d, i) => (
@@ -207,11 +219,13 @@ export function EventRow({
 export function UserTurn({
   item,
   onUndo,
+  onQuote,
 }: {
   item: UserItem;
   onUndo?: () => void;
+  onQuote?: (text: string) => void;
 }) {
   const origin = originOf(item);
-  if (origin) return <EventRow item={item} origin={origin} />;
+  if (origin) return <EventRow item={item} origin={origin} onQuote={onQuote} />;
   return <UserMessage item={item} onUndo={onUndo} />;
 }
