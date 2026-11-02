@@ -190,4 +190,20 @@ describe("rowMenu", () => {
   it("offers a running task Done", () => {
     expect(finishItems({ s: { task_status: "running" } })).toEqual(["done"]);
   });
+
+  it("offers Adopt as lead only where a chat could head a department", () => {
+    const has = (over: Parameters<typeof menu>[0]) =>
+      menu(over)
+        .sections.flat()
+        .some((e) =>
+          typeof e === "string"
+            ? e === "adopt-lead"
+            : e.items.includes("adopt-lead")
+        );
+    expect(has({})).toBe(false);
+    expect(has({ canAdopt: true })).toBe(true);
+    expect(has({ canAdopt: true, hasWorkspace: false })).toBe(false);
+    expect(has({ canAdopt: true, remote: true })).toBe(false);
+    expect(has({ canAdopt: true, s: { role: "lead" } })).toBe(false);
+  });
 });

@@ -183,7 +183,7 @@ describe("a workspace with leads", () => {
       "TTech leadWaiting · 1 running · 1 in review · 1 ask"
     );
     expect(card("mk")).toBe("MMarketing leadIdle · 1 ask");
-    expect(card("ch")).toBe("CChief of staffIdle");
+    expect(card("ch")).toBe("CChief of staffNothing needs you · all quiet");
     expect(host.querySelector("[data-team-row]")).toBeNull();
   });
 

@@ -15,11 +15,15 @@ import { cn } from "@/lib/utils";
 import { usePendingCardSessions } from "@/data/learning-cards";
 import { SessionRow } from "./SessionRow";
 import { GroupShelves } from "./GroupShelves";
-import { OrchestratorPinRow, OrchestratorStartRow } from "./OrchestratorPinRow";
+import {
+  OrchestratorPinRow,
+  OrchestratorStartRow,
+  TeamAddRow,
+} from "./OrchestratorPinRow";
 import { QueuedRow } from "./QueuedRow";
 import { TeamRow } from "./TeamRow";
 import { useRowContext } from "./RowContext";
-import { headItems } from "@/lib/sidebar/orchestrator-row";
+import { addableKinds, headItems } from "@/lib/sidebar/orchestrator-row";
 import type { QueuedRow as QueuedRowData } from "@/lib/sidebar/queued";
 
 // A shelf's header. Only groups that aren't a state (a machine, the line,
@@ -164,9 +168,20 @@ export function SessionShelves({
     <>
       {shelves.orchestrators.length + toStart.length > 0 && (
         <section aria-label="Orchestrator" className="space-y-1 pt-2">
-          {headItems(shelves.orchestrators, ctx.team, foldTeams).map((h) =>
+          {headItems(
+            shelves.orchestrators,
+            ctx.team,
+            foldTeams,
+            addableKinds(ctx.team)
+          ).map((h) =>
             h.kind === "row" ? (
               <OrchestratorPinRow key={h.row.session.id} row={h.row} />
+            ) : h.kind === "add" ? (
+              <TeamAddRow
+                key={`add:${h.workspaceId}:${h.leadKind}`}
+                workspaceId={h.workspaceId}
+                kind={h.leadKind}
+              />
             ) : h.kind === "team" ? (
               <TeamRow
                 key={`team:${h.workspaceId}`}

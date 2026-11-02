@@ -12,10 +12,14 @@ import { useSnapshot } from "valtio";
 import {
   memberCounts,
   memberDot,
+  memberIdleText,
   orchestratorRowText,
 } from "@/lib/sidebar/orchestrator-row";
 import { cn } from "@/lib/utils";
 import { orchestratorOpenActions } from "@/stores/orchestratorOpen";
+import { leadsUiActions } from "@/stores/leadsUi";
+import { memberLetter } from "@/lib/leads/order";
+import { charterTemplate } from "@/lib/leads/templates";
 import { useRowContext } from "./RowContext";
 import { SessionRowMenu } from "./SessionRowMenu";
 import { ActiveTick, ROW_MENU_CONTENT } from "./RowShell";
@@ -53,7 +57,10 @@ export const OrchestratorPinRow = memo(function OrchestratorPinRow({
         inReview: overview?.inReview ?? 0,
         queued: workspace.queued,
       };
-  const { state, status, asks } = orchestratorRowText(row, counts);
+  const text = orchestratorRowText(row, counts);
+  const { state, asks } = text;
+  const status =
+    (member && memberIdleText(member, state, counts.asks)) ?? text.status;
   const chips = visibleChips(ctx.rollups.get(session.id));
   const { orchestratorId } = useSnapshot(sidebarUi);
   const filtering = orchestratorId === session.id;
@@ -237,6 +244,41 @@ export function OrchestratorStartRow({
         </span>
         <span className="text-muted-foreground/70 mt-0.5 truncate text-xs">
           Start orchestrator
+        </span>
+      </span>
+    </RowFrame>
+  );
+}
+
+// A shipped lead the team doesn't have yet, dashed and faded: a tap opens
+// "Add leads" with it ticked.
+export function TeamAddRow({
+  workspaceId,
+  kind,
+}: {
+  workspaceId: string;
+  kind: string;
+}) {
+  const title = charterTemplate(kind).title;
+  return (
+    <RowFrame
+      data-tip={`${title}\nAdd lead`}
+      aria-label={`Add a ${title}`}
+      onActivate={() => leadsUiActions.openAdd(workspaceId, kind)}
+      className="hover:bg-muted/50 border-dashed"
+    >
+      <span className="opacity-50">
+        <LeadAvatar
+          member={{ kind, letter: memberLetter(kind), title }}
+          size="md"
+        />
+      </span>
+      <span className="flex min-w-0 flex-1 flex-col leading-tight">
+        <span className="text-muted-foreground min-w-0 truncate text-[13px] font-medium">
+          {title}
+        </span>
+        <span className="text-muted-foreground/70 mt-0.5 truncate text-xs">
+          Add lead
         </span>
       </span>
     </RowFrame>

@@ -7,6 +7,7 @@ import { seedWorkspace } from "@/lib/orchestrator/testing";
 import { GET, POST } from "./route";
 import * as adopt from "./adopt/route";
 import * as proposals from "./proposals/route";
+import * as setup from "./setup/route";
 
 const post = (
   handler: (r: NextRequest) => Promise<Response>,
@@ -91,5 +92,25 @@ describe("/api/leads", () => {
       confirm: [],
     });
     expect(none.status).toBe(400);
+  });
+});
+
+describe("/api/leads/setup", () => {
+  const get = (q: string) =>
+    setup.GET(new NextRequest(`http://localhost/api/leads/setup${q}`));
+
+  it("answers the sheet's view, and refuses a bad or unknown workspace", async () => {
+    const { workspace } = seedWorkspace();
+    const res = await get(`?workspaceId=${workspace.id}`);
+    expect(res.status).toBe(200);
+    const { setup: view } = await res.json();
+    expect(view.workspaceId).toBe(workspace.id);
+    expect(view.choices.map((c: { kind: string }) => c.kind)).toEqual([
+      "tech",
+      "marketing",
+      "product",
+    ]);
+    expect((await get("")).status).toBe(400);
+    expect((await get("?workspaceId=nope")).status).toBe(404);
   });
 });

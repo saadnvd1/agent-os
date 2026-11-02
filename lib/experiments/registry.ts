@@ -43,7 +43,6 @@ export const EXPERIMENTS = [
       "Department heads and a chief of staff, per workspace. Off, nothing changes. On, you choose which workspaces get leads; each gets its own chief.",
     area: "orchestrator",
     status: "experimental",
-    unlisted: true,
   },
 ] as const satisfies readonly Experiment[];
 

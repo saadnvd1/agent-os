@@ -1,8 +1,10 @@
 import { describe, expect, it } from "vitest";
 import type { Session } from "../db/types";
 import {
+  addableKinds,
   headItems,
   memberDot,
+  memberIdleText,
   orchestratorRowText,
   orchestratorsToStart,
   teamMembers,
@@ -188,6 +190,29 @@ describe("teams", () => {
     ).toEqual(["w1-chief", "w1-tech", "w1-product"]);
   });
 
+  it("puts a dashed row per missing shipped lead under its team, never folded", () => {
+    const addable = addableKinds(team);
+    expect(addable).toEqual(new Map([["w1", ["marketing"]]]));
+    const items = headItems(heads, team, false, addable);
+    expect(items.map((h) => h.kind)).toEqual([
+      "row",
+      "label",
+      "row",
+      "row",
+      "row",
+      "add",
+    ]);
+    expect(items[5]).toEqual({
+      kind: "add",
+      workspaceId: "w1",
+      leadKind: "marketing",
+    });
+    expect(headItems(heads, team, true, addable).map((h) => h.kind)).toEqual([
+      "row",
+      "team",
+    ]);
+  });
+
   it("says what a folded team needs and is doing", () => {
     expect(teamRowText([idle], quiet)).toEqual({ needs: null, status: "Idle" });
     expect(
@@ -208,5 +233,22 @@ describe("teams", () => {
     expect(memberDot({ ...idle, working: true }, 0)).toBe("working");
     expect(memberDot({ ...idle, unread: true }, 0)).toBe("replied");
     expect(memberDot(idle, 0)).toBe("idle");
+  });
+});
+
+describe("memberIdleText", () => {
+  it("says the chief is quiet and a new lead has no direction, only when idle", () => {
+    expect(memberIdleText({ kind: "chief" }, "Idle", 0)).toBe(
+      "Nothing needs you · all quiet"
+    );
+    expect(memberIdleText({ kind: "marketing", pins: 0 }, "Idle", 0)).toMatch(
+      /^New · no direction yet/
+    );
+    expect(
+      memberIdleText({ kind: "marketing", pins: 2 }, "Idle", 0)
+    ).toBeNull();
+    expect(memberIdleText({ kind: "tech", pins: 0 }, "Idle", 0)).toBeNull();
+    expect(memberIdleText({ kind: "chief" }, "Working", 0)).toBeNull();
+    expect(memberIdleText({ kind: "product", pins: 0 }, "Idle", 1)).toBeNull();
   });
 });

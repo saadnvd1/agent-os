@@ -50,6 +50,8 @@ export interface TeamMemberView {
   kind: string;
   title: string;
   sessionId: string;
+  // A lead's pins in force (absent for the chief).
+  pins?: number;
 }
 
 export interface OrchestratorOverview {

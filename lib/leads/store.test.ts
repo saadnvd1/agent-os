@@ -135,11 +135,10 @@ describe("roles", () => {
 });
 
 describe("the Leads experiment", () => {
-  it("exists but isn't offered in Settings yet", () => {
+  it("is offered in Settings, off until turned on", () => {
     expect(isExperimentId("leads")).toBe(true);
-    expect(experimentsView().experiments.map((e) => e.id)).not.toContain(
-      "leads"
-    );
+    const leads = experimentsView().experiments.find((e) => e.id === "leads");
+    expect(leads?.on).toBe(false);
   });
 });
 

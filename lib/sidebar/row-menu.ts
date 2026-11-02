@@ -29,6 +29,7 @@ export type RowMenuItem =
   | "check-ins"
   | "save-recipe"
   | "run-again"
+  | "adopt-lead"
   | "snooze"
   | "unsnooze"
   | "pause"
@@ -69,6 +70,8 @@ export interface RowMenuInput {
   hasWorkspace: boolean;
   machineTargets: number;
   otherProjects: number;
+  // Leads is on and this chat could head one of its workspace's departments.
+  canAdopt?: boolean;
 }
 
 export interface RowMenuPlan {
@@ -162,6 +165,11 @@ export function rowMenu(input: RowMenuInput): RowMenuPlan {
         live &&
         "check-ins",
       input.recipeRun ? "run-again" : agentRow && "save-recipe",
+      !!input.canAdopt &&
+        input.hasWorkspace &&
+        agentRow &&
+        live &&
+        "adopt-lead",
     ]),
   ]);
 
