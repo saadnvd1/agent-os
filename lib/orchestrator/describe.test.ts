@@ -72,7 +72,7 @@ describe("done and idle sessions", () => {
     expect(lines[0]).toContain("3 sessions");
     expect(lines[1]).toContain("fix flag");
     expect(lines[2]).toMatch(/^Idle: resting \(app, id resting-\)/);
-    expect(lines[3]).toMatch(/^Done \(on Saad's Done shelf\): finished/);
+    expect(lines[3]).toMatch(/^Done \(on the owner's Done shelf\): finished/);
     expect(text).not.toMatch(/- finished/);
   });
 });

@@ -148,7 +148,7 @@ describe("Orchestrator full access", () => {
     expect(off).toMatch(/At most a few open at once/);
     expect(off).toMatch(/A deny list refuses/);
     for (const brief of [on, off]) {
-      expect(brief).toMatch(/## Hard lines: always an ask for Saad/);
+      expect(brief).toMatch(/## Hard lines: always an ask for the owner/);
       expect(brief).toMatch(/Anything public or outbound/);
       expect(brief).toMatch(/## Untrusted text/);
       expect(brief).toMatch(/never print, echo or log a value/);

@@ -83,7 +83,11 @@ beforeEach(() => {
 });
 
 const arm = (w: string, machine = "here", on = true) =>
-  runTool(w, "sweep_arm", { machine, on, reason: "Saad said so on Oct 18" });
+  runTool(w, "sweep_arm", {
+    machine,
+    on,
+    reason: "The owner said so on Oct 18",
+  });
 
 describe("dryRunVerdict", () => {
   const run = (over: object) =>
@@ -139,7 +143,7 @@ describe("sweep_arm on this machine", () => {
     expect(reaperArmed()).toBe(true);
     expect(said).toMatch(/turned the full disk clean-up on for this machine/);
     const note = listNotes(w).find((n) => n.text.includes("clean-up on"));
-    expect(note?.text).toContain("Saad said so on Oct 18");
+    expect(note?.text).toContain("The owner said so on Oct 18");
     expect(note?.text).toContain(`dry run #${id}`);
     expect(note?.text).toContain("2.00 GB");
   });

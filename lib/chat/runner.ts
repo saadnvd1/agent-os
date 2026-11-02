@@ -86,6 +86,7 @@ import { DEMO_REFUSAL, demoMode } from "../security/demo";
 import { chatHold, chatRefusal } from "./hold";
 import { getHost } from "../hosts";
 import { hostLink } from "../hosts/remote-api";
+import { ownerUi } from "../owner";
 
 export {
   refreshCapabilities,
@@ -119,7 +120,7 @@ export async function carryOutPlan(
     {
       id: `user-carry-${planId}`,
       text: CARRY_OUT,
-      origin: { kind: "decision", label: "Saad" },
+      origin: { kind: "decision", label: ownerUi(true) },
       host: true,
     },
     timeoutMs

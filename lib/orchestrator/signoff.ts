@@ -58,6 +58,7 @@ import { repoHasCI } from "./repo-ci";
 import { DIFF_CAP, review } from "./review";
 import { workspaceStack, workspaceTask } from "./targets";
 import { ciSettleIn, waitingState } from "./task-state";
+import { owner, Owner } from "../owner";
 
 const short = (sha: string) => sha.slice(0, 7);
 
@@ -214,7 +215,7 @@ export async function gateVerdict(
   }
   if (approval?.sha === sha) {
     const i = await inputs();
-    const approved = `${work.name} (PR #${pr.number} at ${short(sha)}): Saad approved this commit, but`;
+    const approved = `${work.name} (PR #${pr.number} at ${short(sha)}): ${owner()} approved this commit, but`;
     const stack =
       approval.raised_by === "orchestrator" || !held.length
         ? i.stackRefusal
@@ -268,10 +269,10 @@ export async function gateVerdict(
     { fast }
   );
   const head = `${work.name} (PR #${pr.number} at ${short(sha)}) can't merge:`;
-  const toSaad = outcomes.find((o) => o.state === "escalate");
-  if (toSaad)
+  const toOwner = outcomes.find((o) => o.state === "escalate");
+  if (toOwner)
     return no(
-      `${head}\n- ${escalate(workspaceId, work, toSaad.gate, toSaad.reason!, pr.url, sha)}`
+      `${head}\n- ${escalate(workspaceId, work, toOwner.gate, toOwner.reason!, pr.url, sha)}`
     );
   const failed = outcomes.filter((o) => o.state === "fail");
   const waiting = outcomes.filter((o) => o.state === "wait");
@@ -354,7 +355,7 @@ export async function mergeJudged(
   opts: { wait?: boolean } = {}
 ): Promise<string> {
   if (verdict.approval && !spendApproval(verdict.approval))
-    throw new Error(`Saad's approval for ${task.name} was already used`);
+    throw new Error(`${Owner()}'s approval for ${task.name} was already used`);
   let method: MergeMethod | null = null;
   await refundIfRefused(task.id, verdict.approval, async () => {
     method = await signOffTask(task.id, { head: verdict.sha, wait: opts.wait });
@@ -366,7 +367,7 @@ export async function mergeJudged(
     verdict.fast
       ? `Merged ${task.name} (PR #${verdict.pr}, ${short(verdict.sha)}) on the fast lane: no CI wait or review.`
       : verdict.approval
-        ? `Merged ${task.name} (PR #${verdict.pr}, ${short(verdict.sha)}) on Saad's approval of that commit.`
+        ? `Merged ${task.name} (PR #${verdict.pr}, ${short(verdict.sha)}) on ${owner()}'s approval of that commit.`
         : `Merged ${task.name} (PR #${verdict.pr}, ${short(verdict.sha)}): CI green, review passed, in scope.`
   );
   return `Merged ${task.name}: PR #${verdict.pr} ${method ? MERGED_AS[method] : "merged"} at ${short(verdict.sha)}.`;
@@ -408,7 +409,9 @@ export function landGate(
     const verdict = await judge(workspaceId, task, true);
     if (verdict.ok && verdict.approval) {
       if (!spendApproval(verdict.approval))
-        return { stop: `Saad's approval for ${task.name} was already used` };
+        return {
+          stop: `${Owner()}'s approval for ${task.name} was already used`,
+        };
       claimed.set(sessionId, verdict.approval);
     }
     if (verdict.ok) return { head: verdict.sha };

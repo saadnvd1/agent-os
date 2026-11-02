@@ -123,7 +123,7 @@ describe("reminders and cancel_reminder are scoped to the workspace", () => {
     });
     const saads = createSchedule({
       workspaceId: w,
-      name: "Saad's",
+      name: "The owner's",
       at: soon(120),
       prompt: "x",
       kind: "orchestrator",
@@ -135,7 +135,7 @@ describe("reminders and cancel_reminder are scoped to the workspace", () => {
     expect(
       await runTool(w, "cancel_reminder", { id: own.id.slice(0, 8) })
     ).toMatch(/cancelled/);
-    expect(listSchedules(w).map((s) => s.name)).toEqual(["Saad's"]);
+    expect(listSchedules(w).map((s) => s.name)).toEqual(["The owner's"]);
     await expect(runTool(w, "cancel_reminder", { id: own.id })).rejects.toThrow(
       /No reminder/
     );

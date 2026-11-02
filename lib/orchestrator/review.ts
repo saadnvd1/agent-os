@@ -56,6 +56,7 @@ import { noteQuickReview } from "./quick";
 import { workspaceTask } from "./targets";
 import { untrusted } from "./untrusted";
 import { isFast } from "../project-tier/getProjectTier";
+import { owner } from "../owner";
 
 const short = (sha: string) => sha.slice(0, 7);
 // The most diff one reviewer is given, and the most parts a change too big
@@ -135,7 +136,7 @@ async function reviewJob(
       ...row,
       kind: "review",
       status: "error",
-      detail: `${why}; it's with Saad`,
+      detail: `${why}; it's with ${owner()}`,
     });
   }
   const files = await changedFiles(repo, base, sha);
@@ -247,7 +248,7 @@ function countVerdicts(
     }
   }
   return escalated.length
-    ? `; the ${escalated.join(" and ")} gate is stuck in a loop (the loop guard), so it's with Saad now`
+    ? `; the ${escalated.join(" and ")} gate is stuck in a loop (the loop guard), so it's with ${owner()} now`
     : "";
 }
 
@@ -335,7 +336,7 @@ export async function review(
   const held = holdingEscalations(task.id);
   const pr = held.length ? await prFor(task, true) : null;
   if (held.length && !(pr?.head && reviewWanted(workspaceId, task.id, pr.head)))
-    return `${task.name} is with Saad (${held.map((h) => h.gate).join(", ")}); no review needed from you.`;
+    return `${task.name} is with ${owner()} (${held.map((h) => h.gate).join(", ")}); no review needed from you.`;
   const there = pr ?? (await prFor(task, true));
   if (!there?.head) throw new Error(`${task.name} has no PR to review yet`);
   return reviewAt(workspaceId, taskReviewTarget(task, there), there.head, opts);

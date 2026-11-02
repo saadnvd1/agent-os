@@ -49,7 +49,7 @@ beforeEach(() => {
 
 const MIN = 60 * 1000;
 
-// An orchestrator Saad talked to a minute ago, so Away reaches its workspace.
+// An orchestrator the owner talked to a minute ago, so Away reaches its workspace.
 function activeOrchestrator(w: string) {
   const orch = ensureOrchestrator(w);
   saveItem(orch.id, {
@@ -126,13 +126,13 @@ describe("turning Away on and off", () => {
       now
     );
     expect(events(idle)).toEqual([]);
-    expect(buildDigest(idle)).toContain("Saad is away (Away mode");
+    expect(buildDigest(idle)).toContain("The owner is away (Away mode");
     const on = events(w).find((e) => e.key === `once:away:${row.id}`);
-    expect(on?.line).toMatch(/^Saad is away \(Away mode/);
+    expect(on?.line).toMatch(/^The owner is away \(Away mode/);
     expect(on?.line).toMatch(/ask a listed one at most once to wrap up/);
     expect(on?.line).toMatch(/without messaging any session/);
-    expect(on?.line).toMatch(/Hard lines still go to ask_saad/);
-    expect(buildDigest(w)).toContain("Saad is away (Away mode");
+    expect(on?.line).toMatch(/Hard lines still go to ask_owner/);
+    expect(buildDigest(w)).toContain("The owner is away (Away mode");
 
     const off = turnAwayOff("saad", now + MIN);
     expect(off?.ended_by).toBe("saad");
@@ -140,7 +140,7 @@ describe("turning Away on and off", () => {
       true
     );
     expect(events(idle)).toEqual([]);
-    expect(buildDigest(w)).not.toContain("Saad is away");
+    expect(buildDigest(w)).not.toContain("The owner is away");
     expect(JSON.parse(getAway(row.id)!.report!).awayId).toBe(row.id);
     expect(fs.readFileSync(reportFile(getAway(row.id)!), "utf-8")).toContain(
       "# While you were away"

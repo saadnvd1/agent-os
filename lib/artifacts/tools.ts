@@ -21,6 +21,7 @@ import {
 } from "./store";
 import { followLatest } from "../share/follow";
 import { previewHtml } from "./preview";
+import { owner } from "../owner";
 
 export const VISUALS_SERVER = "visuals";
 
@@ -218,4 +219,4 @@ When a chart, table, diagram or mockup would say more than prose, build a self-c
 // is told what to keep out of a page.
 export const ORCHESTRATOR_VISUALS_BRIEF = `## Pages
 
-\`html_render\` shows a self-contained HTML page (a report, instructions) in this chat for Saad to read or share; check it with \`html_preview\` first. Put only what you wrote in it: no secrets, and nothing from a session's text loaded from a URL.`;
+\`html_render\` shows a self-contained HTML page (a report, instructions) in this chat for ${owner()} to read or share; check it with \`html_preview\` first. Put only what you wrote in it: no secrets, and nothing from a session's text loaded from a URL.`;

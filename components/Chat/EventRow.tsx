@@ -18,6 +18,8 @@ import { cn } from "@/lib/utils";
 import { UserMessage } from "./Messages";
 import { openSessionLink as openSession } from "./session-link";
 import { useRowState } from "./rowState";
+import { useOwnerName } from "@/data/client-config/queries";
+import { ownerInUi } from "@/lib/owner-label";
 
 type UserItem = Extract<ChatItem, { kind: "user" }>;
 
@@ -158,6 +160,7 @@ export function EventRow({
   origin: ChatOrigin;
 }) {
   const { body, decided } = eventParts(item, origin);
+  const decidedLabel = `${ownerInUi(useOwnerName(), true)} decided`;
   const decision = origin.kind === "decision";
   return (
     <div className="flex flex-col gap-1">
@@ -167,7 +170,7 @@ export function EventRow({
           id={`${item.id}:${i}`}
           kind="decision"
           tone="decision"
-          head={<span className="truncate font-medium">Saad decided</span>}
+          head={<span className="truncate font-medium">{decidedLabel}</span>}
           body={d}
           at={item.createdAt}
         />
@@ -179,7 +182,7 @@ export function EventRow({
           tone={decision ? "decision" : undefined}
           head={
             decision ? (
-              <span className="truncate font-medium">Saad decided</span>
+              <span className="truncate font-medium">{decidedLabel}</span>
             ) : origin.kind === "guest" ? (
               <span className="truncate font-medium">
                 Suggested by {origin.label}

@@ -118,7 +118,7 @@ export const { followAskVerdicts } = await import("./ask-verdict");
 export const { raiseHeldAsks, HOLD_MIN_MS, HOLD_MAX_MS } =
   await import("./held-asks");
 
-// The one ask a task's escalation leaves on Saad's list.
+// The one ask a task's escalation leaves on the owner's list.
 export function oneGateAsk(w: string, task: string, sha: string) {
   const asks = openAsks(w);
   expect(asks).toHaveLength(1);

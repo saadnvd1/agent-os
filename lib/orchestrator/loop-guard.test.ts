@@ -126,7 +126,7 @@ describe("the streak a gate's failures make", () => {
     expect(repeated()).toBe(1);
   });
 
-  it("goes to Saad on a repeat before the streak runs out", () => {
+  it("goes to the owner on a repeat before the streak runs out", () => {
     const task = "guard-repeat-early";
     recordFailure("w", task, "ci", "why", sha(1), "Test 1: a > b");
     recordFailure("w", task, "ci", "why", sha(2), "Test 1: a > b");

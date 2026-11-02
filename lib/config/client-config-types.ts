@@ -30,6 +30,8 @@ export interface ClientConfig {
   intake: IntakeLimits;
   attachments: AttachmentConfig;
   voice: VoiceLimits;
+  /** The owner's own name for text that refers to them; null until set. */
+  ownerName: string | null;
 }
 
 // What a chat accepts, served from lib/attachments/policy.ts. Sizes in bytes.

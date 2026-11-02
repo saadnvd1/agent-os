@@ -258,7 +258,7 @@ describe("message schedules: who can aim them where", () => {
     expect(() => updateSchedule(schedule.id, { cron: "*/5 * * * *" })).toThrow(
       /every 10 minutes/
     );
-    // Saad's own orchestrator schedules keep no such limit.
+    // the owner's own orchestrator schedules keep no such limit.
     const saved = createSchedule({
       workspaceId: ws.id,
       name: "Often",
@@ -441,7 +441,7 @@ describe("message schedules: runs", () => {
       expect(getSchedule(schedule.id)!.enabled).toBe(false);
       const notice = `Schedule "Check-ins" is paused: ${why}. Point it at another session or delete it.`;
       expect(phone).toEqual([notice]);
-      // A notice, not something for Saad to decide.
+      // A notice, not something for the owner to decide.
       expect(
         db
           .prepare(
@@ -477,7 +477,7 @@ describe("message schedules: runs", () => {
     expect(listRuns(schedule.id)[0].outcome).toBe("started");
   });
 
-  it("an agent's check-in on the orchestrator waits while it's working; Saad's doesn't", async () => {
+  it("an agent's check-in on the orchestrator waits while it's working; the owner's doesn't", async () => {
     const { ws } = setup();
     const orch = seedOrchestrator(ws.id);
     const agentMade = createSchedule(

@@ -1,6 +1,8 @@
 import { createElement } from "react";
 import { renderToStaticMarkup } from "react-dom/server";
+import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { describe, expect, it } from "vitest";
+import { clientConfigKeys } from "@/data/client-config/queries";
 import { UserTurn } from "@/components/Chat/EventRow";
 import type { ChatItem, ChatOrigin } from "./events";
 import { wakeLine } from "../bus/format";
@@ -17,8 +19,20 @@ const user = (over: Partial<UserItem> = {}): UserItem => ({
   ...over,
 });
 
+const clientWith = (ownerName: string | null) => {
+  const client = new QueryClient();
+  client.setQueryData(clientConfigKeys.all, { ownerName });
+  return client;
+};
+
 const render = (item: UserItem) =>
-  renderToStaticMarkup(createElement(UserTurn, { item }));
+  renderToStaticMarkup(
+    createElement(
+      QueryClientProvider,
+      { client: clientWith("Alex") },
+      createElement(UserTurn, { item })
+    )
+  );
 
 // As the bus writes them, short and long.
 const KNOWN_PREFIXES = [
@@ -127,12 +141,12 @@ describe("UserTurn", () => {
     ["peer", { kind: "peer", label: "api", sessionId: "s1" }],
     ["schedule", { kind: "schedule", label: "Triage", body: "triage" }],
     ["system", { kind: "system", label: "Load monitor" }],
-    ["decision", { kind: "decision", label: "Saad" }],
+    ["decision", { kind: "decision", label: "Alex" }],
   ] as const)("renders a %s as its own row, not a bubble", (kind, origin) => {
     const html = render(user({ text: "CI green", origin }));
     expect(html).toContain(`data-origin="${kind}"`);
     expect(html).not.toContain("rounded-2xl");
-    if (kind === "decision") expect(html).toContain("Saad decided");
+    if (kind === "decision") expect(html).toContain("Alex decided");
     else expect(html).toContain(origin.label);
   });
 
@@ -158,6 +172,20 @@ describe("UserTurn", () => {
     );
     expect(html.match(/data-origin="decision"/g)).toHaveLength(1);
     expect(html.match(/data-origin="event"/g)).toHaveLength(1);
-    expect(html).toContain("Saad decided");
+    expect(html).toContain("Alex decided");
+  });
+
+  it("calls the reader 'You' until they've set a name", () => {
+    const html = renderToStaticMarkup(
+      createElement(
+        QueryClientProvider,
+        { client: clientWith(null) },
+        createElement(UserTurn, {
+          item: user({ origin: { kind: "decision", label: "You" } }),
+        })
+      )
+    );
+    expect(html).toContain("You decided");
+    expect(html).not.toContain("Alex");
   });
 });

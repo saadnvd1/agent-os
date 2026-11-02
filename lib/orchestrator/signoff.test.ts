@@ -67,7 +67,7 @@ describe("sign_off", () => {
   it("closes asks about the PR once the sign-off merges it", async () => {
     const t = setup();
     await reviewNow(t.w);
-    await runTool(t.w, "ask_saad", {
+    await runTool(t.w, "ask_owner", {
       title: "Re-approve PR #7 after the merge with main?",
       detail: "main moved",
       kind: "decision",
@@ -89,7 +89,7 @@ describe("sign_off", () => {
   it("still finishes the merge when closing its asks fails", async () => {
     const t = setup();
     await reviewNow(t.w);
-    await runTool(t.w, "ask_saad", {
+    await runTool(t.w, "ask_owner", {
       title: "Re-approve PR #7?",
       detail: "main moved",
       kind: "decision",
@@ -189,7 +189,7 @@ describe("sign_off", () => {
     await expect(t.signOff()).resolves.toMatch(/Merged add-a/);
   });
 
-  it("escalates the same CI failure on a second commit, and then holds the task for Saad", async () => {
+  it("escalates the same CI failure on a second commit, and then holds the task for the owner", async () => {
     const t = setup();
     await reviewNow(t.w);
     S.pr = failingCI();
@@ -199,7 +199,7 @@ describe("sign_off", () => {
     const next = t.push("src/b.ts", "export const b = 2;\n");
     await reviewNow(t.w);
     await expect(t.signOff()).rejects.toThrow(
-      /ci failed \(again, 2 of 4 in a row\)[\s\S]*Escalated to Saad: the ci gate failed the same way on two commits in a row/
+      /ci failed \(again, 2 of 4 in a row\)[\s\S]*Escalated to the owner: the ci gate failed the same way on two commits in a row/
     );
     // The ask waits for the agent; the task is held meanwhile.
     expect(openAsks(t.w)).toEqual([]);
@@ -207,7 +207,7 @@ describe("sign_off", () => {
     const notes = listNotes(t.w).filter((n) => n.kind === "escalation");
     expect(notes).toHaveLength(1);
     expect(notes[0].text).toMatch(
-      /^Saad must decide on add-a \(https:\/\/github.com\/o\/r\/pull\/7\)/
+      /^The owner must decide on add-a \(https:\/\/github.com\/o\/r\/pull\/7\)/
     );
     const orch = ensureOrchestrator(t.w);
     expect(listItems(orch.id).at(-1)).toMatchObject({
@@ -217,17 +217,17 @@ describe("sign_off", () => {
 
     S.pr = { ...S.pr!, checks: "pass", failing: null };
     await expect(t.signOff()).rejects.toThrow(
-      /is with Saad \(ci: .*\)\. Only he can merge it now/
+      /is with the owner \(ci: .*\)\. Only he can merge it now/
     );
     expect(merges).toEqual([]);
     oneGateAsk(t.w, t.task, next);
   });
 
-  it("merges a held task once, on Saad's approval of that exact commit", async () => {
+  it("merges a held task once, on the owner's approval of that exact commit", async () => {
     const t = setup({ approvals: true });
     t.push(".github/workflows/ci.yml", "on: push\n");
     await reviewNow(t.w);
-    await expect(t.signOff()).rejects.toThrow(/Escalated to Saad/);
+    await expect(t.signOff()).rejects.toThrow(/Escalated to the owner/);
     const ask = oneGateAsk(t.w, t.task, S.pr!.head!);
     answerAsk(t.w, ask.id, { action: "approve" });
     await expect(t.signOff()).resolves.toMatch(/Merged add-a/);
@@ -235,14 +235,14 @@ describe("sign_off", () => {
       ["pr", "merge", "7", "--squash", "--match-head-commit", S.pr!.head!],
     ]);
     expect(getAsk(t.w, ask.id)?.used_at).toBeTruthy();
-    expect(listNotes(t.w).at(-1)?.text).toMatch(/on Saad's approval/);
+    expect(listNotes(t.w).at(-1)?.text).toMatch(/on the owner's approval/);
   });
 
-  it("keeps Saad's approval when GitHub refuses the merge, and spends it on the merge that happens", async () => {
+  it("keeps the owner's approval when GitHub refuses the merge, and spends it on the merge that happens", async () => {
     const t = setup({ approvals: true });
     t.push(".github/workflows/ci.yml", "on: push\n");
     await reviewNow(t.w);
-    await expect(t.signOff()).rejects.toThrow(/Escalated to Saad/);
+    await expect(t.signOff()).rejects.toThrow(/Escalated to the owner/);
     const ask = oneGateAsk(t.w, t.task, S.pr!.head!);
     answerAsk(t.w, ask.id, { action: "approve" });
 
@@ -259,7 +259,7 @@ describe("sign_off", () => {
     const t = setup({ approvals: true });
     t.push(".github/workflows/ci.yml", "on: push\n");
     await reviewNow(t.w);
-    await expect(t.signOff()).rejects.toThrow(/Escalated to Saad/);
+    await expect(t.signOff()).rejects.toThrow(/Escalated to the owner/);
     const ask = oneGateAsk(t.w, t.task, S.pr!.head!);
     answerAsk(t.w, ask.id, { action: "approve" });
 
@@ -278,7 +278,7 @@ describe("sign_off", () => {
     const t = setup({ approvals: true });
     t.push(".github/workflows/ci.yml", "on: push\n");
     await reviewNow(t.w);
-    await expect(t.signOff()).rejects.toThrow(/Escalated to Saad/);
+    await expect(t.signOff()).rejects.toThrow(/Escalated to the owner/);
     const ask = oneGateAsk(t.w, t.task, S.pr!.head!);
     answerAsk(t.w, ask.id, { action: "approve" });
 
@@ -293,17 +293,17 @@ describe("sign_off", () => {
     expect(getAsk(t.w, ask.id)?.used_at).toBeTruthy();
   });
 
-  it("asks again when the head moved after Saad approved", async () => {
+  it("asks again when the head moved after the owner approved", async () => {
     const t = setup({ approvals: true });
     t.push(".github/workflows/ci.yml", "on: push\n");
     await reviewNow(t.w);
-    await expect(t.signOff()).rejects.toThrow(/Escalated to Saad/);
+    await expect(t.signOff()).rejects.toThrow(/Escalated to the owner/);
     const first = oneGateAsk(t.w, t.task, S.pr!.head!);
     answerAsk(t.w, first.id, { action: "approve" });
     const next = t.push("src/b.ts", "export const b = 2;\n");
     await expect(t.signOff()).rejects.toThrow(
       new RegExp(
-        `Saad approved ${first.sha!.slice(0, 7)}, but PR #7's head is now ${next.slice(0, 7)}`
+        `The owner approved ${first.sha!.slice(0, 7)}, but PR #7's head is now ${next.slice(0, 7)}`
       )
     );
     await expect(t.signOff()).rejects.toThrow(/Asked him again/);
@@ -334,11 +334,11 @@ describe("sign_off", () => {
     return S.pr.head!;
   }
 
-  it("carries Saad's approval over a clean rebase with the same patch", async () => {
+  it("carries the owner's approval over a clean rebase with the same patch", async () => {
     const t = setup({ approvals: true });
     t.push(".github/workflows/ci.yml", "on: push\n");
     await reviewNow(t.w);
-    await expect(t.signOff()).rejects.toThrow(/Escalated to Saad/);
+    await expect(t.signOff()).rejects.toThrow(/Escalated to the owner/);
     const ask = oneGateAsk(t.w, t.task, S.pr!.head!);
     answerAsk(t.w, ask.id, { action: "approve" });
     const next = rebaseOnMain(t);
@@ -358,13 +358,13 @@ describe("sign_off", () => {
     const t = setup({ approvals: true });
     t.push(".github/workflows/ci.yml", "on: push\n");
     await reviewNow(t.w);
-    await expect(t.signOff()).rejects.toThrow(/Escalated to Saad/);
+    await expect(t.signOff()).rejects.toThrow(/Escalated to the owner/);
     const first = oneGateAsk(t.w, t.task, S.pr!.head!);
     answerAsk(t.w, first.id, { action: "approve" });
     const next = rebaseOnMain(t, ["src/b.ts", "export const b = 2;\n"]);
     await expect(t.signOff()).rejects.toThrow(
       new RegExp(
-        `Saad approved ${first.sha!.slice(0, 7)}, but PR #7's head is now ${next.slice(0, 7)} and its patch changed: now also touches src/b.ts`
+        `The owner approved ${first.sha!.slice(0, 7)}, but PR #7's head is now ${next.slice(0, 7)} and its patch changed: now also touches src/b.ts`
       )
     );
     const again = oneGateAsk(t.w, t.task, next);
@@ -378,7 +378,7 @@ describe("sign_off", () => {
     const t = setup({ approvals: true });
     t.push(".github/workflows/ci.yml", "on: push\n");
     await reviewNow(t.w);
-    await expect(t.signOff()).rejects.toThrow(/Escalated to Saad/);
+    await expect(t.signOff()).rejects.toThrow(/Escalated to the owner/);
     const ask = oneGateAsk(t.w, t.task, S.pr!.head!);
     const facts = () =>
       [{ id: t.task, task: { pr: S.pr } }] as unknown as SessionFacts[];
@@ -406,7 +406,7 @@ describe("sign_off", () => {
     const t = setup({ approvals: true });
     t.push(".github/workflows/ci.yml", "on: push\n");
     await reviewNow(t.w);
-    await expect(t.signOff()).rejects.toThrow(/Escalated to Saad/);
+    await expect(t.signOff()).rejects.toThrow(/Escalated to the owner/);
     const first = oneGateAsk(t.w, t.task, S.pr!.head!);
     answerAsk(t.w, first.id, { action: "approve" });
     const stale = S.pr;
@@ -433,7 +433,7 @@ describe("sign_off", () => {
     const a = t.push(".github/workflows/ci.yml", "on: push\n");
     const b = t.push("src/b.ts", "export const b = 2;\n");
     await reviewNow(t.w);
-    await expect(t.signOff()).rejects.toThrow(/Escalated to Saad/);
+    await expect(t.signOff()).rejects.toThrow(/Escalated to the owner/);
     oneGateAsk(t.w, t.task, b);
     // GitHub itself still says the older commit.
     S.pr = { ...S.pr!, head: a };
@@ -452,7 +452,7 @@ describe("sign_off", () => {
       await expect(t.signOff()).rejects.toThrow(/ci failed \(first\)/);
       t.push("src/b.ts", "export const b = 2;\n");
       await reviewNow(t.w);
-      await expect(t.signOff()).rejects.toThrow(/Escalated to Saad/);
+      await expect(t.signOff()).rejects.toThrow(/Escalated to the owner/);
       expect(openAsks(t.w)).toEqual([]);
       return t;
     }
@@ -577,7 +577,7 @@ describe("sign_off", () => {
   async function approveTwice(t: ReturnType<typeof setup>) {
     t.push(".github/workflows/ci.yml", "on: push\n");
     await reviewNow(t.w);
-    await expect(t.signOff()).rejects.toThrow(/Escalated to Saad/);
+    await expect(t.signOff()).rejects.toThrow(/Escalated to the owner/);
     const first = oneGateAsk(t.w, t.task, S.pr!.head!);
     answerAsk(t.w, first.id, { action: "approve" });
     const next = t.push("src/b.ts", "export const b = 2;\n");
@@ -605,7 +605,7 @@ describe("sign_off", () => {
     // it back.
     expect(spendApproval(second.id)).toBe(true);
     // The older approval, of a commit that's gone, doesn't stand in for it.
-    await expect(t.signOff()).rejects.toThrow(/is with Saad/);
+    await expect(t.signOff()).rejects.toThrow(/is with the owner/);
     expect(openAsks(t.w)).toEqual([]);
 
     expect(releaseInterruptedClaims()).toBe(1);
@@ -698,11 +698,11 @@ describe("sign_off", () => {
     t.push(".github/workflows/ci.yml", "on: push\n");
     await reviewNow(t.w);
     await expect(t.signOff()).rejects.toThrow(
-      /Escalated to Saad: PR #7 at .* touches \.github\/workflows\/ci\.yml \(CI config\)/
+      /Escalated to the owner: PR #7 at .* touches \.github\/workflows\/ci\.yml \(CI config\)/
     );
     expect(merges).toEqual([]);
     expect(listNotes(t.w).at(-1)).toMatchObject({ kind: "escalation" });
-    await expect(t.signOff()).rejects.toThrow(/is with Saad \(sensitive/);
+    await expect(t.signOff()).rejects.toThrow(/is with the owner \(sensitive/);
     oneGateAsk(t.w, t.task, S.pr!.head!);
   });
 
@@ -730,7 +730,7 @@ describe("sign_off", () => {
     const t = setup({ approvals: true });
     t.push("lib/security/auth.ts", "export const auth = 1;\n");
     await reviewNow(t.w);
-    await expect(t.signOff()).rejects.toThrow(/Escalated to Saad/);
+    await expect(t.signOff()).rejects.toThrow(/Escalated to the owner/);
     setMergeApprovals(false);
     await expect(t.signOff()).resolves.toMatch(/Merged add-a/);
   });
@@ -742,9 +742,9 @@ describe("sign_off", () => {
     await expect(t.signOff()).rejects.toThrow(/ci failed \(first\)/);
     t.push("src/b.ts", "export const b = 2;\n");
     await reviewNow(t.w);
-    await expect(t.signOff()).rejects.toThrow(/Escalated to Saad/);
+    await expect(t.signOff()).rejects.toThrow(/Escalated to the owner/);
     S.pr = { ...S.pr!, checks: "pass", failing: null };
-    await expect(t.signOff()).rejects.toThrow(/is with Saad \(ci/);
+    await expect(t.signOff()).rejects.toThrow(/is with the owner \(ci/);
     expect(merges).toEqual([]);
   });
 });

@@ -75,7 +75,7 @@ describe("the scheduling tools", () => {
     ).rejects.toThrow(/a person/);
   });
 
-  it("refuses to resume what isn't paused and to pause what is waiting on Saad", async () => {
+  it("refuses to resume what isn't paused and to pause what is waiting on the owner", async () => {
     const t = setup();
     await expect(
       runTool(t.workspace.id, "resume_task", { task: t.id })

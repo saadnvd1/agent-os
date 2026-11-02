@@ -138,7 +138,7 @@ describe("launchSession (a draft's first send)", () => {
     expect(row(filed.session.id).workspace_id).toBeNull();
   });
 
-  it("runs a session an orchestrator started on the implementation model, and Saad's on the interactive one", async () => {
+  it("runs a session an orchestrator started on the implementation model, and the owner's on the interactive one", async () => {
     const mine = await launchSession({
       agentType: "claude",
       prompt: "a",

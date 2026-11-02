@@ -193,7 +193,7 @@ describe("plan only", () => {
     await handoffAfterPlan(id, async () => {});
     await approvePlan(id, undefined, async () => {});
     expect(amendmentsOf(id).map((a) => [a.kind, a.text])).toEqual([
-      ["approval", "Saad approved the plan; implement it as planned."],
+      ["approval", "The owner approved the plan; implement it as planned."],
     ]);
     const orch = planOnlyTask();
     await handoffAfterPlan(orch.id, async () => {});

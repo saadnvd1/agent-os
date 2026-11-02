@@ -5,6 +5,8 @@ import { TOKEN_HEADER } from "@/lib/orchestrator/tools";
 
 type RouteParams = { params: Promise<{ id: string }> };
 
+const LEGACY_ASK = "ask_saad";
+
 // The orchestrator chat's tools call here from its worker: plain text back.
 // Only that workspace's orchestrator worker holds the secret: other local
 // sessions are trusted by the network, not to act as the orchestrator.
@@ -12,7 +14,10 @@ export async function POST(request: NextRequest, { params }: RouteParams) {
   const { id } = await params;
   if (!isOrchestratorToken(id, request.headers.get(TOKEN_HEADER)))
     return new NextResponse("Not the orchestrator", { status: 403 });
-  const { tool, args } = await request.json().catch(() => ({}));
+  const body = await request.json().catch(() => ({}));
+  const { args } = body;
+  // A worker started before the rename still calls ask_saad.
+  const tool = body.tool === LEGACY_ASK ? "ask_owner" : body.tool;
   if (!isToolName(tool))
     return NextResponse.json({ error: "Unknown tool" }, { status: 400 });
   try {

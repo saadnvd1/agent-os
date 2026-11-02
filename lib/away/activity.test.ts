@@ -12,7 +12,7 @@ const event = { kind: "event" as const, label: "AgentOS" };
 const away = { ...event, away: true as const };
 
 describe("a chat's last real turn", () => {
-  it("is the newest reply or message Saad typed", () => {
+  it("is the newest reply or message the owner typed", () => {
     expect(
       lastChatTurn([
         { kind: "assistant", createdAt: 30 },

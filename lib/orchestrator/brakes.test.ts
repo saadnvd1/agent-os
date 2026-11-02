@@ -144,12 +144,14 @@ describe("No approvals mode", () => {
     await expect(ws.start("held again")).rejects.toThrow(/Brake/);
   });
 
-  it("still honours a pause, which is Saad's own stop", async () => {
+  it("still honours a pause, which is the owner's own stop", async () => {
     const ws = workspace();
     setPaused(ws.workspace.id, true);
     setNoApprovals(true);
     try {
-      await expect(ws.start("while paused")).rejects.toThrow(/Paused by Saad/);
+      await expect(ws.start("while paused")).rejects.toThrow(
+        /Paused by the owner/
+      );
     } finally {
       setNoApprovals(false);
       setPaused(ws.workspace.id, false);
@@ -325,7 +327,7 @@ describe("a stack the orchestrator starts", () => {
   });
 });
 
-describe("a brake on Saad's asks list", () => {
+describe("a brake on the owner's asks list", () => {
   const brakeAsks = (w: string) =>
     openAsks(w).filter((a) => a.kind === "brake");
   const fill = (ws: ReturnType<typeof workspace>) => {
@@ -366,7 +368,7 @@ describe("a brake on Saad's asks list", () => {
     expect(again[0].id).not.toBe(ask.id);
   });
 
-  it("a start that opts out (a schedule's) never spends Saad's approval", async () => {
+  it("a start that opts out (a schedule's) never spends the owner's approval", async () => {
     const ws = workspace();
     fill(ws);
     await expect(ws.start("a")).rejects.toThrow(/Brake/);
@@ -437,7 +439,7 @@ describe("a brake on Saad's asks list", () => {
         restack: async () => {},
       });
       expect(start).not.toHaveBeenCalled();
-      expect(s.item("A")?.note).toMatch(/paused by Saad/);
+      expect(s.item("A")?.note).toMatch(/paused by the owner/);
       await expect(landGate(ws.workspace.id)("any-task")).resolves.toEqual({
         wait: "the orchestrator is paused",
       });
@@ -456,13 +458,13 @@ describe("a brake on Saad's asks list", () => {
   it("refuses every start while paused, and none of it is a brake ask", async () => {
     const ws = workspace();
     setPaused(ws.workspace.id, true);
-    await expect(ws.start("x")).rejects.toThrow(/Paused by Saad/);
+    await expect(ws.start("x")).rejects.toThrow(/Paused by the owner/);
     const { stackStartGate } = await import("./brakes");
     db.prepare(
       `INSERT INTO orchestrator_starts (workspace_id, kind, target, created_at) VALUES (?, 'stack', 'stack-p', ?)`
     ).run(ws.workspace.id, ago(0));
     await expect(stackStartGate("stack-p", "item-1")).resolves.toMatch(
-      /paused by Saad/
+      /paused by the owner/
     );
     expect(brakeAsks(ws.workspace.id)).toEqual([]);
     setPaused(ws.workspace.id, false);

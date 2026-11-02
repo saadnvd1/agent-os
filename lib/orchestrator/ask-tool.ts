@@ -15,6 +15,7 @@ import { fetchRefs, repoOf } from "./repo";
 import { titleSubject } from "./ask-text";
 import { gateTarget } from "./external-pr";
 import { addNote } from "./notes";
+import { owner, ownerUi } from "../owner";
 
 // The PR an ask about merging is pinned to: its subject is the task (or the
 // PR no task owns), and its commit the PR's head, which `sha` must name.
@@ -75,7 +76,7 @@ async function mergeFacts(
     .join("; ");
 }
 
-// `ask_saad`: parks the item and returns at once. The same title again,
+// `ask_owner`: parks the item and returns at once. The same title again,
 // while it's open, refreshes that ask rather than adding a second. With a
 // task and sha it's an ask to merge that PR at that commit.
 export async function askSaad(
@@ -99,7 +100,7 @@ export async function askSaad(
   // never replace it. Its own merge ask moves to the new head.
   const open = merge && openBySubject(workspaceId, merge.subject);
   if (open && open.raised_by !== "orchestrator")
-    return `Already on Saad's list as ask ${open.id}; left as it is. Carry on with everything else.`;
+    return `Already on ${owner()}'s list as ask ${open.id}; left as it is. Carry on with everything else.`;
   let raised;
   try {
     raised = raiseAsk({
@@ -125,7 +126,7 @@ export async function askSaad(
     ? ` If he approves, sign_off merges it once, at ${merge.sha.slice(0, 7)} only, without waiting on a review.`
     : "";
   if (!created)
-    return `Already on Saad's list as ask ${ask.id}; updated it.${once} Carry on with everything else.`;
-  addNote(workspaceId, `Asked Saad: ${ask.title}`, "ask");
-  return `Asked Saad (ask ${ask.id}).${once} Carry on with everything else; his answer reaches you as an event.`;
+    return `Already on ${owner()}'s list as ask ${ask.id}; updated it.${once} Carry on with everything else.`;
+  addNote(workspaceId, `Asked ${ownerUi()}: ${ask.title}`, "ask");
+  return `Asked ${owner()} (ask ${ask.id}).${once} Carry on with everything else; his answer reaches you as an event.`;
 }

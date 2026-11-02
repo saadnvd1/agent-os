@@ -23,6 +23,7 @@ import { spendApproval, unspentApproval, voidApprovals } from "./ask-approvals";
 import { noApprovalsOn, recordAutoApproval } from "../approvals/no-approvals";
 import { isPaused } from "./pause";
 import { readUsage, windowRefusal, type UsageState } from "./usage";
+import { owner } from "../owner";
 
 const HOUR = 60 * 60 * 1000;
 
@@ -154,7 +155,7 @@ async function refusal(
   workspaceId: string,
   spend = true
 ): Promise<string | null> {
-  if (isPaused(workspaceId)) return "the orchestrator is paused by Saad";
+  if (isPaused(workspaceId)) return `the orchestrator is paused by ${owner()}`;
   const on = await brakesOn(workspaceId);
   if (!on.length) {
     liftBrake(workspaceId);
@@ -183,7 +184,7 @@ async function refusal(
     setBrake(workspaceId, null);
     addNote(
       workspaceId,
-      "One start past the brakes, on Saad's approval.",
+      `One start past the brakes, on ${owner()}'s approval.`,
       "brake"
     );
     return null;

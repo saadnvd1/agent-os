@@ -27,7 +27,7 @@ it may do on its own, and the lines that always come back to you as asks.
   workspace, or the project already at that path moves in from no workspace;
   folders that hold secrets and projects of another workspace are refused),
   `note`,
-  `rule_add`, `rule_remove`, `review`, `sign_off`, `arm`, `disarm`, `remind_me`, `reminders`, `cancel_reminder`, `ask_saad`, `question` and `resolve_question`. All are served in-process to its chat (a call made while AgentOS restarts waits up to two minutes for it; one cut off mid-flight reports that and isn't repeated), refuse
+  `rule_add`, `rule_remove`, `review`, `sign_off`, `arm`, `disarm`, `remind_me`, `reminders`, `cancel_reminder`, `ask_owner`, `question` and `resolve_question`. All are served in-process to its chat (a call made while AgentOS restarts waits up to two minutes for it; one cut off mid-flight reports that and isn't repeated), refuse
   any target outside its workspace, and validate their arguments. The one
   exception is other orchestrators: `orchestrators` lists every workspace and
   whether it has one, and `message_orchestrator` messages another workspace's
@@ -93,7 +93,7 @@ it may do on its own, and the lines that always come back to you as asks.
   `mcp__<server>` rule to the orchestrator's allowed tools, covering all its
   tools. Its worker ends at its next turn boundary when the list changes, and
   the next one starts with the new permissions. Sending a message, email or
-  post through a server stays a hard line the brief sends to `ask_saad`.
+  post through a server stays a hard line the brief sends to `ask_owner`.
   Its chat worker checks every write in a PreToolUse hook before it runs, on
   the path with symlinks and `..` resolved as the system will, and refuses
   with the reason; the repositories are read from the database on each write,
@@ -235,7 +235,7 @@ it may do on its own, and the lines that always come back to you as asks.
   `orchestrator_events`, so a restart resends nothing. Set
   `AGENTOS_ORCHESTRATOR=off` to stop events.
 - **Asks:** what's yours to decide sits on its asks list
-  (`orchestrator_asks`): what it raises with `ask_saad` (a decision, or
+  (`orchestrator_asks`): what it raises with `ask_owner` (a decision, or
   something crossing a hard line: public or outbound, money, irreversible,
   credentials, a product call), and every escalated gate and brake. There's
   one open ask per subject (a task, the brakes, a title), so an escalation
@@ -247,7 +247,7 @@ approved`). An approval covers that one item only: a held task's approval
   lets `sign_off` merge it once, at the commit you approved (a new commit
   asks again), and a brake's lets one start through, for that brake only.
   The orchestrator can ask you itself whether to merge a PR the gates won't
-  pass, by giving `ask_saad` the task and its head sha: the ask is pinned to
+  pass, by giving `ask_owner` the task and its head sha: the ask is pinned to
   that commit, opens with what AgentOS knows about it (files changed,
   sensitive files, the review's verdict) and links the PR, and your approval
   lets `sign_off` merge it once, at that commit. It never rewrites an ask the
@@ -343,6 +343,8 @@ reset` yourself in a terminal on the machine: it refuses inside an
   or was escalated, and what waits on you (an explicit "none"). It opens on
   whichever device is open until you dismiss it, a short summary goes to
   your phone, and the report stays in Settings → Audits (`away/`).
+
+The owner is named from one setting, `owner.name` (Settings → Setup & health, `lib/owner.ts`): their name in agent text and chat, "the owner" for agents and "you" in the UI until it is set. `lib/owner-name-guard.test.ts` fails if a person's name is written into a user-visible string.
 
 ## Analyst loop
 

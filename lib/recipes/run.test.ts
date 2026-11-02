@@ -121,7 +121,7 @@ describe("startRun", () => {
       .prepare(`SELECT status FROM recipe_runs WHERE recipe_id = ? ORDER BY id`)
       .all(r.id) as { status: string }[];
     expect(row.map((x) => x.status)).toEqual(["skipped", "skipped"]);
-    // Saad's own Run is never held by the orchestrator's pause.
+    // the owner's own Run is never held by the orchestrator's pause.
     const manual = await startRun(r.id, { trigger: "manual" });
     expect(manual.run.status).toBe("running");
   });

@@ -7,14 +7,14 @@ describe("parseScopeChange", () => {
       "## Summary",
       "Adds the thing.",
       "## Scope change",
-      "Saad dropped the Restart menu item.",
+      "The owner dropped the Restart menu item.",
       "### Why",
       "It was confusing.",
       "## Code review",
       "Reviewed: abcdef123456",
     ].join("\n");
     expect(parseScopeChange(body)).toBe(
-      "Saad dropped the Restart menu item.\n### Why\nIt was confusing."
+      "The owner dropped the Restart menu item.\n### Why\nIt was confusing."
     );
   });
 

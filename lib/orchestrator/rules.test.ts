@@ -46,18 +46,18 @@ describe("standing rules", () => {
     );
   });
 
-  it("removed, leave the prompt but stay on record; Saad's only by Saad", async () => {
+  it("removed, leave the prompt but stay on record; the owner's only by the owner", async () => {
     const { workspace } = seedWorkspace();
     const w = workspace.id;
     const rule = addRule(w, "Never merge #98", "saad");
     expect(await prompt(w)).toContain(
-      `[rule ${rule.id}, from Saad] Never merge #98`
+      `[rule ${rule.id}, from the owner] Never merge #98`
     );
-    // Saad's rule is his to lift: the orchestrator can't, whatever it read.
+    // the owner's rule is his to lift: the orchestrator can't, whatever it read.
     await expect(runTool(w, "rule_remove", { id: rule.id })).rejects.toThrow(
       /only he removes it/
     );
-    expect(await prompt(w)).toContain(`[rule ${rule.id}, from Saad]`);
+    expect(await prompt(w)).toContain(`[rule ${rule.id}, from the owner]`);
     removeRule(w, rule.id, "saad");
     expect(await prompt(w)).not.toContain(`[rule ${rule.id},`);
     const row = db
@@ -78,7 +78,7 @@ describe("standing rules", () => {
     const b = seedWorkspace().workspace.id;
     const rule = addRule(
       a,
-      "Saad's AgentOS URL is the one in Settings",
+      "The owner's AgentOS URL is the one in Settings",
       "saad"
     );
     await expect(runTool(b, "rule_remove", { id: rule.id })).rejects.toThrow(
@@ -91,11 +91,13 @@ describe("standing rules", () => {
   it("are kept once each, and capped", () => {
     const w = seedWorkspace().workspace.id;
     const first = addRule(w, "  One   rule ", "orchestrator");
-    // Saad writing the same rule makes it his, so only he removes it.
+    // the owner writing the same rule makes it his, so only he removes it.
     const his = addRule(w, "One rule", "saad");
     expect(his.id).toBe(first.id);
     expect(his.added_by).toBe("saad");
-    expect(() => removeRule(w, first.id, "orchestrator")).toThrow(/Saad's/);
+    expect(() => removeRule(w, first.id, "orchestrator")).toThrow(
+      /the owner's/
+    );
     expect(addRule(w, "One rule", "orchestrator").added_by).toBe("saad");
     for (let i = 1; i < MAX_RULES; i++) addRule(w, `Rule ${i}`, "orchestrator");
     expect(() => addRule(w, "One too many", "saad")).toThrow(/remove one/);
@@ -103,7 +105,7 @@ describe("standing rules", () => {
     expect(addRule(w, "Room again", "saad").text).toBe("Room again");
   });
 
-  it("reworded by Saad, show the new text; only in their own workspace, and not once removed", async () => {
+  it("reworded by the owner, show the new text; only in their own workspace, and not once removed", async () => {
     const a = seedWorkspace().workspace.id;
     const b = seedWorkspace().workspace.id;
     const rule = addRule(a, "Never merge #1", "saad");

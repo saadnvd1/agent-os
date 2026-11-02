@@ -100,7 +100,7 @@ async function register(who: Who, enrollCode?: string) {
         publicKey: key.publicKey,
         challenge: options.challenge,
         signature: key.sign(options.message!),
-        name: "Saad's phone",
+        name: "The owner's phone",
         hardware: "secure-enclave",
         enrollCode,
       },

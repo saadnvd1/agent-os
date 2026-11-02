@@ -6,6 +6,8 @@ describe("GET /api/client-config", () => {
     const res = GET();
     expect(res.status).toBe(200);
     expect(res.headers.get("cache-control")).toBe("no-store");
-    expect((await res.json()).v).toBe(1);
+    const body = await res.json();
+    expect(body.v).toBe(1);
+    expect(body).toHaveProperty("ownerName");
   });
 });

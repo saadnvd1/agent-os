@@ -29,7 +29,7 @@ const group = z
   .max(60)
   .optional()
   .describe(
-    "One of Saad's groups in this workspace, by name (see sessions): file it there when he asked, or when it continues work already in that group. It must exist; you can't create groups"
+    "One of the owner's groups in this workspace, by name (see sessions): file it there when he asked, or when it continues work already in that group. It must exist; you can't create groups"
   );
 
 const sweepMachine = z
@@ -96,7 +96,7 @@ export const TOOL_SHAPES = {
       .boolean()
       .optional()
       .describe(
-        "The message changes the task's scope (Saad added, dropped or changed what it must do): it's recorded on the task's brief, and its review judges the PR against the brief as amended. Only for a change Saad made, never one the task asked for itself"
+        "The message changes the task's scope (the owner added, dropped or changed what it must do): it's recorded on the task's brief, and its review judges the PR against the brief as amended. Only for a change the owner made, never one the task asked for itself"
       ),
   },
   orchestrators: {},
@@ -139,7 +139,7 @@ export const TOOL_SHAPES = {
       .enum(PRIORITIES)
       .optional()
       .describe(
-        "Where it stands in the queue: urgent (a bug Saad hit), blocking (something waits on it), normal (the default), background"
+        "Where it stands in the queue: urgent (a bug the owner hit), blocking (something waits on it), normal (the default), background"
       ),
     machine: z
       .enum(["mac", "any"])
@@ -159,7 +159,7 @@ export const TOOL_SHAPES = {
       .min(1)
       .max(300)
       .optional()
-      .describe("With now: why it can't wait for a slot; logged for Saad"),
+      .describe("With now: why it can't wait for a slot; logged for the owner"),
     ignore_claims: z
       .boolean()
       .optional()
@@ -195,7 +195,7 @@ export const TOOL_SHAPES = {
       .max(200)
       .optional()
       .describe(
-        'Why, in a few words Saad reads on the task card: "touches 6 files across gates and UI", "one-line default change"'
+        'Why, in a few words the owner reads on the task card: "touches 6 files across gates and UI", "one-line default change"'
       ),
   },
   set_task_model: {
@@ -238,7 +238,7 @@ export const TOOL_SHAPES = {
       .max(60)
       .nullable()
       .describe(
-        "One of Saad's groups in this workspace by name, or null to take the session out of its group"
+        "One of the owner's groups in this workspace by name, or null to take the session out of its group"
       ),
   },
   quick_change: {
@@ -282,7 +282,7 @@ export const TOOL_SHAPES = {
       .max(8000)
       .optional()
       .describe(
-        "Amends the plan: recorded on the task's brief as a scope change, so its review judges the PR against it. Only for a change Saad made"
+        "Amends the plan: recorded on the task's brief as a scope change, so its review judges the PR against it. Only for a change the owner made"
       ),
   },
   plan_pieces: {
@@ -317,7 +317,7 @@ export const TOOL_SHAPES = {
       .trim()
       .min(1)
       .max(500)
-      .describe("What Saad said, and when; it goes in the decision log"),
+      .describe("What the owner said, and when; it goes in the decision log"),
   },
   set_priority: {
     task: ref("A queued or running task: name, project/name or id"),
@@ -330,14 +330,14 @@ export const TOOL_SHAPES = {
       .trim()
       .min(1)
       .max(300)
-      .describe("Why it can't wait for a slot; logged for Saad"),
+      .describe("Why it can't wait for a slot; logged for the owner"),
   },
   pause_task: {
     task,
     for: z
       .enum(["1h", "2h", "tomorrow", "until_resumed"])
       .describe(
-        "How long: 1h, 2h, tomorrow (9 AM, Saad's time) or until_resumed (until you or Saad resume it)"
+        "How long: 1h, 2h, tomorrow (9 AM, the owner's time) or until_resumed (until you or the owner resume it)"
       ),
     now: z
       .boolean()
@@ -353,7 +353,7 @@ export const TOOL_SHAPES = {
   archive: { session },
   resurrect: {
     session: ref(
-      "A dropped, done or archived session: its name, project/name or id (from the decision log, or as Saad named it)"
+      "A dropped, done or archived session: its name, project/name or id (from the decision log, or as the owner named it)"
     ),
     reason: z.string().trim().min(1).max(2000),
   },
@@ -481,13 +481,13 @@ export const TOOL_SHAPES = {
   },
   arm: { task },
   disarm: { task },
-  ask_saad: {
+  ask_owner: {
     title: z
       .string()
       .trim()
       .min(1)
       .max(200)
-      .describe("What Saad decides, as a short question"),
+      .describe("What the owner decides, as a short question"),
     detail: z
       .string()
       .trim()

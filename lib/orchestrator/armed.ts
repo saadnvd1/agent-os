@@ -31,6 +31,7 @@ import { workspaceTask } from "./targets";
 import { markStatusDirty } from "../status/dirty";
 import { setPr } from "../db/session-parts";
 import { noteAutoArmed } from "./fast-lane-state";
+import { owner } from "../owner";
 
 // Judged again at least this often, for what the fingerprint can't see.
 export const ARMED_RECHECK_MS = 5 * 60 * 1000;
@@ -94,7 +95,7 @@ export async function arm(workspaceId: string, ref: string): Promise<string> {
   const task = workspaceTask(workspaceId, ref);
   armTask(task);
   if (isFast(task)) return armedNow(workspaceId, task);
-  return `Armed ${task.name}: AgentOS merges its PR the moment every sign_off gate passes at its head, and tells you with one event. A gate failure also comes as one event; it stays armed for the fix, unless the failure goes to Saad. No need to call sign_off.`;
+  return `Armed ${task.name}: AgentOS merges its PR the moment every sign_off gate passes at its head, and tells you with one event. A gate failure also comes as one event; it stays armed for the fix, unless the failure goes to ${owner()}. No need to call sign_off.`;
 }
 
 // Arms a task, or says why it can't be: only a running task, in a
@@ -108,11 +109,11 @@ export function armTask(task: Session): void {
   const held = approved ? [] : holdingEscalations(task.id);
   if (held.length)
     throw new Error(
-      `${task.name} is with Saad (${held.map((h) => h.gate).join(", ")}); only he merges it`
+      `${task.name} is with ${owner()} (${held.map((h) => h.gate).join(", ")}); only he merges it`
     );
   if (w && !approved && openBySubject(w, workSubject(task.id)))
     throw new Error(
-      `${task.name} has an open ask with Saad; it merges on his answer`
+      `${task.name} has an open ask with ${owner()}; it merges on his answer`
     );
   if (task.peer_mirror)
     throw new Error(`${task.name} runs on a linked machine; arm it there`);
@@ -255,7 +256,7 @@ async function mergeOne(
     event(
       workspaceId,
       task,
-      `task ${task.name}: disarmed, it's with Saad (${held.join(", ")})`
+      `task ${task.name}: disarmed, it's with ${owner()} (${held.join(", ")})`
     );
     return;
   }
@@ -280,14 +281,14 @@ async function mergeOne(
   if (!stillArmed(workspaceId, task.id)) return;
   const counted = await deps.judge(workspaceId, task);
   if (counted.ok) return merge(workspaceId, task, counted, deps);
-  const toSaad = holdingEscalations(task.id).length > 0;
-  if (toSaad) setArmed(task.id, false);
+  const toOwner = holdingEscalations(task.id).length > 0;
+  if (toOwner) setArmed(task.id, false);
   else setPr(db, task.id, { merge_armed_seen: seen });
   event(
     workspaceId,
     task,
-    toSaad
-      ? `task ${task.name}: armed merge stopped and disarmed, it went to Saad.\n${counted.text}`
+    toOwner
+      ? `task ${task.name}: armed merge stopped and disarmed, it went to ${owner()}.\n${counted.text}`
       : `task ${task.name}: armed, not merged yet; it stays armed and merges once this is fixed.\n${counted.text}`
   );
 }

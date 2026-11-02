@@ -263,7 +263,9 @@ describe("brakes", () => {
       setPaused(s.workspace_id, true);
       const run = realDeps.start(s, () => {});
       await expect(run).rejects.toBeInstanceOf(Braked);
-      await expect(run).rejects.toThrow("the orchestrator is paused by Saad");
+      await expect(run).rejects.toThrow(
+        "the orchestrator is paused by the owner"
+      );
       expect(sends).toHaveLength(0);
       expect(tasksCreated).toEqual([]);
       expect(startsIn(s.workspace_id)).toBe(0);

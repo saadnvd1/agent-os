@@ -284,7 +284,7 @@ describe("done, by state", () => {
     await expect(doneSession(s.id, { by: "direct" })).rejects.toThrow(
       /Not done, nothing merged[\s\S]*\n- ci failed: CI failed/
     );
-    // A person's done doesn't count toward sending it to Saad.
+    // A person's done doesn't count toward sending it to the owner.
     expect(failureOf(s.id, "ci")).toBeNull();
     expect(merges).toEqual([]);
     expect(droppedDatabases).toEqual([]);

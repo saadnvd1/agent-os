@@ -55,12 +55,12 @@ const full = (): LogData => ({
     },
     {
       at: "2026-10-12 10:00:00",
-      text: "Escalated to Saad (decision)",
+      text: "Escalated to the owner (decision)",
       quote: "Use redis?",
     },
     {
       at: "2026-10-12 10:05:00",
-      text: "Saad answered",
+      text: "The owner answered",
       detail: "No, keep memory.",
     },
     { at: "2026-10-12 10:15:00", text: "PR #42 merged" },

@@ -38,7 +38,7 @@ export const isQuestionTool = (item: ChatItem): boolean =>
   item.kind === "tool" && /(^|__)question$/.test(item.name);
 
 export const isAskTool = (item: ChatItem): boolean =>
-  item.kind === "tool" && /(^|__)ask_saad$/.test(item.name);
+  item.kind === "tool" && /(^|__)ask_(owner|saad)$/.test(item.name);
 
 // The assistant message a question was asked in (its turn's last words
 // before the call), else the call itself.

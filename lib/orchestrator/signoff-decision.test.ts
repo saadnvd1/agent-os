@@ -41,7 +41,7 @@ describe("gate failures count per task and gate", () => {
         .all(w) as { line: string }[]
     ).map((e) => e.line);
 
-  it("counts a blocking review when its verdict arrives, once per commit, and sends the same findings again to Saad", async () => {
+  it("counts a blocking review when its verdict arrives, once per commit, and sends the same findings again to the owner", async () => {
     const t = setup();
     await reviewNow(t.w, "block");
     expect(failureOf(t.task, "review")).toMatchObject({
@@ -61,9 +61,9 @@ describe("gate failures count per task and gate", () => {
     await askUp(t.w, t.task);
     oneGateAsk(t.w, t.task, next);
     expect(events(t.w).at(-1)).toMatch(
-      /review of \w+ found blocking issues; the review gate is stuck in a loop \(the loop guard\), so it's with Saad now/
+      /review of \w+ found blocking issues; the review gate is stuck in a loop \(the loop guard\), so it's with the owner now/
     );
-    await expect(t.signOff()).rejects.toThrow(/is with Saad \(review/);
+    await expect(t.signOff()).rejects.toThrow(/is with the owner \(review/);
     expect(merges).toEqual([]);
   });
 
@@ -82,7 +82,7 @@ describe("gate failures count per task and gate", () => {
     expect(failureOf(t.task, "scope")?.count).toBe(2);
     expect(failureOf(t.task, "scope")?.escalated_at).toBeTruthy();
     expect(events(t.w).at(-1)).toMatch(
-      /passed; the scope gate is stuck in a loop \(the loop guard\), so it's with Saad now/
+      /passed; the scope gate is stuck in a loop \(the loop guard\), so it's with the owner now/
     );
   });
 
@@ -143,11 +143,11 @@ describe("gate failures count per task and gate", () => {
   });
 });
 
-describe("a merge decision from Saad", () => {
+describe("a merge decision from the owner", () => {
   const ask = (t: ReturnType<typeof setup>, extra: object) =>
-    runTool(t.w, "ask_saad", {
+    runTool(t.w, "ask_owner", {
       title: "Merge add-a despite the review?",
-      detail: "The review blocks on an item Saad dropped.",
+      detail: "The review blocks on an item the owner dropped.",
       kind: "decision",
       ...extra,
     });
@@ -172,7 +172,7 @@ describe("a merge decision from Saad", () => {
       ["pr", "merge", "7", "--squash", "--match-head-commit", t.sha],
     ]);
     expect(getAsk(t.w, raised.id)?.used_at).toBeTruthy();
-    expect(listNotes(t.w).at(-1)?.text).toMatch(/on Saad's approval/);
+    expect(listNotes(t.w).at(-1)?.text).toMatch(/on the owner's approval/);
   });
 
   it("doesn't merge a later commit on an approval of an earlier one", async () => {
@@ -219,7 +219,7 @@ describe("a merge decision from Saad", () => {
     const next = t.push("src/b.ts", "export const b = 2;\n");
     await reviewNow(t.w, "block");
     await expect(ask(t, { task: "add-a", sha: next })).resolves.toMatch(
-      /Already on Saad's list as ask \d+; updated it/
+      /Already on the owner's list as ask \d+; updated it/
     );
     const [raised] = openAsks(t.w);
     expect(raised.sha).toBe(next);
@@ -248,11 +248,11 @@ describe("a merge decision from Saad", () => {
     const t = setup({ approvals: true });
     t.push(".github/workflows/ci.yml", "on: push\n");
     await reviewNow(t.w);
-    await expect(t.signOff()).rejects.toThrow(/Escalated to Saad/);
+    await expect(t.signOff()).rejects.toThrow(/Escalated to the owner/);
     const gate = oneGateAsk(t.w, t.task, S.pr!.head!);
     await expect(
       ask(t, { task: "add-a", sha: S.pr!.head!, title: "Merge a typo fix?" })
-    ).resolves.toMatch(/Already on Saad's list as ask \d+; left as it is/);
+    ).resolves.toMatch(/Already on the owner's list as ask \d+; left as it is/);
     expect(getAsk(t.w, gate.id)).toMatchObject({
       title: gate.title,
       detail: gate.detail,
@@ -278,7 +278,7 @@ describe("a merge decision from Saad", () => {
       detail: JSON.stringify({ count: S.pr!.checkCount, at: 0 }),
     });
 
-  it("merges the commit Saad approved without a review of it", async () => {
+  it("merges the commit the owner approved without a review of it", async () => {
     const t = setup();
     const raised = await approved(t);
     expect(getCheck(t.task, t.sha, "review")).toBeNull();
@@ -287,7 +287,7 @@ describe("a merge decision from Saad", () => {
       ["pr", "merge", "7", "--squash", "--match-head-commit", t.sha],
     ]);
     expect(getAsk(t.w, raised.id)?.used_at).toBeTruthy();
-    expect(listNotes(t.w).at(-1)?.text).toMatch(/on Saad's approval/);
+    expect(listNotes(t.w).at(-1)?.text).toMatch(/on the owner's approval/);
   });
 
   it("merges an approved commit whose review blocks", async () => {
@@ -300,7 +300,7 @@ describe("a merge decision from Saad", () => {
   it("merges a held task on an approval at its head, without a review", async () => {
     const t = setup({ approvals: true });
     t.push(".github/workflows/ci.yml", "on: push\n");
-    await expect(t.signOff()).rejects.toThrow(/Escalated to Saad/);
+    await expect(t.signOff()).rejects.toThrow(/Escalated to the owner/);
     const gate = oneGateAsk(t.w, t.task, S.pr!.head!);
     answerAsk(t.w, gate.id, { action: "approve" }, S.pr!.head!);
     expect(getCheck(t.task, S.pr!.head!, "review")).toBeNull();
@@ -322,7 +322,7 @@ describe("a merge decision from Saad", () => {
     const raised = await approved(t);
     S.pr = { ...S.pr!, attribution: ATTRIBUTED };
     await expect(t.signOff()).rejects.toThrow(
-      /Saad approved this commit, but the PR body carries AI attribution/
+      /the owner approved this commit, but the PR body carries AI attribution/
     );
     expect(merges).toEqual([]);
     expect(getAsk(t.w, raised.id)?.used_at).toBeNull();
@@ -336,13 +336,13 @@ describe("a merge decision from Saad", () => {
     const failed = await judge(t.w, getTaskSession(t.task)!);
     expect(failed).toMatchObject({ ok: false, wait: false });
     expect(!failed.ok && failed.text).toMatch(
-      /Saad approved this commit, but CI failed on/
+      /the owner approved this commit, but CI failed on/
     );
     S.pr = { ...S.pr!, checks: "pending", failing: null };
     const running = await judge(t.w, getTaskSession(t.task)!);
     expect(running).toMatchObject({ ok: false, wait: true });
     expect(!running.ok && running.text).toMatch(
-      /Saad approved this commit, but CI is still running/
+      /the owner approved this commit, but CI is still running/
     );
     expect(merges).toEqual([]);
     expect(getAsk(t.w, raised.id)?.used_at).toBeNull();
@@ -366,12 +366,12 @@ describe("a merge decision from Saad", () => {
     expect(merges).toHaveLength(1);
   });
 
-  it("merges an armed held task on Saad's approval of its head", async () => {
+  it("merges an armed held task on the owner's approval of its head", async () => {
     const t = setup({ approvals: true });
     t.push(".github/workflows/ci.yml", "on: push\n");
-    await expect(t.signOff()).rejects.toThrow(/Escalated to Saad/);
+    await expect(t.signOff()).rejects.toThrow(/Escalated to the owner/);
     const gate = oneGateAsk(t.w, t.task, S.pr!.head!);
-    expect(() => armTask(getTaskSession(t.task)!)).toThrow(/is with Saad/);
+    expect(() => armTask(getTaskSession(t.task)!)).toThrow(/is with the owner/);
     answerAsk(t.w, gate.id, { action: "approve" }, S.pr!.head!);
     armTask(getTaskSession(t.task)!);
     settle(t);
@@ -388,13 +388,13 @@ describe("a merge decision from Saad", () => {
     const t = setup();
     await reviewNow(t.w);
     // The code-review gate fails on its fourth commit in a row and the
-    // task is held for Saad.
+    // task is held for the owner.
     failedBefore(t.w, t.task, "code-review");
     S.pr = { ...S.pr!, attribution: ATTRIBUTED };
-    await expect(t.signOff()).rejects.toThrow(/Escalated to Saad/);
+    await expect(t.signOff()).rejects.toThrow(/Escalated to the owner/);
     await askUp(t.w, t.task);
     const gate = oneGateAsk(t.w, t.task, t.sha);
-    // Saad replies rather than approving: the task stays held, and the
+    // the owner replies rather than approving: the task stays held, and the
     // orchestrator raises its own merge ask.
     answerAsk(t.w, gate.id, { action: "reply", text: "why no review?" });
     await ask(t, { task: "add-a", sha: t.sha });
@@ -405,7 +405,7 @@ describe("a merge decision from Saad", () => {
     );
     answerAsk(t.w, raised.id, { action: "approve" }, t.sha);
     await expect(t.signOff()).rejects.toThrow(
-      /Saad approved this commit, but the PR body carries AI attribution/
+      /the owner approved this commit, but the PR body carries AI attribution/
     );
     expect(merges).toEqual([]);
     expect(getAsk(t.w, raised.id)?.used_at).toBeNull();
@@ -420,7 +420,7 @@ describe("a merge decision from Saad", () => {
     await reviewNow(t.w);
     failedBefore(t.w, t.task, "code-review");
     S.pr = { ...S.pr!, attribution: ATTRIBUTED };
-    await expect(t.signOff()).rejects.toThrow(/Escalated to Saad/);
+    await expect(t.signOff()).rejects.toThrow(/Escalated to the owner/);
     await askUp(t.w, t.task);
     answerAsk(t.w, oneGateAsk(t.w, t.task, t.sha).id, {
       action: "reply",
@@ -429,7 +429,8 @@ describe("a merge decision from Saad", () => {
     S.pr = { ...S.pr!, attribution: null };
     return t;
   }
-  const WITH_SAAD = /is with Saad \(code-review\); no review needed from you/;
+  const WITH_SAAD =
+    /is with the owner \(code-review\); no review needed from you/;
 
   it("reviews the approved head of a held task, counts nothing, and merges once", async () => {
     const t = await heldTask();
@@ -481,13 +482,13 @@ describe("a merge decision from Saad", () => {
     // escalates onto that ask.
     failedBefore(t.w, t.task, "code-review");
     S.pr = { ...S.pr!, attribution: ATTRIBUTED };
-    await expect(t.signOff()).rejects.toThrow(/Escalated to Saad/);
+    await expect(t.signOff()).rejects.toThrow(/Escalated to the owner/);
     expect(openAsks(t.w)).toMatchObject([
       { id: raised.id, raised_by: "orchestrator", sha: t.sha },
     ]);
     answerAsk(t.w, raised.id, { action: "approve" }, t.sha);
     await expect(t.signOff()).rejects.toThrow(
-      /Saad approved this commit, but the PR body carries AI attribution/
+      /the owner approved this commit, but the PR body carries AI attribution/
     );
     expect(merges).toEqual([]);
     S.pr = { ...S.pr!, attribution: null };
@@ -506,9 +507,9 @@ describe("a merge decision from Saad", () => {
   });
 });
 
-describe("a PR the loop guard sent to Saad", () => {
+describe("a PR the loop guard sent to the owner", () => {
   // CI failing the same way on two commits, then a fix whose CI passes:
-  // Saad's ask names the fix.
+  // the owner's ask names the fix.
   async function stuck() {
     const t = setup();
     await reviewNow(t.w);
@@ -516,7 +517,7 @@ describe("a PR the loop guard sent to Saad", () => {
     await expect(t.signOff()).rejects.toThrow(/ci failed \(first\)/);
     t.push("src/b.ts", "export const b = 2;\n");
     await expect(t.signOff()).rejects.toThrow(
-      /Escalated to Saad: the ci gate failed the same way on two commits in a row/
+      /Escalated to the owner: the ci gate failed the same way on two commits in a row/
     );
     const fix = t.push("src/c.ts", "export const c = 3;\n");
     S.pr = { ...S.pr!, checks: "pass", failing: null, failingUrl: null };
@@ -533,7 +534,7 @@ describe("a PR the loop guard sent to Saad", () => {
     }).then(() => reviews);
   };
 
-  it("still reviews the commit Saad would approve, and his ask shows CI and that review", async () => {
+  it("still reviews the commit the owner would approve, and his ask shows CI and that review", async () => {
     const { t, fix, ask } = await stuck();
     expect(ask.detail).toMatch(/^the ci gate failed the same way/);
     expect(await judgeAsked(t.w, t.task, "block")).toEqual([t.task]);
@@ -548,11 +549,11 @@ describe("a PR the loop guard sent to Saad", () => {
     // Reviewed once: the next pass only refreshes what the ask shows.
     expect(await judgeAsked(t.w, t.task, "block")).toEqual([]);
     expect(getAsk(t.w, ask.id)!.detail).toBe(shown);
-    // Counted nothing: the task is with Saad.
+    // Counted nothing: the task is with the owner.
     expect(failureOf(t.task, "review")).toBeNull();
   });
 
-  it("merges once at the commit Saad approves, whatever the review said", async () => {
+  it("merges once at the commit the owner approves, whatever the review said", async () => {
     const { t, fix, ask } = await stuck();
     await judgeAsked(t.w, t.task, "block");
     answerAsk(t.w, ask.id, { action: "approve" }, fix);
@@ -568,7 +569,7 @@ describe("a PR the loop guard sent to Saad", () => {
     answerAsk(t.w, ask.id, { action: "approve" }, fix);
     const later = t.push("src/d.ts", "export const d = 4;\n");
     await expect(t.signOff()).rejects.toThrow(
-      /Saad approved \w+, but PR #7's head is now/
+      /The owner approved \w+, but PR #7's head is now/
     );
     expect(merges).toEqual([]);
     const again = oneGateAsk(t.w, t.task, later);

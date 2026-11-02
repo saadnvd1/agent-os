@@ -11,6 +11,7 @@ import {
   recordAutoApproval,
   setNoApprovals,
 } from "./no-approvals";
+import { ownerUi } from "../owner";
 
 // Everything already waiting when the mode goes on is approved: open asks,
 // tool cards in live chats.
@@ -42,7 +43,7 @@ export async function switchNoApprovals(on: boolean): Promise<void> {
       o.workspace_id,
       on
         ? "No approvals mode is on: every ask is approved as it's raised, and agents run without permission prompts."
-        : "No approvals mode is off: asks wait for Saad again.",
+        : `No approvals mode is off: asks wait for ${ownerUi()} again.`,
       "ask"
     );
   }

@@ -218,7 +218,7 @@ describe("the PR's real base", () => {
       `UPDATE sessions SET base_branch = 'feature/parent-gone' WHERE id = ?`
     ).run(t.task);
     stackOn(t, "dropped", "feature/parent-gone");
-    await runTool(t.w, "ask_saad", {
+    await runTool(t.w, "ask_owner", {
       title: "Merge add-a despite the review?",
       detail: "The review blocks.",
       kind: "decision",

@@ -41,6 +41,7 @@ import {
   startSetup,
 } from "../sessions/setup-progress";
 import { recordSetup, setupNote, setupOutcome, type TaskSetup } from "./setup";
+import { owner } from "../owner";
 
 const execFileAsync = promisify(execFile);
 
@@ -62,7 +63,8 @@ export function launchHold(sessionId: string): string | null {
     .get(sessionId, sessionId, sessionId) as
     { workspace_id: string } | undefined;
   if (!row) return null;
-  if (isPaused(row.workspace_id)) return "the orchestrator is paused by Saad";
+  if (isPaused(row.workspace_id))
+    return `the orchestrator is paused by ${owner()}`;
   const window = brakesEnabled() ? windowRefusal(readUsage()) : null;
   return window ? `held by the brakes: ${window}` : null;
 }

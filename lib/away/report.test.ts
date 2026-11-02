@@ -39,7 +39,7 @@ function action(
 const mine = (r: AwayReport, w: string) => r.workspaces.find((x) => x.id === w);
 
 describe("the While you were away report", () => {
-  it("lists merged with deploys and PR links, in flight with why, failures, and what waits on Saad", () => {
+  it("lists merged with deploys and PR links, in flight with why, failures, and what waits on the owner", () => {
     const s = seedWorkspace();
     const w = s.workspace.id;
     const now = Date.now();
@@ -163,7 +163,7 @@ describe("the While you were away report", () => {
     expect(phoneSummary(r)).toMatch(/waiting on you, 1 a hard line/);
   });
 
-  it("says explicitly that nothing waits on Saad", () => {
+  it("says explicitly that nothing waits on the owner", () => {
     // The whole database's asks count: none open, so the report says so.
     db.exec(`UPDATE orchestrator_asks SET status = 'resolved'`);
     const s = seedWorkspace();
@@ -241,7 +241,7 @@ describe("why a task is still in flight", () => {
     status,
   });
 
-  it("puts Saad's part first, then what broke, then what it waits on", () => {
+  it("puts the owner's part first, then what broke, then what it waits on", () => {
     expect(
       inFlightWhy({
         ...base,

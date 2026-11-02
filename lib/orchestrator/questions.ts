@@ -9,6 +9,7 @@
 import { db } from "../db";
 import type { QuestionView } from "./ask-view";
 import { workspaceTask } from "./targets";
+import { owner } from "../owner";
 
 export const MAX_OPEN_QUESTIONS = 10;
 
@@ -79,7 +80,7 @@ export function askQuestion(
       `INSERT INTO orchestrator_questions (workspace_id, text, task) VALUES (?, ?, ?)`
     )
     .run(workspaceId, text, task);
-  return `Question ${lastInsertRowid} is open on Saad's Needs-you strip. Call resolve_question ${lastInsertRowid} once he has answered or it no longer matters.`;
+  return `Question ${lastInsertRowid} is open on ${owner()}'s Needs-you strip. Call resolve_question ${lastInsertRowid} once he has answered or it no longer matters.`;
 }
 
 export function resolveQuestion(

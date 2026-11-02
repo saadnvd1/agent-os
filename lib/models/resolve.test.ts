@@ -138,7 +138,7 @@ describe("role resolution", () => {
   it("names the role a session's next turn runs as", () => {
     expect(sessionRole({ role: "orchestrator" })).toBe("orchestrator");
     expect(sessionRole({})).toBe("interactive");
-    // Work an orchestrator started is implementation; Saad's own is not.
+    // Work an orchestrator started is implementation; the owner's own is not.
     seedOrchestrator("orch-1");
     expect(sessionRole({ started_by: "orch-1" })).toBe("implement");
     // A plain task's own spawn is not orchestrator work.

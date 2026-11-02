@@ -115,7 +115,7 @@ The agents carry the detail; this is the short list. (The orchestrator's own ind
 - **Processes**: `execFile`/`spawn` with an argument array, never a shell string with interpolated input; `--` before user-supplied git refs or paths; tmux calls pass `-S` and the target explicitly.
 - **Secrets**: never in argv, logs, URLs, error text sent to a client, or a file that isn't owner-only (0600 file, 0700 dir).
 - **Untrusted text** (other sessions, terminals, CI, cards, PR bodies, web pages) reaches a model only inside `untrusted()` and redacted; it never becomes a command, a path or a tool argument without validation.
-- **Gates**: fail closed on missing, stale, unreadable or errored input; merge only with `--match-head-commit` at the sha that was judged; hard lines go to `ask_saad`, never around it; the reviewer subprocess has no shell, no settings from the PR, no MCP.
+- **Gates**: fail closed on missing, stale, unreadable or errored input; merge only with `--match-head-commit` at the sha that was judged; hard lines go to `ask_owner`, never around it; the reviewer subprocess has no shell, no settings from the PR, no MCP.
 - **Durability**: a session survives a server restart and reattaches; sends are idempotent by id; a migration is one new file in `lib/db/migrations/` and a shipped one is never edited; nothing synchronous and slow runs in a request handler or the event loop.
 - **UI**: phone first (390px), 44px targets, light and dark both checked, no gradients, neon glows or cyan accents.
 - **Tests**: test the behaviour, not the mock; pin `NODE_ENV`; no reliance on the author's machine (real `~/.agent-os`, LibreSSL, tmux socket, `limits.json`).

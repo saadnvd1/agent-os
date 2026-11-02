@@ -24,6 +24,7 @@ import {
   type Pair,
   type SessionInput,
 } from "./types";
+import { owner } from "../owner";
 
 const ID = "learning-cards" as const;
 const LESSON_MAX = 200;
@@ -227,7 +228,7 @@ export async function analyzeSession(
           input.workspaceId,
           `learning-card:${card.id}`,
           sessionId,
-          `Learning card on "${input.name.replace(/\s+/g, " ")}", waiting on Saad's Needs-you strip: ${untrusted("learning card", cardTitle(card))}`
+          `Learning card on "${input.name.replace(/\s+/g, " ")}", waiting on ${owner()}'s Needs-you strip: ${untrusted("learning card", cardTitle(card))}`
         );
   } finally {
     inFlight.delete(sessionId);

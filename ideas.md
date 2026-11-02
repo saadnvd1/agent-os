@@ -362,3 +362,5 @@
 - Customisable keymap (a Settings section that rebinds the chords and sequences).
 - The back and forward history shared with the iPhone app, and kept per device on the server.
 - Snippets in the history menu next to each chat's name.
+
+- Ask the owner for their name in the welcome flow (today it is set in Settings → Setup & health; until then text says "you" and agents say "the owner").

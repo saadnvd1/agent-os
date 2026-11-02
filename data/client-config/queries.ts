@@ -16,3 +16,6 @@ export const clientConfigQuery = queryOptions({
 });
 
 export const useClientConfig = () => useQuery(clientConfigQuery);
+
+/** The owner's own name, or null until they set one (see lib/owner-label). */
+export const useOwnerName = () => useClientConfig().data?.ownerName ?? null;

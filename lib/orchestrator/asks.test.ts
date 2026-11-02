@@ -47,7 +47,7 @@ function workspace() {
   const orch = ensureOrchestrator(ws.workspace.id);
   const w = ws.workspace.id;
   const ask = (title: string, kind = "money", link?: string) =>
-    runTool(w, "ask_saad", {
+    runTool(w, "ask_owner", {
       title,
       detail: `Why: ${title}`,
       kind,
@@ -80,7 +80,7 @@ describe("the ask lifecycle", () => {
     const t = workspace();
     await expect(
       t.ask("Pay for the domain?", "money", "https://example.com/d")
-    ).resolves.toMatch(/Asked Saad \(ask \d+\)\. Carry on/);
+    ).resolves.toMatch(/Asked the owner \(ask \d+\)\. Carry on/);
     const [ask] = openAsks(t.w);
     expect(ask).toMatchObject({
       kind: "money",
@@ -91,7 +91,7 @@ describe("the ask lifecycle", () => {
     });
     expect(listNotes(t.w).at(-1)).toMatchObject({
       kind: "ask",
-      text: "Asked Saad: Pay for the domain?",
+      text: "Asked you: Pay for the domain?",
     });
 
     answerAsk(t.w, ask.id, { action: "approve" });
@@ -130,7 +130,7 @@ describe("the ask lifecycle", () => {
     ).toThrow();
   });
 
-  it("tags the batch as AgentOS's, with the answers as Saad's decisions", async () => {
+  it("tags the batch as AgentOS's, with the answers as the owner's decisions", async () => {
     const t = workspace();
     await t.ask("Pay for the domain?");
     const [ask] = openAsks(t.w);
@@ -158,7 +158,7 @@ describe("de-duplication", () => {
     const t = workspace();
     await t.ask("Rotate the API key?", "credentials");
     await expect(t.ask("rotate the  API key?", "credentials")).resolves.toMatch(
-      /Already on Saad's list/
+      /Already on the owner's list/
     );
     expect(openAsks(t.w)).toHaveLength(1);
     answerAsk(t.w, openAsks(t.w)[0].id, { action: "reply", text: "later" });
@@ -171,7 +171,7 @@ describe("de-duplication", () => {
     await t.ask("Rotate the API key?", "credentials");
     await expect(
       t.ask("Should we rotate API key", "credentials")
-    ).resolves.toMatch(/Already on Saad's list/);
+    ).resolves.toMatch(/Already on the owner's list/);
   });
 
   it("doesn't ask again for 6 hours after a decline", async () => {
@@ -179,12 +179,12 @@ describe("de-duplication", () => {
     await t.ask("Buy the domain?");
     answerAsk(t.w, openAsks(t.w)[0].id, { action: "decline" });
     await expect(t.ask("buy domain")).resolves.toMatch(
-      /Not asked: Saad declined .* in the last 6 hours/
+      /Not asked: the owner declined .* in the last 6 hours/
     );
     db.prepare(
       `UPDATE orchestrator_asks SET resolved_at = datetime('now', '-7 hours') WHERE workspace_id = ?`
     ).run(t.w);
-    await expect(t.ask("buy domain")).resolves.toMatch(/Asked Saad/);
+    await expect(t.ask("buy domain")).resolves.toMatch(/Asked the owner/);
   });
 
   it("holds the cooldown for a title reworded or raised under another subject", async () => {
@@ -201,7 +201,7 @@ describe("de-duplication", () => {
     expect(gate.title).toBe("Merge add-auth?");
     answerAsk(t.w, gate.id, { action: "decline" });
     await expect(t.ask("merge add-auth", "decision")).resolves.toMatch(
-      /Not asked: Saad declined "Merge add-auth\?"/
+      /Not asked: the owner declined "Merge add-auth\?"/
     );
   });
 
@@ -209,7 +209,7 @@ describe("de-duplication", () => {
     const t = workspace();
     for (let i = 0; i < 10; i++) await t.ask(`Pay invoice number ${i}?`);
     await expect(t.ask("One more payment?")).resolves.toMatch(
-      /Not asked: Saad already has 10 open asks/
+      /Not asked: the owner already has 10 open asks/
     );
     expect(openAskCount(t.w)).toBe(10);
   });
@@ -294,7 +294,7 @@ describe("what an ask says", () => {
     );
   });
 
-  it("refuses an approval of something that changed since Saad saw it", () => {
+  it("refuses an approval of something that changed since the owner saw it", () => {
     const t = workspace();
     const task = getSession(t.task)!;
     escalate(t.w, task, "ci", "no CI", "https://pr/1", "a".repeat(40));
@@ -324,7 +324,7 @@ describe("needs-you", () => {
     expect(t.orchNeedsYou()).toBe(false);
   });
 
-  it("shows on the overview with the fence taken off for Saad", () => {
+  it("shows on the overview with the fence taken off for the owner", () => {
     const t = workspace();
     escalate(
       t.w,
@@ -359,11 +359,13 @@ describe("pause", () => {
       ["review", { target: "add-auth" }],
       ["start_task", { project: t.app.name, prompt: "x" }],
     ] as const)
-      await expect(runTool(t.w, tool, args)).rejects.toThrow(/Paused by Saad/);
+      await expect(runTool(t.w, tool, args)).rejects.toThrow(
+        /Paused by the owner/
+      );
     await expect(runTool(t.w, "note", { text: "waiting" })).resolves.toBe(
       "Noted."
     );
-    await expect(t.ask("Still allowed?")).resolves.toMatch(/Asked Saad/);
+    await expect(t.ask("Still allowed?")).resolves.toMatch(/Asked the owner/);
     await expect(runTool(t.w, "sessions", {})).resolves.toMatch(/chat-one/);
     expect(listNotes(t.w).map((n) => n.kind)).toContain("pause");
   });
@@ -386,5 +388,41 @@ describe("pause", () => {
       'task add-auth: CI green\nask "Paid plan?": approved (this item only, not standing permission)',
     ]);
     expect(pendingEvents(t.w)).toEqual([]);
+  });
+});
+
+describe("the owner's name in ask text", () => {
+  it("is the configured name, or 'You' and 'the owner' until one is set", async () => {
+    const { setOwnerName } = await import("@/lib/owner");
+    const t = workspace();
+    const raise = async (title: string) => {
+      await t.ask(title);
+      return openAsks(t.w).find((a) => a.title === title)!;
+    };
+
+    setOwnerName(null);
+    answerAsk(t.w, (await raise("Pay for the domain?")).id, {
+      action: "approve",
+    });
+    expect(listNotes(t.w).at(-1)?.text).toMatch(/^You answered /);
+    answerAsk(t.w, (await raise("Pay for the host?")).id, {
+      action: "decline",
+    });
+    await expect(t.ask("Pay for the host!")).resolves.toMatch(
+      /Not asked: the owner declined "Pay for the host\?"/
+    );
+
+    setOwnerName("Alex");
+    answerAsk(t.w, (await raise("Pay for the plan?")).id, {
+      action: "approve",
+    });
+    expect(listNotes(t.w).at(-1)?.text).toMatch(/^Alex answered /);
+    answerAsk(t.w, (await raise("Pay for the seats?")).id, {
+      action: "decline",
+    });
+    await expect(t.ask("Pay for the seats!")).resolves.toMatch(
+      /Not asked: Alex declined "Pay for the seats\?"/
+    );
+    setOwnerName(null);
   });
 });

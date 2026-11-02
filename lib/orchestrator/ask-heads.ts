@@ -15,6 +15,7 @@ import type { SessionFacts } from "./facts";
 import { addNote } from "./notes";
 import { comparePatches } from "./patch";
 import { fetchRefs, repoOf } from "./repo";
+import { Owner } from "../owner";
 
 const short = (sha: string) => sha.slice(0, 7);
 
@@ -49,7 +50,7 @@ export async function followAskHeads(
       if (moveAskHead(ask.id, ask.sha, pr.head, line))
         addNote(
           workspaceId,
-          `Saad's ask on ${task.name} now names ${short(pr.head)} (${same ? "same patch" : "patch changed"}).`,
+          `${Owner()}'s ask on ${task.name} now names ${short(pr.head)} (${same ? "same patch" : "patch changed"}).`,
           "ask"
         );
     } catch (error) {

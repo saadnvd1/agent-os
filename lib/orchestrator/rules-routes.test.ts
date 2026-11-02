@@ -30,7 +30,7 @@ const at = (id: string, ruleId?: string) => ({
   params: Promise.resolve({ id, ruleId: ruleId ?? "" }),
 });
 
-// Saad's passkey on a challenge bound to this workspace's rules.
+// the owner's passkey on a challenge bound to this workspace's rules.
 async function proof(
   key: ReturnType<typeof softAuthenticator>,
   workspaceId: string
@@ -43,7 +43,7 @@ async function proof(
 }
 
 describe("the standing rules routes", () => {
-  it("add, reword and remove a rule as Saad's, each with his passkey", async () => {
+  it("add, reword and remove a rule as the owner's, each with his passkey", async () => {
     const w = seedWorkspace().workspace.id;
     const key = softAuthenticator();
     key.register();
@@ -80,7 +80,7 @@ describe("the standing rules routes", () => {
       at(w)
     );
     expect(res.status).toBe(403);
-    // It stays the orchestrator's, fenced: not passed off as Saad's.
+    // It stays the orchestrator's, fenced: not passed off as the owner's.
     expect(listRules(w)[0]).toMatchObject({
       id: kept.id,
       added_by: "orchestrator",

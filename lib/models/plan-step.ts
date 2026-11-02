@@ -35,6 +35,7 @@ import {
   splitOf,
 } from "../plans/features";
 import { advancePlan, setPlan } from "../db/session-parts";
+import { Owner } from "../owner";
 
 export const PLAN_FILE = ".agentos/plan.md";
 
@@ -533,7 +534,7 @@ export async function recheckPlanning(
 export type ApprovedBy = "saad" | "orchestrator" | "no-approvals";
 
 const APPROVAL_TEXT: Record<ApprovedBy, string> = {
-  saad: "Saad approved the plan; implement it as planned.",
+  saad: `${Owner()} approved the plan; implement it as planned.`,
   orchestrator: "The orchestrator approved the plan; implement it as planned.",
   "no-approvals":
     "The plan was approved automatically (no-approvals mode); implement it as planned.",

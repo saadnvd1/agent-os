@@ -230,7 +230,7 @@ function aosRefusal(args: string[]): string | null {
     stop: T.stop,
   };
   if (sub === "sweep" && args.includes("--arm"))
-    return `Refused: \`aos sweep --arm\` turns on removing files and databases, which is Saad's call: Health, Clean-up, Turn on. When he has said to, use ${T.sweep_arm} (after ${T.sweep_dry_run}). \`--dry-run\` and \`--disarm\` are fine.`;
+    return `Refused: \`aos sweep --arm\` turns on removing files and databases, which is the owner's call: Health, Clean-up, Turn on. When he has said to, use ${T.sweep_arm} (after ${T.sweep_dry_run}). \`--dry-run\` and \`--disarm\` are fine.`;
   if (sub && tool[sub])
     return `Refused: \`aos ${sub}\` isn't for you; use ${tool[sub]}, which is scoped to this workspace and held by Pause.`;
   return null;
@@ -269,7 +269,7 @@ function ghRefusal(args: string[]): string | null {
     sub === "edit" &&
     optionValues(args, ["-B"], ["--base"]).length
   )
-    return `Refused: retargeting a PR changes what its gates judged; a stack sets its own bases (${T.stack}), and anything else is Saad's call (${T.ask_saad}).`;
+    return `Refused: retargeting a PR changes what its gates judged; a stack sets its own bases (${T.stack}), and anything else is the owner's call (${T.ask_owner}).`;
   if (group !== "api") return null;
   const endpoint = positionals(args, values)[1] ?? "";
   const method = optionValues(args, ["-X"], ["--method"]).pop();
@@ -494,7 +494,7 @@ async function sqliteRefusal(
 }
 
 const SERVER_PATTERN = /node|tsx|server|agent-?os|tmux|next/i;
-const STOP_MSG = `Refused: never stop or restart AgentOS or its tmux; that ends every session it runs, this one included. Stop a session with ${T.stop} or finish it with ${T.done}, and if AgentOS itself needs a restart, ${T.ask_saad}.`;
+const STOP_MSG = `Refused: never stop or restart AgentOS or its tmux; that ends every session it runs, this one included. Stop a session with ${T.stop} or finish it with ${T.done}, and if AgentOS itself needs a restart, ${T.ask_owner}.`;
 
 async function stopRefusal(
   inv: Invocation,
@@ -538,7 +538,7 @@ async function stopRefusal(
   return null;
 }
 
-const SECRET_MSG = `Refused: orchestrators never read secrets (env files, keys, credential stores). If a step needs one, ${T.ask_saad}.`;
+const SECRET_MSG = `Refused: orchestrators never read secrets (env files, keys, credential stores). If a step needs one, ${T.ask_owner}.`;
 
 // Orchestrators may read tokenvault's folders (and run `tv`); writing them
 // is still refused by the write guard.
