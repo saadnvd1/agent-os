@@ -2057,6 +2057,30 @@
       "area": "AgentOS",
       "text": "Heavy builds and test runs on Linux machines are now memory-capped, so one runaway command can no longer freeze the whole machine.",
       "url": "https://github.com/saadnvd1/agent-os/pull/576"
+    },
+    {
+      "id": 583,
+      "date": "2026-11-02",
+      "kind": "fixed",
+      "area": "AgentOS",
+      "text": "A fork you mark done now leaves the sidebar and moves to Done.",
+      "url": "https://github.com/saadnvd1/agent-os/pull/583"
+    },
+    {
+      "id": 584,
+      "date": "2026-11-02",
+      "kind": "new",
+      "area": "AgentOS",
+      "text": "Turn on Leads in Settings → Experiments to give a workspace a team of leads and a chief of staff, or make an existing chat a lead without losing its history.",
+      "url": "https://github.com/saadnvd1/agent-os/pull/584"
+    },
+    {
+      "id": 585,
+      "date": "2026-11-02",
+      "kind": "fixed",
+      "area": "Updates",
+      "text": "Update now installs the update right away on computers that don't deploy automatically, instead of waiting forever.",
+      "url": "https://github.com/saadnvd1/agent-os/pull/585"
     }
   ]
 }
