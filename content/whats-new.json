@@ -2081,6 +2081,14 @@
       "area": "Updates",
       "text": "Update now installs the update right away on computers that don't deploy automatically, instead of waiting forever.",
       "url": "https://github.com/saadnvd1/agent-os/pull/585"
+    },
+    {
+      "id": 586,
+      "date": "2026-11-02",
+      "kind": "improved",
+      "area": "Sidebar",
+      "text": "In All workspaces, clicking a workspace opens its Chief of Staff chat, and clicking a lead's icon opens that lead, without leaving the view.",
+      "url": "https://github.com/saadnvd1/agent-os/pull/586"
     }
   ]
 }
