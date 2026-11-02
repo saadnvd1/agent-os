@@ -1,5 +1,14 @@
 import { describe, expect, it } from "vitest";
-import { orchestratorRowText, orchestratorsToStart } from "./orchestrator-row";
+import type { Session } from "../db/types";
+import {
+  headItems,
+  memberDot,
+  orchestratorRowText,
+  orchestratorsToStart,
+  teamMembers,
+  teamRowText,
+} from "./orchestrator-row";
+import { buildShelves } from "./shelves";
 
 const quiet = { asks: 0, paused: false, running: 0, inReview: 0, queued: 0 };
 const idle = { need: null, working: false, unread: false };
@@ -110,5 +119,94 @@ describe("orchestratorsToStart", () => {
 
   it("offers nothing while the overview hasn't loaded", () => {
     expect(orchestratorsToStart([], all)).toEqual([]);
+  });
+});
+
+describe("teams", () => {
+  const at = (n: number) => `2026-11-0${n} 10:00:00`;
+  const s = (id: string, ws: string, n: number, over: Partial<Session> = {}) =>
+    ({
+      id,
+      name: id,
+      workspace_id: ws,
+      role: "lead",
+      pinned: true,
+      created_at: at(n),
+      updated_at: at(n),
+      ...over,
+    }) as Session;
+  // w1 has a team; w2 (older) has only its orchestrator.
+  const sessions = [
+    s("w1-product", "w1", 2),
+    s("w1-tech", "w1", 5, { role: "orchestrator" }),
+    s("w2-orch", "w2", 1, { role: "orchestrator" }),
+    s("w1-chief", "w1", 6, { role: "chief" }),
+  ];
+  const team = teamMembers([
+    {
+      workspaceId: "w1",
+      team: [
+        { kind: "chief", title: "Chief of staff", sessionId: "w1-chief" },
+        { kind: "tech", title: "Tech lead", sessionId: "w1-tech" },
+        { kind: "product", title: "Product lead", sessionId: "w1-product" },
+      ],
+    },
+    { workspaceId: "w2" },
+  ]);
+  const heads = buildShelves({
+    sessions,
+    statuses: {},
+    tasks: {},
+    projectName: () => "",
+    currentOrchestrators: new Set(["w2-orch", ...team.keys()]),
+    leadRanks: new Map([...team].map(([id, m]) => [id, m.rank])),
+  }).orchestrators;
+
+  it("keeps each team together, in team order, workspaces oldest first", () => {
+    expect(heads.map((r) => r.session.id)).toEqual([
+      "w2-orch",
+      "w1-chief",
+      "w1-tech",
+      "w1-product",
+    ]);
+    expect(team.get("w1-chief")!.letter).toBe("C");
+    expect(team.get("w1-product")!.letter).toBe("P");
+  });
+
+  it("labels a team, or folds it into one row", () => {
+    expect(headItems(heads, team, false).map((h) => h.kind)).toEqual([
+      "row",
+      "label",
+      "row",
+      "row",
+      "row",
+    ]);
+    const folded = headItems(heads, team, true);
+    expect(folded.map((h) => h.kind)).toEqual(["row", "team"]);
+    expect(
+      folded[1].kind === "team" && folded[1].rows.map((r) => r.session.id)
+    ).toEqual(["w1-chief", "w1-tech", "w1-product"]);
+  });
+
+  it("says what a folded team needs and is doing", () => {
+    expect(teamRowText([idle], quiet)).toEqual({ needs: null, status: "Idle" });
+    expect(
+      teamRowText([idle, { ...idle, working: true }], {
+        ...quiet,
+        asks: 2,
+        running: 3,
+      })
+    ).toEqual({ needs: "2 needs you", status: "3 running" });
+    expect(teamRowText([idle], { ...quiet, paused: true, running: 1 })).toEqual(
+      { needs: null, status: "Paused · 1 running" }
+    );
+  });
+
+  it("dots an avatar by what matters most", () => {
+    expect(memberDot({ ...idle, need: "failed" }, 2)).toBe("failed");
+    expect(memberDot({ ...idle, working: true }, 1)).toBe("asks");
+    expect(memberDot({ ...idle, working: true }, 0)).toBe("working");
+    expect(memberDot({ ...idle, unread: true }, 0)).toBe("replied");
+    expect(memberDot(idle, 0)).toBe("idle");
   });
 });

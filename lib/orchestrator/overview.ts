@@ -14,8 +14,11 @@ import { getOrchestrator } from "./home";
 import { resolveStaleAsks } from "./ask-settle";
 import { pendingCards } from "../learning-cards";
 import { dismissedKeys, openQuestions } from "./questions";
+import { experimentOn } from "../experiments";
+import { workspaceLeads } from "../leads/settings";
+import { teamViews } from "../leads/home";
 
-export type { AskView, OrchestratorOverview } from "./ask-view";
+export type { AskView, OrchestratorOverview, TeamMemberView } from "./ask-view";
 
 // The fence around text other sessions wrote is for the orchestrator; Saad
 // reads it plain.
@@ -36,6 +39,7 @@ function inReview(workspaceId: string): number {
 
 export function orchestratorOverview(): OrchestratorOverview[] {
   const cards = pendingCards();
+  const leads = experimentOn("leads");
   return listWorkspaces().map((w) => {
     // Asks about work that finished elsewhere never reach Saad's list.
     resolveStaleAsks(w.id);
@@ -65,6 +69,7 @@ export function orchestratorOverview(): OrchestratorOverview[] {
       questions: openQuestions(w.id),
       dismissed: dismissedKeys(w.id),
       cards: cards.filter((c) => c.workspaceId === w.id),
+      ...(leads && workspaceLeads(w.id) ? { team: teamViews(w.id) } : {}),
     };
   });
 }

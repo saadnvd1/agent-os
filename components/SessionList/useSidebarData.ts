@@ -17,7 +17,11 @@ import {
   machineGroups,
   onMachineOnly,
 } from "@/lib/sidebar/machines";
-import { orchestratorsToStart } from "@/lib/sidebar/orchestrator-row";
+import {
+  orchestratorsToStart,
+  teamMembers,
+  type TeamMember,
+} from "@/lib/sidebar/orchestrator-row";
 import { useSessionsQuery } from "@/data/sessions";
 import { useLinkedHostNames } from "@/data/hosts";
 import { useProjectsQuery } from "@/data/projects";
@@ -59,9 +63,20 @@ export function useSidebarData(
     .flatMap((o) => (o.sessionId ? [o.sessionId] : []))
     .sort()
     .join(",");
+  // Each chief and lead, while Leads is on; keyed by its contents too.
+  const teamKey = JSON.stringify([...teamMembers(orchestrators)]);
+  const team = useMemo(
+    () => new Map(JSON.parse(teamKey) as [string, TeamMember][]),
+    [teamKey]
+  );
   const currentOrchestrators = useMemo(
-    () => new Set(currentKey ? currentKey.split(",") : []),
-    [currentKey]
+    () =>
+      new Set([...(currentKey ? currentKey.split(",") : []), ...team.keys()]),
+    [currentKey, team]
+  );
+  const leadRanks = useMemo(
+    () => new Map([...team].map(([id, m]) => [id, m.rank])),
+    [team]
   );
 
   const sessions = useMemo(
@@ -93,9 +108,11 @@ export function useSidebarData(
     const taskStates: Record<string, TaskState> = {};
     for (const t of tasks) taskStates[t.id] = t.state;
     const projectName = (s: Session) =>
-      isTechRole(s.role)
-        ? `Orchestrator · ${workspaceName.get(s.workspace_id ?? "") ?? ""}`
-        : (byId.get(s.project_id ?? "")?.name ?? "");
+      team.has(s.id)
+        ? `${team.get(s.id)!.title} · ${workspaceName.get(s.workspace_id ?? "") ?? ""}`
+        : isTechRole(s.role)
+          ? `Orchestrator · ${workspaceName.get(s.workspace_id ?? "") ?? ""}`
+          : (byId.get(s.project_id ?? "")?.name ?? "");
     const common = {
       statuses: sessionStatuses ?? {},
       tasks: taskStates,
@@ -117,6 +134,7 @@ export function useSidebarData(
       ),
       projectId: project?.id ?? null,
       currentOrchestrators,
+      leadRanks,
       groups: orderGroups(
         allGroups.filter((g) => !workspace || g.workspace_id === workspace.id),
         workspaces.map((w) => w.id)
@@ -151,6 +169,8 @@ export function useSidebarData(
     workspaces,
     tasks,
     currentOrchestrators,
+    leadRanks,
+    team,
     sessionStatuses,
     workspace,
     project,
@@ -229,12 +249,15 @@ export function useSidebarData(
   );
 
   // Orchestrator session id -> the workspace it serves, for tags and chips.
+  // A chief or lead goes by its title.
   const orchestratorKey = JSON.stringify(
     sessions
-      .filter((s) => isTechRole(s.role))
+      .filter((s) => team.has(s.id) || isTechRole(s.role))
       .map((s) => [
         s.id,
-        workspaces.find((w) => w.id === s.workspace_id)?.name ?? s.name,
+        team.get(s.id)?.title ??
+          workspaces.find((w) => w.id === s.workspace_id)?.name ??
+          s.name,
       ])
       .sort()
   );
@@ -278,6 +301,7 @@ export function useSidebarData(
     queuedByWorkspace,
     rollupByOrchestrator,
     orchestratorNames,
+    team,
     workspaces,
     workspace,
     workspaceProjects,

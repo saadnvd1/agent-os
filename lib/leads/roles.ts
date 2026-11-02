@@ -50,10 +50,19 @@ const LEAD: RoleTable<boolean> = {
   chief: false,
 };
 
+// The workspace's chief of staff, which heads no department.
+const CHIEF: RoleTable<boolean> = {
+  none: false,
+  orchestrator: false,
+  lead: false,
+  chief: true,
+};
+
 export const ROLE_DECISIONS = {
   standing: STANDING,
   tech: TECH_ROLE,
   lead: LEAD,
+  chief: CHIEF,
 } as const;
 
 export const isStandingRole = decide(STANDING) as (
@@ -61,6 +70,7 @@ export const isStandingRole = decide(STANDING) as (
 ) => role is SessionRole;
 export const isTechRole = decide(TECH_ROLE);
 export const isLeadRole = decide(LEAD);
+export const isChiefRole = decide(CHIEF);
 
 const NOUN: RoleTable<string> = {
   none: "session",
@@ -91,6 +101,7 @@ const SQL_LEADS = STANDING_ROLES.filter((r) => LEAD[r])
   .map((r) => `'${r}'`)
   .join(", ");
 export const sqlLead = (col = "role") => `${col} IN (${SQL_LEADS})`;
+export const sqlChief = (col = "role") => `${col} = 'chief'`;
 
 // The department a standing session heads: the orchestrator is always Tech,
 // even before its workspace adds leads; the chief heads none.

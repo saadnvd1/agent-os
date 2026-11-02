@@ -17,20 +17,21 @@ import {
   getOrchestrator,
   orchestratorDir,
 } from "../orchestrator/home";
-import { isLeadKind, leadKindOf, sqlLead, sqlStanding } from "./roles";
+import {
+  isLeadKind,
+  leadKindOf,
+  sqlChief,
+  sqlLead,
+  sqlStanding,
+} from "./roles";
+import { byLeadOrder, CHIEF } from "./order";
 import { TECH, type LeadKind } from "./types";
 import { markLeadsEnabled } from "./settings";
 import { getCharter, leadAreas, putCharter } from "./charters";
 import { charterTemplate } from "./templates";
+import type { TeamMemberView } from "../orchestrator/ask-view";
 
-// Tech first, then the shipped kinds, then custom ones by name.
-const ORDER = [TECH, "marketing", "product"];
-const rank = (kind: string) => {
-  const i = ORDER.indexOf(kind);
-  return i < 0 ? ORDER.length : i;
-};
-export const byLeadOrder = (a: string, b: string) =>
-  rank(a) - rank(b) || a.localeCompare(b);
+export { byLeadOrder } from "./order";
 
 // Where a lead starts and may write freely: the Tech lead keeps the
 // orchestrator's folder.
@@ -193,4 +194,23 @@ export function leadViews(workspaceId: string): LeadView[] {
       areas: leadAreas(workspaceId, kind),
     };
   });
+}
+
+// What the sidebar draws for a workspace with leads: its chief, when it has
+// one, then its leads in order.
+export function teamViews(workspaceId: string): TeamMemberView[] {
+  const chief = db
+    .prepare(
+      `SELECT id FROM session_rows WHERE workspace_id = ? AND ${sqlChief()}`
+    )
+    .get(workspaceId) as { id: string } | undefined;
+  return [
+    ...(chief
+      ? [{ kind: CHIEF, title: "Chief of staff", sessionId: chief.id }]
+      : []),
+    ...listLeads(workspaceId).map((s) => {
+      const kind = leadKindOf(s) ?? TECH;
+      return { kind, title: leadTitle(workspaceId, kind), sessionId: s.id };
+    }),
+  ];
 }
