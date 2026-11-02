@@ -94,7 +94,9 @@ const usage = `aos: talk to other agent sessions in AgentOS
                                      message it once (ISO, "in 2h"; Central by default)
   aos heavy -- <command...>          run a test suite, type check or build now; says
                                      first if other heavy commands are running or
-                                     the machine is loaded (never waits or blocks)
+                                     the machine is loaded (never waits or blocks).
+                                     On Linux with systemd it's capped (40% of RAM,
+                                     512 tasks; AOS_HEAVY_MEMORY_MAX, AOS_HEAVY_TASKS_MAX)
   aos notify <text...>               push a message to the owner's phone (or text
                                      on stdin); at most one a minute, the rest
                                      wait and go together
@@ -355,17 +357,38 @@ async function heavy(words) {
       ? await require("./aos-lib/heavy-lease.js")({ url, token, me }).acquire()
       : null;
   // One argument is a shell command line ("npm test && npm run build").
-  const child =
-    argv.length === 1
-      ? spawn(argv[0], { stdio: "inherit", shell: true })
-      : spawn(argv[0], argv.slice(1), { stdio: "inherit" });
+  const scope = require("./aos-lib/heavy-scope.js");
+  const which = (name) => {
+    const r = require("child_process").spawnSync("which", [name], {
+      encoding: "utf8",
+    });
+    return r.status === 0 && r.stdout.trim();
+  };
+  let run = scope.plan(argv, { which });
+  if (run.scoped) {
+    // systemd-run can exist without a user session bus; a no-op scope tells.
+    const probe = require("child_process").spawnSync(
+      "systemd-run",
+      ["--user", "--scope", "--quiet", "--", "true"],
+      { stdio: "ignore" }
+    );
+    if (probe.status !== 0) {
+      console.error(
+        "aos heavy: can't start a systemd scope, running without a memory cap"
+      );
+      run = scope.plan(argv, { which: () => null });
+    }
+  }
+  const child = spawn(run.cmd, run.args, { stdio: "inherit" });
   child.on("error", (err) => fail(`can't run ${argv[0]}: ${err.message}`));
   for (const sig of ["SIGINT", "SIGTERM", "SIGHUP"])
     process.on(sig, () => child.kill(sig));
   child.on("exit", (code, signal) =>
-    Promise.resolve(release?.()).finally(() =>
-      process.exit(signal ? 1 : (code ?? 1))
-    )
+    Promise.resolve(release?.()).finally(() => {
+      if (run.scoped && scope.hitCap(code, signal))
+        console.error(scope.capMessage(argv, run.memoryMax));
+      process.exit(signal ? 1 : (code ?? 1));
+    })
   );
   if (child.pid)
     fetch(url + "/api/load/heavy", {

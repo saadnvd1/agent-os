@@ -210,7 +210,11 @@ whole test suite, type check, build, repo-wide lint, `xcodebuild` or
 `pytest`, the Claude hook AgentOS installs tells it what heavy commands are
 already running and how loaded the machine is, so it can narrow the run or
 wait. Targeted runs (`vitest run lib/x.test.ts`) are left alone. `aos heavy
--- <cmd>` does the same for anything else. When the load stays red for two
+-- <cmd>` does the same for anything else. On Linux with systemd it also
+runs the command in a capped scope (memory 40% of RAM, 512 tasks; set
+`AOS_HEAVY_MEMORY_MAX`, e.g. `8G`, and `AOS_HEAVY_TASKS_MAX`), so a runaway
+build is stopped instead of freezing the machine; it says so when the cap
+kills it. macOS has no cgroups and runs uncapped. When the load stays red for two
 minutes, one message goes to your phone and to each workspace orchestrator,
 naming the top sessions and their heavy commands; the next one waits until
 it has been green for ten minutes. `AGENTOS_LOAD=off` turns it all off.
