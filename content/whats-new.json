@@ -1913,6 +1913,14 @@
       "area": "AgentOS",
       "text": "Files shared into the app are now checked against the same rules as chat attachments.",
       "url": "https://github.com/saadnvd1/agent-os/pull/549"
+    },
+    {
+      "id": 550,
+      "date": "2026-11-01",
+      "kind": "new",
+      "area": "AgentOS",
+      "text": "You can set your name in Settings, and AgentOS uses it in chats and notes instead of a fixed name.",
+      "url": "https://github.com/saadnvd1/agent-os/pull/550"
     }
   ]
 }
