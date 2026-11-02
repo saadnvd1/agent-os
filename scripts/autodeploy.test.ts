@@ -143,6 +143,53 @@ describe("autodeploy restart gap", () => {
   });
 });
 
+describe("autodeploy update request", () => {
+  const request = (t: ReturnType<typeof setup>, ageMs = 0) => {
+    fs.mkdirSync(t.state, { recursive: true });
+    const file = path.join(t.state, "now");
+    fs.writeFileSync(file, `${Date.now()}\n`);
+    const at = new Date(Date.now() - ageMs);
+    fs.utimesSync(file, at, at);
+    return file;
+  };
+
+  it("skips the gap and the settle wait, then removes the request", () => {
+    const t = setup();
+    t.commit("a");
+    t.run();
+    const b = t.commit("b");
+    const file = request(t);
+    const out = t.run({ AGENTOS_SETTLE: "3600" });
+    expect(out).toMatch(
+      /Restart gap skipped for [0-9a-f]{7}: update requested/
+    );
+    expect(t.deployed()).toBe(b);
+    expect(t.restarts()).toBe(2);
+    expect(fs.existsSync(file)).toBe(false);
+  });
+
+  it("is removed straight away when origin/main is already deployed", () => {
+    const t = setup();
+    t.commit("a");
+    t.run();
+    const file = request(t);
+    expect(t.run()).toBe("");
+    expect(fs.existsSync(file)).toBe(false);
+    expect(t.restarts()).toBe(1);
+  });
+
+  it("ignores, and removes, a request older than 30 minutes", () => {
+    const t = setup();
+    t.commit("a");
+    t.run();
+    const b = t.commit("b");
+    const file = request(t, 31 * 60_000);
+    expect(t.run()).toMatch(/HELD/);
+    expect(t.deployed()).not.toBe(b);
+    expect(fs.existsSync(file)).toBe(false);
+  });
+});
+
 describe("autodeploy changelog commits", () => {
   const changelog = (t: ReturnType<typeof setup>, also?: string) => {
     const work = path.join(t.root, "work");

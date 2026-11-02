@@ -9,7 +9,16 @@ import { isActivePhase, type UpdateView } from "@/lib/updates/banner";
  */
 export function useReloadWhenUpdated(view: UpdateView | undefined) {
   const watched = useRef<string | null>(null);
+  const queuedFrom = useRef<string | null>(null);
   const run = view?.run;
+  // An Update now that autodeploy took: the page was loaded from the old build.
+  const sha = view?.current?.sha;
+  useEffect(() => {
+    if (!sha) return;
+    if (view?.queued) queuedFrom.current = sha;
+    else if (queuedFrom.current && queuedFrom.current !== sha)
+      window.location.reload();
+  }, [view?.queued, sha]);
   useEffect(() => {
     if (!run) return;
     if (isActivePhase(run.phase)) watched.current = run.id;

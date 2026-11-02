@@ -8,6 +8,7 @@ import {
   preflight,
   readLog,
   readPending,
+  readQueued,
   readRun,
   realRunDeps,
   recordFinishedRun,
@@ -102,6 +103,8 @@ export async function updateView(
         : { ok: true },
     run,
     pending,
+    managed: deps.managed(),
+    queued: readQueued(deps),
     auto: await autoView(deps, check, refusal).then((auto) =>
       mayUpdate
         ? auto

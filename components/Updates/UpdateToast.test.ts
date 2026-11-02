@@ -96,6 +96,8 @@ const make = (over: Partial<UpdateView> = {}): UpdateView => ({
   canUpdate: { ok: true },
   run: null,
   pending: null,
+  managed: false,
+  queued: null,
   working: { sessions: 0, reviews: 0, setups: 0 },
   ...over,
 });
@@ -210,6 +212,21 @@ describe("UpdateToast", () => {
     expect(text()).toContain("3 sessions working");
     await act(async () => button("Update when idle")!.click());
     expect(runMutate).toHaveBeenCalledWith("idle", expect.anything());
+  });
+
+  it("on a machine autodeploy manages, explains and still offers Update now", async () => {
+    view = make({ managed: true });
+    await render();
+    expect(text()).toContain("deployed by autodeploy");
+    await act(async () => button("Update now")!.click());
+    expect(runMutate).toHaveBeenCalledWith("now", expect.anything());
+  });
+
+  it("shows a queued request as a disabled Updating… button", async () => {
+    view = make({ managed: true, queued: { requestedAt: 1 } });
+    await render();
+    expect(button("Updating…")?.disabled).toBe(true);
+    expect(button("Update now")).toBeUndefined();
   });
 
   it("shows a pending update with Cancel", async () => {

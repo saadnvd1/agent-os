@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import { Loader2 } from "lucide-react";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import {
@@ -38,6 +39,12 @@ export function UpdateActions({ view }: { view: UpdateView }) {
   const [confirm, setConfirm] = useState(false);
   const busy = workingTotal(view.working) > 0;
 
+  if (view.queued)
+    return (
+      <Button size="sm" className="min-h-11 md:min-h-0" disabled>
+        <Loader2 className="h-4 w-4 animate-spin" /> Updating…
+      </Button>
+    );
   if (view.pending)
     return (
       <Button
@@ -60,7 +67,10 @@ export function UpdateActions({ view }: { view: UpdateView }) {
 
   const start = (when: "now" | "idle") => {
     setConfirm(false);
-    run.mutate(when, { onError: toastError });
+    run.mutate(when, {
+      onError: toastError,
+      onSuccess: (v) => v.message && toast.success(v.message),
+    });
   };
 
   return (
@@ -87,10 +97,15 @@ export function UpdateActions({ view }: { view: UpdateView }) {
             <Button variant="ghost" onClick={() => setConfirm(false)}>
               Cancel
             </Button>
-            <Button variant="outline" onClick={() => start("now")}>
+            <Button
+              variant={view.managed ? "default" : "outline"}
+              onClick={() => start("now")}
+            >
               Update now
             </Button>
-            <Button onClick={() => start("idle")}>Update when idle</Button>
+            {!view.managed && (
+              <Button onClick={() => start("idle")}>Update when idle</Button>
+            )}
           </DialogFooter>
         </DialogContent>
       </Dialog>

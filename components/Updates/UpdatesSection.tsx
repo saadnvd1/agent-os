@@ -11,7 +11,7 @@ import {
   useUpdateBannerSetting,
   useUpdates,
 } from "@/data/updates";
-import { isActivePhase } from "@/lib/updates/banner";
+import { isActivePhase, MANAGED_NOTE } from "@/lib/updates/banner";
 import { AutoUpdates } from "./AutoUpdates";
 import { UpdateActions } from "./UpdateActions";
 
@@ -108,8 +108,16 @@ export function UpdatesSection() {
           {view.run?.phase})…
         </p>
       )}
+      {view.available && view.managed && view.canUpdate.ok && (
+        <p className="text-muted-foreground text-xs">{MANAGED_NOTE}</p>
+      )}
       {view.available && !view.canUpdate.ok && view.canUpdate.reason && (
         <p className="text-muted-foreground text-xs">{view.canUpdate.reason}</p>
+      )}
+      {view.queued && (
+        <p className="text-muted-foreground text-sm">
+          Queued for autodeploy. It deploys within about a minute.
+        </p>
       )}
       {view.pending && (
         <p className="text-muted-foreground text-sm">

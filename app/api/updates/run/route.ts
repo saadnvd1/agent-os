@@ -28,9 +28,13 @@ export async function POST(request: NextRequest) {
       { code: started.code, error: started.error },
       { status: 409 }
     );
-  return NextResponse.json(await updateView({ mayUpdate: true }), {
-    status: 202,
-  });
+  return NextResponse.json(
+    {
+      ...(await updateView({ mayUpdate: true })),
+      ...(started.message ? { message: started.message } : {}),
+    },
+    { status: 202 }
+  );
 }
 
 // DELETE /api/updates/run - cancel a requested "update when idle". A started
