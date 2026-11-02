@@ -14,11 +14,7 @@ export async function GET(request: NextRequest) {
     if (!session && params.get("stats") !== "1")
       throw new Error("Which session?");
     if (!session) {
-      const { db } = await import("@/lib/db");
-      const rows = db
-        .prepare(`SELECT * FROM session_children`)
-        .all() as Parameters<typeof statsOf>[0];
-      const stats = statsOf(rows);
+      const stats = statsOf(allChildren());
       return NextResponse.json({ stats, text: statsText(stats) });
     }
     const view = childrenView(session);
