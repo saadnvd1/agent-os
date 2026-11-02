@@ -39,7 +39,7 @@ const { profileFor, profileHas } = await import("./profiles");
 const { runStandingTool } = await import("./tools");
 const { pinDirection } = await import("./direction");
 const { writeMemo } = await import("./memos");
-const { setLeadAreas } = await import("./charters");
+const { getCharter, setLeadAreas } = await import("./charters");
 const { addLeadMessage } = await import("./messages");
 const { setChiefAutonomy } = await import("./settings");
 const { AREA_THREAD } = await import("./area-notify");
@@ -356,5 +356,89 @@ describe("the daily sweep", () => {
     expect(brief).toContain("mcp__");
     expect(brief).toContain("company");
     expect(brief).not.toContain("sign_off`");
+  });
+
+  it("has the chief act directly and ask a lead only for what it lacks", () => {
+    const { w, chief } = company();
+    const brief = chiefBrief({
+      workspace: "Acme",
+      workspaceId: w,
+      profile: profileFor(chief, true)!,
+      autonomy: "on_request",
+      projects: [],
+      leads: [{ kind: "marketing", title: "Marketing lead" }],
+    });
+    expect(brief).toContain("do it yourself");
+    expect(brief).toContain("only for knowledge you don't have");
+    expect(brief).not.toContain("prefer asking that lead");
+    expect(brief).toContain("__add_lead`");
+    expect(brief).toContain("__update_charter`");
+  });
+});
+
+describe("the chief's setup tools", () => {
+  it("adds a lead of any kind and rewrites a charter on the owner's ask", async () => {
+    const { w, chief, marketing } = company();
+    owner(chief.id, "Add a design lead and sharpen marketing's charter");
+    expect(
+      await runStandingTool(w, chief, "add_lead", {
+        kind: "design",
+        title: "Design lead",
+      })
+    ).toContain("Added");
+    expect(home.getLead(w, "design")).toBeTruthy();
+    expect(getCharter(w, "design")?.title).toBe("Design lead");
+    expect(
+      await runStandingTool(w, chief, "add_lead", { kind: "design" })
+    ).toContain("already exists");
+
+    const before = getCharter(w, "marketing")!;
+    const out = await runStandingTool(w, chief, "update_charter", {
+      lead: "marketing",
+      goal: "Grow slowly",
+      charter_md: "Own SEO and the newsletter.",
+    });
+    expect(out).toContain("Updated");
+    const after = getCharter(w, "marketing")!;
+    expect(after.goal).toBe("Grow slowly");
+    expect(after.charterMd).toBe("Own SEO and the newsletter.");
+    expect(after.title).toBe(before.title);
+    await expect(
+      runStandingTool(w, chief, "update_charter", { lead: "nope", goal: "x" })
+    ).rejects.toThrow(/no "nope" lead/);
+    expect(marketing.id).toBeTruthy();
+  });
+
+  it("refuses both when the owner didn't start the turn, or while paused", async () => {
+    const { w, chief } = company();
+    schedule(chief.id);
+    await expect(
+      runStandingTool(w, chief, "add_lead", { kind: "design" })
+    ).rejects.toThrow(/act only when/);
+    await expect(
+      runStandingTool(w, chief, "update_charter", {
+        lead: "marketing",
+        goal: "x",
+      })
+    ).rejects.toThrow(/act only when/);
+    expect(home.getLead(w, "design")).toBeNull();
+
+    owner(chief.id, "Add a design lead");
+    db.prepare(
+      `UPDATE workspaces SET orch_paused_at = datetime('now') WHERE id = ?`
+    ).run(w);
+    await expect(
+      runStandingTool(w, chief, "add_lead", { kind: "design" })
+    ).rejects.toThrow();
+    expect(home.getLead(w, "design")).toBeNull();
+  });
+
+  it("is the chief's alone", () => {
+    const { chief, marketing, tech } = company();
+    for (const t of ["add_lead", "update_charter"]) {
+      expect(profileHas(profileFor(chief, true)!, t)).toBe(true);
+      expect(profileHas(profileFor(marketing, true)!, t)).toBe(false);
+      expect(profileHas(profileFor(tech, true)!, t)).toBe(false);
+    }
   });
 });

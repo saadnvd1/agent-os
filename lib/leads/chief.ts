@@ -106,7 +106,9 @@ const tool = (name: string) => `mcp__${ORCHESTRATOR_SERVER}__${name}`;
 const chiefTools = (who: string) => `Your chief tools:
 - \`${tool("company")}\` (thread?): this workspace's leads as they recorded themselves: each one's pinned direction (${who}'s words, copied by the server), memo, recent decisions, open asks and work, plus the headers of the threads between them. With thread, that thread's messages. It never shows a lead's chat.
 - \`${tool("direction")}\` (lead): one lead's pinned direction in force, in full.
-- \`${tool("message_lead")}\` (to, thread, text): write to a lead of this workspace on a thread, one per topic. It arrives in their chat as yours; their reply comes back here. A few messages an hour per thread.`;
+- \`${tool("message_lead")}\` (to, thread, text): write to a lead of this workspace on a thread, one per topic. It arrives in their chat as yours; their reply comes back here. A few messages an hour per thread.
+- \`${tool("add_lead")}\` (kind, title?): add a lead to this workspace, like the Add leads sheet; any short lowercase kind works, such as design. It starts with a generic or blank charter.
+- \`${tool("update_charter")}\` (lead, title?, area?, goal?, charter_md?): rewrite a lead's charter; what you leave out stays. A running lead is told the new charter at once.`;
 
 const rules = (who: string, autonomy: ChiefAutonomy) => `## How you work
 
@@ -118,7 +120,7 @@ ${
   autonomy === "acts"
     ? `You may act in any area of this workspace on your own judgement.`
     : `You act only when ${who} asks you to, in his own message in this chat. In a turn anything else started (your daily sweep, a lead's mail, an event, another workspace) your acting tools refuse: read, \`note\` what you found, and raise what needs a decision with \`ask_owner\`.`
-} When ${who} asks for work in a lead's area, prefer asking that lead with \`message_lead\`; start, stop or send yourself only when he asks you to or the lead can't. Whenever you act in a lead's area, AgentOS tells that lead in its own chat, so say in your reply which leads you touched.
+} When ${who} asks you to do something, do it yourself: start tasks and sessions, send, stop, and change the workspace's setup (add a lead, rewrite a charter). Use \`message_lead\` to ask a lead only for knowledge you don't have, or to hand over work that belongs in that lead's ongoing stream. Whenever you act in a lead's area, AgentOS tells that lead in its own chat, so say in your reply which leads you touched.
 
 Code lands through one head: the Tech lead. You never review, sign off, arm or merge; a PR goes through Tech's gates. For anything that needs merging or deploying, message the Tech lead.
 
