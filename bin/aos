@@ -349,74 +349,10 @@ async function scheduleAdd(words) {
   );
 }
 
-// `aos heavy -- <cmd>`: starts the command at once, then registers it and
-// prints the server's note, if any. A server that's down says nothing.
-async function heavy(words) {
-  const argv = words[0] === "--" ? words.slice(1) : words;
-  if (!argv.length) fail("usage: aos heavy -- <command...>");
-  const { spawn } = require("child_process");
-  // A fork child waits for a slot first (it's told in its brief).
-  const release =
-    me && process.env.AOS_FORK_CHILD === "1"
-      ? await require("./aos-lib/heavy-lease.js")({ url, token, me }).acquire()
-      : null;
-  // One argument is a shell command line ("npm test && npm run build").
-  const scope = require("./aos-lib/heavy-scope.js");
-  const which = (name) => {
-    const r = require("child_process").spawnSync("which", [name], {
-      encoding: "utf8",
-    });
-    return r.status === 0 && r.stdout.trim();
-  };
-  let run = scope.plan(argv, { which });
-  if (run.scoped) {
-    // systemd-run can exist without a user session bus; a no-op scope tells.
-    const probe = require("child_process").spawnSync(
-      "systemd-run",
-      ["--user", "--scope", "--quiet", "--", "true"],
-      { stdio: "ignore" }
-    );
-    if (probe.status !== 0) {
-      console.error(
-        "aos heavy: can't start a systemd scope, running without a memory cap"
-      );
-      run = scope.plan(argv, { which: () => null });
-    }
-  }
-  const child = spawn(run.cmd, run.args, { stdio: "inherit" });
-  child.on("error", (err) => fail(`can't run ${argv[0]}: ${err.message}`));
-  for (const sig of ["SIGINT", "SIGTERM", "SIGHUP"])
-    process.on(sig, () => child.kill(sig));
-  child.on("exit", (code, signal) =>
-    Promise.resolve(release?.()).finally(() => {
-      if (run.scoped && scope.hitCap(code, signal))
-        console.error(scope.capMessage(argv, run.memoryMax));
-      process.exit(signal ? 1 : (code ?? 1));
-    })
-  );
-  if (child.pid)
-    fetch(url + "/api/load/heavy", {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-        ...(token && { Authorization: `Bearer ${token}` }),
-      },
-      body: JSON.stringify({
-        session: me,
-        pid: child.pid,
-        command: argv.join(" "),
-      }),
-      signal: AbortSignal.timeout(1000),
-    })
-      .then((res) => (res.ok ? res.json() : {}))
-      .then((data) => data.note && console.error(data.note))
-      .catch(() => {});
-}
-
 async function main() {
   switch (cmd) {
     case "heavy":
-      return heavy(args);
+      return require("./aos-lib/heavy.js")({ url, token, me, fail })(args);
     case "claims":
       return claimsCmd(args);
     case "leads":

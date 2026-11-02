@@ -197,7 +197,7 @@ async function invocationRefusal(
   }
   const heavy = heavyLabel([name, ...args].join(" "));
   if (heavy)
-    return `Refused: a whole ${heavy} run goes through \`aos heavy -- <command>\`, which queues fork runs so several forks don't load the machine at once.`;
+    return `Refused: a whole ${heavy} run goes through \`aos heavy -- <command>\`, which queues heavy runs so several sessions don't load the machine at once.`;
 
   if (name === "git") {
     const sub = gitSub(args);

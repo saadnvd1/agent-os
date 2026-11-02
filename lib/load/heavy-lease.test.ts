@@ -41,11 +41,39 @@ describe("heavy slots for fork children", () => {
     expect(requestLease("c", me).granted).toBe(false);
   });
 
-  it("starts nothing new while the machine is red", () => {
+  it("still lets one run at a time while the machine is red", () => {
     level.value = "red";
-    expect(requestLease("a", me).granted).toBe(false);
-    level.value = "green";
+    expect(slotsNow()).toBe(1);
     expect(requestLease("a", me).granted).toBe(true);
+    expect(requestLease("b", me).granted).toBe(false);
+  });
+
+  it("queues sessions and callers outside any session alike", () => {
+    level.value = "amber";
+    expect(requestLease(null, me).granted).toBe(true);
+    expect(requestLease("task", me)).toEqual({ granted: false, ahead: 1 });
+    releaseLease(null, me);
+    expect(requestLease("task", me).granted).toBe(true);
+  });
+
+  it("takes the slot counts from the environment, and ignores bad values", () => {
+    vi.stubEnv("AGENTOS_HEAVY_SLOTS", "3");
+    expect(slotsNow()).toBe(3);
+    vi.stubEnv("AGENTOS_HEAVY_SLOTS", "0");
+    vi.stubEnv("AGENTOS_HEAVY_SLOTS_CALM", "4");
+    level.value = "amber";
+    expect(slotsNow()).toBe(1);
+    level.value = "green";
+    expect(slotsNow()).toBe(4);
+    vi.stubEnv("AGENTOS_HEAVY_SLOTS_CALM", "x");
+    expect(slotsNow()).toBe(2);
+    vi.unstubAllEnvs();
+  });
+
+  it("keeps a run going before a server restart: a holder the server doesn't know takes a slot", () => {
+    level.value = "amber";
+    expect(requestLease("a", me, Date.now(), true).granted).toBe(true);
+    expect(requestLease("b", me).granted).toBe(false);
   });
 
   it("takes a slot back from a holder that stopped asking, or whose process is gone", () => {
