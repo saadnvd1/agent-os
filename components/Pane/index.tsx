@@ -345,6 +345,7 @@ export const Pane = memo(function Pane({
             (isStandingRole(chat.role) || !!chat.has_brief) && !chat.archived_at
           }
           orchestratorOf={isTechRole(chat.role) ? chat.workspace_id : null}
+          standing={isStandingRole(chat.role)}
           active={isActive && isFocused}
         />
       );

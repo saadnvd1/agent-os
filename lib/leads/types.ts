@@ -40,6 +40,8 @@ export interface DirectionPin {
   quote: string;
   setAt: string;
   supersededBy: number | null;
+  // Taken down by the person with nothing in its place.
+  retiredAt: string | null;
 }
 
 export type ProposalStatus = "open" | "pinned" | "dropped";

@@ -16,6 +16,7 @@ interface PinRow {
   quote: string;
   set_at: string;
   superseded_by: number | null;
+  retired_at: string | null;
 }
 
 interface ProposalRow {
@@ -39,6 +40,7 @@ const pinView = (r: PinRow): DirectionPin => ({
   quote: r.quote,
   setAt: r.set_at,
   supersededBy: r.superseded_by,
+  retiredAt: r.retired_at,
 });
 
 const proposalView = (r: ProposalRow): PinProposal => ({
@@ -87,26 +89,63 @@ function attest(t: PinTarget): { quote: string } | { error: string } {
   return quote ? { quote } : { error: "Only your own message can be pinned" };
 }
 
+// In force: neither superseded by a newer pin nor taken down.
+const IN_FORCE = `superseded_by IS NULL AND retired_at IS NULL`;
+
 export function pinDirection(
   t: PinTarget & { supersedes?: number }
 ): DirectionPin | { error: string } {
   const a = attest(t);
   if ("error" in a) return a;
   return db.transaction(() => {
-    const { lastInsertRowid } = db
+    // Pinning a message already in force changes nothing.
+    const same = db
       .prepare(
-        `INSERT INTO lead_direction (workspace_id, lead_kind, session_id, chat_item_id, quote)
-         VALUES (?, ?, ?, ?, ?)`
+        `SELECT id FROM lead_direction
+         WHERE workspace_id = ? AND lead_kind = ? AND chat_item_id = ? AND ${IN_FORCE}`
       )
-      .run(t.workspaceId, t.leadKind, t.sessionId, t.chatItemId, a.quote);
-    const id = Number(lastInsertRowid);
-    if (t.supersedes)
+      .get(t.workspaceId, t.leadKind, t.chatItemId) as
+      { id: number } | undefined;
+    const id = same
+      ? same.id
+      : Number(
+          db
+            .prepare(
+              `INSERT INTO lead_direction (workspace_id, lead_kind, session_id, chat_item_id, quote)
+               VALUES (?, ?, ?, ?, ?)`
+            )
+            .run(t.workspaceId, t.leadKind, t.sessionId, t.chatItemId, a.quote)
+            .lastInsertRowid
+        );
+    if (t.supersedes && t.supersedes !== id)
       db.prepare(
         `UPDATE lead_direction SET superseded_by = ?
-         WHERE id = ? AND workspace_id = ? AND lead_kind = ? AND superseded_by IS NULL`
+         WHERE id = ? AND workspace_id = ? AND lead_kind = ? AND ${IN_FORCE}`
       ).run(id, t.supersedes, t.workspaceId, t.leadKind);
+    // A lead's suggestion for this message is answered by the pin.
+    db.prepare(
+      `UPDATE lead_pin_proposals SET status = 'pinned', resolved_at = datetime('now')
+       WHERE session_id = ? AND chat_item_id = ? AND status = 'open'`
+    ).run(t.sessionId, t.chatItemId);
     return getPin(id)!;
   })();
+}
+
+// The person takes a pin down. It stays in the history; false if it wasn't
+// in force.
+export function retirePin(
+  workspaceId: string,
+  leadKind: LeadKind,
+  id: number
+): boolean {
+  return (
+    db
+      .prepare(
+        `UPDATE lead_direction SET retired_at = datetime('now')
+         WHERE id = ? AND workspace_id = ? AND lead_kind = ? AND ${IN_FORCE}`
+      )
+      .run(id, workspaceId, leadKind).changes > 0
+  );
 }
 
 export function getPin(id: number): DirectionPin | null {
@@ -124,7 +163,7 @@ export function currentDirection(
     db
       .prepare(
         `SELECT * FROM lead_direction
-         WHERE workspace_id = ? AND lead_kind = ? AND superseded_by IS NULL
+         WHERE workspace_id = ? AND lead_kind = ? AND ${IN_FORCE}
          ORDER BY id DESC`
       )
       .all(workspaceId, leadKind) as PinRow[]
@@ -133,15 +172,16 @@ export function currentDirection(
 
 export function directionHistory(
   workspaceId: string,
-  leadKind: LeadKind
+  leadKind: LeadKind,
+  limit = 100
 ): DirectionPin[] {
   return (
     db
       .prepare(
         `SELECT * FROM lead_direction WHERE workspace_id = ? AND lead_kind = ?
-         ORDER BY id DESC`
+         ORDER BY id DESC LIMIT ?`
       )
-      .all(workspaceId, leadKind) as PinRow[]
+      .all(workspaceId, leadKind, limit) as PinRow[]
   ).map(pinView);
 }
 
@@ -199,4 +239,21 @@ export function resolveProposals(
     }
     return pins;
   })();
+}
+
+// One proposal answered from its chip: pinned (attested again) or dropped.
+export function resolveProposal(
+  workspaceId: string,
+  leadKind: LeadKind,
+  id: number,
+  pin: boolean
+): DirectionPin | { error: string } | null {
+  const p = openProposals(workspaceId, leadKind).find((x) => x.id === id);
+  if (!p) return { error: "That proposal was already answered" };
+  if (pin) return pinDirection(p);
+  db.prepare(
+    `UPDATE lead_pin_proposals SET status = 'dropped', resolved_at = datetime('now')
+     WHERE id = ? AND status = 'open'`
+  ).run(id);
+  return null;
 }

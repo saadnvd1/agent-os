@@ -121,7 +121,7 @@ const SITES: Record<string, Partial<Record<Decision, number>>> = {
   "app/api/sessions/[id]/route.ts": { standing: 1 },
   "app/api/tmux/kill-all/route.ts": { standing: 1 },
   "components/Analyst/pair.ts": { standing: 1 },
-  "components/Pane/index.tsx": { standing: 3, tech: 1 },
+  "components/Pane/index.tsx": { standing: 4, tech: 1 },
   "components/Schedules/ScheduleForm.tsx": { tech: 1 },
   "components/SessionList/RowSubtitle.tsx": { tech: 1 },
   "components/SessionList/SessionRow.tsx": { tech: 1 },

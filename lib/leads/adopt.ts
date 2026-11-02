@@ -112,6 +112,10 @@ export async function adoptLead(input: {
       );
     throw e;
   }
+  db.prepare(
+    `INSERT OR REPLACE INTO lead_adoptions (session_id, workspace_id, lead_kind)
+     VALUES (?, ?, ?)`
+  ).run(sessionId, workspaceId, kind);
   const title = leadTitle(workspaceId, kind);
   addNote(
     workspaceId,
@@ -146,5 +150,20 @@ export async function confirmPins(input: {
     );
   const pins = resolveProposals(workspaceId, kind, input.confirm);
   const fresh = input.switchOver ? await freshStartChat(lead.id) : null;
+  if (fresh)
+    db.prepare(
+      `UPDATE lead_adoptions SET switched_at = datetime('now')
+       WHERE session_id = ? AND switched_at IS NULL`
+    ).run(lead.id);
   return { pins, fresh };
+}
+
+// An adopted lead still on its old conversation, waiting for the owner's
+// tap on its proposed pins.
+export function switchPending(sessionId: string): boolean {
+  return !!db
+    .prepare(
+      `SELECT 1 FROM lead_adoptions WHERE session_id = ? AND switched_at IS NULL`
+    )
+    .get(sessionId);
 }
