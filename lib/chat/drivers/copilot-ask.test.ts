@@ -180,6 +180,62 @@ describe("CopilotAskServer", () => {
     await call;
   });
 
+  const post = (url: string, body: unknown) =>
+    fetch(url, {
+      method: "POST",
+      headers: {
+        "content-type": "application/json",
+        accept: "application/json, text/event-stream",
+      },
+      body: JSON.stringify(body),
+    });
+
+  it("expires the card when Copilot cancels the call on its own request", async () => {
+    const t = await setup();
+    const call = post(t.entry.url, {
+      jsonrpc: "2.0",
+      id: 7,
+      method: "tools/call",
+      params: { name: "ask_user", arguments: { question: "Sure?" } },
+    });
+    const id = await t.pendingId();
+    const r = await post(t.entry.url, {
+      jsonrpc: "2.0",
+      method: "notifications/cancelled",
+      params: { requestId: 7 },
+    });
+    expect(r.status).toBe(202);
+    for (let i = 0; i < 100 && t.approvals.pending.has(id); i++)
+      await new Promise((r) => setTimeout(r, 5));
+    expect(t.approvals.pending.has(id)).toBe(false);
+    expect(t.cards().at(-1)).toMatchObject({ id, status: "expired" });
+    await call;
+    expect(
+      (t.server as unknown as { waiting: Map<string, string> }).waiting.size
+    ).toBe(0);
+  });
+
+  it("ignores a cancellation for an unknown request id", async () => {
+    const t = await setup();
+    const call = post(t.entry.url, {
+      jsonrpc: "2.0",
+      id: 7,
+      method: "tools/call",
+      params: { name: "ask_user", arguments: { question: "Sure?" } },
+    });
+    const id = await t.pendingId();
+    for (const requestId of [8, "7"]) {
+      await post(t.entry.url, {
+        jsonrpc: "2.0",
+        method: "notifications/cancelled",
+        params: { requestId },
+      });
+    }
+    expect(t.approvals.pending.has(id)).toBe(true);
+    t.approvals.pending.respond(id, { decision: "deny" });
+    await call;
+  });
+
   it("keeps two conversations apart", async () => {
     const a = await setup();
     const b = await setup();
