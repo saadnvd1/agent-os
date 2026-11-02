@@ -34,7 +34,7 @@ import {
   setState,
 } from "./ledger";
 import { FORK_LIMITS, FORKS_OFF, forksOn, type DeliveryMode } from "./options";
-import { ensureScratch, removeFork } from "./scratch";
+import { ensureScratch, tidyFork } from "./scratch";
 import { parentSnapshot } from "./snapshot";
 import { createForkWorktree } from "./worktree";
 import type { ChildRow } from "./types";
@@ -266,7 +266,7 @@ async function startChild(childId: string): Promise<void> {
   } catch (error) {
     const why = error instanceof Error ? error.message : String(error);
     const { settleAndDeliver } = await import("./settle");
-    await removeFork(childId).catch(() => undefined);
+    await tidyFork(childId).catch(() => undefined);
     await settleAndDeliver(childId, {
       outcome: "failed",
       summary: `couldn't start: ${why.split("\n")[0]}`,

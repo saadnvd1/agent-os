@@ -65,6 +65,8 @@ vi.mock("@/lib/fork/scratch", async (importOriginal) => ({
   ...(await importOriginal<typeof import("@/lib/fork/scratch")>()),
   ensureScratch: async (id: string) => `/tmp/scratch-${id}`,
   removeFork: async () => {},
+  tidyFork: async () => true,
+  forkLosses: async () => [],
 }));
 
 const { db } = await import("@/lib/db");

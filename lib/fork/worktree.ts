@@ -2,15 +2,15 @@
  * A throwaway checkout for a fork child that has to edit code to find its
  * answer (`aos fork --worktree`): detached at the parent's HEAD, with the
  * parent's uncommitted changes applied on top, so it sees what the parent
- * sees. No branch is made and nothing from it is merged; it is removed when
- * the child settles.
+ * sees. No branch is made and nothing from it is merged; it is kept until
+ * the child's session is closed with nothing changed in it.
  */
 
 import fs from "fs";
 import path from "path";
 import { git } from "../git-exec";
 import { setupWorktree } from "../env-setup";
-import { forkHome, worktreeOf } from "./scratch";
+import { baseOf, forkHome, snapshotTree, worktreeOf } from "./scratch";
 
 const MAX_UNTRACKED = 200;
 const MAX_UNTRACKED_BYTES = 5_000_000;
@@ -70,6 +70,10 @@ export async function createForkWorktree(opts: {
       throw new Error(
         setup.steps.find((s) => !s.success)?.error ?? "worktree setup failed"
       );
+    await fs.promises.writeFile(
+      baseOf(opts.childId),
+      await snapshotTree(wt, opts.childId)
+    );
     return {
       cwd: path.join(wt, path.relative(top, cwd)),
       root: wt,

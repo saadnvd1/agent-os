@@ -7,12 +7,30 @@ import { deliverDue } from "./deliver";
 import { lookAtChild } from "./settle";
 import { tickForkWaits } from "./waits";
 import { forksOn } from "./options";
+import { sweepForks } from "./scratch";
 import type { ChildRow } from "./types";
 
 const EVERY_MS = 5000;
 let running = false;
 let timer: NodeJS.Timeout | null = null;
 let kicked = false;
+const SWEEP_EVERY_MS = 10 * 60_000;
+let sweptAt = 0;
+
+// Folders of children whose session closed after they settled, or a crash.
+async function sweepClosed(now: number): Promise<void> {
+  if (now - sweptAt < SWEEP_EVERY_MS) return;
+  sweptAt = now;
+  const live = db.prepare(
+    `SELECT 1 FROM session_children c
+     LEFT JOIN sessions s ON s.id = c.child_session_id
+     WHERE c.child_session_id = ?
+       AND (c.state != 'settled' OR (s.id IS NOT NULL AND s.archived_at IS NULL))`
+  );
+  await sweepForks((id) => !!live.get(id)).catch((error) =>
+    console.error("[forks] sweep:", error)
+  );
+}
 
 export async function forksTick(now = Date.now()): Promise<void> {
   if (running || !forksOn()) return;
@@ -33,6 +51,7 @@ export async function forksTick(now = Date.now()): Promise<void> {
         await admitQueued(parent);
     await tickForkWaits(now);
     await deliverDue(now);
+    await sweepClosed(now);
   } finally {
     running = false;
   }

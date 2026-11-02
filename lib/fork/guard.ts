@@ -27,6 +27,8 @@ export interface ForkGuardContext {
   parentCheckout: string;
   // The child's scratch folder: free to write.
   scratch: string;
+  // Where every fork's folders live; the others' are never written.
+  forksRoot: string;
   // Its own throwaway checkout, when it has one: free to write.
   ownCheckout: string | null;
   // Where the child runs; relative paths start here.
@@ -39,7 +41,7 @@ const WHERE = (c: ForkGuardContext) =>
     : `put temp work in ${c.scratch} (AOS_SCRATCH), or ask for \`aos fork --worktree\` to edit code`;
 
 const noWrite = (c: ForkGuardContext, what: string) =>
-  `Refused: ${what} would change the parent's checkout, which it is working in. ${WHERE(c)}.`;
+  `Refused: ${what} would change the parent's checkout or another fork's folder, which they are working in. ${WHERE(c)}.`;
 
 // Commands whose every path argument is something they change.
 const MUTATORS = new Set([
@@ -134,7 +136,7 @@ async function protectedPath(
     c.ownCheckout ? physicalPath(c.ownCheckout) : Promise.resolve(null),
   ]);
   if (within(r, scratch) || (own && within(r, own))) return false;
-  return within(r, parent);
+  return within(r, parent) || within(r, await physicalPath(c.forksRoot));
 }
 
 // A file tool's refusal, or null.
