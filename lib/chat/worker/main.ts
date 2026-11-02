@@ -41,9 +41,17 @@ async function main(sessionId: string) {
     console.error(`No session ${sessionId}`);
     process.exit(1);
   }
-  const session = await (
+  const routed = await (
     await import("../../models/launch")
   ).routeOrchestrator(row);
+  const { resolveChatCwd, carryClaudeTranscript } = await import("./cwd");
+  const { session, removedFrom } = resolveChatCwd(routed);
+  if (removedFrom && session.agent_type === "claude")
+    carryClaudeTranscript(
+      removedFrom,
+      session.working_directory,
+      session.claude_session_id
+    );
 
   const clients = new Set<net.Socket>();
   const emit = (e: WorkerEvent) => {
@@ -60,7 +68,8 @@ async function main(sessionId: string) {
       emit(e);
       if (e.type === "state") armIdle();
     },
-    extras
+    extras,
+    !!removedFrom
   );
   function armIdle() {
     clearTimeout(idleTimer);

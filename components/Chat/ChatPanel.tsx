@@ -12,6 +12,7 @@ import { ArrowDown, Loader2 } from "lucide-react";
 import type { ClipboardEvent } from "react";
 import { useChat } from "@/data/chat/useChat";
 import { PausedBanner } from "./PausedBanner";
+import { WorktreeRemovedNotice } from "./WorktreeRemovedNotice";
 import { groupTimeline } from "@/lib/chat/group";
 import type { ChatItem } from "@/lib/chat/events";
 import { isFreshCommand, withFresh } from "@/lib/chat/commands";
@@ -688,6 +689,7 @@ export function ChatPanel({
           onFork={forksOn ? forkQuote : undefined}
         />
         <PausedBanner sessionId={sessionId} />
+        <WorktreeRemovedNotice sessionId={sessionId} />
         <ForksStrip sessionId={sessionId} />
         <Queue
           queue={queue}

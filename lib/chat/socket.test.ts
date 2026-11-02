@@ -328,6 +328,8 @@ describe("/ws/chat send with a client id", () => {
       id: clientId,
       message: expect.stringContaining("isn't linked"),
     });
+    // Shown on the message alone, not again as an error in the chat.
+    expect(errors(sent)).toEqual([]);
     remove(id);
     vi.restoreAllMocks();
   });

@@ -10,6 +10,7 @@ import { ModelUnavailableError } from "@/lib/models/agent-binding";
 import { namesLine, waitBadges } from "@/lib/bus/waits/store";
 import { claimsSnapshot } from "@/lib/claims";
 import { isProjectRef } from "@/lib/tasks/project-ref";
+import { worktreeRemoved } from "@/lib/chat/worker/cwd";
 import { omitNulls } from "@/lib/sessions/omit-null";
 
 // The sidebar's Done shelf lists this many finished tasks; ?done=all lists
@@ -34,7 +35,12 @@ export async function GET(request?: NextRequest) {
     const sessions = rows.map((s) => {
       const b = badges.get(s.id);
       const overlap = claims.bySession.get(s.id);
-      const row = overlap ? { ...s, overlap } : s;
+      const gone = worktreeRemoved(s);
+      const row = {
+        ...s,
+        ...(overlap && { overlap }),
+        ...(gone && { worktree_removed: true }),
+      };
       return omitNulls(
         b
           ? {
