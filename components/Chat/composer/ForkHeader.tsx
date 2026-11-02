@@ -35,21 +35,32 @@ export function ForkHeader({ fork }: { fork: ForkComposer }) {
           ↵ start · Esc cancel
         </span>
       </div>
-      {fork.quote && (
-        <div className="bg-muted/60 text-muted-foreground flex items-start gap-2 rounded-lg py-1.5 pr-1 pl-2.5 text-sm">
-          <Quote aria-hidden className="mt-1 size-3.5 shrink-0" />
-          <p className="line-clamp-2 min-w-0 flex-1">{fork.quote}</p>
-          <button
-            type="button"
-            onMouseDown={(e) => e.preventDefault()}
-            onClick={fork.onDropQuote}
-            aria-label="Remove quote"
-            className="hover:text-foreground flex size-8 shrink-0 items-center justify-center"
-          >
-            <X aria-hidden className="size-4" />
-          </button>
-        </div>
-      )}
+      {fork.quote && <QuoteChip text={fork.quote} onDrop={fork.onDropQuote} />}
+    </div>
+  );
+}
+
+// The selection as a chip above the box; it goes out ahead of what's typed.
+export function QuoteChip({
+  text,
+  onDrop,
+}: {
+  text: string;
+  onDrop: () => void;
+}) {
+  return (
+    <div className="bg-muted/60 text-muted-foreground flex items-start gap-2 rounded-lg py-1.5 pr-1 pl-2.5 text-sm">
+      <Quote aria-hidden className="mt-1 size-3.5 shrink-0" />
+      <p className="line-clamp-2 min-w-0 flex-1">{text}</p>
+      <button
+        type="button"
+        onMouseDown={(e) => e.preventDefault()}
+        onClick={onDrop}
+        aria-label="Remove quote"
+        className="hover:text-foreground flex size-8 shrink-0 items-center justify-center"
+      >
+        <X aria-hidden className="size-4" />
+      </button>
     </div>
   );
 }

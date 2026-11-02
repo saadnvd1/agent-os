@@ -32,7 +32,7 @@ import { offeredSuggestion } from "@/lib/chat/suggestion";
 import { historyStep } from "@/lib/chat/history";
 import { markdownParagraphs } from "@/lib/chat/quote";
 import { insertMarkdown } from "./insert";
-import { ForkHeader, type ForkComposer } from "./ForkHeader";
+import { ForkHeader, QuoteChip, type ForkComposer } from "./ForkHeader";
 import { useCoarsePointer } from "./useCoarsePointer";
 import { useMentions } from "./useMentions";
 import { Attachments } from "./Attachments";
@@ -56,6 +56,8 @@ export interface ComposerProps {
   // The send button's label, when Enter does something else than send.
   // Fork mode: the quote chip, pill and own-checkout choice.
   fork?: ForkComposer;
+  // After Fork mode: the selection stays as a chip on a normal reply.
+  quoteChip?: { text: string; onDrop: () => void };
   onSend: (text: string, images: ChatImage[], files: ChatFile[]) => void;
   // Where attached files are kept: the session's id, or "draft" before one exists.
   attachScope: string;
@@ -99,6 +101,7 @@ export function ComposerBody({
   disabled,
   placeholder,
   fork,
+  quoteChip,
   onSend,
   onStop,
   commands = [],
@@ -276,6 +279,7 @@ export function ComposerBody({
 
   const empty =
     !fork?.quote &&
+    !quoteChip &&
     !text.trim() &&
     !images.length &&
     !files.length &&
@@ -371,6 +375,11 @@ export function ComposerBody({
         )}
       >
         {fork && <ForkHeader fork={fork} />}
+        {quoteChip && (
+          <div className="mb-1.5">
+            <QuoteChip text={quoteChip.text} onDrop={quoteChip.onDrop} />
+          </div>
+        )}
         <Attachments
           images={images}
           files={files}

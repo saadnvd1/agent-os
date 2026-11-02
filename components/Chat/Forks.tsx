@@ -10,6 +10,7 @@ import {
   useStartForks,
   type ChildView,
 } from "@/data/fork";
+import { formatElapsed } from "@/lib/chat/elapsed";
 import { Button } from "@/components/ui/button";
 import { StatusPill } from "@/components/ui/status-pill";
 import { SessionAnchor } from "./SessionAnchor";
@@ -34,6 +35,9 @@ export const forkLabel = (typed: string, quote: string): string => {
   return line.length > 60 ? `${line.slice(0, 59)}…` : line;
 };
 
+export const startedToast = (ns: number[]): string =>
+  ns.length === 1 ? `Started fork ${ns[0]}` : `Started forks ${ns.join(", ")}`;
+
 // What a fork that ended with nothing to read says in place of a result.
 export const emptyNote = (c: ChildView) =>
   c.summary && c.summary !== "ended without a result"
@@ -49,12 +53,22 @@ export function useRunAgain(sessionId: string) {
       start.mutate(
         { instructions: [c.instruction], worktree: c.worktree },
         {
-          onSuccess: () => toast.success("Started fork"),
+          onSuccess: (res) =>
+            toast.success(startedToast(res.children.map((x) => x.n))),
           onError: (e) => toast.error(e.message),
         }
       ),
   };
 }
+
+// "2m 14s · reading sync/worker.ts": how long it has gone and its latest step.
+export const runningNote = (c: ChildView, now = Date.now()): string | null => {
+  const parts = [
+    c.startedAt ? formatElapsed(now - c.startedAt) : null,
+    c.activity,
+  ].filter(Boolean);
+  return parts.length ? parts.join(" · ") : null;
+};
 
 function Row({
   c,
@@ -72,6 +86,7 @@ function Row({
   const empty = c.outcome === "empty";
   const note =
     (empty ? emptyNote(c) : c.summary) ??
+    (c.state === "running" ? runningNote(c) : null) ??
     (c.asks
       ? `Asks: ${c.asks}`
       : c.state === "queued"

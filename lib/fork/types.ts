@@ -71,6 +71,8 @@ export interface ChildView {
   delivered: boolean;
   // A question or approval it's waiting on.
   asks: string | null;
+  // What it is doing now (its latest tool), while it runs.
+  activity: string | null;
 }
 
 export interface GroupView {
