@@ -211,7 +211,7 @@ importers:
         version: 0.4.6(react-dom@19.3.1(react@19.3.1))(react@19.3.1)
       node-pty:
         specifier: ^1.2.0-beta.6
-        version: 1.2.0-beta.6
+        version: 1.2.0-beta.15
       playwright:
         specifier: ^1.63.0
         version: 1.64.1
@@ -4414,8 +4414,8 @@ packages:
     resolution: {integrity: sha512-VijLXbi3UACN69I0JVXJsX4tjACjNoQDgv2gTF6sx2wWEi8tkSg2eX8p5gSIFi8z2+DL3oHmY6OyKce38SDolg==}
     engines: {node: ^18 || ^20 || >= 21}
 
-  node-pty@1.2.0-beta.6:
-    resolution: {integrity: sha512-0ArHUpsE5y6nSRSkbY36l+bjyuZNMjww0pdsBKCbiw/HTFCikJlsbUuyZc60KPdgH/9YhAiqD2BM8a0AOUVrsw==}
+  node-pty@1.2.0-beta.15:
+    resolution: {integrity: sha512-vORSzHXi4Ofl7HemVWpuudLqCPdaQb4LfpRCUpE5HPxhp4JYscl8zZwxh11p26v2wvW24WMwnMfLjhRLixrfxA==}
 
   node-releases@2.0.57:
     resolution: {integrity: sha512-kQK9LGGFiHtrWiNhZtA7Qbw17AQz+dmsEKODRIVTXA9+e5MS/2gZEBhYJt13GrAz5/IOZKddH/0Z3TP/Zgo+yw==}
@@ -10128,7 +10128,7 @@ snapshots:
 
   node-addon-api@8.9.2: {}
 
-  node-pty@1.2.0-beta.6:
+  node-pty@1.2.0-beta.15:
     dependencies:
       node-addon-api: 7.1.1
 
