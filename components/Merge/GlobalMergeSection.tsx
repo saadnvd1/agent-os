@@ -77,12 +77,9 @@ export function GlobalMergeSection() {
           <MergeSettingsFields
             settings={data.settings}
             inherited={data.defaults}
-            disabled={update.isPending}
-            onChange={(s) => update.mutate(s)}
+            idPrefix="merge-global"
+            onSave={(s) => update.mutateAsync(s)}
           />
-        )}
-        {update.isError && (
-          <p className="text-destructive text-sm">{update.error.message}</p>
         )}
       </div>
       {data && <Overrides overrides={data.overrides} />}

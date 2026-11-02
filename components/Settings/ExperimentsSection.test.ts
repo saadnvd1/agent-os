@@ -29,7 +29,9 @@ const w = (calls: number) => ({
   dismissed: 1,
   acceptRate: 0.5,
 });
-const state = vi.hoisted(() => ({ mutate: vi.fn() }));
+const state = vi.hoisted(() => ({
+  mutateAsync: vi.fn().mockResolvedValue({}),
+}));
 vi.mock("@/data/experiments", () => ({
   useExperimentsQuery: () => ({
     isPending: false,
@@ -50,7 +52,7 @@ vi.mock("@/data/experiments", () => ({
       ],
     },
   }),
-  useSetExperiment: () => ({ mutate: state.mutate }),
+  useSetExperiment: () => ({ mutateAsync: state.mutateAsync }),
   useExperimentDetailQuery: () => ({ isPending: true }),
 }));
 
@@ -59,7 +61,7 @@ const { ExperimentsSection } = await import("./ExperimentsSection");
 let root: Root;
 let host: HTMLDivElement;
 beforeEach(() => {
-  state.mutate.mockReset();
+  state.mutateAsync.mockClear();
   host = document.createElement("div");
   document.body.appendChild(host);
   root = createRoot(host);
@@ -87,9 +89,9 @@ describe("ExperimentsSection", () => {
         .querySelector('[role="switch"]')
         ?.dispatchEvent(new window.MouseEvent("click", { bubbles: true }));
     });
-    expect(state.mutate).toHaveBeenCalledWith(
-      { id: "learning-cards", on: true },
-      expect.any(Object)
-    );
+    expect(state.mutateAsync).toHaveBeenCalledWith({
+      id: "learning-cards",
+      on: true,
+    });
   });
 });

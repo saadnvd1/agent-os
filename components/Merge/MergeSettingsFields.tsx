@@ -1,13 +1,7 @@
 "use client";
 
-import { useId } from "react";
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@/components/ui/select";
+import { SelectSetting } from "@/components/Settings/settings-fields";
+import { SettingSection } from "@/components/Settings/SettingRow";
 import {
   MERGE_METHODS,
   METHOD_LABEL,
@@ -29,47 +23,6 @@ const SOURCE: Record<MergeSource, string> = {
 
 const onOff = (on: boolean) => (on ? "On" : "Off");
 
-function Field({
-  label,
-  detail,
-  value,
-  inheritLabel,
-  options,
-  onChange,
-  disabled,
-}: {
-  label: string;
-  detail: string;
-  value: string;
-  inheritLabel: string;
-  options: Array<{ value: string; label: string }>;
-  onChange: (value: string) => void;
-  disabled?: boolean;
-}) {
-  const id = useId();
-  return (
-    <div className="space-y-1.5">
-      <label htmlFor={id} className="text-sm font-medium">
-        {label}
-      </label>
-      <Select value={value} onValueChange={onChange} disabled={disabled}>
-        <SelectTrigger id={id} className="h-11 md:h-9">
-          <SelectValue />
-        </SelectTrigger>
-        <SelectContent>
-          <SelectItem value={INHERIT}>{inheritLabel}</SelectItem>
-          {options.map((o) => (
-            <SelectItem key={o.value} value={o.value}>
-              {o.label}
-            </SelectItem>
-          ))}
-        </SelectContent>
-      </Select>
-      <p className="text-muted-foreground text-xs">{detail}</p>
-    </div>
-  );
-}
-
 const TOGGLE = [
   { value: "on", label: "On" },
   { value: "off", label: "Off" },
@@ -78,38 +31,43 @@ const TOGGLE = [
 /**
  * The merge method and the two deletions after a merge, each either set
  * here or left to what this level inherits (`inherited`, with where that
- * comes from).
+ * comes from). Each saves the moment it changes.
  */
 export function MergeSettingsFields({
+  idPrefix,
   settings,
   inherited,
   from,
   allowed,
-  disabled,
-  onChange,
+  onSave,
 }: {
+  idPrefix: string;
   settings: MergeSettings;
   inherited: MergePolicy;
   from?: Record<keyof MergePolicy, MergeSource>;
   // The repository's allowed methods, when known.
   allowed?: MergeMethod[] | null;
-  disabled?: boolean;
-  onChange: (settings: MergeSettings) => void;
+  onSave: (settings: MergeSettings) => Promise<unknown>;
 }) {
-  const inheritLabel = (key: keyof MergePolicy, shown: string) =>
-    from ? `Inherit: ${shown} (${SOURCE[from[key]]})` : `Default: ${shown}`;
+  const inheritOption = (key: keyof MergePolicy, shown: string) => ({
+    value: INHERIT,
+    label: from
+      ? `Inherit: ${shown} (${SOURCE[from[key]]})`
+      : `Default: ${shown}`,
+  });
   const set = <K extends keyof MergeSettings>(
     key: K,
     value: MergeSettings[K] | undefined
-  ) => onChange({ ...settings, [key]: value });
+  ) => onSave({ ...settings, [key]: value });
   const toggle = (key: "delete_remote_branch" | "delete_worktree") => (
-    <Field
+    <SelectSetting
+      id={`${idPrefix}-${key}`}
       label={
         key === "delete_remote_branch"
           ? "Delete the branch on origin after a merge"
           : "Delete the local worktree and branch after a merge"
       }
-      detail={
+      help={
         key === "delete_remote_branch"
           ? "Never main, master, or a branch a stacked task still targets."
           : "Never one with uncommitted work or commits the merge didn't include."
@@ -117,10 +75,10 @@ export function MergeSettingsFields({
       value={
         settings[key] === undefined ? INHERIT : settings[key] ? "on" : "off"
       }
-      inheritLabel={inheritLabel(key, onOff(inherited[key]))}
-      options={TOGGLE}
-      disabled={disabled}
-      onChange={(v) => set(key, v === INHERIT ? undefined : v === "on")}
+      options={[inheritOption(key, onOff(inherited[key])), ...TOGGLE]}
+      defaultValue={INHERIT}
+      hint=""
+      onSave={(v) => set(key, v === INHERIT ? undefined : v === "on")}
     />
   );
 
@@ -128,25 +86,29 @@ export function MergeSettingsFields({
   const refused = allowed && !allowed.includes(method);
 
   return (
-    <div className="space-y-3">
-      <Field
+    <SettingSection>
+      <SelectSetting
+        id={`${idPrefix}-method`}
         label="Merge method"
-        detail="How sign-off, Done, Land and external PRs merge. If GitHub refuses it, the merge fails and says so; it never falls back to another method."
+        help="How sign-off, Done, Land and external PRs merge. If GitHub refuses it, the merge fails and says so; it never falls back to another method."
         value={settings.method ?? INHERIT}
-        inheritLabel={inheritLabel("method", METHOD_LABEL[inherited.method])}
-        options={MERGE_METHODS.map((m) => ({
-          value: m,
-          label:
-            METHOD_LABEL[m] +
-            (allowed && !allowed.includes(m) ? " (off on GitHub)" : ""),
-        }))}
-        disabled={disabled}
-        onChange={(v) =>
+        options={[
+          inheritOption("method", METHOD_LABEL[inherited.method]),
+          ...MERGE_METHODS.map((m) => ({
+            value: m,
+            label:
+              METHOD_LABEL[m] +
+              (allowed && !allowed.includes(m) ? " (off on GitHub)" : ""),
+          })),
+        ]}
+        defaultValue={INHERIT}
+        hint=""
+        onSave={(v) =>
           set("method", v === INHERIT ? undefined : (v as MergeMethod))
         }
       />
       {refused && (
-        <p className="text-destructive text-xs">
+        <p className="text-destructive px-3 py-2 text-xs">
           This repository has &ldquo;{REPO_SETTING[method]}&rdquo; turned off on
           GitHub, so merges will be refused until it&rsquo;s on or the method
           changes.
@@ -154,6 +116,6 @@ export function MergeSettingsFields({
       )}
       {toggle("delete_remote_branch")}
       {toggle("delete_worktree")}
-    </div>
+    </SettingSection>
   );
 }
