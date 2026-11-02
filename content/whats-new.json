@@ -2033,6 +2033,14 @@
       "area": "Updates",
       "text": "You can update AgentOS by hand again on machines that deploy themselves, and Update now skips the hourly wait.",
       "url": "https://github.com/saadnvd1/agent-os/pull/571"
+    },
+    {
+      "id": 573,
+      "date": "2026-11-02",
+      "kind": "new",
+      "area": "AgentOS",
+      "text": "Mark a fork as done straight from the Forks list above the chat box.",
+      "url": "https://github.com/saadnvd1/agent-os/pull/573"
     }
   ]
 }
