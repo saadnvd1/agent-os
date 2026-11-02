@@ -1945,6 +1945,14 @@
       "area": "Updates",
       "text": "Automatic updates no longer get stuck after the first one because of a file the build rewrites.",
       "url": "https://github.com/saadnvd1/agent-os/pull/555"
+    },
+    {
+      "id": 558,
+      "date": "2026-11-02",
+      "kind": "improved",
+      "area": "AgentOS",
+      "text": "Select text in a chat reply and tap Fork to hand it to a background copy of the session; its result comes back as a card.",
+      "url": "https://github.com/saadnvd1/agent-os/pull/558"
     }
   ]
 }
