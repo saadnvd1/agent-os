@@ -1969,6 +1969,22 @@
       "area": "AgentOS",
       "text": "Forking from a selection is tidier: the fork pill can be dismissed while keeping your quote and text, and started forks show a one-line marker and what they're doing.",
       "url": "https://github.com/saadnvd1/agent-os/pull/561"
+    },
+    {
+      "id": 562,
+      "date": "2026-11-02",
+      "kind": "improved",
+      "area": "Settings",
+      "text": "Settings now save as you change them, with a clear \"Saved\" note, undo and reset, and Context settings have their own page.",
+      "url": "https://github.com/saadnvd1/agent-os/pull/562"
+    },
+    {
+      "id": 563,
+      "date": "2026-11-02",
+      "kind": "improved",
+      "area": "Settings",
+      "text": "More settings now save as you change them, and revoking a passkey or link asks inline instead of with a browser pop-up.",
+      "url": "https://github.com/saadnvd1/agent-os/pull/563"
     }
   ]
 }
