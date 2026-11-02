@@ -2041,6 +2041,22 @@
       "area": "AgentOS",
       "text": "Mark a fork as done straight from the Forks list above the chat box.",
       "url": "https://github.com/saadnvd1/agent-os/pull/573"
+    },
+    {
+      "id": 574,
+      "date": "2026-11-02",
+      "kind": "fixed",
+      "area": "AgentOS",
+      "text": "Files a forked session writes are no longer deleted when it finishes.",
+      "url": "https://github.com/saadnvd1/agent-os/pull/574"
+    },
+    {
+      "id": 576,
+      "date": "2026-11-02",
+      "kind": "improved",
+      "area": "AgentOS",
+      "text": "Heavy builds and test runs on Linux machines are now memory-capped, so one runaway command can no longer freeze the whole machine.",
+      "url": "https://github.com/saadnvd1/agent-os/pull/576"
     }
   ]
 }
