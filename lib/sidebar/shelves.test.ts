@@ -177,6 +177,28 @@ describe("buildShelves", () => {
     expect(conductor?.workers.map((w) => w.session.id)).toEqual(["w1"]);
   });
 
+  it("takes a fork marked done out from under its parent", () => {
+    const fork = {
+      conductor_session_id: "parent",
+      parent_session_id: "parent",
+      active_at: utc(NOW - 2 * 3600_000),
+    };
+    const out = shelves(
+      [
+        session("parent", { active_at: utc(NOW - 3600_000) }),
+        session("open", fork),
+        session("closed", { ...fork, settled_at: utc(NOW - 3600_000) }),
+      ],
+      {},
+      {}
+    );
+    const parent = [...out.raw.ongoing, ...out.raw.done].find(
+      (r) => r.session.id === "parent"
+    );
+    expect(parent?.workers.map((w) => w.session.id)).toEqual(["open"]);
+    expect(out.done).toContain("closed");
+  });
+
   it("filters by search over titles and project names, and by project", () => {
     const list = [
       session("Fix gate", { project_id: "p1" }),

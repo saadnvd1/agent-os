@@ -4,6 +4,7 @@
 import { isStandingRole } from "../leads/roles";
 import type { Session } from "@/lib/db/types";
 import { fromSqliteTime } from "@/lib/session-meta";
+import { isFork } from "@/lib/sessions/fork";
 import type { PrStage } from "@/lib/tasks/pr-stage";
 import { isFinished, type TaskState } from "@/lib/tasks/state";
 
@@ -374,8 +375,11 @@ export function buildShelves(input: ShelfInput): Shelves {
     const conductor = row.session.conductor_session_id
       ? byId.get(row.session.conductor_session_id)
       : undefined;
-    // A worker that needs you leaves its conductor so the shelf shows it.
-    if (conductor && !row.need) conductor.workers.push(row);
+    // A worker that needs you leaves its conductor so the shelf shows it, and
+    // so does a fork marked done: it goes to Done like any session.
+    const doneFork =
+      isFork(row.session) && settledHow(row.session, now) === "manual";
+    if (conductor && !row.need && !doneFork) conductor.workers.push(row);
     else top.push(row);
   }
 
