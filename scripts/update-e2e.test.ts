@@ -19,6 +19,8 @@ const SCRIPTS = [
   "lib/build-swap.sh",
   "lib/pnpm.sh",
   "lib/deps-swap.sh",
+  "lib/generated.sh",
+  "generated-files.txt",
   "lib/update-verify.mjs",
 ];
 
