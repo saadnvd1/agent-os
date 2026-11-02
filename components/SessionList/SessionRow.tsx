@@ -127,7 +127,6 @@ export const SessionRow = memo(function SessionRow({
         menu={menu}
         menuLabel="Session actions"
         menuButton={!selecting}
-        renaming={renaming}
       >
         {renaming ? (
           <RowRename

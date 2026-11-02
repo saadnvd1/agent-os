@@ -42,7 +42,6 @@ export function RowShell({
   menu,
   menuLabel,
   menuButton = true,
-  renaming = false,
 }: {
   title: string;
   tipKey?: string;
@@ -62,8 +61,6 @@ export function RowShell({
   menuLabel: string;
   // False keeps the right-click menu but hides the ⋯ (while selecting).
   menuButton?: boolean;
-  // A rename input is open: closing the menu mustn't move focus off it.
-  renaming?: boolean;
 }) {
   const content = (
     <div
@@ -118,7 +115,7 @@ export function RowShell({
           <DM.DropdownMenuContent
             align="end"
             className={ROW_MENU_CONTENT}
-            onCloseAutoFocus={keepRenameFocus(renaming)}
+            onCloseAutoFocus={keepRenameFocus}
             onClick={(e) => e.stopPropagation()}
           >
             {menu("dropdown")}
@@ -133,7 +130,7 @@ export function RowShell({
       <CM.ContextMenuTrigger asChild>{content}</CM.ContextMenuTrigger>
       <CM.ContextMenuContent
         className={ROW_MENU_CONTENT}
-        onCloseAutoFocus={keepRenameFocus(renaming)}
+        onCloseAutoFocus={keepRenameFocus}
       >
         {menu("context")}
       </CM.ContextMenuContent>

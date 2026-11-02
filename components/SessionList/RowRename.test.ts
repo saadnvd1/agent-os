@@ -2,11 +2,15 @@ import "@/components/Chat/composer/test-dom";
 import { act, createElement, useState } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import { keepRenameFocus, RowRename } from "./RowParts";
+import * as DM from "@/components/ui/dropdown-menu";
+import { keepRenameFocus, RowRename, useRenameInput } from "./RowParts";
 
 (
   globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }
 ).IS_REACT_ACT_ENVIRONMENT = true;
+
+// Radix dispatches CustomEvents; node's own class is rejected by jsdom.
+(globalThis as { CustomEvent?: unknown }).CustomEvent = window.CustomEvent;
 
 let root: Root;
 let host: HTMLElement;
@@ -28,23 +32,87 @@ function mount(onDone: (n: string | null) => void, initial = "old") {
   act(() => root.render(createElement(RowRename, { initial, onDone })));
 }
 
+// A row whose menu has a Rename item, wired like RowShell / GroupShelves.
+function Row({ group = false }: { group?: boolean }) {
+  const [renaming, setRenaming] = useState(false);
+  const [name, setName] = useState("old");
+  const rename = useRenameInput(() => setRenaming(false));
+  const menu = createElement(
+    DM.DropdownMenu,
+    { defaultOpen: true },
+    createElement(
+      DM.DropdownMenuTrigger,
+      { asChild: true },
+      createElement("button", { "aria-label": "menu" })
+    ),
+    createElement(
+      DM.DropdownMenuContent,
+      { onCloseAutoFocus: keepRenameFocus },
+      createElement(
+        DM.DropdownMenuItem,
+        { onSelect: () => setRenaming(true) },
+        "Rename"
+      )
+    )
+  );
+  return createElement(
+    "div",
+    null,
+    menu,
+    renaming
+      ? group
+        ? createElement("input", {
+            ...rename,
+            value: name,
+            onChange: (e: { target: { value: string } }) =>
+              setName(e.target.value),
+          })
+        : createElement(RowRename, {
+            initial: name,
+            onDone: () => setRenaming(false),
+          })
+      : null
+  );
+}
+
+describe.each([
+  ["session row", false],
+  ["group header", true],
+])("rename from the menu on a fresh mount (%s)", (_n, group) => {
+  it("keeps the input open, focused, and accepting typing", async () => {
+    vi.useRealTimers();
+    act(() => root.render(createElement(Row, { group })));
+    const item = [...document.querySelectorAll('[role="menuitem"]')].find(
+      (el) => el.textContent === "Rename"
+    ) as HTMLElement;
+    expect(item).toBeTruthy();
+    await act(async () => {
+      item.click();
+      await new Promise((r) => setTimeout(r, 100));
+    });
+    const el = input();
+    expect(el).toBeTruthy();
+    expect(document.activeElement).toBe(el);
+    const set = Object.getOwnPropertyDescriptor(
+      window.HTMLInputElement.prototype,
+      "value"
+    )!.set!;
+    act(() => {
+      set.call(el, "typed");
+      el.dispatchEvent(new window.Event("input", { bubbles: true }));
+    });
+    expect(input()).toBe(el);
+    expect(input().value).toBe("typed");
+  });
+});
+
 describe("RowRename", () => {
-  it("retries focus the menu stole, and ignores blur until it has it", () => {
-    const real = window.HTMLElement.prototype.focus;
-    let calls = 0;
-    // The first focus attempts land while the menu still traps focus.
-    vi.spyOn(window.HTMLElement.prototype, "focus").mockImplementation(
-      function (this: HTMLElement) {
-        if (++calls > 2) real.call(this);
-      }
-    );
+  it("ignores a blur that comes before it was ever focused", () => {
     const done = vi.fn();
     mount(done);
+    // an open menu keeps the input from taking focus on mount
     act(() => input().dispatchEvent(new window.FocusEvent("blur")));
     expect(done).not.toHaveBeenCalled();
-    act(() => vi.advanceTimersByTime(150));
-    expect(document.activeElement).toBe(input());
-    vi.restoreAllMocks();
   });
 
   it("keeps typed text across a parent re-render (list refresh)", () => {
@@ -75,7 +143,6 @@ describe("RowRename", () => {
   it("saves on Enter, cancels on Escape, saves on blur once focused", () => {
     const done = vi.fn();
     mount(done);
-    act(() => vi.advanceTimersByTime(60));
     const key = (k: string) =>
       act(() => {
         input().dispatchEvent(
@@ -92,11 +159,13 @@ describe("RowRename", () => {
 });
 
 describe("keepRenameFocus", () => {
-  it("stops the menu returning focus only while renaming", () => {
+  it("takes the focus the menu would return, only while a rename input is open", () => {
     const e = { preventDefault: vi.fn() } as unknown as Event;
-    keepRenameFocus(false)(e);
+    keepRenameFocus(e);
     expect(e.preventDefault).not.toHaveBeenCalled();
-    keepRenameFocus(true)(e);
+    mount(() => {});
+    keepRenameFocus(e);
     expect(e.preventDefault).toHaveBeenCalled();
+    expect(document.activeElement).toBe(input());
   });
 });
