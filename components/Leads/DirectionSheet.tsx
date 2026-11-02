@@ -15,6 +15,7 @@ import { useConfirmPins, useDirectionAction } from "@/data/leads";
 import { useMediaQuery } from "@/hooks/useMediaQuery";
 import type { DirectionPin } from "@/lib/leads/types";
 import { cn } from "@/lib/utils";
+import { CharterSheet } from "./CharterSheet";
 import { pinDate, type DirectionChat } from "./direction-context";
 
 const Label = ({ children }: { children: React.ReactNode }) => (
@@ -131,6 +132,7 @@ export function DirectionSheet({
   const { view } = chat;
   const act = useDirectionAction(sessionId);
   const [memoOpen, setMemoOpen] = useState(false);
+  const [charterOpen, setCharterOpen] = useState(false);
   const past = view.history.filter((p) => p.supersededBy || p.retiredAt);
   const review = view.proposals.length > 0 || view.switchPending;
   return (
@@ -193,6 +195,16 @@ export function DirectionSheet({
             ))}
           </section>
           <section className="space-y-2">
+            <Label>Charter</Label>
+            <Button
+              variant="secondary"
+              className="h-11 w-full md:h-9"
+              onClick={() => setCharterOpen(true)}
+            >
+              Edit charter
+            </Button>
+          </section>
+          <section className="space-y-2">
             <Label>Memo</Label>
             {view.memo ? (
               <button
@@ -235,6 +247,13 @@ export function DirectionSheet({
             </section>
           )}
         </div>
+        <CharterSheet
+          workspaceId={view.workspaceId}
+          kind={view.kind}
+          name={view.title}
+          open={charterOpen}
+          onOpenChange={setCharterOpen}
+        />
       </ASheetContent>
     </ASheet>
   );

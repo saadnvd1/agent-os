@@ -14,6 +14,8 @@ export const leadKeys = {
   chief: (sessionId: string) => ["leads", "chief", sessionId] as const,
   thread: (q: object, all: boolean) => ["leads", "thread", q, all] as const,
   setup: (workspaceId: string) => ["leads", "setup", workspaceId] as const,
+  charter: (workspaceId: string, kind: string) =>
+    ["leads", "charter", workspaceId, kind] as const,
 };
 
 async function json<T>(res: Response): Promise<T> {
@@ -168,6 +170,51 @@ export function useAddLeads(workspaceId: string) {
       void qc.invalidateQueries({ queryKey: ["leads"] });
       void qc.invalidateQueries({ queryKey: orchestratorKeys.all });
       void qc.invalidateQueries({ queryKey: sessionKeys.all });
+    },
+  });
+}
+
+export interface CharterFields {
+  title: string;
+  area: string;
+  goal: string;
+  charter_md: string;
+}
+
+// One lead's charter, read when its editor opens. A chief with none yet has
+// no row: the editor starts blank.
+export function useLeadCharter(
+  workspaceId: string,
+  kind: string,
+  enabled: boolean
+) {
+  return useQuery({
+    queryKey: leadKeys.charter(workspaceId, kind),
+    queryFn: async (): Promise<CharterFields | null> => {
+      const res = await fetch(
+        `/api/leads/charter?workspaceId=${encodeURIComponent(workspaceId)}&kind=${encodeURIComponent(kind)}`
+      );
+      if (res.status === 404) return null;
+      return (await json<{ charter: CharterFields }>(res)).charter;
+    },
+    enabled,
+  });
+}
+
+export function useSaveCharter(workspaceId: string, kind: string) {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async (fields: CharterFields) => {
+      const res = await fetch("/api/leads/charter", {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ workspaceId, kind, ...fields }),
+      });
+      return json<{ charter: CharterFields; delivered: boolean }>(res);
+    },
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: leadKeys.charter(workspaceId, kind) });
+      qc.invalidateQueries({ queryKey: ["leads"] });
     },
   });
 }

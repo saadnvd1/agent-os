@@ -12,6 +12,7 @@ import { ORCHESTRATOR_SERVER } from "../orchestrator/tool-names";
 import { toolsSection } from "../orchestrator/brief";
 import {
   brakesText,
+  charterSection,
   hardLines,
   keepToolLines,
   loadBriefProjects,
@@ -21,7 +22,7 @@ import {
   up,
   type BriefProject,
 } from "./brief-common";
-import { getCharter, leadAreas } from "./charters";
+import { leadAreas } from "./charters";
 import { buildLeadDigest } from "./digest";
 import { getChief, leadTitle, listLeads } from "./home";
 import { profileHas, type LeadToolName, type Profile } from "./profiles";
@@ -35,16 +36,6 @@ const leadTools = (who: string) => `Your lead tools:
 - \`${tool("propose_pin")}\` (item): propose one of ${who}'s own messages in this chat as pinned direction, by its chat item id. The server copies his words; it's direction once he confirms it with a tap.
 - \`${tool("direction")}\` (lead?): the pinned direction in force for you, or for another lead of this workspace, with your memo and open proposals.
 - \`${tool("message_lead")}\` (to, thread, text, pins?): write to another lead of this workspace on a thread, one per topic. Cite the ids of your pins the message relies on: the server quotes ${who}'s words with them, and a claim of his approval without one reads as unattested. Their reply arrives in this chat. A few messages an hour per thread; past that it goes to ${who} as an ask, so don't retry.`;
-
-function charterSection(w: string, kind: LeadKind): string {
-  const c = getCharter(w, kind);
-  const parts = [
-    c?.charterMd.trim(),
-    c?.goal.trim() ? `Goal: ${c.goal.trim()}` : "",
-    c?.areaText.trim() ? `Area: ${c.areaText.trim()}` : "",
-  ].filter(Boolean);
-  return `## Your charter\n\n${parts.length ? parts.join("\n\n") : "None written yet."}`;
-}
 
 function areaLine(areas: LeadArea[]): string {
   const projects = areas

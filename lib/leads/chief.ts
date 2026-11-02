@@ -23,6 +23,7 @@ import { toolsSection } from "../orchestrator/brief";
 import { getWorkspace } from "../workspaces";
 import {
   brakesText,
+  charterSection,
   hardLines,
   keepToolLines,
   loadBriefProjects,
@@ -31,6 +32,7 @@ import {
   SCHEDULED_RULE,
   up,
 } from "./brief-common";
+import { getCharter } from "./charters";
 import { buildLeadDigest } from "./digest";
 import { getChief, leadTitle, listLeads } from "./home";
 import { CHIEF } from "./order";
@@ -145,6 +147,9 @@ export function chiefBrief(input: {
   return [
     `You are the chief of staff for the "${input.workspace}" workspace in AgentOS. Its leads, each heading one department: ${team}. Its orchestrator is the Tech lead.`,
     projectsSection(input.projects),
+    getCharter(input.workspaceId, CHIEF)
+      ? charterSection(input.workspaceId, CHIEF)
+      : "",
     rules(who, input.autonomy),
     `${noApprovalsText(who)}## Brakes\n\n${brakesText(who)}`,
     hardLines(who, false),
