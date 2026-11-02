@@ -318,11 +318,6 @@ function HomeContent() {
         return { sessionName, cwd, hostId, sessionId };
       }
 
-      // TODO: Add explicit "Enable Orchestration" toggle that creates .mcp.json
-      // for conductor sessions. Removed auto-creation because it pollutes projects
-      // with .mcp.json files that aren't in their .gitignore.
-      // See: /api/sessions/[id]/mcp-config, lib/mcp-config.ts
-
       // Get parent session ID for forking
       let parentSessionId: string | null = null;
       if (!session.claude_session_id && isFork(session)) {

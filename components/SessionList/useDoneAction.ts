@@ -1,6 +1,7 @@
 import { toast } from "sonner";
 import type { Session } from "@/lib/db";
 import {
+  ForkChildrenOpenError,
   useArchiveSession,
   useDoneSession,
   useResurrectSession,
@@ -57,8 +58,8 @@ export function useDoneAction() {
 export function useArchiveAction() {
   const archive = useArchiveSession();
   const unarchive = useUnarchiveSession();
-  return (session: Session) =>
-    archive.mutate(session.id, {
+  const run = (session: Session, children?: "stop" | "keep") =>
+    archive.mutate(children ? { id: session.id, children } : session.id, {
       onSuccess: () =>
         toast.success(`Archived ${session.name}`, {
           action: {
@@ -66,8 +67,22 @@ export function useArchiveAction() {
             onClick: () => unarchive.mutate(session.id),
           },
         }),
-      onError: (e) => toast.error(e.message, { duration: 12000 }),
+      onError: (e) =>
+        e instanceof ForkChildrenOpenError
+          ? toast(e.message, {
+              duration: 15000,
+              action: {
+                label: "Stop them",
+                onClick: () => run(session, "stop"),
+              },
+              cancel: {
+                label: "Keep them going",
+                onClick: () => run(session, "keep"),
+              },
+            })
+          : toast.error(e.message, { duration: 12000 }),
     });
+  return (session: Session) => run(session);
 }
 
 // Restore from a session's menu: the same conversation, its worktree back.

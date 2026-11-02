@@ -17,6 +17,7 @@ import { stackStartGate } from "./lib/orchestrator/brakes";
 import { buildId } from "./lib/build";
 import { startOrchestratorWatcher } from "./lib/orchestrator/watcher";
 import { startWaitWatcher } from "./lib/bus/waits/tick";
+import { startForkWatcher } from "./lib/fork/tick";
 import { installErrorCounter } from "./lib/health/errors";
 import { recordBoot } from "./lib/health/boots";
 import { realDeps, schedulesEnabled, startScheduler } from "./lib/schedules";
@@ -498,6 +499,7 @@ app.prepare().then(async () => {
   if (process.env.AGENTOS_ORCHESTRATOR !== "off") startOrchestratorWatcher();
   // Sessions waiting on each other (aos send --await, aos wait).
   startWaitWatcher();
+  startForkWatcher();
   // Schedules tick here, once a minute, and nowhere else.
   if (schedulesEnabled(process.env)) startScheduler(realDeps);
   // Looking for a newer version, and running an update when one is asked

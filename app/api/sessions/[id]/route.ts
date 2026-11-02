@@ -9,7 +9,6 @@ import {
 } from "@/lib/worktrees";
 import { releasePort } from "@/lib/ports";
 import { releaseSessionLeftovers } from "@/lib/sessions/leftovers";
-import { killWorker } from "@/lib/orchestration";
 import { endSessionAgent } from "@/lib/sessions/end";
 import { endTmuxSession } from "@/lib/tmux/end";
 import { hostExecFile } from "@/lib/hosts";
@@ -264,11 +263,11 @@ export async function DELETE(request: NextRequest, { params }: RouteParams) {
       );
     }
 
-    // If this is a conductor, delete all its workers first
+    // Children nested under this session go with it
     const workers = queries.getWorkersByConductor(db).all(id) as Session[];
     for (const worker of workers) {
       try {
-        await killWorker(worker.id, false); // false = don't cleanup worktree yet
+        await endSessionAgent(worker);
       } catch (error) {
         console.error(`Failed to kill worker ${worker.id}:`, error);
       }

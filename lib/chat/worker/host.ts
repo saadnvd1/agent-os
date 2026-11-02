@@ -7,6 +7,7 @@
 import os from "os";
 import { db, type Session } from "../../db";
 import { agentEnv } from "../../agents/launch";
+import { forkBrief } from "../../fork/extras";
 import { sessionRunningBrief } from "../../project-config/session";
 import { BUS_BRIEF } from "../../agents/brief";
 import { resolveModelForAgent } from "../../model-catalog";
@@ -250,6 +251,7 @@ export class ChatHost {
         BUS_BRIEF,
         visuals && (orchestrator ? ORCHESTRATOR_VISUALS_BRIEF : VISUALS_BRIEF),
         !orchestrator && COMPACT_BRIEF,
+        forkBrief(session),
       ]
         .filter(Boolean)
         .join("\n\n"),

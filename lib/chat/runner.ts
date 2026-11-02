@@ -87,6 +87,7 @@ import { chatHold, chatRefusal } from "./hold";
 import { getHost } from "../hosts";
 import { hostLink } from "../hosts/remote-api";
 import { ownerUi } from "../owner";
+import { heldForNext } from "../fork/held";
 
 export {
   refreshCapabilities,
@@ -432,10 +433,15 @@ export async function sendChat(
     id?: string;
   } & SentBy
 ): Promise<void> {
-  const text = input.text.trim();
-  if (!text && !input.images?.length && !input.files?.length) return;
+  const typed = input.text.trim();
+  if (!typed && !input.images?.length && !input.files?.length) return;
   if (input.id && taken(sessionId, input.id)) return;
   refuseAway(sessionId);
+  // Results of forks the reader started come first in their next message.
+  const text =
+    !input.from && !input.origin && !input.peer
+      ? heldForNext(sessionId) + typed
+      : typed;
   const id = input.id ?? `user-${Date.now()}-${randomUUID().slice(0, 5)}`;
   // Its worktree is still being set up, its task hasn't launched (held by
   // Pause, say), or it's moving or landing: the message waits its turn.

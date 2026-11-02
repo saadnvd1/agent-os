@@ -73,9 +73,33 @@ export function useDoneSession() {
   );
 }
 
+// Archiving a session whose forks are still running asks what to do with them.
+export class ForkChildrenOpenError extends Error {
+  constructor(
+    message: string,
+    readonly open: number
+  ) {
+    super(message);
+  }
+}
+
 export function useArchiveSession() {
-  return useDoneMutation(async (id: string) =>
-    json(await post(`/api/sessions/${id}/archive`))
+  return useDoneMutation(
+    async (input: string | { id: string; children: "stop" | "keep" }) => {
+      const { id, children } =
+        typeof input === "string" ? { id: input, children: undefined } : input;
+      const res = await post(
+        `/api/sessions/${id}/archive`,
+        children ? { children } : undefined
+      );
+      const data = await res
+        .clone()
+        .json()
+        .catch(() => null);
+      if (res.status === 409 && typeof data?.children === "number")
+        throw new ForkChildrenOpenError(data.error, data.children);
+      return json(res);
+    }
   );
 }
 

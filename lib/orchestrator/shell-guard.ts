@@ -37,7 +37,7 @@ export interface ShellContext {
   protectedPids: () => Promise<Set<number>>;
 }
 
-interface Invocation {
+export interface Invocation {
   name: string;
   args: string[];
   cmd: SimpleCommand;
@@ -87,7 +87,10 @@ const SHELLS = /^(ba|z|da|k|fi|c|tc)?sh$/;
 
 // What a simple command runs once its wrappers are taken off: one
 // invocation, or several (`bash -c '…'`, `find -exec`).
-function invocations(cmd: SimpleCommand, depth = 0): Invocation[] | string {
+export function invocations(
+  cmd: SimpleCommand,
+  depth = 0
+): Invocation[] | string {
   let words = cmd.words;
   for (;;) {
     while (
@@ -183,7 +186,7 @@ function findInvocations(
 }
 
 // Words that aren't options; `--` ends options. `values` take the next word.
-function positionals(args: string[], values: string[] = []): string[] {
+export function positionals(args: string[], values: string[] = []): string[] {
   const out: string[] = [];
   for (let i = 0; i < args.length; i++) {
     const a = args[i];

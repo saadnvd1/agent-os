@@ -83,6 +83,21 @@ export function withFresh(commands: ChatCommand[]): ChatCommand[] {
     : [FRESH_COMMAND, ...commands];
 }
 
+// AgentOS's own command when forks are on: opens the fork sheet.
+export const FORK_COMMAND: ChatCommand = {
+  name: "fork",
+  description: "Start background copies of this session",
+};
+
+export const isForkCommand = (text: string): boolean =>
+  text.trim().toLowerCase() === "/fork";
+
+export function withFork(commands: ChatCommand[]): ChatCommand[] {
+  return commands.some((c) => c.name === "fork")
+    ? commands
+    : [FORK_COMMAND, ...commands];
+}
+
 export interface MenuGroup {
   label: string;
   commands: ChatCommand[];

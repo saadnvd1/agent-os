@@ -14,7 +14,6 @@ import type { TerminalHandle } from "@/components/Terminal";
 import type { Session, Project } from "@/lib/db";
 import { sessionRegistry } from "@/lib/client/session-registry";
 import { cn } from "@/lib/utils";
-import { ConductorPanel } from "@/components/ConductorPanel";
 import { useFileEditor } from "@/hooks/useFileEditor";
 import { MobileTabBar } from "./MobileTabBar";
 import { PairSwitch } from "@/components/Analyst/PairSwitch";
@@ -207,14 +206,6 @@ export const Pane = memo(function Pane({
 
   // File editor state - lifted here so it persists across view switches
   const fileEditor = useFileEditor();
-
-  // Check if this session is a conductor (has workers)
-  const workerCount = useMemo(() => {
-    if (!session) return 0;
-    return sessions.filter((s) => s.conductor_session_id === session.id).length;
-  }, [session, sessions]);
-
-  const isConductor = workerCount > 0;
 
   // A merged task keeps the log AgentOS wrote of it.
   const merged =
@@ -477,10 +468,8 @@ export const Pane = memo(function Pane({
           sessions={sessions}
           projects={projects}
           viewMode={viewMode}
-          isConductor={isConductor}
           hasLog={hasLog}
           hasReport={hasReport}
-          workerCount={workerCount}
           showGit={showGit}
           onMenuClick={onMenuClick}
           onViewModeChange={setViewMode}
@@ -501,10 +490,8 @@ export const Pane = memo(function Pane({
           sessions={sessions}
           viewMode={viewMode}
           isFocused={isFocused}
-          isConductor={isConductor}
           hasLog={hasLog}
           hasReport={hasReport}
-          workerCount={workerCount}
           canSplit={canSplit}
           canClose={canClose}
           hasAttachedTmux={!!activeTab?.attachedTmux}
@@ -587,24 +574,6 @@ export const Pane = memo(function Pane({
               onOpenInFiles={isLocalSession ? openInFiles : undefined}
             />
           )}
-
-          {/* Workers */}
-          {viewMode === "workers" && session && (
-            <ConductorPanel
-              conductorSessionId={session.id}
-              onAttachToWorker={(workerId) => {
-                setViewMode("terminal");
-                const worker = sessions.find((s) => s.id === workerId);
-                if (worker && terminalRef) {
-                  terminalRef.attach({
-                    sessionName: worker.tmux_name || `claude-${workerId}`,
-                    hostId: worker.host_id,
-                    attachOnly: true,
-                  });
-                }
-              }}
-            />
-          )}
         </div>
       ) : (
         <ResizablePanelGroup
@@ -661,25 +630,6 @@ export const Pane = memo(function Pane({
                       sessionId={session.id}
                       mobile={false}
                       onOpenInFiles={isLocalSession ? openInFiles : undefined}
-                    />
-                  )}
-
-                  {/* Workers */}
-                  {viewMode === "workers" && session && (
-                    <ConductorPanel
-                      conductorSessionId={session.id}
-                      onAttachToWorker={(workerId) => {
-                        setViewMode("terminal");
-                        const worker = sessions.find((s) => s.id === workerId);
-                        if (worker && terminalRef) {
-                          terminalRef.attach({
-                            sessionName:
-                              worker.tmux_name || `claude-${workerId}`,
-                            hostId: worker.host_id,
-                            attachOnly: true,
-                          });
-                        }
-                      }}
                     />
                   )}
                 </div>

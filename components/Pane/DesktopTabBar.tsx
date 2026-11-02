@@ -36,10 +36,8 @@ interface DesktopTabBarProps {
   sessions: Session[];
   viewMode: ViewMode;
   isFocused: boolean;
-  isConductor: boolean;
   hasLog?: boolean;
   hasReport?: boolean;
-  workerCount: number;
   canSplit: boolean;
   canClose: boolean;
   hasAttachedTmux: boolean;
@@ -68,10 +66,8 @@ export function DesktopTabBar({
   sessions,
   viewMode,
   isFocused,
-  isConductor,
   hasLog,
   hasReport,
-  workerCount,
   canSplit,
   canClose,
   hasAttachedTmux,
@@ -184,10 +180,8 @@ export function DesktopTabBar({
             isChat={session.view === "chat"}
             viewMode={viewMode}
             isLocalSession={isLocalSession}
-            isConductor={isConductor}
             hasLog={hasLog}
             hasReport={hasReport}
-            workerCount={workerCount}
             showGit={showGit}
             gitDrawerOpen={gitDrawerOpen}
             shellDrawerOpen={shellDrawerOpen}

@@ -1,9 +1,6 @@
 "use client";
 
-import type { StepCounts } from "@/lib/chat/tool-outcome";
 import {
-  Fragment,
-  memo,
   useCallback,
   useEffect,
   useLayoutEffect,
@@ -15,14 +12,17 @@ import { ArrowDown, Loader2 } from "lucide-react";
 import type { ClipboardEvent } from "react";
 import { useChat } from "@/data/chat/useChat";
 import { PausedBanner } from "./PausedBanner";
+import { groupTimeline } from "@/lib/chat/group";
+import type { ChatItem } from "@/lib/chat/events";
 import {
-  groupTimeline,
-  sameBlock,
-  STANDALONE_TOOLS,
-  type TimelineBlock,
-} from "@/lib/chat/group";
-import type { ApprovalDecision, ChatItem } from "@/lib/chat/events";
-import { isFreshCommand, withFresh } from "@/lib/chat/commands";
+  isForkCommand,
+  isFreshCommand,
+  withFork,
+  withFresh,
+} from "@/lib/chat/commands";
+import { useExperiment } from "@/data/experiments";
+import { ForkDialog, ForksStrip } from "./Forks";
+import { ReplyingTo } from "./ReplyingTo";
 import { compactsFirst } from "@/lib/chat/pending";
 import { useFreshStart } from "@/data/sessions";
 import {
@@ -35,10 +35,8 @@ import { quoteInsert, quoteMarkdown } from "@/lib/chat/quote";
 import { OrchestratorBar } from "@/components/Orchestrator/OrchestratorBar";
 import { ActivityLine } from "./Activity";
 import { modelLabel as pickedModelLabel } from "./ModelPicker";
-import { Approval } from "./Approval";
 import { BackgroundTasks } from "./BackgroundTasks";
-import { SubagentCard } from "./Subagent";
-import { UndoDialog, UndoneBlock } from "./Undo";
+import { UndoDialog } from "./Undo";
 import { Composer } from "./Composer";
 import { Queue } from "./Queue";
 import { LivePanel } from "@/components/Live/LivePanel";
@@ -48,25 +46,19 @@ import { composerCompacts } from "@/lib/chat/stale";
 import { useFreshStartQuery } from "@/data/fresh-start";
 import { QuoteButton } from "./QuoteButton";
 import { quoteIntoComposer } from "./quote-selection";
-import { ToolBodies, ToolGroup } from "./Tools";
+import { ToolBodies } from "./Tools";
 import { RowState, RowStore } from "./rowState";
 import { useKeybindings } from "@/hooks/useKeybindings";
 import { Background, type BackgroundValue } from "./background";
 import { FindBar } from "./FindBar";
 import { useFind, useFindShortcut } from "./useFind";
-import { McpServers } from "./McpServers";
 import { ChatSessionId } from "./session";
-import { ArtifactCard } from "./Artifact";
-import { PlanCard } from "./PlanCard";
 import { ChatIdle, RetryTurn } from "./idle";
 import { RETRY_TEXT } from "@/lib/chat/turn-end";
 import { ContextMeter } from "./ContextMeter";
 import { SetupCard } from "./SetupCard";
-import { UserTurn } from "./EventRow";
-import { EventGroup } from "./EventTurns";
 import { needsMoreHistory } from "./needs-more-history";
 import { useGoToItem } from "./useGoToItem";
-import { NewDivider } from "./NewDivider";
 import { usePosition } from "./usePosition";
 import { NeedsYouStrip } from "@/components/Orchestrator/NeedsYouStrip";
 import { useResolveQuestion } from "@/data/orchestrators";
@@ -83,180 +75,12 @@ import {
   TurnStarts,
   type BookmarkChat,
 } from "@/components/Bookmarks/context";
-import {
-  AssistantMessage,
-  CommandOutput,
-  Compacted,
-  SkillChip,
-  UserMessage,
-  ErrorMessage,
-  NoteLine,
-  Reasoning,
-  Todos,
-  TurnEnd,
-} from "./Messages";
+import { UserMessage } from "./Messages";
 
-interface ItemActions {
-  respond: (id: string, answer: ApprovalDecision) => void;
-  // Absent inside undone messages; hidden while the agent works (ChatIdle).
-  onCarryPlan?: (id: string) => void;
-  onKeepPlanning?: () => void;
-  // Absent inside undone messages; hidden while the agent works (ChatIdle).
-  onUndo?: (id: string) => void;
-  onQuote?: (text: string) => void;
-}
+import type { ItemActions } from "./TimelineRows";
+import { TimelineRows } from "./TimelineRows";
 
-function Item({
-  item,
-  actions,
-  steps,
-}: {
-  item: ChatItem;
-  actions: ItemActions;
-  steps?: StepCounts;
-}) {
-  switch (item.kind) {
-    case "user":
-      return (
-        <UserTurn
-          item={item}
-          onUndo={
-            item.checkpoint && actions.onUndo
-              ? () => actions.onUndo?.(item.id)
-              : undefined
-          }
-        />
-      );
-    case "assistant":
-      return <AssistantMessage item={item} onQuote={actions.onQuote} />;
-    case "reasoning":
-      return <Reasoning item={item} />;
-    case "todos":
-      return <Todos item={item} />;
-    case "turn_end":
-      return <TurnEnd item={item} steps={steps} />;
-    case "error":
-      return <ErrorMessage item={item} />;
-    case "command_output":
-      return <CommandOutput item={item} />;
-    case "mcp":
-      return <McpServers item={item} />;
-    case "compacted":
-      return <Compacted item={item} />;
-    case "note":
-      return <NoteLine item={item} />;
-    case "artifact":
-      return <ArtifactCard item={item} />;
-    case "approval":
-      return <Approval item={item} respond={actions.respond} />;
-    case "plan":
-      return (
-        <PlanCard
-          item={item}
-          onCarryOut={
-            actions.onCarryPlan
-              ? () => actions.onCarryPlan?.(item.id)
-              : undefined
-          }
-          onKeepPlanning={() => actions.onKeepPlanning?.()}
-        />
-      );
-    case "tool":
-      return item.name === "Skill" ? (
-        <SkillChip item={item} />
-      ) : STANDALONE_TOOLS.has(item.name) ? (
-        <SubagentCard item={item} />
-      ) : null;
-    default:
-      return null;
-  }
-}
-
-function Timeline({
-  blocks,
-  actions,
-}: {
-  blocks: TimelineBlock[];
-  actions: ItemActions;
-}) {
-  return blocks.map((b) => (
-    <Block
-      key={b.type === "item" ? b.item.id : b.id}
-      block={b}
-      actions={actions}
-    />
-  ));
-}
-
-const blockKey = (b: TimelineBlock) => (b.type === "item" ? b.item.id : b.id);
-
-// One block, re-rendered only when its items or the actions change: a long
-// conversation doesn't redraw every message for each streamed word.
-const Block = memo(
-  function Block({
-    block: b,
-    actions,
-  }: {
-    block: TimelineBlock;
-    actions: ItemActions;
-  }) {
-    const respond = actions.respond;
-    const undoneActions = useMemo(
-      () => ({ respond, onQuote: actions.onQuote }),
-      [respond, actions.onQuote]
-    );
-    return b.type === "tools" ? (
-      <ToolGroup tools={b.tools} />
-    ) : b.type === "events" ? (
-      <EventGroup
-        id={b.id}
-        turns={b.turns}
-        renderReplies={(items) => (
-          <Timeline blocks={groupTimeline(items)} actions={undoneActions} />
-        )}
-      />
-    ) : b.type === "undone" ? (
-      <UndoneBlock
-        undo={b.undo}
-        count={b.items.filter((i) => i.kind === "user").length}
-      >
-        <Timeline blocks={groupTimeline(b.items)} actions={undoneActions} />
-      </UndoneBlock>
-    ) : (
-      <div data-item={b.item.id}>
-        <Item item={b.item} actions={actions} steps={b.steps} />
-      </div>
-    );
-  },
-  (prev, next) =>
-    prev.actions === next.actions && sameBlock(prev.block, next.block)
-);
-
-// The conversation's rows in the page's flow, not a virtualized list: a
-// selection follows the DOM, and a list that recycles and re-orders its rows
-// breaks it (docs/decisions/2026-10-11-chat-timeline-in-flow.md).
-export function TimelineRows({
-  blocks,
-  actions,
-  newFrom,
-}: {
-  blocks: TimelineBlock[];
-  actions: ItemActions;
-  // The block the reader hasn't seen yet begins at, when they were away.
-  newFrom?: string | null;
-}) {
-  return blocks.map((b) => (
-    <Fragment key={blockKey(b)}>
-      {newFrom === blockKey(b) && <NewDivider />}
-      <div
-        data-block={blockKey(b)}
-        className="chat-row mx-auto w-full max-w-3xl px-4 pb-4"
-      >
-        <Block block={b} actions={actions} />
-      </div>
-    </Fragment>
-  ));
-}
+export { TimelineRows };
 
 export function ChatPanel({
   sessionId,
@@ -282,6 +106,9 @@ export function ChatPanel({
     at: number;
     append?: boolean;
   }>();
+  const forksOn = useExperiment("forks");
+  const [forkOpen, setForkOpen] = useState(false);
+  const withForkIf = (c: typeof commands) => (forksOn ? withFork(c) : c);
   const {
     items,
     hasMore,
@@ -799,19 +626,7 @@ export function ChatPanel({
           />
         )}
         {replyTo && (
-          <div className="text-muted-foreground mb-2 flex min-h-11 items-center gap-2 rounded-lg px-2 text-xs">
-            <span className="min-w-0 flex-1 truncate">
-              Answering: {replyTo.text}
-            </span>
-            <button
-              type="button"
-              onClick={() => setReplyTo(null)}
-              aria-label="Stop answering"
-              className="hover:text-foreground flex size-11 shrink-0 items-center justify-center"
-            >
-              ×
-            </button>
-          </div>
+          <ReplyingTo text={replyTo.text} onStop={() => setReplyTo(null)} />
         )}
         <ActivityLine
           items={items}
@@ -830,6 +645,7 @@ export function ChatPanel({
         />
         <QuoteButton rootRef={scrollRef} onQuote={quote} />
         <PausedBanner sessionId={sessionId} />
+        <ForksStrip sessionId={sessionId} />
         <Queue
           queue={queue}
           running={running}
@@ -872,6 +688,10 @@ export function ChatPanel({
               startFresh.mutate(sessionId);
               return;
             }
+            if (forksOn && isForkCommand(text)) {
+              setForkOpen(true);
+              return;
+            }
             toEnd();
             const compact = composerCompacts(text, context, {
               state,
@@ -891,7 +711,7 @@ export function ChatPanel({
             }
           }}
           onStop={interrupt}
-          commands={freshStart ? withFresh(commands) : commands}
+          commands={withForkIf(freshStart ? withFresh(commands) : commands)}
           onRefreshCommands={refreshCommands}
           refreshingCommands={refreshingCommands}
           models={models}
@@ -911,6 +731,13 @@ export function ChatPanel({
           focusKey={active ? sessionId : null}
         />
       </div>
+      {forksOn && (
+        <ForkDialog
+          sessionId={sessionId}
+          open={forkOpen}
+          onOpenChange={setForkOpen}
+        />
+      )}
       {undoPreview && (
         <UndoDialog
           preview={undoPreview.preview}

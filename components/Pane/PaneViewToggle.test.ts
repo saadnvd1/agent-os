@@ -56,8 +56,6 @@ describe("PaneViewToggle", () => {
           viewMode: "terminal",
           isLocalSession: true,
           showGit,
-          isConductor: false,
-          workerCount: 0,
           gitDrawerOpen: false,
           shellDrawerOpen: false,
           onViewModeChange: () => {},

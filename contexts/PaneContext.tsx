@@ -29,7 +29,7 @@ import {
 import { useViewport } from "@/hooks/useViewport";
 
 export type ViewMode =
-  "terminal" | "files" | "git" | "workers" | "log" | "artifacts" | "report";
+  "terminal" | "files" | "git" | "log" | "artifacts" | "report";
 
 export interface PaneViewState {
   viewMode: ViewMode;

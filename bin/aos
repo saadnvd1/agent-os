@@ -38,6 +38,24 @@ const usage = `aos: talk to other agent sessions in AgentOS
                                      record a wait on an event and return: you're woken
                                      when it goes idle, its PR merges or it messages
                                      you, or at the timeout. Never blocks the shell
+  aos fork [--worktree] [--label name] "<instruction>" ["<instruction>" ...]
+                                     (Settings → Experimental → Forks) start background
+                                     copies of this session that know what it knows; it
+                                     returns at once and results arrive as a message
+  aos children [<n>] [--stats]       your forks and their results; a number shows one in full
+  aos cancel <n>|--all               stop forks
+  aos wait children --all|--any [--timeout 30m]
+                                     end your turn and be woken with fork results
+  aos return [--failed] "<result>"   from a fork child: hand in your result
+  aos fork [--worktree] [--label name] "<instruction>" ["<instruction>" ...]
+                                     (Settings → Experimental → Forks) start background
+                                     copies of this session that know what it knows; it
+                                     returns at once and results arrive as a message
+  aos children [<n>] [--stats]       your forks and their results; a number shows one in full
+  aos cancel <n>|--all               stop forks
+  aos wait children --all|--any [--timeout 30m]
+                                     end your turn and be woken with fork results
+  aos return [--failed] "<result>"   from a fork child: hand in your result
   aos inbox                          read messages sent to you
   aos history <session>              your conversation with a session
   aos read <session> [--turns N | --lines N] [--all] [--grep text] [--json]
@@ -214,6 +232,14 @@ const waitLib = require("./aos-lib/wait.js")({ post, fail, needMe, me });
 const readCmd = (words) =>
   require("./aos-lib/read.js")({ call, fail, needMe, me })(words);
 
+const forkLib = require("./aos-lib/fork.js")({
+  call,
+  post,
+  fail,
+  needMe,
+  me,
+  stdin,
+});
 const claimCmd = (words) =>
   require("./aos-lib/claim.js")({ url, token, fail })(words);
 const claimsCmd = (words) =>
@@ -328,10 +354,15 @@ async function scheduleAdd(words) {
 
 // `aos heavy -- <cmd>`: starts the command at once, then registers it and
 // prints the server's note, if any. A server that's down says nothing.
-function heavy(words) {
+async function heavy(words) {
   const argv = words[0] === "--" ? words.slice(1) : words;
   if (!argv.length) fail("usage: aos heavy -- <command...>");
   const { spawn } = require("child_process");
+  // A fork child waits for a slot first (it's told in its brief).
+  const release =
+    me && process.env.AOS_FORK_CHILD === "1"
+      ? await require("./aos-lib/heavy-lease.js")({ url, token, me }).acquire()
+      : null;
   // One argument is a shell command line ("npm test && npm run build").
   const child =
     argv.length === 1
@@ -340,7 +371,11 @@ function heavy(words) {
   child.on("error", (err) => fail(`can't run ${argv[0]}: ${err.message}`));
   for (const sig of ["SIGINT", "SIGTERM", "SIGHUP"])
     process.on(sig, () => child.kill(sig));
-  child.on("exit", (code, signal) => process.exit(signal ? 1 : (code ?? 1)));
+  child.on("exit", (code, signal) =>
+    Promise.resolve(release?.()).finally(() =>
+      process.exit(signal ? 1 : (code ?? 1))
+    )
+  );
   if (child.pid)
     fetch(url + "/api/load/heavy", {
       method: "POST",
@@ -453,7 +488,17 @@ async function main() {
       return;
     }
     case "wait":
-      return waitLib.wait(args);
+      return args[0] === "children"
+        ? forkLib.wait(args.slice(1))
+        : waitLib.wait(args);
+    case "fork":
+      return forkLib.fork(args);
+    case "children":
+      return forkLib.children(args);
+    case "return":
+      return forkLib.ret(args);
+    case "cancel":
+      return forkLib.cancel(args);
     case "inbox": {
       needMe();
       const { messages } = await call(
