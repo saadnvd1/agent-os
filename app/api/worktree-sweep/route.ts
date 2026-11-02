@@ -10,6 +10,7 @@ import { requireLocalTrust } from "@/lib/security/route-guard";
 import { db, type Session } from "@/lib/db";
 import { orchestratorFullAccess } from "@/lib/orchestrator/full-access";
 import { sweepState } from "@/lib/worktree-sweep/state";
+import { owner } from "@/lib/owner";
 
 const body = z.union([
   z.object({
@@ -53,8 +54,7 @@ export async function PUT(request: NextRequest) {
         if (!s || !orchestratorFullAccess(s))
           return NextResponse.json(
             {
-              error:
-                "a session can't turn the full clean-up on: Saad does (Health, Clean-up, Turn on), or the orchestrator's sweep_arm tool when he has said to",
+              error: `a session can't turn the full clean-up on: ${owner()} does (Health, Clean-up, Turn on), or the orchestrator's sweep_arm tool when he has said to`,
             },
             { status: 403 }
           );

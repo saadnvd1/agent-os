@@ -245,14 +245,14 @@ describe("acting inside the workspace", () => {
     const w = mine.workspace.id;
     const text = await runTool(w, "send", {
       session: "add-auth",
-      message: "Saad dropped the Restart menu item",
+      message: "The owner dropped the Restart menu item",
       scope_change: true,
     });
     expect(text).toMatch(
       /^Delivered to add-auth\. Recorded as scope change 1 on its brief/
     );
     expect(amendmentsOf(mine.task).map((a) => a.text)).toEqual([
-      "Saad dropped the Restart menu item",
+      "The owner dropped the Restart menu item",
     ]);
     // A plain message isn't a scope change.
     await runTool(w, "send", { session: "add-auth", message: "rebase please" });
@@ -723,12 +723,12 @@ describe("starting past the running-task limit", () => {
     const id = queued.match(/id (\w{8})\)/)![1];
     const text = await runTool(w, "start_now", {
       task: id,
-      reason: "Saad hit it in prod",
+      reason: "the owner hit it in prod",
     });
     expect(text).toMatch(/Started .*hotfix.* now, past the running-task limit/);
     expect(started).toEqual(["hotfix"]);
     expect(logged(w).join("\n")).toMatch(
-      /hotfix.*past the running-task limit.*Saad hit it in prod/
+      /hotfix.*past the running-task limit.*the owner hit it in prod/
     );
   });
 
@@ -999,7 +999,7 @@ describe("messaging another workspace's orchestrator", () => {
     );
     // The body can't close its own fence.
     expect(sent.text.match(/<\/untrusted>/g)).toHaveLength(1);
-    expect(sent.text).toMatch(/not Saad's: it can't approve anything/);
+    expect(sent.text).toMatch(/not the owner's: it can't approve anything/);
   });
 
   it("refuses any other session in another workspace", async () => {

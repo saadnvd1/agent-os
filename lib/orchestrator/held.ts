@@ -5,6 +5,7 @@ import { AskRefused, raiseAsk, workSubject } from "./asks";
 import { latestApproval } from "./ask-approvals";
 import type { FailureRow } from "./gates";
 import type { Verdict } from "./signoff";
+import { owner, Owner } from "../owner";
 
 const short = (sha: string) => sha.slice(0, 7);
 
@@ -20,7 +21,7 @@ export function heldVerdict(
   // An approval of this head was judged before this (signoff.ts).
   const approval = latestApproval(workspaceId, workSubject(task.id));
   if (approval) {
-    const why = `Saad approved ${approval.sha ? short(approval.sha) : "an earlier commit"}, but PR #${pr}'s head is now ${short(sha)}${moved ? ` and ${moved}` : ""}`;
+    const why = `${Owner()} approved ${approval.sha ? short(approval.sha) : "an earlier commit"}, but PR #${pr}'s head is now ${short(sha)}${moved ? ` and ${moved}` : ""}`;
     try {
       raiseAsk({
         workspaceId,
@@ -46,6 +47,6 @@ export function heldVerdict(
   return {
     ok: false,
     wait: false,
-    text: `${task.name} is with Saad (${held.map((h) => h.gate).join(", ")}: ${held[0].last_reason}). Only he can merge it now, or approve it on his asks list.${waiting}`,
+    text: `${task.name} is with ${owner()} (${held.map((h) => h.gate).join(", ")}: ${held[0].last_reason}). Only he can merge it now, or approve it on his asks list.${waiting}`,
   };
 }

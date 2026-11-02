@@ -39,6 +39,8 @@ import {
   TurnBookmark,
   BookmarkPress,
 } from "@/components/Bookmarks/BookmarkButton";
+import { useOwnerName } from "@/data/client-config/queries";
+import { ownerVerb } from "@/lib/owner-label";
 
 type Of<K extends ChatItem["kind"]> = Extract<ChatItem, { kind: K }>;
 
@@ -473,13 +475,18 @@ export function CommandOutput({ item }: { item: Of<"command_output"> }) {
 const NOTE_LABEL = {
   note: "Note",
   brake: "Brake",
-  escalation: "Saad decides",
+  escalation: "",
   ask: "Ask",
   pause: "Pause",
   away: "Away",
 } as const;
 
 export function NoteLine({ item }: { item: Of<"note"> }) {
+  const name = useOwnerName();
+  const label =
+    item.tone === "escalation"
+      ? ownerVerb(name, "decides", "decide")
+      : NOTE_LABEL[item.tone];
   return (
     <div
       className={cn(
@@ -490,7 +497,7 @@ export function NoteLine({ item }: { item: Of<"note"> }) {
       )}
     >
       <span className="text-muted-foreground mr-2 font-mono text-[11px] tracking-wide uppercase">
-        {NOTE_LABEL[item.tone]}
+        {label}
       </span>
       {item.text}
     </div>

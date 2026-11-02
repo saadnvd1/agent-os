@@ -29,6 +29,7 @@ import {
   type ScheduleRun,
 } from "./store";
 import { isPaused } from "../orchestrator/pause";
+import { ownerUi } from "../owner";
 
 export * from "./store";
 export { schedulesEnabled, startScheduler, tick } from "./scheduler";
@@ -52,7 +53,7 @@ function creatorOf(s: Schedule): ScheduleView["createdBy"] {
   const creator = s.created_by_session_id
     ? getSessionRow(s.created_by_session_id)
     : null;
-  if (!creator) return { kind: "saad", name: "Saad" };
+  if (!creator) return { kind: "saad", name: ownerUi(true) };
   return creator.role === "orchestrator"
     ? { kind: "orchestrator", name: "Orchestrator" }
     : { kind: "session", name: creator.name };

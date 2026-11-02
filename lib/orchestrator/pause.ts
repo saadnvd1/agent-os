@@ -8,6 +8,7 @@
 
 import { db } from "../db";
 import { getWorkspace } from "../workspaces";
+import { ownerUi } from "../owner";
 import { addNote } from "./notes";
 
 export function isPaused(workspaceId: string): boolean {
@@ -15,7 +16,7 @@ export function isPaused(workspaceId: string): boolean {
 }
 
 export const PAUSED_REFUSAL =
-  "Paused by Saad: acting tools refuse until he resumes. You can still read, note and ask_saad; events wait until then.";
+  "Paused by the owner: acting tools refuse until they resume. You can still read, note and ask_owner; events wait until then.";
 
 export function setPaused(workspaceId: string, paused: boolean): boolean {
   const changed = db
@@ -29,8 +30,8 @@ export function setPaused(workspaceId: string, paused: boolean): boolean {
     addNote(
       workspaceId,
       paused
-        ? "Paused by Saad. Events wait and acting tools refuse until he resumes."
-        : "Resumed by Saad. Events that queued while paused are delivered now.",
+        ? `Paused by ${ownerUi()}. Events wait and acting tools refuse until ${ownerUi() === "you" ? "you resume" : "they resume"}.`
+        : `Resumed by ${ownerUi()}. Events that queued while paused are delivered now.`,
       "pause"
     );
   return changed === 1;

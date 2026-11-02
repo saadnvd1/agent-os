@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import type { PresenceProof } from "@/lib/security/presence-http";
 import { getWorkspace } from "@/lib/workspaces";
 import { addRule, listRules } from "@/lib/orchestrator/rules";
-import { provenAsSaad } from "./presence";
+import { provenAsOwner } from "./presence";
 
 type RouteParams = { params: Promise<{ id: string }> };
 
@@ -25,7 +25,7 @@ export async function POST(request: NextRequest, { params }: RouteParams) {
   const { text } = body;
   if (typeof text !== "string")
     return NextResponse.json({ error: "text is required" }, { status: 400 });
-  const refused = await provenAsSaad(request, id, body);
+  const refused = await provenAsOwner(request, id, body);
   if (refused) return refused;
   try {
     return NextResponse.json({ rule: addRule(id, text, "saad") });

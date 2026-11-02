@@ -12,9 +12,10 @@ import {
 } from "./gates";
 import { LOOP_GUARD_COMMITS, stuckBy, stuckWhy } from "./loop-guard";
 import { addNote } from "./notes";
+import { owner, Owner } from "../owner";
 
 // Puts the ask on Saad's list (or notes why it couldn't be).
-export function askSaadAbout(
+export function askOwnerAbout(
   workspaceId: string,
   task: { id: string; name: string },
   why: string,
@@ -36,14 +37,14 @@ export function askSaadAbout(
     if (!(error instanceof AskRefused)) throw error;
     addNote(
       workspaceId,
-      `Saad must decide on ${task.name} (${url}): ${why}. Not added to his asks: ${error.message}.`,
+      `${Owner()} must decide on ${task.name} (${url}): ${why}. Not added to his asks: ${error.message}.`,
       "escalation"
     );
   }
   if (created)
     addNote(
       workspaceId,
-      `Saad must decide on ${task.name} (${url}): ${why}. The orchestrator won't merge it; it's on his asks list to approve, decline, or sign off or drop himself.`,
+      `${Owner()} must decide on ${task.name} (${url}): ${why}. The orchestrator won't merge it; it's on his asks list to approve, decline, or sign off or drop himself.`,
       "escalation"
     );
 }
@@ -64,10 +65,10 @@ export function escalate(
   markEscalated(task.id, gate, why);
   if (opts.hold) {
     holdAsk(task.id, gate);
-    return `Escalated to Saad: ${why}. His ask goes up once ${task.name}'s agent is idle and CI has settled on its latest head, so it names the commit he'd merge; his answer reaches you as an event. Don't retry; say so in your chat.`;
+    return `Escalated to ${owner()}: ${why}. His ask goes up once ${task.name}'s agent is idle and CI has settled on its latest head, so it names the commit he'd merge; his answer reaches you as an event. Don't retry; say so in your chat.`;
   }
-  askSaadAbout(workspaceId, task, why, url, sha);
-  return `Escalated to Saad: ${why}. It's on his asks list; his answer reaches you as an event. Don't retry; say so in your chat.`;
+  askOwnerAbout(workspaceId, task, why, url, sha);
+  return `Escalated to ${owner()}: ${why}. It's on his asks list; his answer reaches you as an event. Don't retry; say so in your chat.`;
 }
 
 // Counts a gate's failure on this head against the task. A failure is the

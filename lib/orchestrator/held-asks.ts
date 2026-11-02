@@ -6,7 +6,7 @@
 import { db, type Session } from "../db";
 import { prFor } from "../tasks/session";
 import { latestApproval } from "./ask-approvals";
-import { askSaadAbout } from "./escalate";
+import { askOwnerAbout } from "./escalate";
 import { getCheck } from "./checks";
 import { openBySubject, workSubject } from "./asks";
 import { recentlyMessaged } from "./conditions";
@@ -109,6 +109,6 @@ async function raiseFor(
       ? [`${task.name} was still working after an hour; this is its head now.`]
       : []),
   ].join("\n");
-  askSaadAbout(workspaceId, task, why, pr.url, pr.head);
+  askOwnerAbout(workspaceId, task, why, pr.url, pr.head);
   releaseHeldAsks(taskId);
 }

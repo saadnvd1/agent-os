@@ -43,7 +43,7 @@ describe("the merge gates", () => {
     expect(evaluateGates(input()).every((g) => g.state === "pass")).toBe(true);
   });
 
-  it("ci: waits while running or settling, fails when red, and no CI goes to Saad", () => {
+  it("ci: waits while running or settling, fails when red, and no CI goes to the owner", () => {
     expect(gate(input({ checks: "pending" }), "ci").state).toBe("wait");
     expect(gate(input({ checks: "fail", failing: "test" }), "ci")).toEqual({
       gate: "ci",
@@ -192,7 +192,7 @@ describe("the plain diff rules", () => {
     ]);
   });
 
-  it("sends CI, build, agent, deploy and secrets-handling files to Saad", () => {
+  it("sends CI, build, agent, deploy and secrets-handling files to the owner", () => {
     const files = [
       ".github/workflows/ci.yml",
       ".github/dependabot.yml",

@@ -9,6 +9,7 @@
 
 import { db } from "../db";
 import { redact } from "./untrusted";
+import { owner } from "../owner";
 
 export type RuleAuthor = "orchestrator" | "saad";
 
@@ -114,7 +115,7 @@ export function removeRule(
   // read can't talk it into removing one.
   if (by === "orchestrator" && rule.added_by === "saad")
     throw new Error(
-      `Rule ${id} is Saad's: only he removes it, in Settings → Workspaces`
+      `Rule ${id} is ${owner()}'s: only he removes it, in Settings → Workspaces`
     );
   db.prepare(
     `UPDATE orchestrator_rules SET removed_at = datetime('now'), removed_by = ?

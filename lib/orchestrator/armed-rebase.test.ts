@@ -87,11 +87,11 @@ describe("arm", () => {
     expect(armedAt(t.task)).not.toBeNull();
   });
 
-  it("disarms on a failure that goes to Saad", async () => {
+  it("disarms on a failure that goes to the owner", async () => {
     const t = setup();
     await runTool(t.w, "arm", { task: "add-a" });
     // The review gate failed on the three commits before this one; a
-    // fourth in a row sends it to Saad.
+    // fourth in a row sends it to the owner.
     for (let i = 1; i < LOOP_GUARD_COMMITS; i++)
       recordFailure(
         t.w,
@@ -105,7 +105,7 @@ describe("arm", () => {
     expect(merges).toEqual([]);
     expect(armedAt(t.task)).toBeNull();
     expect(events(t.w)[0]).toMatch(
-      /^task add-a: armed merge stopped and disarmed, it went to Saad\./
+      /^task add-a: armed merge stopped and disarmed, it went to the owner\./
     );
   });
 
@@ -119,7 +119,7 @@ describe("arm", () => {
     expect(armedAt(t.task)).toBeNull();
   });
 
-  it("refuses to arm a task that isn't running, is with Saad, or has no orchestrator to report to", async () => {
+  it("refuses to arm a task that isn't running, is with the owner, or has no orchestrator to report to", async () => {
     const t = setup();
     const row = () =>
       db
@@ -127,7 +127,7 @@ describe("arm", () => {
         .get(t.task) as Parameters<typeof armTask>[0];
     escalate(t.w, { id: t.task, name: "add-a" }, "ci", "why", "url", t.sha);
     await expect(runTool(t.w, "arm", { task: "add-a" })).rejects.toThrow(
-      /is with Saad/
+      /is with the owner/
     );
     db.prepare(
       `DELETE FROM orchestrator_gate_failures WHERE session_id = ?`
@@ -149,7 +149,7 @@ describe("arm", () => {
     expect(armedAt(t.task)).toBeNull();
   });
 
-  it("disarms with one event when the PR is closed, or the task went to Saad", async () => {
+  it("disarms with one event when the PR is closed, or the task went to the owner", async () => {
     const t = setup();
     await runTool(t.w, "arm", { task: "add-a" });
     S.pr = { ...S.pr!, state: "CLOSED" };
@@ -163,12 +163,12 @@ describe("arm", () => {
     await mergeArmed(t.w, t.facts(), armedDeps().deps, 2);
     expect(armedAt(t.task)).toBeNull();
     expect(events(t.w).at(-1)).toMatch(
-      /^task add-a: disarmed, it's with Saad \(ci\)/
+      /^task add-a: disarmed, it's with the owner \(ci\)/
     );
     expect(merges).toEqual([]);
   });
 
-  it("disarms a task Saad has an open ask about, and won't arm it", async () => {
+  it("disarms a task the owner has an open ask about, and won't arm it", async () => {
     const t = setup();
     await runTool(t.w, "arm", { task: "add-a" });
     t.put("review", "pass");
@@ -183,10 +183,10 @@ describe("arm", () => {
     expect(merges).toEqual([]);
     expect(armedAt(t.task)).toBeNull();
     expect(events(t.w)).toEqual([
-      "task add-a: disarmed, it's with Saad (an open ask)",
+      "task add-a: disarmed, it's with the owner (an open ask)",
     ]);
     await expect(runTool(t.w, "arm", { task: "add-a" })).rejects.toThrow(
-      /has an open ask with Saad/
+      /has an open ask with the owner/
     );
   });
 
@@ -324,7 +324,7 @@ describe("automatic rebase", () => {
     expect(armedAt(t.task)).not.toBeNull();
     expect(openAsks(t.w)).toHaveLength(0);
     expect(failureOf(t.task, "ci")).toBeNull();
-    expect(events(t.w).join("\n")).not.toMatch(/Saad|disarmed/);
+    expect(events(t.w).join("\n")).not.toMatch(/the owner|disarmed/);
 
     await rebaseConflicting(t.w, t.facts(), rebaseDeps().deps);
     git(t.repo, "fetch", "-q", "origin");

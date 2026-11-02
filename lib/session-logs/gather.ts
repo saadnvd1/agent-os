@@ -20,6 +20,7 @@ import { PLAN_FILE } from "../models/plan-step";
 import { estimateCost, rowModel } from "../usage/cost";
 import { sessionPath } from "../session-url";
 import type { LogData, LogEvent, LogUsageRow } from "./build";
+import { ownerUi } from "../owner";
 
 const expandHome = (p: string) => p.replace(/^~/, os.homedir());
 
@@ -146,7 +147,7 @@ function askEvents(id: string): LogEvent[] {
   return rows.flatMap((a): LogEvent[] => {
     const raised: LogEvent = {
       at: a.created_at,
-      text: `Escalated to Saad (${a.kind})`,
+      text: `Escalated to ${ownerUi()} (${a.kind})`,
       sha: a.sha,
       quote: a.title,
       detail: a.detail || null,
@@ -156,7 +157,7 @@ function askEvents(id: string): LogEvent[] {
       raised,
       {
         at: a.resolved_at,
-        text: `Saad ${a.status === "approved" ? "approved" : a.status === "declined" ? "declined" : "answered"}`,
+        text: `${ownerUi(true)} ${a.status === "approved" ? "approved" : a.status === "declined" ? "declined" : "answered"}`,
         sha: a.sha,
         quote: a.title,
         detail: a.answer,

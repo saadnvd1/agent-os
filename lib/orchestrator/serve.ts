@@ -320,7 +320,7 @@ export async function runTool(
       return await arm(w, p(tool, raw).task);
     case "disarm":
       return disarm(w, p(tool, raw).task);
-    case "ask_saad":
+    case "ask_owner":
       return askSaad(w, p(tool, raw));
     case "question": {
       const a = p(tool, raw);

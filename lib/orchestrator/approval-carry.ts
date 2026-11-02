@@ -11,6 +11,7 @@ import { addNote } from "./notes";
 import { comparePatches } from "./patch";
 import { fetchRefs } from "./repo";
 import type { Session } from "../db";
+import { Owner } from "../owner";
 
 const short = (sha: string) => sha.slice(0, 7);
 
@@ -41,7 +42,7 @@ export async function carryApproval(
   if (rebindApproval(approval.id, approval.sha, head, line))
     addNote(
       workspaceId,
-      `Saad's approval of ${work.name} at ${short(approval.sha)} carries to ${short(head)}: same patch, rebased onto ${base}.`
+      `${Owner()}'s approval of ${work.name} at ${short(approval.sha)} carries to ${short(head)}: same patch, rebased onto ${base}.`
     );
   const now = getAsk(workspaceId, approval.id);
   return { approval: now?.sha === head && !now.used_at ? now : null, note };

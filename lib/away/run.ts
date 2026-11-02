@@ -56,6 +56,7 @@ import { checkDeploy } from "./deploy";
 import { buildAwayReport, phoneSummary, reportMarkdown } from "./report";
 import { awayOnLine } from "./brief";
 import { shutFinishedTaskSimulators } from "../simulator";
+import { owner, Owner, ownerUi } from "../owner";
 
 const PHONE_SOURCE = "away";
 const PHONE_LINES = 8;
@@ -116,7 +117,7 @@ function tellAway(
       ).run(away.id, workspaceId, orchestratorId, toldKey(workspaceId));
       addNote(
         workspaceId,
-        `Saad turned Away on, ${untilText(away, now)}.`,
+        `${ownerUi(true)} turned Away on, ${untilText(away, now)}.`,
         "away"
       );
     }
@@ -181,13 +182,13 @@ export function turnAwayOff(
   }
   const line =
     by === "expired"
-      ? "Away mode ran out: Saad may be back. Go back to reacting to events; don't drive interactive sessions."
-      : "Saad is back: Away mode is off. Go back to reacting to events.";
+      ? `Away mode ran out: ${owner()} may be back. Go back to reacting to events; don't drive interactive sessions.`
+      : `${Owner()} is back: Away mode is off. Go back to reacting to events.`;
   for (const workspaceId of reachedWorkspaces(ended.id)) {
     queueEvent(workspaceId, `away-back:${ended.id}`, null, line, now);
     addNote(
       workspaceId,
-      by === "expired" ? "Away ran out." : "Saad turned Away off.",
+      by === "expired" ? "Away ran out." : `${ownerUi(true)} turned Away off.`,
       "away"
     );
   }

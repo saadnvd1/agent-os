@@ -24,6 +24,7 @@ import type { SweepRun } from "../worktree-sweep/types";
 import { addNote } from "./notes";
 import { PAUSED_REFUSAL } from "./pause";
 import { getWorkspace } from "../workspaces";
+import { owner } from "../owner";
 
 export const DRY_RUN_FRESH_MS = 60 * 60 * 1000;
 
@@ -165,7 +166,7 @@ export async function sweepArm(
 
 export async function sweepDryRun(machine: string): Promise<string> {
   const m = machineOf(machine);
-  const started = `Dry run started on ${m.name}; it takes a few minutes and removes nothing. When Saad has said to turn the full clean-up on, call sweep_arm: it reads this run.`;
+  const started = `Dry run started on ${m.name}; it takes a few minutes and removes nothing. When ${owner()} has said to turn the full clean-up on, call sweep_arm: it reads this run.`;
   if (m.link) {
     await hostApi(m.link, "/api/worktree-sweep/run", {
       body: { dryRun: true },

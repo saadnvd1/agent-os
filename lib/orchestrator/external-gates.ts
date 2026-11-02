@@ -30,6 +30,7 @@ import { signOffTask } from "../tasks";
 import { prFor } from "../tasks/session";
 import { ciSettleIn } from "./task-state";
 import { untrusted } from "./untrusted";
+import { owner, Owner } from "../owner";
 
 const short = (sha: string) => sha.slice(0, 7);
 
@@ -124,7 +125,7 @@ export async function signOffExternal(
   const verdict = await judgeExternal(workspaceId, ext);
   if (!verdict.ok) throw new Error(verdict.text);
   if (verdict.approval && !spendApproval(verdict.approval))
-    throw new Error(`Saad's approval for ${ext.name} was already used`);
+    throw new Error(`${Owner()}'s approval for ${ext.name} was already used`);
   const { method } = mergePolicy(ext.project);
   try {
     await mergePR({
@@ -147,7 +148,7 @@ export async function signOffExternal(
   addNote(
     workspaceId,
     verdict.approval
-      ? `Merged ${ext.name} (not an AgentOS task, ${short(verdict.sha)}) on Saad's approval of that commit.`
+      ? `Merged ${ext.name} (not an AgentOS task, ${short(verdict.sha)}) on ${owner()}'s approval of that commit.`
       : `Merged ${ext.name} (not an AgentOS task, ${short(verdict.sha)}): CI green, review passed, in scope.`
   );
   return `Merged ${ext.name}: ${MERGED_AS[method]} at ${short(verdict.sha)}.`;
@@ -164,7 +165,7 @@ export async function reviewExternal(
     held.length &&
     !(ext.pr.head && reviewWanted(workspaceId, ext.id, ext.pr.head))
   )
-    return `${ext.name} is with Saad (${held.map((h) => h.gate).join(", ")}); no review needed from you.`;
+    return `${ext.name} is with ${owner()} (${held.map((h) => h.gate).join(", ")}); no review needed from you.`;
   if (!ext.pr.head) throw new Error(`${ext.name}'s head commit is unknown`);
   return reviewAt(
     workspaceId,
@@ -242,7 +243,7 @@ async function signOffDirect(
   const task = t.task;
   if (holdingEscalations(task.id).length)
     throw new Error(
-      `${task.name} is with Saad; he signs it off or drops it, a direct merge doesn't go around that`
+      `${task.name} is with ${owner()}; he signs it off or drops it, a direct merge doesn't go around that`
     );
   const pr = await prFor(task, true);
   if (!pr || pr.state !== "OPEN" || !pr.head)

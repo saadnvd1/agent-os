@@ -21,6 +21,7 @@
 
 import { isFinished } from "../tasks/state";
 import type { SessionFacts } from "../orchestrator/facts";
+import { owner } from "../owner";
 
 export const SWEEP_EVERY_MS = 10 * 60 * 1000;
 export const STALL_MS = 30 * 60 * 1000;
@@ -199,7 +200,7 @@ function wrapupCandidate(f: SessionFacts, v: SweepView): Candidate | null {
     kind: "wrapup",
     sessionId: f.id,
     key,
-    line: `${f.name} (${f.id}): Saad's own session, idle ${minutes(v.now - turnOf(f, v))}m with uncommitted work.`,
+    line: `${f.name} (${f.id}): ${owner()}'s own session, idle ${minutes(v.now - turnOf(f, v))}m with uncommitted work.`,
   };
 }
 

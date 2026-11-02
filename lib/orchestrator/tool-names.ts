@@ -58,7 +58,7 @@ export const TOOL_NAMES = {
   recipe_update: name("recipe_update"),
   reminders: name("reminders"),
   cancel_reminder: name("cancel_reminder"),
-  ask_saad: name("ask_saad"),
+  ask_owner: name("ask_owner"),
 } as const;
 
 // What it may do, fixed by its role. It acts through its own tools, which

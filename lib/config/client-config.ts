@@ -1,3 +1,4 @@
+import { ownerName } from "../owner";
 import { ATTACHMENT_LIMITS } from "../attachments/policy";
 import { ACCESS_LEVELS, DEFAULT_NEW_CHAT_ACCESS } from "../chat/access-levels";
 import { CHAT_ACCESS } from "../chat/events";
@@ -42,5 +43,6 @@ export function clientConfig(): ClientConfig {
     intake: INTAKE_LIMITS,
     attachments: ATTACHMENT_LIMITS,
     voice: VOICE_LIMITS,
+    ownerName: ownerName(),
   };
 }

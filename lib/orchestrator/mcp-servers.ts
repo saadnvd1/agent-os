@@ -3,7 +3,7 @@
  * fixed list (tool-names.ts); each workspace adds whole servers, by name, from
  * Settings → Workspaces. Servers carry their own auth and some send outbound
  * (a message, an email), so none is allowed unless named; the brief keeps
- * those actions as hard lines for ask_saad.
+ * those actions as hard lines for ask_owner.
  *
  * Only names are ever read from the Claude config: never env, headers, URLs
  * or tokens.

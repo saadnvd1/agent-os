@@ -68,6 +68,7 @@ export type {
   StartOutcome,
 } from "./queue-types";
 import { setTask } from "../db/session-parts";
+import { owner } from "../owner";
 export { afterMet, hasFinished, resolveAfter, slotState } from "./queue-rows";
 export { findQueued, listQueue, queuedView } from "./queue-view";
 export { tickOnce, tickQueue, tickQueueSoon } from "./queue-tick";
@@ -234,7 +235,8 @@ export async function startQueuedForOrchestrator(
     outcome: "held",
     text,
   });
-  if (isPaused(workspaceId)) return held("the orchestrator is paused by Saad");
+  if (isPaused(workspaceId))
+    return held(`the orchestrator is paused by ${owner()}`);
   if (isRemoteHost(r.host_id ?? project.host_id))
     return held(
       "it runs on another machine, and the orchestrator starts tasks on this one only"

@@ -61,7 +61,7 @@ describe("arm", () => {
       ]);
     });
 
-    it("sends the task to Saad when the gate fails on four commits in a row", async () => {
+    it("sends the task to the owner when the gate fails on four commits in a row", async () => {
       const t = setup();
       await runTool(t.w, "arm", { task: "add-a" });
       const shas: string[] = [];
@@ -70,7 +70,7 @@ describe("arm", () => {
       expect(merges).toEqual([]);
       expect(armedAt(t.task)).toBeNull();
       expect(events(t.w).at(-1)).toMatch(
-        /armed merge stopped and disarmed, it went to Saad/
+        /armed merge stopped and disarmed, it went to the owner/
       );
       const why = failureOf(t.task, "review")?.escalated_why ?? "";
       expect(why).toMatch(
@@ -85,7 +85,7 @@ describe("arm", () => {
       ).toEqual(shas.map((s) => s.slice(0, 7)));
     });
 
-    it("sends the task to Saad when the same failure repeats on the next commit", async () => {
+    it("sends the task to the owner when the same failure repeats on the next commit", async () => {
       const t = setup();
       await runTool(t.w, "arm", { task: "add-a" });
       await head(t, 1, "src/b.ts:5: off by one");

@@ -84,7 +84,7 @@ describe("the fallback title", () => {
   it("takes the brief's first heading, without its byline", () => {
     expect(
       t.briefHeading(
-        "Some preamble\n# Descriptive session names (Saad, 2026-10-07)\n\nOne PR."
+        "Some preamble\n# Descriptive session names (the owner, 2026-10-07)\n\nOne PR."
       )
     ).toBe("Descriptive session names");
     expect(t.briefHeading("## Only a subheading\ntext")).toBeNull();
@@ -115,7 +115,7 @@ describe("the fallback title", () => {
 
 describe("naming a session from its prompt", () => {
   it("starts with the brief's heading and takes the generated title", async () => {
-    const file = briefFile("# Web performance (Saad)\n\nMake it fast.\n");
+    const file = briefFile("# Web performance (the owner)\n\nMake it fast.\n");
     const naming = await t.nameFor(
       `Read and execute the brief at ${file}. Run /do-code-review.`,
       "/tmp",

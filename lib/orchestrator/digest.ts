@@ -18,6 +18,7 @@ import { formatRunTime } from "../schedules/cron";
 import { listRecipes, listRuns } from "../recipes/store";
 import { getTimer } from "../recipes/timer";
 import { outputsText } from "../recipes/result";
+import { owner } from "../owner";
 
 // About four characters a token: close enough to cap a prompt.
 export const CHARS_PER_TOKEN = 4;
@@ -121,7 +122,7 @@ export function gateState(
     );
   const failed = failures.map(
     (f) =>
-      `${f.gate} failed ${f.count}x${f.escalated_at ? " (Saad's now)" : ""}`
+      `${f.gate} failed ${f.count}x${f.escalated_at ? ` (${owner()}'s now)` : ""}`
   );
   if (failed.length) parts.push(failed.join(", "));
   return parts.join("; ");
@@ -134,7 +135,7 @@ function rulesSection(workspaceId: string): Section {
     // it read: a line planted there can't pass for his word.
     lines: listRules(workspaceId).map((r) =>
       r.added_by === "saad"
-        ? `- [rule ${r.id}, from Saad] ${clip(r.text)}`
+        ? `- [rule ${r.id}, from ${owner()}] ${clip(r.text)}`
         : `- [rule ${r.id}, kept by you] ${untrusted("a rule you kept", clip(r.text))}`
     ),
     empty: "- None. Keep one with rule_add.",
@@ -144,7 +145,7 @@ function rulesSection(workspaceId: string): Section {
 
 function asksSection(workspaceId: string): Section {
   return {
-    title: "Open asks (waiting on Saad)",
+    title: `Open asks (waiting on ${owner()})`,
     lines: openAsks(workspaceId).map((a) => {
       const on = a.subject.startsWith("task:")
         ? ` | task ${shortId(a.subject.slice(5))}`

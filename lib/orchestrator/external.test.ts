@@ -323,7 +323,7 @@ describe("sign_off on a PR no task owns", () => {
     expect(merges).toEqual([]);
   });
 
-  it("escalates a repository with no CI to Saad as an ask about the PR", async () => {
+  it("escalates a repository with no CI to the owner as an ask about the PR", async () => {
     const t = setup();
     await reviewTarget(t.w, "#50", { wait: true, claude: passing });
     pr = { ...pr!, statusCheckRollup: [] };
@@ -336,7 +336,7 @@ describe("sign_off on a PR no task owns", () => {
       detail: JSON.stringify({ count: 0, at: 0 }),
     });
     await expect(runTool(t.w, "sign_off", { task: "#50" })).rejects.toThrow(
-      /Escalated to Saad: no CI ran/
+      /Escalated to the owner: no CI ran/
     );
     expect(openAsks(t.w)).toEqual([
       expect.objectContaining({
@@ -546,12 +546,12 @@ describe("refusing what isn't the workspace's to merge", () => {
   });
 });
 
-describe("Saad's approvals on an external PR", () => {
-  it("sends a sensitive change to Saad, merges once on his approval of that head, and gives a refused merge's approval back", async () => {
+describe("The owner's approvals on an external PR", () => {
+  it("sends a sensitive change to the owner, merges once on his approval of that head, and gives a refused merge's approval back", async () => {
     const t = setup({ files: [[".github/workflows/ci.yml", "on: push\n"]] });
     setMergeApprovals(true);
     await expect(runTool(t.w, "sign_off", { task: "#50" })).rejects.toThrow(
-      /Escalated to Saad: PR #50 at [0-9a-f]{7} touches \.github\/workflows\/ci\.yml/
+      /Escalated to the owner: PR #50 at [0-9a-f]{7} touches \.github\/workflows\/ci\.yml/
     );
     const [ask] = openAsks(t.w);
     expect(ask).toMatchObject({ subject: "pr:o/r#50", sha: t.sha });
@@ -570,11 +570,11 @@ describe("Saad's approvals on an external PR", () => {
     expect(merges).toHaveLength(1);
     expect(merges[0]).toContain(t.sha);
     await expect(runTool(t.w, "sign_off", { task: "#50" })).rejects.toThrow(
-      /is with Saad/
+      /is with the owner/
     );
   });
 
-  it("links an ask_saad merge decision to the PR's head and merges it once on his approval", async () => {
+  it("links an ask_owner merge decision to the PR's head and merges it once on his approval", async () => {
     const t = setup();
     putCheck({
       workspaceId: t.w,
@@ -585,7 +585,7 @@ describe("Saad's approvals on an external PR", () => {
       detail: "one bug",
     });
     await expect(
-      runTool(t.w, "ask_saad", {
+      runTool(t.w, "ask_owner", {
         title: "Merge o/r#50 without its review?",
         detail: "Dispatch reviewed it its own way.",
         kind: "decision",

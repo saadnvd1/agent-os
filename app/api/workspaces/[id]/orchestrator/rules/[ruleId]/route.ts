@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import type { PresenceProof } from "@/lib/security/presence-http";
 import { removeRule, updateRule } from "@/lib/orchestrator/rules";
-import { provenAsSaad } from "../presence";
+import { provenAsOwner } from "../presence";
 
 type RouteParams = { params: Promise<{ id: string; ruleId: string }> };
 
@@ -21,7 +21,7 @@ async function target(
       response: NextResponse.json({ error: "Bad rule id" }, { status: 400 }),
     };
   const body = (await request.json().catch(() => ({}))) as Body;
-  const refused = await provenAsSaad(request, id, body);
+  const refused = await provenAsOwner(request, id, body);
   if (refused) return { response: refused };
   return { workspaceId: id, ruleId: n, body };
 }

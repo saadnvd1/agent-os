@@ -77,7 +77,7 @@ describe("open questions", () => {
     ).resolves.toMatch(/Not opened/);
   });
 
-  it("resolves when Saad answers, and not for another workspace", async () => {
+  it("resolves when the owner answers, and not for another workspace", async () => {
     const t = workspace();
     const other = workspace();
     await runTool(t.w, "question", { text: "Merge it?" });
@@ -114,7 +114,7 @@ describe("open questions", () => {
 describe("dismissing from the strip", () => {
   it("hides an item without resolving it", async () => {
     const t = workspace();
-    await runTool(t.w, "ask_saad", {
+    await runTool(t.w, "ask_owner", {
       title: "Pay for the domain?",
       detail: "Why",
       kind: "money",

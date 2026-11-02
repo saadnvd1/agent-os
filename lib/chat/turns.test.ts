@@ -49,7 +49,9 @@ describe("activityOrigin", () => {
     expect(activityOrigin(user("u"))).toBeNull();
     expect(activityOrigin(user("u", { from: "you" }))).toBeNull();
     expect(
-      activityOrigin(user("u", { origin: { kind: "decision", label: "Saad" } }))
+      activityOrigin(
+        user("u", { origin: { kind: "decision", label: "The owner" } })
+      )
     ).toBeNull();
   });
 
@@ -141,7 +143,7 @@ describe("eventTurnAt", () => {
   });
 
   it("never folds a turn that asked a question or an ask", () => {
-    for (const name of ["mcp__orchestrator__question", "ask_saad"]) {
+    for (const name of ["mcp__orchestrator__question", "ask_owner"]) {
       const q: ChatItem = {
         id: "q",
         kind: "tool",

@@ -64,7 +64,7 @@ describe("checkPieces", () => {
   it("a plan whose (b) piece says merged, not deployed, is folded and says why", () => {
     const r = checkPieces(
       plan(
-        "1. Experiments framework: registry, usage  (repo: web)\n   owns: migration 85, table experiment_usage, settings keys `experiments.*`\n2. Learning cards: signal scripts, cards  (repo: web)\n   after: 1 is merged\n   why split: (b) — Saad's scope call: the framework merges first and the experiment is built on the merged framework\n   owns: migration 86, table learning_cards"
+        "1. Experiments framework: registry, usage  (repo: web)\n   owns: migration 85, table experiment_usage, settings keys `experiments.*`\n2. Learning cards: signal scripts, cards  (repo: web)\n   after: 1 is merged\n   why split: (b) — the owner's scope call: the framework merges first and the experiment is built on the merged framework\n   owns: migration 86, table learning_cards"
       ),
       ctx
     );

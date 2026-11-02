@@ -20,6 +20,7 @@ import { run, shellPath, spawnOn } from "./shell";
 import { onWindowsDrive, WINDOWS_DRIVE_WARNING } from "../wsl";
 
 import { PROJECT_NAME } from "./name";
+import { owner } from "../owner";
 
 export { PROJECT_NAME };
 // https://host/owner/repo(.git), ssh://…, or git@host:owner/repo(.git).
@@ -151,7 +152,7 @@ export async function addFolder(
     const from = existing.workspace_id;
     if (opts.moveOnlyUnassigned && from && from !== workspaceId)
       throw new Error(
-        `${existing.name} belongs to the ${getWorkspace(from)?.name ?? "another"} workspace; only Saad moves a project between workspaces`
+        `${existing.name} belongs to the ${getWorkspace(from)?.name ?? "another"} workspace; only ${owner()} moves a project between workspaces`
       );
     const outcome =
       !workspaceId || from === workspaceId ? "unchanged" : "moved";

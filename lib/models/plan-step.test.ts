@@ -236,7 +236,7 @@ describe("plan then implement", () => {
       expect(eventsFor(id)[0].line).toContain("asked once more");
     });
 
-    it("stays quiet for a task Saad started", async () => {
+    it("stays quiet for a task the owner started", async () => {
       const { id, worktree } = planningTask();
       await finishPlan(id, worktree, "# Plan\n- a\n");
       expect(eventsFor(id)).toEqual([]);

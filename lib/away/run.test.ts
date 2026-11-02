@@ -111,7 +111,7 @@ const stalled = (id: string): SessionFacts => ({
   stack: null,
 });
 
-// One chat item in a session; no origin means Saad typed it.
+// One chat item in a session; no origin means the owner typed it.
 let seq = 0;
 function chatItem(
   sessionId: string,
@@ -128,7 +128,7 @@ function chatItem(
   );
 }
 
-// A workspace whose orchestrator worked, and was messaged by Saad, five
+// A workspace whose orchestrator worked, and was messaged by the owner, five
 // minutes ago.
 function seed() {
   const s = seedWorkspace();
@@ -175,7 +175,7 @@ describe("sweeping a workspace while away", () => {
     expect(digest).toContain(
       `- uncommitted, no PR: task ${stalled(other).name} (${other})`
     );
-    // It's told Saad is away first, once.
+    // It's told the owner is away first, once.
     expect(events(w).map((e) => e.key)).toEqual([
       `once:away:${away.id}`,
       expect.stringMatching(/^once:away-digest:/),
@@ -285,7 +285,7 @@ describe("sweeping a workspace while away", () => {
     ).toBeNull();
   });
 
-  it("leaves a task with an open ask on it, or one escalated, to Saad", async () => {
+  it("leaves a task with an open ask on it, or one escalated, to the owner", async () => {
     const { w, task, orch, api } = seed();
     const other = seedSession({ projectId: api.id, name: "other", task: true });
     db.prepare(
@@ -316,7 +316,7 @@ describe("sweeping a workspace while away", () => {
     expect(actions(w).filter((a) => a.kind !== "told")).toEqual([]);
   });
 
-  it("stops acting when Saad pauses the workspace during a sweep", async () => {
+  it("stops acting when the owner pauses the workspace during a sweep", async () => {
     const { w, task, orch } = seed();
     h.facts = [stalled(task)];
     h.meanwhile = () => setPaused(w, true);
@@ -374,7 +374,7 @@ describe("turning Away on and off", () => {
 });
 
 describe("telling orchestrators Away is on", () => {
-  it("messages only the one Saad wrote to inside 24 hours", async () => {
+  it("messages only the one the owner wrote to inside 24 hours", async () => {
     db.exec(
       `UPDATE away_periods SET ended_at = datetime('now'), ended_by = 'saad' WHERE ended_at IS NULL`
     );
@@ -390,7 +390,10 @@ describe("telling orchestrators Away is on", () => {
     chatItem(old.orch, NOW - 3 * 24 * 60 * 60_000);
     const automated = mk();
     const decided = mk();
-    chatItem(decided.orch, NOW - 60_000, { kind: "decision", label: "Saad" });
+    chatItem(decided.orch, NOW - 60_000, {
+      kind: "decision",
+      label: "The owner",
+    });
     for (const kind of ["event", "schedule", "peer", "system"])
       chatItem(automated.orch, NOW - 60_000, { kind, label: kind });
 
@@ -401,12 +404,12 @@ describe("telling orchestrators Away is on", () => {
     expect(events(automated.w)).toEqual([]);
 
     // The sweep doesn't tell the skipped ones either, but their brief
-    // still says Saad is away.
+    // still says the owner is away.
     await sweepWorkspace(row, old.w, old.orch, NOW);
     await sweepWorkspace(row, automated.w, automated.orch, NOW);
     expect(events(old.w)).toEqual([]);
     expect(events(automated.w)).toEqual([]);
-    expect(awayDigestLine(NOW)).toContain("Saad is away");
+    expect(awayDigestLine(NOW)).toContain("The owner is away");
 
     turnAwayOff("saad", NOW + 1000);
     expect(events(recent.w).map((e) => e.key)).toContain(
@@ -418,7 +421,7 @@ describe("telling orchestrators Away is on", () => {
 });
 
 describe("an orchestrator already told Away is on", () => {
-  it("keeps its sweeps after Saad's last message ages past 24 hours", async () => {
+  it("keeps its sweeps after the owner's last message ages past 24 hours", async () => {
     const t = seed();
     const row = turnAwayOn({ setBy: "x", expiresAt: null }, NOW);
     expect(events(t.w)).toHaveLength(1);

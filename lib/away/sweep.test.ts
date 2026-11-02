@@ -86,7 +86,7 @@ describe("the away sweep's stalled tasks", () => {
     expect(kinds(view([f]))).toEqual([]);
   });
 
-  it("skips what someone already waits on: blocked, needs input, held for Saad, dead, setting up", () => {
+  it("skips what someone already waits on: blocked, needs input, held for the owner, dead, setting up", () => {
     const long = STALL_MS * 2;
     const list = [
       idleTask("blocked", long, {
@@ -196,7 +196,7 @@ describe("the away sweep's uncommitted work", () => {
   });
 });
 
-describe("the away sweep and Saad's own sessions", () => {
+describe("the away sweep and the owner's own sessions", () => {
   const mine = (over: Partial<SessionFacts> = {}) =>
     facts("mine", {
       task: null,
@@ -209,7 +209,7 @@ describe("the away sweep and Saad's own sessions", () => {
     const v = view([mine()], { dirty: new Set(["mine"]) });
     const { flags } = pickCandidates(v);
     expect(flags.map((c) => c.kind)).toEqual(["wrapup"]);
-    expect(flags[0].line).toMatch(/Saad's own session/);
+    expect(flags[0].line).toMatch(/the owner's own session/);
     expect(kinds({ ...v, acted: new Set([flags[0].key]) })).toEqual([]);
   });
 

@@ -89,10 +89,10 @@ describe("derivePrStage", () => {
     it("CI settling beats review running", () => {
       expect(stage({ settleIn: 5, review: "running" })).toBe("ci-settling");
     });
-    it("review blocked beats waiting on Saad", () => {
+    it("review blocked beats waiting on the owner", () => {
       expect(stage({ review: "block", held: true })).toBe("review-blocked");
     });
-    it("waiting on Saad beats armed", () => {
+    it("waiting on the owner beats armed", () => {
       expect(stage({ held: true, armed: true })).toBe("waiting");
     });
   });

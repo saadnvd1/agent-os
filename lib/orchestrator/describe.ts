@@ -1,6 +1,7 @@
 import type { TaskPR } from "../tasks/state";
 import type { SessionFacts } from "./facts";
 import { untrusted } from "./untrusted";
+import { owner, Owner } from "../owner";
 
 const STATUS_WORD: Record<SessionFacts["status"], string> = {
   running: "working",
@@ -106,10 +107,12 @@ export function describeSessions(
     ...sorted.map(sessionLine),
     ...(idle.length ? [`Idle: ${idle.map(compactLine).join("; ")}.`] : []),
     ...(done.length
-      ? [`Done (on Saad's Done shelf): ${done.map(compactLine).join("; ")}.`]
+      ? [
+          `Done (on ${owner()}'s Done shelf): ${done.map(compactLine).join("; ")}.`,
+        ]
       : []),
     ...(groups.length
-      ? [`Saad's groups here: ${groups.map((g) => `"${g}"`).join(", ")}.`]
+      ? [`${Owner()}'s groups here: ${groups.map((g) => `"${g}"`).join(", ")}.`]
       : []),
   ].join("\n");
 }

@@ -639,7 +639,7 @@ describe("the sidebar", () => {
       "q",
     ]);
     expect(shelves.orchestrators[0].quick?.[0].task).toBe("checks-failing");
-    // Its failing CI is the orchestrator's to carry, not a need of Saad's.
+    // Its failing CI is the orchestrator's to carry, not a need of the owner's.
     expect(shelves.needsYou).toEqual([]);
   });
 });

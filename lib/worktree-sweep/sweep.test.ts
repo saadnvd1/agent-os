@@ -221,7 +221,7 @@ describe("sweeping settled sessions", () => {
     t.set.restoring(false);
   });
 
-  it("skips one with an ask waiting on Saad", async () => {
+  it("skips one with an ask waiting on the owner", async () => {
     const t = setup();
     const s = t.session();
     db.prepare(

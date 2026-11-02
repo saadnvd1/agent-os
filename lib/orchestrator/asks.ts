@@ -18,6 +18,7 @@ import { addNote } from "./notes";
 import { cleanTitle, classifyKind, titleSubject } from "./ask-text";
 import { revokePasskey } from "../security/passkeys";
 import type { AskKind } from "./ask-view";
+import { owner, ownerUi } from "../owner";
 
 export { ASK_KINDS, type AskKind } from "./ask-view";
 
@@ -75,7 +76,7 @@ export interface AskRow {
   resolved_at: string | null;
   used_at: string | null;
   brake_key: string | null;
-  // "orchestrator" for a merge ask it raised with ask_saad; null when the
+  // "orchestrator" for a merge ask it raised with ask_owner; null when the
   // gates, the brakes or AgentOS raised or last wrote it.
   raised_by: string | null;
 }
@@ -124,9 +125,9 @@ function refusal(
     }[]
   ).find((d) => d.subject === subject || titleSubject(d.title) === words);
   if (declined)
-    return `Saad declined "${declined.title}" in the last 6 hours; don't ask again yet`;
+    return `${owner()} declined "${declined.title}" in the last 6 hours; don't ask again yet`;
   if (openAskCount(workspaceId) >= MAX_OPEN_ASKS)
-    return `Saad already has ${MAX_OPEN_ASKS} open asks here; wait for answers before adding more`;
+    return `${owner()} already has ${MAX_OPEN_ASKS} open asks here; wait for answers before adding more`;
   return null;
 }
 
@@ -332,7 +333,8 @@ export function answerAsk(
     else queueEvent(workspaceId, answerKey(id), null, line);
   })();
   // An auto-approval is noted once, by recordAutoApproval.
-  if (by === "saad") addNote(workspaceId, `Saad answered ${line}`, "ask");
+  if (by === "saad")
+    addNote(workspaceId, `${ownerUi(true)} answered ${line}`, "ask");
   return getAsk(workspaceId, id)!;
 }
 

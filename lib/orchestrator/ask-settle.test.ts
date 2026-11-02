@@ -57,7 +57,7 @@ function workspace() {
   // The task has PR #107 open, as prFor records it.
   setTask({ pr_url: PR, pr_number: 107, pr_status: "open" });
   const ask = (title: string, link?: string) =>
-    runTool(w, "ask_saad", {
+    runTool(w, "ask_owner", {
       title,
       detail: `Why: ${title}`,
       kind: "decision",
@@ -342,7 +342,7 @@ describe("asks about work that finished elsewhere", () => {
 });
 
 describe("where stale asks are noticed", () => {
-  it("the overview Saad reads never shows one", async () => {
+  it("the overview the owner reads never shows one", async () => {
     const t = workspace();
     await t.ask("Re-approve PR #107?", PR);
     t.setTask({ task_status: "merged", pr_status: "merged" });

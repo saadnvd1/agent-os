@@ -79,7 +79,7 @@ describe("raising the alert", () => {
     raiseAlert("Machine load red.");
     expect(sent.phone).toEqual([]);
     expect(sent.to).toEqual(["live"]);
-    // Shown in chat as a notice, not as Saad's message.
+    // Shown in chat as a notice, not as the owner's message.
     expect(sent.origins[0]).toMatchObject({
       kind: "system",
       label: "Load monitor",

@@ -64,7 +64,7 @@ function workspace() {
   ensureOrchestrator(ws.workspace.id);
   const w = ws.workspace.id;
   const ask = (title: string, kind: string) =>
-    runTool(w, "ask_saad", { title, detail: `Why: ${title}`, kind });
+    runTool(w, "ask_owner", { title, detail: `Why: ${title}`, kind });
   return { ...ws, w, ask };
 }
 
@@ -114,7 +114,7 @@ describe("the setting", () => {
 });
 
 describe("asks", () => {
-  it("wait for Saad when the mode is off", async () => {
+  it("wait for the owner when the mode is off", async () => {
     const t = workspace();
     await t.ask("Pay for the domain?", "money");
     expect(openAsks(t.w)).toHaveLength(1);
@@ -179,7 +179,7 @@ describe("asks", () => {
     expect(noApprovalsOn()).toBe(false);
   });
 
-  it("keeps a decline Saad already gave: the cooldown still refuses", () => {
+  it("keeps a decline the owner already gave: the cooldown still refuses", () => {
     const t = workspace();
     const { ask } = raiseAsk({
       workspaceId: t.w,
@@ -203,7 +203,7 @@ describe("asks", () => {
 });
 
 describe("merge approvals", () => {
-  it("read as off in the mode, keeping what Saad set", () => {
+  it("read as off in the mode, keeping what the owner set", () => {
     setMergeApprovals(true);
     expect(mergeApprovalsOn()).toBe(true);
     setNoApprovals(true);

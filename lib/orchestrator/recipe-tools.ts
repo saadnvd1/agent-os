@@ -22,6 +22,7 @@ import {
   type RecipeRun,
 } from "../recipes";
 import { outputsText } from "../recipes/result";
+import { owner } from "../owner";
 
 const when = (iso: string | null) =>
   iso
@@ -38,7 +39,7 @@ function runLine(r: RecipeRun, recipe: Recipe): string {
       ? "timer"
       : r.trigger === "tool"
         ? "you"
-        : "Saad";
+        : owner();
   return `#${r.seq} ${r.status} (${when(r.ended_at ?? r.started_at ?? r.created_at)}, by ${by})${pr}${text}`;
 }
 
@@ -61,7 +62,7 @@ export function recipesText(w: string, name?: string): string {
     return [
       `Recipe "${r.name}" (${r.kind}, ${r.view}, project ${projectName(w, r)})${r.model ? `, model ${r.model}` : ""}${r.max_minutes ? `, time limit ${r.max_minutes} min` : ""}.`,
       timer
-        ? `Timer: ${timer.description} ${timer.timezone}${timer.enabled ? "" : " (off)"}, set by Saad.`
+        ? `Timer: ${timer.description} ${timer.timezone}${timer.enabled ? "" : " (off)"}, set by ${owner()}.`
         : "No timer.",
       `Brief:\n${r.brief}`,
       runs.length
@@ -126,7 +127,7 @@ export function saveRecipe(
     },
     orchestrator?.id ?? null
   );
-  return `Saved recipe "${recipe.name}" (${recipe.kind}, ${project.name}). Run it with run_recipe; Saad sees it in Recipes and sets any timer.`;
+  return `Saved recipe "${recipe.name}" (${recipe.kind}, ${project.name}). Run it with run_recipe; ${owner()} sees it in Recipes and sets any timer.`;
 }
 
 export function updateRecipeTool(
@@ -155,5 +156,5 @@ export function updateRecipeTool(
     },
     orchestrator?.id ?? null
   );
-  return `Updated recipe "${a.new_name ?? recipe.name}". Earlier versions of the brief are kept; Saad sees the change.`;
+  return `Updated recipe "${a.new_name ?? recipe.name}". Earlier versions of the brief are kept; ${owner()} sees the change.`;
 }

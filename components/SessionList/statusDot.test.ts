@@ -35,7 +35,7 @@ describe("statusDot", () => {
     expect(d.title).toContain("Load 4.2 on 10 cores");
     expect(d.opensHealth).toBe(true);
   });
-  it("goes red when a health issue needs Saad", () => {
+  it("goes red when a health issue needs the owner", () => {
     const d = statusDot(load("green"), { open: 2, needsYou: 2 })!;
     expect(d.level).toBe("red");
     expect(d.label).toBe("Load normal · 2 health issues need you");

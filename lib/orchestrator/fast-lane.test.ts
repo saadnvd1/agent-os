@@ -83,7 +83,7 @@ describe("the fast lane", () => {
     expect(armedAt(t.task)).toBeNull();
   });
 
-  it("still refuses an AI-attributed body, another base and Saad's hold", async () => {
+  it("still refuses an AI-attributed body, another base and the owner's hold", async () => {
     const t = fastTask();
     S.pr = { ...S.pr!, attribution: "footer" as never };
     const body = await judge(t.w, session(t.task), false, { count: false });
