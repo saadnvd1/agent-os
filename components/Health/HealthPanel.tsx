@@ -306,7 +306,12 @@ function Thresholds() {
   const { data } = useHealthConfig();
   const save = useSaveConfig();
   const [draft, setDraft] = useState<Record<string, string>>({});
+  const [errors, setErrors] = useState<Record<string, string>>({});
   if (!data) return null;
+  const drop = (k: string) => {
+    setDraft(({ [k]: _, ...rest }) => rest);
+    setErrors(({ [k]: _, ...rest }) => rest);
+  };
   return (
     <div className="space-y-3">
       <p className="text-muted-foreground text-sm">
@@ -326,23 +331,43 @@ function Thresholds() {
                   default {data.defaults[k]}
                 </span>
               </label>
-              <Input
-                id={`health-${k}`}
-                inputMode="decimal"
-                value={value}
-                onChange={(e) => setDraft({ ...draft, [k]: e.target.value })}
-                onBlur={() => {
-                  if (draft[k] === undefined) return;
-                  const raw = draft[k].trim();
-                  save.mutate(
-                    { [k]: raw === "" ? null : Number(raw) },
-                    {
-                      onSettled: () => setDraft(({ [k]: _, ...rest }) => rest),
+              <span className="flex flex-col items-end gap-1">
+                <Input
+                  id={`health-${k}`}
+                  inputMode="decimal"
+                  value={value}
+                  aria-invalid={!!errors[k]}
+                  onChange={(e) => {
+                    setDraft({ ...draft, [k]: e.target.value });
+                    setErrors(({ [k]: _, ...rest }) => rest);
+                  }}
+                  onBlur={() => {
+                    if (draft[k] === undefined) return;
+                    const raw = draft[k].trim();
+                    const n = raw === "" ? null : Number(raw);
+                    if (n !== null && (!Number.isFinite(n) || n < 0))
+                      return setErrors({
+                        ...errors,
+                        [k]: "Enter a number, 0 or more.",
+                      });
+                    if (n === data.config[k]) return drop(k);
+                    save.mutate({ [k]: n }, { onSettled: () => drop(k) });
+                  }}
+                  onKeyDown={(e) => {
+                    if (e.key === "Enter") e.currentTarget.blur();
+                    if (e.key === "Escape") {
+                      drop(k);
+                      e.currentTarget.blur();
                     }
-                  );
-                }}
-                className="h-11 w-24 text-right tabular-nums md:h-9"
-              />
+                  }}
+                  className="h-11 w-24 text-right tabular-nums md:h-9"
+                />
+                {errors[k] && (
+                  <span role="alert" className="text-destructive text-xs">
+                    {errors[k]}
+                  </span>
+                )}
+              </span>
             </li>
           );
         })}

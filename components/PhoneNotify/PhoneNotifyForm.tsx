@@ -1,8 +1,8 @@
 "use client";
 
-import { useState } from "react";
 import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
+import { SettingSection } from "@/components/Settings/SettingRow";
+import { TextSetting } from "@/components/Settings/settings-fields";
 import {
   useNotifySettings,
   useSaveTelegram,
@@ -16,11 +16,8 @@ export function PhoneNotifyForm() {
   const { data: settings, isPending } = useNotifySettings();
   const save = useSaveTelegram();
   const test = useTestNotify();
-  const [token, setToken] = useState("");
-  const [chatId, setChatId] = useState<string | null>(null);
   if (isPending || !settings)
     return <div className="bg-muted/40 h-32 animate-pulse rounded-xl" />;
-  const chat = chatId ?? settings.telegram.chatId ?? "";
 
   return (
     <div className="space-y-5">
@@ -48,60 +45,45 @@ export function PhoneNotifyForm() {
         )}
       </div>
 
-      <form
-        className="space-y-3"
-        onSubmit={(e) => {
-          e.preventDefault();
-          save.mutate(
-            {
-              ...(token.trim() && { telegramToken: token.trim() }),
-              telegramChatId: chat,
-            },
-            { onSuccess: () => setToken("") }
-          );
-        }}
-      >
+      <div className="space-y-2">
         <p className="label-mono text-muted-foreground">Telegram</p>
-        <div className="space-y-2">
-          <label className="text-sm font-medium" htmlFor="tg-token">
-            Bot token
-          </label>
-          <Input
-            id="tg-token"
-            type="password"
-            autoComplete="off"
-            value={token}
-            onChange={(e) => setToken(e.target.value)}
-            placeholder={
-              settings.telegram.tokenSet ? "Saved; type to replace" : "123:ABC…"
-            }
-            className="h-11 font-mono md:h-9"
-          />
-        </div>
-        <div className="space-y-2">
-          <label className="text-sm font-medium" htmlFor="tg-chat">
-            Chat id
-          </label>
-          <Input
+        <SettingSection>
+          <TextSetting
             id="tg-chat"
-            inputMode="numeric"
-            value={chat}
-            onChange={(e) => setChatId(e.target.value)}
-            placeholder="Your chat id with the bot"
-            className="h-11 font-mono md:h-9"
+            label="Chat id"
+            help="Where the bot sends alerts: your chat id with it, or @channel."
+            placeholder="123456789"
+            value={settings.telegram.chatId ?? ""}
+            validate={(t) =>
+              !t || /^-?\d+$|^@\w+$/.test(t)
+                ? null
+                : "A chat id is a whole number like 123456789, or @channel."
+            }
+            onSave={(t) => save.mutateAsync({ telegramChatId: t || null })}
           />
-        </div>
-        {save.error && (
-          <p className="text-destructive text-sm">{save.error.message}</p>
-        )}
+          <TextSetting
+            id="tg-token"
+            label="Bot token"
+            help="Write-only. Saved with the button, never on blur: a half-typed secret must not save."
+            secret
+            buttonLabel={settings.telegram.tokenSet ? "Replace" : "Connect"}
+            placeholder={
+              settings.telegram.tokenSet
+                ? "Connected; paste to replace"
+                : "123:ABC…"
+            }
+            value=""
+            validate={(t) =>
+              !t
+                ? "Paste the bot token from BotFather."
+                : /\s/.test(t)
+                  ? "A token has no spaces."
+                  : null
+            }
+            onSave={(t) => save.mutateAsync({ telegramToken: t })}
+          />
+        </SettingSection>
         <div className="flex flex-wrap gap-2">
-          <Button
-            type="submit"
-            className="h-11 md:h-9"
-            disabled={save.isPending}
-          >
-            {save.isPending ? "Saving..." : "Save"}
-          </Button>
           {settings.telegram.tokenSet && (
             <Button
               type="button"
@@ -109,10 +91,7 @@ export function PhoneNotifyForm() {
               className="text-muted-foreground h-11 md:h-9"
               disabled={save.isPending}
               onClick={() =>
-                save.mutate(
-                  { telegramToken: null, telegramChatId: null },
-                  { onSuccess: () => setChatId(null) }
-                )
+                save.mutate({ telegramToken: null, telegramChatId: null })
               }
             >
               Remove bot
@@ -136,7 +115,7 @@ export function PhoneNotifyForm() {
             {testSummary(test.data)}
           </p>
         )}
-      </form>
+      </div>
     </div>
   );
 }

@@ -104,7 +104,7 @@ The ring in the tab bar (in the composer on a phone) is how full the
 conversation's context is, measured against the room before auto-compact:
 amber past 60%, red past 85%. Tap it for the breakdown and **Compact now**.
 
-Two thresholds (Settings → Workspaces → Compact; 0 turns one off). Mid-turn,
+Two thresholds (Settings → Context → Compact; 0 turns one off). Mid-turn,
 the agent compacts itself at 300k by default: AgentOS launches Claude Code
 with `CLAUDE_CODE_AUTO_COMPACT_WINDOW` set to that size (its floor is 100k),
 high enough that a long job isn't cut in half. Your own sessions, in a chat

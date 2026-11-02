@@ -24,7 +24,7 @@ export function useUpdateFreshStart() {
     mutationFn: async (settings: Partial<RefreshSettings>) =>
       json<RefreshSettings>(
         await fetch("/api/fresh-start", {
-          method: "PUT",
+          method: "PATCH",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify(settings),
         })

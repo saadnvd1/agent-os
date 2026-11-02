@@ -17,7 +17,6 @@ import {
   setRefreshSettings,
 } from "./refresh";
 import { roleExtras } from "./worker/extras";
-import { parseFreshStart } from "@/components/Workspaces/fresh-start";
 
 const task = (over: Partial<Session> = {}) =>
   ({
@@ -76,13 +75,6 @@ describe("fresh-start settings", () => {
     );
     setRefreshSettings({ compactTokens: 150_000 });
     expect(refreshSettings().compactTokens).toBe(150_000);
-  });
-
-  it("are typed in thousands in Settings", () => {
-    expect(parseFreshStart(true, "200")).toEqual({ tokens: 200_000 });
-    expect(parseFreshStart(false, "nope")).toEqual({ tokens: 0 });
-    expect(parseFreshStart(true, "20")).toHaveProperty("error");
-    expect(parseFreshStart(true, "")).toHaveProperty("error");
   });
 });
 

@@ -1,17 +1,20 @@
 "use client";
 
-import { SettingToggle } from "@/components/Settings/SettingToggle";
+import { settingsUiActions } from "@/stores/settingsUi";
 import { useUpdateWorkspace, useWorkspacesQuery } from "@/data/workspaces";
-import { TaskLimitForm } from "./TaskLimitForm";
 import { RulesForm } from "./RulesForm";
-import { FreshStartForm } from "./FreshStartForm";
 import { McpServersForm } from "./McpServersForm";
 import { HqFolderForm } from "./HqFolderForm";
 import { ProjectTiersForm } from "./ProjectTiersForm";
-import { StallForm } from "./StallForm";
 import { WorkspaceModeForm } from "./WorkspaceModeForm";
 import { WorkspaceModelsForm } from "./WorkspaceModelsForm";
-import { AwayWindowForm } from "@/components/Away/AwayWindowForm";
+import { AppWideLimits } from "@/components/Settings/AppWideLimits";
+import {
+  NumberSetting,
+  SwitchSetting,
+} from "@/components/Settings/settings-fields";
+import { SettingSection } from "@/components/Settings/SettingRow";
+import { SETTING_DEFAULTS } from "@/lib/settings/defaults";
 
 // Settings > Workspaces: each workspace's own settings.
 export function WorkspaceSettings() {
@@ -43,33 +46,67 @@ export function WorkspaceSettings() {
           className="bg-muted/40 space-y-3 rounded-lg px-3 py-3"
         >
           <h3 className="truncate text-sm font-medium">{w.name}</h3>
-          <TaskLimitForm
-            key={`${w.id}:${w.max_running_tasks ?? "off"}`}
-            workspace={w}
-          />
+          <SettingSection>
+            <NumberSetting
+              id={`task-limit-${w.id}`}
+              label="Tasks at a time"
+              help="Cap on tasks running at once. The rest wait in Queued and start in order."
+              value={w.max_running_tasks ?? 0}
+              defaultValue={0}
+              onSave={(n) =>
+                update.mutateAsync({
+                  id: w.id,
+                  maxRunningTasks: n === 0 ? null : n,
+                })
+              }
+              min={1}
+              integer
+              unit="at a time"
+              optional={{ off: 0, on: SETTING_DEFAULTS.taskLimitOn }}
+            />
+          </SettingSection>
           <WorkspaceModeForm workspaceId={w.id} />
           <RulesForm workspaceId={w.id} />
           <WorkspaceModelsForm workspaceId={w.id} />
           <McpServersForm workspace={w} />
           <HqFolderForm workspaceId={w.id} />
           <ProjectTiersForm workspaceId={w.id} />
-          <SettingToggle
-            title="Wake tasks on CI failures and reviews"
-            detail="A task's agent is messaged once when a check fails on its PR's head, with the log's tail, and when someone reviews or comments on it."
-            checked={w.wake_tasks_on_pr}
-            onChange={(on) => update.mutate({ id: w.id, wakeTasksOnPR: on })}
-          />
-          <SettingToggle
-            title="Orchestrator full access"
-            detail="Its shell and file writes aren't checked: it can push, commit, edit any repository or file on this machine, and merge a PR directly, and edit .claude files (skills, settings, hooks). Applies when its conversation next restarts. Off: the deny list, write limits, quick-change cap and merge-only-through-the-gates apply."
-            checked={w.orch_full_access}
-            onChange={(on) => update.mutate({ id: w.id, orchFullAccess: on })}
-          />
+          <SettingSection>
+            <SwitchSetting
+              id={`wake-${w.id}`}
+              label="Wake tasks on CI failures and reviews"
+              help="A task's agent is messaged once when a check fails on its PR, and when someone reviews or comments."
+              checked={w.wake_tasks_on_pr}
+              onSave={(on) =>
+                update.mutateAsync({ id: w.id, wakeTasksOnPR: on })
+              }
+            />
+            <SwitchSetting
+              id={`full-access-${w.id}`}
+              label="Orchestrator full access"
+              help="Its shell and file writes aren't checked. Applies when its conversation next restarts."
+              checked={w.orch_full_access}
+              confirm="Let this orchestrator act without approval? It can push, commit, edit any repository or file on this machine, merge a PR directly, and edit .claude files. Off: the deny list, write limits and merge-only-through-the-gates apply."
+              confirmLabel="Turn on full access"
+              onSave={(on) =>
+                update.mutateAsync({ id: w.id, orchFullAccess: on })
+              }
+            />
+          </SettingSection>
         </section>
       ))}
-      <FreshStartForm />
-      <StallForm />
-      <AwayWindowForm />
+      <AppWideLimits />
+      <p className="text-muted-foreground text-sm">
+        Fresh starts and compaction are app-wide:{" "}
+        <button
+          type="button"
+          className="text-primary underline-offset-2 hover:underline"
+          onClick={() => settingsUiActions.show("context")}
+        >
+          open Context
+        </button>
+        .
+      </p>
     </div>
   );
 }

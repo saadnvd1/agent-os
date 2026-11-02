@@ -1,6 +1,6 @@
 "use client";
 
-import { memo, useEffect, useRef } from "react";
+import { memo, useEffect, useRef, useState } from "react";
 import { useSnapshot } from "valtio";
 import {
   ArrowLeft,
@@ -12,7 +12,9 @@ import {
   Cpu,
   GitMerge,
   HeartPulse,
+  Layers,
   LayoutGrid,
+  Search,
   Link2,
   ListChecks,
   ShieldOff,
@@ -48,6 +50,8 @@ import { cn } from "@/lib/utils";
 import { schedulesUiActions } from "@/stores/schedulesUi";
 import { RecipesPanel } from "@/components/Recipes";
 import { settingsUi, settingsUiActions } from "@/stores/settingsUi";
+import { ContextSection } from "./ContextSection";
+import { SettingsQueryContext } from "./SettingRow";
 import { SetupSection } from "./SetupSection";
 import { NoApprovalsSection } from "./NoApprovalsSection";
 import {
@@ -83,6 +87,11 @@ export const SECTION_INFO: Record<
     label: "Shared links",
     hint: "Snapshot links you made, with views, and revoke",
     icon: Link2,
+  },
+  context: {
+    label: "Context",
+    hint: "When agents start fresh or compact",
+    icon: Layers,
   },
   models: {
     label: "Models",
@@ -150,6 +159,8 @@ function SectionBody({
       return <NoApprovalsSection />;
     case "workspaces":
       return <WorkspaceSettings />;
+    case "context":
+      return <ContextSection />;
     case "models":
       return <ModelsSection />;
     case "agent-roles":
@@ -175,6 +186,40 @@ function SectionBody({
     case "experiments":
       return <ExperimentsSection />;
   }
+}
+
+// Sections built from SettingRow, which the search box filters.
+const SEARCHABLE: ReadonlySet<SettingsSection> = new Set([
+  "context",
+  "workspaces",
+]);
+
+function SearchableBody({
+  section,
+  browser,
+}: {
+  section: SettingsSection;
+  browser: BrowserNotifications;
+}) {
+  const [query, setQuery] = useState("");
+  if (!SEARCHABLE.has(section))
+    return <SectionBody section={section} browser={browser} />;
+  return (
+    <SettingsQueryContext.Provider value={query}>
+      <div className="relative mb-4">
+        <Search className="text-muted-foreground pointer-events-none absolute top-3.5 left-3 size-4 md:top-2.5" />
+        <input
+          type="search"
+          value={query}
+          onChange={(e) => setQuery(e.target.value)}
+          placeholder="Search settings"
+          aria-label="Search settings"
+          className="bg-input/60 hairline h-11 w-full rounded-xl border-0 pr-3 pl-9 text-base outline-none md:h-9 md:text-sm"
+        />
+      </div>
+      <SectionBody section={section} browser={browser} />
+    </SettingsQueryContext.Provider>
+  );
 }
 
 /**
@@ -323,7 +368,7 @@ export const SettingsDialog = memo(function SettingsDialog({
               {SECTION_INFO[shown].label}
             </h2>
             {open && (
-              <SectionBody
+              <SearchableBody
                 key={shown}
                 section={shown}
                 browser={notifications}

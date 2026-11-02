@@ -8,6 +8,7 @@ export const SETTINGS_SECTIONS = [
   "merging",
   "approvals",
   "workspaces",
+  "context",
   "models",
   "agent-roles",
   "devices",

@@ -34,6 +34,7 @@ vi.mock("./NoApprovalsSection", () => ({
 vi.mock("@/components/Workspaces", () => ({
   WorkspaceSettings: stub("workspaces"),
 }));
+vi.mock("./ContextSection", () => ({ ContextSection: stub("context") }));
 vi.mock("@/components/Models/ModelsSection", () => ({
   ModelsSection: stub("models"),
 }));
