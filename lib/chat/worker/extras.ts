@@ -1,4 +1,4 @@
-import { isTechRole } from "../../leads/roles";
+import { isLeadRole } from "../../leads/roles";
 import type { Session } from "../../db";
 import type { ChatStartOptions } from "../driver";
 import { refreshSettings } from "../refresh";
@@ -41,7 +41,9 @@ export async function roleExtras(session: Session): Promise<RoleExtras> {
 }
 
 async function ownExtras(session: Session): Promise<RoleExtras> {
-  if (isTechRole(session.role))
+  // The orchestrator and the other leads run on the orchestrator's worker,
+  // each with its own profile.
+  if (isLeadRole(session.role))
     return (await import("../../orchestrator/worker")).orchestratorExtras(
       session
     );

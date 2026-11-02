@@ -110,4 +110,19 @@ describe("addressing across workspaces", () => {
       new RegExp(`${one.ws.name}/orchestrator`)
     );
   });
+
+  it("sends to <workspace>/<lead>, and <workspace>/tech only once it has leads", async () => {
+    const { addLeads, getLead } = await import("@/lib/leads/home");
+    const one = workspaceWithOrchestrator("leads");
+    expect(() => bus.resolveTarget(`${one.ws.name}/tech`)).toThrow();
+    addLeads(one.ws.id, ["marketing"]);
+    const marketing = getLead(one.ws.id, "marketing")!;
+    expect(bus.resolveTarget(`${one.ws.name}/marketing`).session.id).toBe(
+      marketing.id
+    );
+    expect(bus.resolveTarget(`${one.ws.name}/tech`).session.id).toBe(one.orch);
+    expect(bus.resolveTarget(`${one.ws.name}/orchestrator`).session.id).toBe(
+      one.orch
+    );
+  });
 });

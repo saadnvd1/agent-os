@@ -81,6 +81,8 @@ export function matchesRef(
     // orchestrator: "<workspace>/<name>" and "<workspace>/orchestrator".
     workspaceName?: string | null;
     orchestrator?: boolean;
+    // A lead's department: "<workspace>/<kind>".
+    leadKind?: string | null;
   }
 ): boolean {
   const r = ref.trim().toLowerCase();
@@ -92,6 +94,7 @@ export function matchesRef(
     r === name ||
     (!!s.projectName && r === `${s.projectName.toLowerCase()}/${name}`) ||
     (!!ws && r === `${ws}/${name}`) ||
-    (!!ws && !!s.orchestrator && r === `${ws}/orchestrator`)
+    (!!ws && !!s.orchestrator && r === `${ws}/orchestrator`) ||
+    (!!ws && !!s.leadKind && r === `${ws}/${s.leadKind}`)
   );
 }

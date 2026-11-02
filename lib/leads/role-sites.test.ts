@@ -9,6 +9,7 @@ import {
   isPeerStanding,
   isStandingRole,
   isTechRole,
+  sqlLead,
   sqlNoRole,
   sqlStanding,
   sqlTech,
@@ -103,6 +104,7 @@ const HELPERS = {
   isTechRole: "tech",
   sqlTech: "tech",
   isLeadRole: "lead",
+  sqlLead: "lead",
   sqlNoRole: "worker",
   isPeerStanding: "peer",
 } as const;
@@ -127,13 +129,13 @@ const SITES: Record<string, Partial<Record<Decision, number>>> = {
   "lib/bus/index.ts": { tech: 2 },
   "lib/bus/read-scope.ts": { standing: 2 },
   "lib/bus/role-alias.ts": { tech: 1 },
-  "lib/bus/targets.ts": { tech: 3 },
+  "lib/bus/targets.ts": { tech: 4 },
   "lib/bus/waits/tick.ts": { standing: 1 },
   "lib/chat/compact-context.ts": { standing: 1 },
   "lib/chat/mention-roots.ts": { standing: 1 },
   "lib/chat/runner.ts": { standing: 2 },
   "lib/chat/settings.ts": { standing: 2 },
-  "lib/chat/worker/extras.ts": { tech: 1 },
+  "lib/chat/worker/extras.ts": { lead: 1 },
   "lib/chat/worker/host.ts": { standing: 5 },
   "lib/done/archive.ts": { standing: 1 },
   "lib/done/auto-archive.ts": { worker: 1 },
@@ -144,6 +146,9 @@ const SITES: Record<string, Partial<Record<Decision, number>>> = {
   "lib/fork/start.ts": { standing: 1 },
   "lib/hosts/peer-actions.ts": { peer: 1 },
   "lib/hosts/peer-sessions.ts": { peer: 1 },
+  "lib/leads/adopt.ts": { standing: 1, worker: 1 },
+  "lib/leads/home.ts": { lead: 2, standing: 1 },
+  "lib/leads/profiles.ts": { lead: 1, tech: 1 },
   "lib/leads/usage.ts": { standing: 1 },
   "lib/learning-cards/input.ts": { standing: 1 },
   "lib/live/drive.ts": { standing: 1 },
@@ -262,6 +267,7 @@ describe("role decisions", () => {
       expect(sql(sqlStanding("r"), r)).toBe(isStandingRole(r));
       expect(sql(sqlNoRole("r"), r)).toBe(!isStandingRole(r));
       expect(sql(sqlTech("r"), r)).toBe(isTechRole(r));
+      expect(sql(sqlLead("r"), r)).toBe(isLeadRole(r));
     }
     db.close();
   });

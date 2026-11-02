@@ -19,7 +19,7 @@ import { TOOL_SHAPES, TOOLS, type ToolName } from "./tool-schemas";
 type CallToolResult = Awaited<ReturnType<Parameters<typeof tool>[3]>>;
 
 export type ToolCaller = (
-  tool: ToolName,
+  tool: string,
   args: object,
   signal?: AbortSignal
 ) => Promise<string>;
@@ -203,21 +203,38 @@ const DESCRIPTIONS: Record<ToolName, string> = {
     "Park an item on the owner's asks list (a decision, or anything crossing a hard line) and carry on; it never waits. One open ask per title. His answer reaches you as an event. To ask whether to merge a PR the gates refuse, give task and sha (its head): his approval lets sign_off merge it once, at that commit, without a review (an AI-attributed body or failing CI still refuses).",
 };
 
+// A tool beyond the orchestrator's own (a lead's, lib/leads/tools.ts).
+export interface ExtraTool {
+  name: string;
+  description: string;
+  shape: z.ZodRawShape;
+}
+
+// The tools a standing session gets: by default exactly the orchestrator's.
 export function orchestratorTools(
-  call: ToolCaller
+  call: ToolCaller,
+  names: readonly ToolName[] = TOOLS,
+  extra: readonly ExtraTool[] = []
 ): McpSdkServerConfigWithInstance {
+  const signal = (e: unknown) => (e as { signal?: AbortSignal })?.signal;
   return createSdkMcpServer({
     name: ORCHESTRATOR_SERVER,
     version: "1.0.0",
-    tools: TOOLS.map((name) =>
-      tool(
-        name,
-        DESCRIPTIONS[name],
-        TOOL_SHAPES[name],
-        (args: object, extra: unknown) =>
-          answer(call(name, args, (extra as { signal?: AbortSignal })?.signal))
-      )
-    ),
+    tools: [
+      ...names.map((name) =>
+        tool(
+          name,
+          DESCRIPTIONS[name],
+          TOOL_SHAPES[name],
+          (args: object, e: unknown) => answer(call(name, args, signal(e)))
+        )
+      ),
+      ...extra.map((t) =>
+        tool(t.name, t.description, t.shape, (args: object, e: unknown) =>
+          answer(call(t.name, args, signal(e)))
+        )
+      ),
+    ],
   });
 }
 
@@ -225,9 +242,22 @@ export function orchestratorTools(
 // arguments and permissions. A worker after a deploy tells the agent its
 // tools changed only when this did.
 export function orchestratorToolsDigest(
-  permissions: object = ORCHESTRATOR_PERMISSIONS
+  permissions: object = ORCHESTRATOR_PERMISSIONS,
+  names?: readonly ToolName[],
+  extra: readonly ExtraTool[] = []
 ): string {
-  return toolsDigest(DESCRIPTIONS, TOOL_SHAPES, permissions);
+  if (!names && !extra.length)
+    return toolsDigest(DESCRIPTIONS, TOOL_SHAPES, permissions);
+  const kept = names ?? TOOLS;
+  const pick = <T>(m: Record<string, T>, x: (t: ExtraTool) => T) => ({
+    ...Object.fromEntries(kept.map((n) => [n, m[n]])),
+    ...Object.fromEntries(extra.map((t) => [t.name, x(t)])),
+  });
+  return toolsDigest(
+    pick(DESCRIPTIONS, (t) => t.description),
+    pick<z.ZodRawShape>(TOOL_SHAPES, (t) => t.shape),
+    permissions
+  );
 }
 
 export function toolsDigest(
