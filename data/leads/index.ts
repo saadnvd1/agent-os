@@ -4,9 +4,11 @@ import type {
   LeadDirectionView,
 } from "@/lib/leads/direction-view";
 import type { LeadThreadView } from "@/lib/leads/thread-view";
+import type { ChiefView } from "@/lib/leads/chief";
 
 export const leadKeys = {
   direction: (sessionId: string) => ["leads", "direction", sessionId] as const,
+  chief: (sessionId: string) => ["leads", "chief", sessionId] as const,
   thread: (q: object, all: boolean) => ["leads", "thread", q, all] as const,
 };
 
@@ -37,6 +39,23 @@ export function useLeadDirection(sessionId: string, enabled: boolean) {
       ).direction,
     enabled,
     staleTime: 30000,
+  });
+}
+
+// A chief of staff's chat header (null for any other chat).
+export function useChiefView(sessionId: string, enabled: boolean) {
+  return useQuery({
+    queryKey: leadKeys.chief(sessionId),
+    queryFn: async () =>
+      (
+        await json<{ chief: ChiefView | null }>(
+          await fetch(
+            `/api/leads/chief?sessionId=${encodeURIComponent(sessionId)}`
+          )
+        )
+      ).chief,
+    enabled,
+    staleTime: 60000,
   });
 }
 

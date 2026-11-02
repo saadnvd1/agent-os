@@ -1,5 +1,5 @@
 import { actorIn } from "../leads/actor";
-import { leadKindOf } from "../leads/roles";
+import { memberKind } from "../leads/roles";
 import { TECH } from "../leads/types";
 import type { Session } from "../db";
 import { prFor } from "../tasks/session";
@@ -94,7 +94,7 @@ export async function askSaad(
   }
 ): Promise<string> {
   const actor = actorIn(workspaceId);
-  const leadKind = (actor && leadKindOf(actor)) ?? TECH;
+  const leadKind = (actor && memberKind(actor)) ?? TECH;
   if (a.task && leadKind !== TECH)
     throw new Error(
       "Only the Tech lead asks to merge a PR; hand it over with send"

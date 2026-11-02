@@ -4,18 +4,30 @@
 
 import type { Session } from "@/lib/db/types";
 import { TOOLS, type ToolName } from "../orchestrator/tool-schemas";
-import { isLeadRole, isTechRole } from "./roles";
+import { CHIEF } from "./order";
+import { isChiefRole, isLeadRole, isTechRole } from "./roles";
 import type { LeadKind } from "./types";
 import { TECH } from "./types";
 
-// A lead's own tools, on top of the orchestrator's (./tools.ts).
+// The tools leads and the chief have on top of the orchestrator's
+// (./tools.ts). `company` is the chief's alone.
 export const LEAD_TOOLS = [
   "update_memo",
   "propose_pin",
   "direction",
   "message_lead",
+  "company",
 ] as const;
 export type LeadToolName = (typeof LEAD_TOOLS)[number];
+const OWN_LEAD_TOOLS: readonly LeadToolName[] = LEAD_TOOLS.filter(
+  (t) => t !== "company"
+);
+// The chief has no direction or memo of its own: it reads the leads'.
+const CHIEF_LEAD_TOOLS: readonly LeadToolName[] = [
+  "direction",
+  "message_lead",
+  "company",
+];
 export const isLeadToolName = (t: unknown): t is LeadToolName =>
   typeof t === "string" && (LEAD_TOOLS as readonly string[]).includes(t);
 
@@ -52,7 +64,15 @@ export const TECH_ONLY: ReadonlySet<ToolName> = new Set<ToolName>([
   "recipe_update",
 ]);
 
+// The chief reaches other workspaces the way the orchestrator does
+// (orchestrator/cross.ts); the rest of Tech's own tools stay Tech's.
+const CHIEF_FROM_TECH: ReadonlySet<ToolName> = new Set<ToolName>([
+  "orchestrators",
+  "message_orchestrator",
+]);
+
 export interface Profile {
+  // A department, or "chief".
   kind: LeadKind;
   tools: readonly ToolName[];
   leadTools: readonly LeadToolName[];
@@ -60,9 +80,9 @@ export interface Profile {
   inArea: boolean;
 }
 
-// A standing session's profile, or null for one that has none yet (the
-// chief, piece 7). The orchestrator of a workspace without leads keeps
-// exactly the tools it always had.
+// A standing session's profile, or null for one that has none. The
+// orchestrator of a workspace without leads keeps exactly the tools it
+// always had.
 export function profileFor(
   s: Pick<Session, "role" | "lead_kind">,
   workspaceHasLeads: boolean
@@ -71,14 +91,22 @@ export function profileFor(
     return {
       kind: TECH,
       tools: TOOLS,
-      leadTools: workspaceHasLeads ? LEAD_TOOLS : [],
+      leadTools: workspaceHasLeads ? OWN_LEAD_TOOLS : [],
+      inArea: false,
+    };
+  // Any area of its own workspace; never review, sign_off or merges.
+  if (isChiefRole(s.role))
+    return {
+      kind: CHIEF,
+      tools: TOOLS.filter((t) => !TECH_ONLY.has(t) || CHIEF_FROM_TECH.has(t)),
+      leadTools: CHIEF_LEAD_TOOLS,
       inArea: false,
     };
   if (!isLeadRole(s.role) || !s.lead_kind) return null;
   return {
     kind: s.lead_kind,
     tools: TOOLS.filter((t) => !TECH_ONLY.has(t)),
-    leadTools: LEAD_TOOLS,
+    leadTools: OWN_LEAD_TOOLS,
     inArea: true,
   };
 }

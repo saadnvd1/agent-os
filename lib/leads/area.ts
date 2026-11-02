@@ -75,3 +75,42 @@ export function areaRefusal(
   const title = leadTitle(workspaceId, kind);
   return `"${project.name}" isn't in your area as ${title}, so ${tool} is refused there. Hand the work to the Tech lead with message_lead, or ask the owner to add the project to your area.`;
 }
+
+// What a chief's call does to work that already exists, said for the lead
+// whose area it's in. Starts aren't here: the session they make records
+// its starter, and that tells the lead (./area-notify).
+const ACTED: Record<string, { verb: string; kind: "task" | "session" }> = {
+  drop: { verb: "dropped", kind: "task" },
+  pause_task: { verb: "paused", kind: "task" },
+  resume_task: { verb: "resumed", kind: "task" },
+  set_priority: { verb: "changed the priority of", kind: "task" },
+  approve_plan: { verb: "approved the plan of", kind: "task" },
+  plan_pieces: { verb: "edited the pieces of", kind: "task" },
+  set_task_model: { verb: "changed the model of", kind: "task" },
+  stop: { verb: "stopped", kind: "session" },
+  archive: { verb: "archived", kind: "session" },
+  resurrect: { verb: "brought back", kind: "session" },
+  set_group: { verb: "regrouped", kind: "session" },
+  send: { verb: "sent a message to", kind: "session" },
+};
+
+export function actedOn(
+  workspaceId: string,
+  tool: string,
+  args: unknown
+): { project: Project; what: string } | null {
+  const act = ACTED[tool];
+  if (!act) return null;
+  const ref = str(((args ?? {}) as Args)[act.kind]);
+  try {
+    const s =
+      act.kind === "task"
+        ? workspaceTask(workspaceId, ref)
+        : findWorkspaceSession(workspaceId, ref);
+    const project = getProject(s.project_id ?? "");
+    return project ? { project, what: `${act.verb} "${s.name}"` } : null;
+  } catch {
+    // The tool reports a target it can't find itself.
+    return null;
+  }
+}

@@ -11,7 +11,7 @@ import type { ChatItem } from "../chat/events";
 import { getOrchestrator } from "./home";
 import { actorIn } from "../leads/actor";
 import { getLead } from "../leads/home";
-import { leadKindOf } from "../leads/roles";
+import { memberKind } from "../leads/roles";
 import { TECH, type LeadKind } from "../leads/types";
 
 export type NoteKind =
@@ -37,13 +37,14 @@ export function addNote(
   workspaceId: string,
   text: string,
   kind: NoteKind = "note",
-  // Whose log it goes in: the lead calling, else the one named, else Tech.
+  // Whose log it goes in: the lead (or chief) calling, else the one named,
+  // else Tech.
   lead?: LeadKind
 ): NoteRow {
   const body = text.trim().slice(0, NOTE_CAP);
   if (!body) throw new Error("The note is empty");
   const actor = actorIn(workspaceId);
-  const leadKind = lead ?? (actor && leadKindOf(actor)) ?? TECH;
+  const leadKind = lead ?? (actor && memberKind(actor)) ?? TECH;
   const { lastInsertRowid } = db
     .prepare(
       `INSERT INTO orchestrator_notes (workspace_id, kind, text, lead_kind) VALUES (?, ?, ?, ?)`

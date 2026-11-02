@@ -1,4 +1,4 @@
-import { isLeadRole } from "../../leads/roles";
+import { isStandingRole } from "../../leads/roles";
 import type { Session } from "../../db";
 import type { ChatStartOptions } from "../driver";
 import { refreshSettings } from "../refresh";
@@ -41,9 +41,9 @@ export async function roleExtras(session: Session): Promise<RoleExtras> {
 }
 
 async function ownExtras(session: Session): Promise<RoleExtras> {
-  // The orchestrator and the other leads run on the orchestrator's worker,
-  // each with its own profile.
-  if (isLeadRole(session.role))
+  // The orchestrator, the other leads and the chief run on the
+  // orchestrator's worker, each with its own profile.
+  if (isStandingRole(session.role))
     return (await import("../../orchestrator/worker")).orchestratorExtras(
       session
     );

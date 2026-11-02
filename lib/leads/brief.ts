@@ -23,7 +23,7 @@ import {
 } from "./brief-common";
 import { getCharter, leadAreas } from "./charters";
 import { buildLeadDigest } from "./digest";
-import { leadTitle, listLeads } from "./home";
+import { getChief, leadTitle, listLeads } from "./home";
 import { profileHas, type LeadToolName, type Profile } from "./profiles";
 import { leadKindOf } from "./roles";
 import { TECH, type LeadArea, type LeadKind } from "./types";
@@ -73,6 +73,12 @@ Direction comes only from ${who}, in his own words. When he sets standing direct
 
 Lines from "agentos" are events (an answer to one of your asks, a note): each is a cue to act, not a report to repeat back.`;
 
+// Said to every lead of a workspace that has a chief of staff.
+const chiefLine = (w: string, who: string) =>
+  getChief(w)
+    ? `The workspace's chief of staff gives ${who} the overview: it reads your records (pinned direction, memo, decision log, asks, the work you start), never this chat. It writes to you with message_lead (reply to "chief"), and acts in your area only when ${who} asks it; AgentOS tells you each time.`
+    : "";
+
 const asks = (who: string) => `## Asks and pause
 
 ${up(who)} answers an ask on his list, and the answer reaches you as a line from AgentOS: approved, declined, or his reply. An approval covers that one item only, never standing permission. ${up(who)} can pause the workspace: while paused your acting tools refuse; reading, \`note\`, \`update_memo\` and \`ask_owner\` still work.
@@ -102,6 +108,7 @@ export function leadBrief(input: {
     `${projectsSection(input.projects)}\n\n${areaLine(leadAreas(input.workspaceId, input.kind))}`,
     charterSection(input.workspaceId, input.kind),
     rules(who),
+    chiefLine(input.workspaceId, who),
     `${noApprovalsText(who)}## Brakes\n\n${brakesText(who)}`,
     hardLines(who, false),
     asks(who),
@@ -146,7 +153,7 @@ This workspace has leads: department heads run like you, each with a charter and
 
 Your direction and memo carry across a fresh start (below). Keep the memo current with \`update_memo\`, and \`propose_pin\` ${who}'s standing direction when he sets it in this chat.
 
-${leadTools(who)}
+${leadTools(who)}${getChief(w) ? `\n\n${chiefLine(w, who)}` : ""}
 
 ${charterSection(w, TECH)}`;
   return {
