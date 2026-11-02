@@ -9,11 +9,13 @@
 //   AGENTOS_UPDATE_DB     the database to back up first, into AGENTOS_UPDATE_BACKUPS
 //   AGENTOS_UPDATE_VERIFY=0  skip the health check (tests)
 //   AGENTOS_UPDATE_REDEPLOY  the script to run (tests); default scripts/redeploy
+//   AGENTOS_AUTODEPLOY_DIR  autodeploy's state dir (tests); default ~/.agent-os/autodeploy
 //   AGENTOS_UPDATE_ROOT   the checkout (tests); default this script's
 // Outcomes: done, built, build_failed (live server untouched), rolled_back,
 // broken (the rollback didn't come up either).
 import { execFileSync, spawn } from "node:child_process";
 import fs from "node:fs";
+import os from "node:os";
 import path from "node:path";
 import readline from "node:readline";
 import { fileURLToPath } from "node:url";
@@ -149,6 +151,24 @@ function resetSource(from) {
   }
 }
 
+/**
+ * scripts/autodeploy's "deployed" marker must not claim a build that isn't
+ * running: after a rollback it names the build that is. Only where autodeploy
+ * runs (its state directory exists).
+ */
+function markDeployed(sha) {
+  const dir =
+    env.AGENTOS_AUTODEPLOY_DIR ||
+    path.join(os.homedir(), ".agent-os", "autodeploy");
+  if (!sha || !fs.existsSync(dir)) return;
+  try {
+    fs.writeFileSync(path.join(dir, "deployed"), `${sha}\n`);
+    say(`Recorded ${sha.slice(0, 7)} as the deployed build.`);
+  } catch (error) {
+    say(`Couldn't record the deployed build: ${error.message}`);
+  }
+}
+
 async function main() {
   const heartbeat = setInterval(() => write({}), 15_000);
   write({ pid: process.pid });
@@ -184,6 +204,14 @@ async function main() {
         expect: env.AGENTOS_UPDATE_TO || head(),
         env,
       });
+      if (ok.otherRestart) {
+        say(`Not rolling back: ${ok.why}.`);
+        return finish(
+          "failed",
+          "interrupted",
+          `The update was built, but ${ok.why}. Nothing was rolled back; check which version is running.`
+        );
+      }
       if (!ok.ok) why = ok.why;
     }
     if (!why) return finish("done", "done");
@@ -205,6 +233,7 @@ async function main() {
         say(`The rolled-back version isn't healthy either: ${ok.why}`);
       }
     }
+    if (backOk) markDeployed(from);
     return backOk
       ? finish(
           "rolled_back",

@@ -85,6 +85,8 @@ export interface RunDeps {
   freeBytes: () => number | null;
   /** True when scripts/autodeploy deploys this checkout. */
   managed: () => boolean;
+  /** True while scripts/autodeploy is deploying (its lock directory exists). */
+  deployLocked: () => boolean;
   /** What a restart would interrupt, as short labels; empty when nothing. */
   busy: () => Promise<string[]>;
   /** The database the runner backs up first, and where to. */
@@ -214,6 +216,7 @@ export function realRunDeps(): RunDeps {
         return false;
       }
     },
+    deployLocked: () => fs.existsSync(agentosHome("autodeploy", "lock")),
     busy: busyLabels,
     dbFile: path.resolve(dbPath()),
     backupDir: agentosHome("backups"),
@@ -354,6 +357,12 @@ export async function preflight(
       code: "not_git",
       error:
         "AgentOS isn't running from a git checkout, so it can't update itself.",
+    };
+  if (deps.managed() || deps.deployLocked())
+    return {
+      code: "managed",
+      error:
+        "This machine is updated by its own deploy job, so updating from here would race it. It deploys new versions by itself.",
     };
   const run = readRun(deps);
   if (run && isActivePhase(run.phase))

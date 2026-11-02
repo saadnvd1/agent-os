@@ -202,6 +202,36 @@ describe("checking a merge's deploy", () => {
   });
 });
 
+describe("a server running a build without the merge", () => {
+  const files = (at: number) => ({ [config.deployed]: { sha: MERGE, at } });
+  const server = (at: number, build: string) => {
+    const d = deps({ files: files(at), history: { [LATER]: [MERGE] } });
+    d.health = async () => ({ ok: true, build });
+    return d;
+  };
+
+  it("isn't deployed when the running build lacks the merge, though the marker says so", async () => {
+    expect(
+      await checkDeploy(input(), server(NOW - HEALTH_GRACE_MS, OTHER))
+    ).toMatchObject({
+      state: "failed",
+      detail: expect.stringContaining("not deployed"),
+    });
+    expect(await checkDeploy(input(), server(NOW - 1000, OTHER))).toEqual({
+      state: "pending",
+    });
+  });
+
+  it("is ok when the running build has the merge", async () => {
+    expect(
+      (await checkDeploy(input(), server(NOW - HEALTH_GRACE_MS, LATER))).state
+    ).toBe("ok");
+    expect(
+      (await checkDeploy(input(), server(NOW - HEALTH_GRACE_MS, MERGE))).state
+    ).toBe("ok");
+  });
+});
+
 describe("whether a deployed commit has the merge, in a real repository", () => {
   const git = (cwd: string, ...args: string[]) =>
     execFileSync("git", args, { cwd, encoding: "utf-8" }).trim();

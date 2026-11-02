@@ -33,6 +33,17 @@ mkdir -p "$state"
 # updates stand aside (lib/updates/run.ts managedByAutodeploy). Before the
 # lock: a long deploy still counts as managing it.
 touch "$state/heartbeat"
+# An in-app update (lib/updates/run.ts) in progress owns this checkout: its
+# pull would meet ours mid-way. Its state file is rewritten every 15 seconds,
+# so an old one is a run that died. Quiet exit; the next minute retries.
+for f in "${AGENTOS_UPDATE_STATE:-}" "${DB_PATH:+$(dirname "$DB_PATH")/agent-os-update.json}" \
+  "$HOME/.agent-os/agent-os-update.json" "$PWD/agent-os-update.json"; do
+  [ -n "$f" ] && [ -f "$f" ] || continue
+  [ -z "$(find "$f" -maxdepth 0 -mmin +30)" ] || continue
+  if grep -Eq '"phase" *: *"(starting|backing_up|pulling|installing|building|restarting|verifying|rolling_back)"' "$f"; then
+    exit 0
+  fi
+done
 # A lock older than 30 minutes is from a run that died.
 for lock in lock publish.lock; do
   if [ -d "$state/$lock" ] && [ -n "$(find "$state/$lock" -maxdepth 0 -mmin +30)" ]; then

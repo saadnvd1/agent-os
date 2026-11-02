@@ -32,6 +32,7 @@ let env: Record<string, string | undefined>;
 let restart: string | null;
 let free: number | null;
 let managed: boolean;
+let deployLocked: boolean;
 let busyNow: string[];
 let notified: string[];
 
@@ -57,6 +58,7 @@ const deps = (): import("./run").RunDeps => ({
     void (v === null ? settings.delete(k) : settings.set(k, v)),
   freeBytes: () => free,
   managed: () => managed,
+  deployLocked: () => deployLocked,
   busy: async () => busyNow,
   dbFile: null,
   backupDir: null,
@@ -90,6 +92,7 @@ beforeEach(() => {
   restart = "restart-cmd";
   free = null;
   managed = false;
+  deployLocked = false;
   busyNow = [];
   notified = [];
   check = available();
@@ -399,6 +402,21 @@ describe("automatic updates", () => {
     expect(await tickFor(watcher, 11 * 60_000)).toBe("started");
     expect(spawned[0].env.AGENTOS_UPDATE_TO).toBe("older");
     expect(state().toVersion).toBe("v-older");
+  });
+
+  it("a manual run is refused on a machine autodeploy manages, or while it deploys", async () => {
+    managed = true;
+    expect(await run.startUpdate({ when: "now" }, deps())).toMatchObject({
+      ok: false,
+      code: "managed",
+    });
+    managed = false;
+    deployLocked = true;
+    expect(await run.startUpdate({ when: "now" }, deps())).toMatchObject({
+      ok: false,
+      code: "managed",
+    });
+    expect(spawned).toHaveLength(0);
   });
 
   it("does nothing when off, pinned off, or deployed by autodeploy", async () => {
