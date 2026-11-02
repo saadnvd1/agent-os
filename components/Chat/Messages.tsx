@@ -33,6 +33,7 @@ import { UndoButton } from "./Undo";
 import { ShareFromHere } from "./ShareFromHere";
 import { useRowState } from "./rowState";
 import { useBookmarkChat } from "@/components/Bookmarks/context";
+import { PinButton, PinNote } from "@/components/Leads/MessagePin";
 import { ChatItemContext } from "./itemContext";
 import { exportUi, exportUiActions, pickedRange } from "@/stores/exportUi";
 import {
@@ -279,11 +280,13 @@ export function UserMessage({
           <UserText text={item.text} />
         </div>
       )}
+      {!pending && !item.from && <PinNote itemId={item.id} />}
       {pending ? (
         <SendStatus pending={pending} />
       ) : (
         <div className="-mr-1.5 flex items-center">
           {onUndo && <UndoButton onClick={onUndo} />}
+          {!item.from && <PinButton itemId={item.id} />}
           <ExportFromHere itemId={item.id} />
           <ShareFromHere itemId={item.id} />
           <BookmarkButton itemId={item.id} />

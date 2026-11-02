@@ -37,6 +37,9 @@ import {
 import { sentPrompts } from "@/lib/chat/history";
 import { quoteInsert, quoteMarkdown } from "@/lib/chat/quote";
 import { OrchestratorBar } from "@/components/Orchestrator/OrchestratorBar";
+import { DirectionStrip } from "@/components/Leads/DirectionStrip";
+import { DirectionChatContext } from "@/components/Leads/direction-context";
+import { useDirection } from "@/components/Leads/useDirection";
 import { ActivityLine } from "./Activity";
 import { modelLabel as pickedModelLabel } from "./ModelPicker";
 import { BackgroundTasks } from "./BackgroundTasks";
@@ -91,6 +94,7 @@ export function ChatPanel({
   sessionName,
   accessLocked = false,
   orchestratorOf,
+  standing = false,
   freshStart = false,
   active,
 }: {
@@ -100,6 +104,8 @@ export function ChatPanel({
   accessLocked?: boolean;
   // The workspace it orchestrates: its header line, Pause and asks show on top.
   orchestratorOf?: string | null;
+  // An orchestrator, lead or chief: a lead's pinned direction shows on top.
+  standing?: boolean;
   // An orchestrator or task: /fresh starts its conversation over.
   freshStart?: boolean;
   // The tab on show in the focused pane: opening it takes the caret.
@@ -171,6 +177,7 @@ export function ChatPanel({
     loadedFor,
   } = useChat(sessionId, (text) => setPrefill({ text, at: Date.now() }));
   const startFresh = useFreshStart();
+  const direction = useDirection(sessionId, standing, state);
   const { isMobile } = useViewport();
   const scrollRef = useRef<HTMLDivElement>(null);
   const listRef = useRef<HTMLDivElement>(null);
@@ -540,83 +547,86 @@ export function ChatPanel({
       className="flex h-full min-h-0 flex-col outline-none"
     >
       {orchestratorOf && <OrchestratorBar workspaceId={orchestratorOf} />}
+      {direction && <DirectionStrip chat={direction} sessionId={sessionId} />}
       <div ref={scrollRef} className="relative min-h-0 flex-1">
         <RowState.Provider value={rowState}>
           <Background.Provider value={background}>
             <ToolBodies.Provider value={bodies}>
               <BookmarkChatContext.Provider value={bookmarkChat}>
-                <div
-                  // A new conversation starts over, scrolled to the end.
-                  key={sessionId}
-                  ref={listRef}
-                  onScroll={onListScroll}
-                  onCopy={onCopy}
-                  className="h-full overflow-y-auto overscroll-y-contain"
-                >
-                  <div className="mx-auto flex w-full max-w-3xl flex-col gap-4 px-4 pt-5 pb-4">
-                    {hasMore && (
-                      <div className="text-muted-foreground flex min-h-11 items-center justify-center text-xs">
-                        {loadingOlder ? (
-                          <Loader2 className="h-4 w-4 animate-spin" />
-                        ) : (
-                          <button
-                            type="button"
-                            onClick={loadOlder}
-                            className="hover:text-foreground min-h-11 px-3"
-                          >
-                            Show earlier messages
-                          </button>
-                        )}
-                      </div>
-                    )}
-                    <SetupCard sessionId={sessionId} />
-                    {blocks.length === 0 &&
-                      !queue.length &&
-                      !pending.length && (
-                        <p className="text-muted-foreground py-16 text-center text-sm">
-                          Ask anything to start.
-                        </p>
+                <DirectionChatContext.Provider value={direction}>
+                  <div
+                    // A new conversation starts over, scrolled to the end.
+                    key={sessionId}
+                    ref={listRef}
+                    onScroll={onListScroll}
+                    onCopy={onCopy}
+                    className="h-full overflow-y-auto overscroll-y-contain"
+                  >
+                    <div className="mx-auto flex w-full max-w-3xl flex-col gap-4 px-4 pt-5 pb-4">
+                      {hasMore && (
+                        <div className="text-muted-foreground flex min-h-11 items-center justify-center text-xs">
+                          {loadingOlder ? (
+                            <Loader2 className="h-4 w-4 animate-spin" />
+                          ) : (
+                            <button
+                              type="button"
+                              onClick={loadOlder}
+                              className="hover:text-foreground min-h-11 px-3"
+                            >
+                              Show earlier messages
+                            </button>
+                          )}
+                        </div>
                       )}
-                  </div>
-                  <ChatSessionId.Provider value={sessionId}>
-                    <ChatIdle.Provider value={idle}>
-                      <RetryTurn.Provider value={retryTurn}>
-                        <TimelineRows
-                          blocks={blocks}
-                          actions={actions}
-                          newFrom={newFrom}
-                        />
-                      </RetryTurn.Provider>
-                    </ChatIdle.Provider>
-                  </ChatSessionId.Provider>
-                  {pending.map((p) => (
-                    <div
-                      key={p.id}
-                      className="mx-auto w-full max-w-3xl px-4 pb-4"
-                    >
-                      <UserMessage
-                        item={{
-                          id: p.id,
-                          kind: "user",
-                          text: p.text,
-                          images: p.images,
-                          files: p.files,
-                          createdAt: p.at,
-                        }}
-                        pending={{
-                          status: p.status,
-                          compacting: compactsFirst(p, { state, compacting }),
-                          error: p.error,
-                          onRetry: () => retrySend(p.id),
-                          onEdit: () => {
-                            dropSend(p.id);
-                            setPrefill({ text: p.text, at: Date.now() });
-                          },
-                        }}
-                      />
+                      <SetupCard sessionId={sessionId} />
+                      {blocks.length === 0 &&
+                        !queue.length &&
+                        !pending.length && (
+                          <p className="text-muted-foreground py-16 text-center text-sm">
+                            Ask anything to start.
+                          </p>
+                        )}
                     </div>
-                  ))}
-                </div>
+                    <ChatSessionId.Provider value={sessionId}>
+                      <ChatIdle.Provider value={idle}>
+                        <RetryTurn.Provider value={retryTurn}>
+                          <TimelineRows
+                            blocks={blocks}
+                            actions={actions}
+                            newFrom={newFrom}
+                          />
+                        </RetryTurn.Provider>
+                      </ChatIdle.Provider>
+                    </ChatSessionId.Provider>
+                    {pending.map((p) => (
+                      <div
+                        key={p.id}
+                        className="mx-auto w-full max-w-3xl px-4 pb-4"
+                      >
+                        <UserMessage
+                          item={{
+                            id: p.id,
+                            kind: "user",
+                            text: p.text,
+                            images: p.images,
+                            files: p.files,
+                            createdAt: p.at,
+                          }}
+                          pending={{
+                            status: p.status,
+                            compacting: compactsFirst(p, { state, compacting }),
+                            error: p.error,
+                            onRetry: () => retrySend(p.id),
+                            onEdit: () => {
+                              dropSend(p.id);
+                              setPrefill({ text: p.text, at: Date.now() });
+                            },
+                          }}
+                        />
+                      </div>
+                    ))}
+                  </div>
+                </DirectionChatContext.Provider>
               </BookmarkChatContext.Provider>
             </ToolBodies.Provider>
           </Background.Provider>
