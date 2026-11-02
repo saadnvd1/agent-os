@@ -36,6 +36,7 @@ import {
 } from "../plans/features";
 import { advancePlan, setPlan } from "../db/session-parts";
 import { Owner } from "../owner";
+import { checkPlanFile } from "./plan-fresh";
 
 export const PLAN_FILE = ".agentos/plan.md";
 
@@ -134,9 +135,13 @@ export function planNoteFor(
   file: string,
   next: string,
   again = "",
-  after = ""
+  after = "",
+  stale = ""
 ): string {
   let head = `Task "${s.name}": no plan file was written${again}; ${next}${after}.`;
+  // A plan file left over from the base branch is not this task's plan.
+  if (stale)
+    return `Task "${s.name}": no usable plan was written (the plan file is stale: ${stale})${again}; ${next}${after}.`;
   try {
     const text = fs.readFileSync(file, "utf8");
     const summary = planSummary(text);
@@ -153,7 +158,12 @@ export function planNoteFor(
 }
 
 // Tells the orchestrator that started a task its plan is written, once.
-function announcePlan(s: Session, ref: string | null, retried = false): void {
+function announcePlan(
+  s: Session,
+  ref: string | null,
+  retried = false,
+  stale = ""
+): void {
   // The machine that placed it announces the plan, from its own copy.
   if (s.plan_waits_for_caller) return;
   if (!orchestratorOf(s.started_by) && !s.held_by_device) return;
@@ -167,7 +177,7 @@ function announcePlan(s: Session, ref: string | null, retried = false): void {
     ? `implementing on ${ref}`
     : "waiting for approval, not implementing (approve_plan to go ahead, drop to reject)";
   const again = retried ? " (asked once more for it first)" : "";
-  const head = planNoteFor(s, file, next, again, ref ? " anyway" : "");
+  const head = planNoteFor(s, file, next, again, ref ? " anyway" : "", stale);
   if (s.held_by_device) {
     setPlan(db, s.id, { plan_note: head });
     return;
@@ -215,12 +225,14 @@ async function handOffToPieces(s: Session): Promise<void> {
   }
 }
 
-function readPlan(s: Session): string | null {
-  try {
-    return fs.readFileSync(path.join(s.worktree_path!, PLAN_FILE), "utf8");
-  } catch {
-    return null;
-  }
+// The plan this task's planning turn wrote: null when there is none, and
+// `stale` says why a file that is there was refused.
+async function readPlan(
+  s: Session
+): Promise<{ text: string | null; stale: string }> {
+  const v = await checkPlanFile(s.worktree_path!, s.base_branch);
+  if (!v) return { text: null, stale: "" };
+  return v.ok ? { text: v.text, stale: "" } : { text: null, stale: v.why };
 }
 
 export const implementMessageId = (sessionId: string) =>
@@ -243,7 +255,8 @@ async function startImplementing(
   from: "planning" | "awaiting",
   send: Send,
   amendment?: string,
-  retried = false
+  retried = false,
+  stale = ""
 ): Promise<string | null> {
   const sessionId = s.id;
   const routed = resolveRole("implement", {
@@ -251,7 +264,14 @@ async function startImplementing(
     override: taskOverride(s),
   });
   const id = implementMessageId(sessionId);
-  const planText = readPlan(s);
+  // Only the planning turn's own file is checked for being this task's: a
+  // plan waiting for approval was checked when its turn ended.
+  const planText =
+    from === "planning"
+      ? (await readPlan(s)).text
+      : fs.existsSync(path.join(s.worktree_path!, PLAN_FILE))
+        ? fs.readFileSync(path.join(s.worktree_path!, PLAN_FILE), "utf8")
+        : null;
   // The branch was cut when the task was created; the plan may have waited.
   const fresh = await refreshBase({
     name: s.name,
@@ -313,12 +333,7 @@ async function startImplementing(
     if (nothingOwn) return true;
     enqueue(sessionId, {
       id,
-      text: implementPrompt(
-        fs.existsSync(path.join(s.worktree_path!, PLAN_FILE)),
-        note,
-        piece,
-        baseNote
-      ),
+      text: implementPrompt(planText !== null, note, piece, baseNote),
       origin: { kind: "decision", label: "Plan step" },
     });
     return true;
@@ -326,7 +341,7 @@ async function startImplementing(
   if (!claimed) return null;
   if (from === "planning") {
     try {
-      announcePlan(s, routed.ref, retried);
+      announcePlan(s, routed.ref, retried, stale);
     } catch (e) {
       console.error("plan-done event failed:", e);
     }
@@ -411,7 +426,8 @@ export async function handoffAfterPlan(
   }
   // Mid-turn, the turn's own end decides.
   if (env.turnRunning?.()) return false;
-  if (!fs.existsSync(path.join(s.worktree_path, PLAN_FILE))) {
+  const found = await readPlan(s);
+  if (found.text === null) {
     const w = stateOf(sessionId);
     const now = (env.now ?? Date.now)();
     const limit = env.waitMs ?? PLAN_BACKGROUND_WAIT_MS;
@@ -458,7 +474,7 @@ export async function handoffAfterPlan(
   // A plan-only task never goes on by itself, in No approvals mode too: it
   // was asked to stop and show the plan. Pieces that couldn't be registered
   // always hold a plan-first one: building on a guess is the bug.
-  const planText = readPlan(s);
+  const planText = found.text;
   const pieceErrors =
     (planText && !s.plan_waits_for_caller
       ? splitOf(s, planText)?.errors
@@ -469,13 +485,14 @@ export async function handoffAfterPlan(
       "planning",
       send,
       undefined,
-      retried
+      retried,
+      found.stale
     );
     return ref !== null;
   }
   if (!advancePlan(db, sessionId, "planning", "awaiting")) return false;
   try {
-    announcePlan(s, null, retried);
+    announcePlan(s, null, retried, found.stale);
   } catch (e) {
     console.error("plan-done event failed:", e);
   }
@@ -490,8 +507,7 @@ export async function handoffAfterPlan(
   // The machine that placed a plan sends its own push.
   try {
     if (!s.plan_waits_for_caller) {
-      const text = readPlan(s);
-      const planned = text ? planFor(s, text) : null;
+      const planned = planText ? planFor(s, planText) : null;
       (await import("../notify/push/events")).pushPlanAwaiting(
         s.id,
         s.name,

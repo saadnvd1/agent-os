@@ -36,6 +36,9 @@ async function cardText(task: Session): Promise<string> {
   return task.task_prompt ?? task.name;
 }
 
+export const isTaskStatePath = (p: string) =>
+  p === ".agentos" || p.startsWith(".agentos/");
+
 export async function checkScope(input: {
   workspaceId: string;
   task: Session;
@@ -53,6 +56,13 @@ export async function checkScope(input: {
     // Claimed before the first await: written in the same tick as the
     // review's verdict, so no review call sees neither.
     putCheck({ ...base, status: "running", detail: null });
+    const taskState = input.files.filter((f) => isTaskStatePath(f.path));
+    if (taskState.length)
+      return putCheck({
+        ...base,
+        status: "block",
+        detail: `Commits task state under .agentos/ (${taskState.map((f) => f.path).join(", ")}); the plan folder is never part of a change.`,
+      });
     const amended = input.amendments?.length
       ? `\n\nScope changes recorded since the task started, oldest first; they win over the card, and a later one over an earlier one:\n${fence("amendments", input.amendments.map((a, i) => `${i + 1}. ${a}`).join("\n"))}`
       : "";
