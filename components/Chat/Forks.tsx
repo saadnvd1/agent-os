@@ -1,7 +1,7 @@
 "use client";
 
 import { useState } from "react";
-import { GitFork, Square } from "lucide-react";
+import { CircleCheck, GitFork, Square } from "lucide-react";
 import { toast } from "sonner";
 import { useExperiment } from "@/data/experiments";
 import {
@@ -13,6 +13,7 @@ import {
 import { formatElapsed } from "@/lib/chat/elapsed";
 import { Button } from "@/components/ui/button";
 import { StatusPill } from "@/components/ui/status-pill";
+import { useDoneAction } from "@/components/SessionList/useDoneAction";
 import { SessionAnchor } from "./SessionAnchor";
 
 type Tone = "amber" | "muted" | "green" | "primary" | "red";
@@ -73,12 +74,14 @@ export const runningNote = (c: ChildView, now = Date.now()): string | null => {
 function Row({
   c,
   onStop,
+  onDone,
   stopping,
   again,
 }: {
   c: ChildView;
   again: ReturnType<typeof useRunAgain>;
   onStop: () => void;
+  onDone: () => void;
   stopping: boolean;
 }) {
   const { text, tone } = stateLabel(c);
@@ -144,6 +147,16 @@ function Row({
           <Square aria-hidden className="size-4" />
         </Button>
       )}
+      <Button
+        size="sm"
+        variant="ghost"
+        aria-label={`Mark fork ${c.n} done`}
+        data-tip="Done"
+        className="size-11 shrink-0"
+        onClick={onDone}
+      >
+        <CircleCheck aria-hidden className="size-4" />
+      </Button>
     </li>
   );
 }
@@ -154,10 +167,11 @@ export function ForksStrip({ sessionId }: { sessionId: string }) {
   const { data } = useForkChildren(sessionId, on);
   const cancel = useCancelForks(sessionId);
   const again = useRunAgain(sessionId);
+  const markDone = useDoneAction();
   const [collapsed, setCollapsed] = useState(false);
   if (!on || !data) return null;
   if (data.asChild) return <ForkOfBanner info={data.asChild} />;
-  const { children } = data;
+  const children = data.children.filter((c) => !c.done);
   if (!children.length) return null;
   const open = children.filter((c) => c.state !== "settled").length;
   const stop = (ref?: string) =>
@@ -206,6 +220,14 @@ export function ForksStrip({ sessionId }: { sessionId: string }) {
               stopping={cancel.isPending}
               again={again}
               onStop={() => stop(String(c.n))}
+              onDone={() =>
+                markDone({
+                  id: c.id,
+                  name: c.label,
+                  task_status: null,
+                  pr_status: null,
+                })
+              }
             />
           ))}
         </ul>

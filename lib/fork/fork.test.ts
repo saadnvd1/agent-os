@@ -81,7 +81,7 @@ const { deliverDue } = await import("./deliver");
 const { heldForNext } = await import("./held");
 const { registerForkWait, tickForkWaits } = await import("./waits");
 const { forksTick } = await import("./tick");
-const { statsOf } = await import("./view");
+const { statsOf, childrenView } = await import("./view");
 const { FORK_LIMITS } = await import("./options");
 
 function parent(opts: { task?: boolean; limit?: number } = {}) {
@@ -207,6 +207,37 @@ describe("starting forks", () => {
       .get(r.children[0].id) as { claude_session_id: string };
     expect(row.claude_session_id).toBe("forked-1");
     expect(ledger.getChild(r.children[0].id)?.cut_message_id).toBe("m9");
+  });
+});
+
+describe("children view", () => {
+  it("marks a fork done once its session is marked done or archived", async () => {
+    const p = parent();
+    startFork({
+      parentId: p,
+      requestId: "d",
+      instructions: ["one", "two", "three"],
+      startedBy: "agent",
+    });
+    await flush();
+    const [a, b, c] = ledger.childrenOf(p).map((x) => x.child_session_id);
+    expect(childrenView(p).children.map((x) => x.done)).toEqual([
+      false,
+      false,
+      false,
+    ]);
+    db.prepare(
+      `UPDATE sessions SET settled_at = datetime('now') WHERE id = ?`
+    ).run(a);
+    db.prepare(
+      `UPDATE sessions SET archived_at = datetime('now') WHERE id = ?`
+    ).run(c);
+    const view = childrenView(p).children;
+    expect(view.map((x) => [x.id, x.done])).toEqual([
+      [a, true],
+      [b, false],
+      [c, true],
+    ]);
   });
 });
 
