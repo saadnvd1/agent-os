@@ -26,6 +26,14 @@ export const EXPERIMENTS = [
     status: "experimental",
     suggests: true,
   },
+  {
+    id: "forks",
+    name: "Parallel forks",
+    description:
+      "A session can start several children that know what it knows, work in the background on independent questions, and report back, so the main session isn't blocked.",
+    area: "sessions",
+    status: "experimental",
+  },
 ] as const satisfies readonly Experiment[];
 
 export type ExperimentId = (typeof EXPERIMENTS)[number]["id"];

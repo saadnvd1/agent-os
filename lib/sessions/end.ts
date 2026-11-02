@@ -5,6 +5,8 @@ import { endTmuxSession } from "../tmux/end";
 import { releaseOnEnd, shutTaskSimulators } from "../simulator";
 import { forgetPlanWait } from "../models/plan-step";
 import { kickWaits } from "../bus/waits/kick";
+import { openChildren } from "../fork/ledger";
+import { cancelChildren } from "../fork/settle";
 
 type Agent = Pick<Session, "id" | "host_id" | "tmux_name"> &
   Partial<Pick<Session, "worktree_path" | "branch_name">>;
@@ -14,6 +16,9 @@ type Agent = Pick<Session, "id" | "host_id" | "tmux_name"> &
 // finish share.
 export async function endSessionAgent(s: Agent): Promise<void> {
   forgetPlanWait(s.id);
+  // Its forks have no one to report to.
+  if (openChildren(s.id).length)
+    void cancelChildren(s.id).catch(() => undefined);
   stopChat(s.id);
   // The task's simulator goes with it; no row, no work.
   releaseOnEnd(s.id, { remove: true });

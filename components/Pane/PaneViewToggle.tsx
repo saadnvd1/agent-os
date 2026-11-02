@@ -7,7 +7,6 @@ import {
   Package,
   ScrollText,
   ClipboardList,
-  Users,
 } from "lucide-react";
 import {
   Tooltip,
@@ -25,11 +24,9 @@ interface PaneViewToggleProps {
   isLocalSession: boolean;
   // Local, and the folder is not known to be outside a git repository.
   showGit: boolean;
-  isConductor: boolean;
   // The task merged and has a log.
   hasLog?: boolean;
   hasReport?: boolean;
-  workerCount: number;
   gitDrawerOpen: boolean;
   shellDrawerOpen: boolean;
   onViewModeChange: (mode: ViewMode) => void;
@@ -85,10 +82,8 @@ export function PaneViewToggle({
   viewMode,
   isLocalSession,
   showGit,
-  isConductor,
   hasLog,
   hasReport,
-  workerCount,
   gitDrawerOpen,
   shellDrawerOpen,
   onViewModeChange,
@@ -157,18 +152,6 @@ export function PaneViewToggle({
           onClick={() => onViewModeChange("log")}
         >
           <ScrollText className="h-3.5 w-3.5" />
-        </ToggleButton>
-      )}
-      {isConductor && (
-        <ToggleButton
-          label="Workers"
-          active={viewMode === "workers"}
-          onClick={() => onViewModeChange("workers")}
-        >
-          <Users className="h-3.5 w-3.5" />
-          <span className="bg-primary text-primary-foreground absolute -top-1 -right-1 flex h-3.5 min-w-3.5 items-center justify-center rounded-full text-[9px] font-medium">
-            {workerCount}
-          </span>
         </ToggleButton>
       )}
     </div>

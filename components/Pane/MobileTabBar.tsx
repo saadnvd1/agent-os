@@ -54,10 +54,8 @@ interface MobileTabBarProps {
   sessions: Session[];
   projects: Project[];
   viewMode: ViewMode;
-  isConductor: boolean;
   hasLog?: boolean;
   hasReport?: boolean;
-  workerCount: number;
   // Local, and the folder is not known to be outside a git repository.
   showGit: boolean;
   onMenuClick?: () => void;
@@ -75,10 +73,8 @@ export function MobileTabBar({
   sessions,
   projects,
   viewMode,
-  isConductor,
   hasLog,
   hasReport,
-  workerCount,
   showGit,
   onMenuClick,
   onViewModeChange,
@@ -403,8 +399,6 @@ export function MobileTabBar({
           showGit={showGit}
           hasLog={hasLog}
           hasReport={hasReport}
-          isConductor={isConductor}
-          workerCount={workerCount}
         />
       )}
     </div>

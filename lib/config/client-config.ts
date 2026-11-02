@@ -7,6 +7,7 @@ import {
   RUN_TRIGGER_LABELS,
 } from "../recipes/status-labels";
 import { TASK_STATE_LABELS } from "../tasks/state-labels";
+import { forkConfig } from "../fork/options";
 import { cachedCheck } from "../updates/check";
 import {
   CLIENT_CONFIG_VERSION,
@@ -44,5 +45,6 @@ export function clientConfig(): ClientConfig {
     attachments: ATTACHMENT_LIMITS,
     voice: VOICE_LIMITS,
     ownerName: ownerName(),
+    forks: forkConfig(),
   };
 }

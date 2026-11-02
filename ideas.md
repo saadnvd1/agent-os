@@ -364,3 +364,10 @@
 - Snippets in the history menu next to each chat's name.
 
 - Ask the owner for their name in the welcome flow (today it is set in Settings → Setup & health; until then text says "you" and agents say "the owner").
+
+## Forks (follow-ups)
+
+- The phone app (agentos-mobile, separate private repo): the Forks strip, the child banner and the fork dialog. The server API (`/api/fork/children`, `/api/fork`, `/api/fork/cancel`) is ready for it.
+- Orchestrator forks (V1 forks only chat sessions and never nests).
+- A real-token check that a mid-turn cut resumes in the SDK; today a failed cut falls back to a brief.
+- Forks that open PRs (V1 children never do).

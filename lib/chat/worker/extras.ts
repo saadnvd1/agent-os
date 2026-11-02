@@ -2,6 +2,7 @@ import type { Session } from "../../db";
 import type { ChatStartOptions } from "../driver";
 import { refreshSettings } from "../refresh";
 import { sessionProviderEnv } from "../../models/launch";
+import { childExtras } from "../../fork/extras";
 
 export type RoleExtras = Pick<
   ChatStartOptions,
@@ -30,7 +31,12 @@ export async function roleExtras(session: Session): Promise<RoleExtras> {
     ownExtras(session),
     sessionProviderEnv(session),
   ]);
-  return env ? { ...extras, env } : extras;
+  const fork = childExtras(session);
+  return {
+    ...extras,
+    ...(fork?.toolGuard && { toolGuard: fork.toolGuard }),
+    ...((env || fork) && { env: { ...env, ...fork?.env } }),
+  };
 }
 
 async function ownExtras(session: Session): Promise<RoleExtras> {

@@ -32,6 +32,13 @@ export interface ClientConfig {
   voice: VoiceLimits;
   /** The owner's own name for text that refers to them; null until set. */
   ownerName: string | null;
+  // Parallel forks (an experiment, off unless turned on in Settings).
+  forks?: {
+    enabled: boolean;
+    maxPerFork: number;
+    summaryChars: number;
+    deliveryModes: string[];
+  };
 }
 
 // What a chat accepts, served from lib/attachments/policy.ts. Sizes in bytes.

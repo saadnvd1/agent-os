@@ -300,44 +300,6 @@ describe("POST /api/sessions/[id]/summarize", async () => {
   }, 10_000);
 });
 
-describe("orchestration workers", async () => {
-  const { sendToWorker, getWorkerOutput, killWorker } =
-    await import("@/lib/orchestration");
-
-  it.each(EVIL)("sends %j to a worker as literal keys", async (message) => {
-    const id = addSession({ tmux_name: EVIL[2] });
-    expect(await sendToWorker(id, message)).toBe(true);
-    expect(calls).toEqual([
-      {
-        file: "tmux",
-        args: ["send-keys", "-t", `=${EVIL[2]}:`, "-l", "--", message],
-      },
-      { file: "tmux", args: ["send-keys", "-t", `=${EVIL[2]}:`, "Enter"] },
-    ]);
-  });
-
-  it("reads a worker's output with a numeric line count only", async () => {
-    const id = addSession({ tmux_name: EVIL[0] });
-    await getWorkerOutput(id, "5; touch /tmp/pwned" as unknown as number);
-    expect(calls).toEqual([
-      {
-        file: "tmux",
-        args: ["capture-pane", "-t", `=${EVIL[0]}:`, "-p", "-S", "-0"],
-      },
-    ]);
-  });
-
-  it("ends a worker by its stored name, and runs nothing for a name that is shell syntax", async () => {
-    const good = addSession({ tmux_name: "claude-worker.1_a" });
-    await killWorker(good);
-    expect(calls).toEqual([{ file: "tmux-end", args: ["claude-worker.1_a"] }]);
-    calls.length = 0;
-    const evil = addSession({ tmux_name: EVIL[1] });
-    await killWorker(evil);
-    expect(calls).toEqual([]);
-  });
-});
-
 describe("docker dev servers", async () => {
   const { startServer, stopServer } = await import("@/lib/dev-servers");
   const { createProject } = await import("@/lib/projects");
@@ -384,72 +346,6 @@ describe("POST /api/tmux/kill-all", async () => {
       { file: "tmux", args: ["list-sessions", "-F", "#{session_name}"] },
       { file: "tmux-end", args: [name] },
     ]);
-  });
-});
-
-describe("spawnWorker", async () => {
-  const { spawnWorker } = await import("@/lib/orchestration");
-  const os = await import("os");
-  const path = await import("path");
-
-  // Its readiness poll sleeps 2s between looks: run those sleeps on a fake
-  // clock, while the mocked processes still answer on real setImmediate.
-  async function spawn(task: string, workingDirectory: string) {
-    answer.fn = (_file, args) =>
-      args[0] === "capture-pane" ? "? for shortcuts\n" : "";
-    vi.useFakeTimers({ toFake: ["setTimeout"] });
-    try {
-      let done = false;
-      const started = spawnWorker({
-        conductorSessionId: addSession(),
-        task,
-        workingDirectory,
-        useWorktree: false,
-      }).finally(() => (done = true));
-      while (!done) {
-        await vi.advanceTimersByTimeAsync(2000);
-        await new Promise((r) => setImmediate(r));
-      }
-      return await started;
-    } finally {
-      vi.useRealTimers();
-    }
-  }
-  const created = () =>
-    tmuxCalls().find((c) => c.args[0] === "new-session")?.args;
-
-  it.each(EVIL)(
-    "starts in a hostile directory and sends the task %j as literal keys",
-    async (task) => {
-      const worker = await spawn(task, `~/${EVIL[0]}`);
-      const target = `=${worker.tmux_name}:`;
-      expect(created()?.slice(0, 6)).toEqual([
-        "new-session",
-        "-d",
-        "-s",
-        worker.tmux_name,
-        "-c",
-        path.join(os.homedir(), EVIL[0]),
-      ]);
-      expect(created()?.slice(6, 8)).toEqual([
-        "-e",
-        `AGENTOS_SESSION_ID=${worker.tmux_name.slice(-36)}`,
-      ]);
-      expect(created()).toHaveLength(9);
-      expect(tmuxCalls().slice(-2)).toEqual([
-        { file: "tmux", args: ["send-keys", "-t", target, "-l", "--", task] },
-        { file: "tmux", args: ["send-keys", "-t", target, "Enter"] },
-      ]);
-    }
-  );
-
-  it.each([
-    ["~", os.homedir()],
-    ["~foo/x", "~foo/x"],
-    ["/a~b", "/a~b"],
-  ])("expands only a leading ~ or ~/: %j", async (dir, cwd) => {
-    await spawn("t", dir);
-    expect(created()?.[5]).toBe(cwd);
   });
 });
 

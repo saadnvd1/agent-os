@@ -130,7 +130,7 @@ const FOLDS_CASE =
 const key = (p: string) =>
   FOLDS_CASE ? p.normalize("NFC").toLowerCase() : p.normalize("NFC");
 
-const within = (p: string, root: string) => {
+export const within = (p: string, root: string) => {
   const [a, b] = [key(p), key(root)];
   return a === b || a.startsWith(b === "/" ? b : b + "/");
 };

@@ -9,7 +9,6 @@ import {
   ScrollText,
   ClipboardList,
   Terminal as TerminalIcon,
-  Users,
   type LucideIcon,
 } from "lucide-react";
 import {
@@ -33,8 +32,6 @@ export interface MobileViewAvailability {
   showGit: boolean;
   hasLog?: boolean;
   hasReport?: boolean;
-  isConductor: boolean;
-  workerCount: number;
 }
 
 // The one list of views on a phone; the picker renders it.
@@ -43,8 +40,6 @@ export function mobileViews({
   showGit,
   hasLog,
   hasReport,
-  isConductor,
-  workerCount,
 }: MobileViewAvailability): MobileView[] {
   const views: (MobileView | false)[] = [
     { mode: "terminal", label: "Chat", icon: TerminalIcon },
@@ -53,12 +48,6 @@ export function mobileViews({
     { mode: "artifacts", label: "Artifacts", icon: Package },
     !!hasReport && { mode: "report", label: "Report", icon: ClipboardList },
     !!hasLog && { mode: "log", label: "Log", icon: ScrollText },
-    isConductor && {
-      mode: "workers",
-      label: "Workers",
-      icon: Users,
-      count: workerCount,
-    },
   ];
   return views.filter((v): v is MobileView => !!v);
 }

@@ -7,6 +7,20 @@ import { statusOf } from "../orchestrator/facts";
 import { kickWaits } from "../bus/waits/kick";
 import { peerSessionLink } from "../hosts/peer-actions";
 import { endLinkOf } from "../analyst/endLink";
+import { openChildren } from "../fork/ledger";
+import { cancelChildren } from "../fork/settle";
+
+// Archiving a session whose forks are still running asks first.
+export class ForkChildrenOpen extends Error {
+  constructor(
+    name: string,
+    readonly open: number
+  ) {
+    super(
+      `${name} has ${open} ${open === 1 ? "fork" : "forks"} still running: stop them or keep them going`
+    );
+  }
+}
 
 export interface ArchivedView {
   id: string;
@@ -81,7 +95,10 @@ export function listArchived(workspaceId?: string): ArchivedView[] {
 
 // Puts a session away on purpose. Nothing is merged or stopped here: an
 // agent still working, a task with an open PR and an orchestrator stay.
-export async function archiveChecked(id: string): Promise<Session> {
+export async function archiveChecked(
+  id: string,
+  opts: { children?: "stop" | "keep" } = {}
+): Promise<Session> {
   const s = queries.getSession(db).get(id) as Session | undefined;
   if (!s) throw new Error("Session not found");
   if (s.archived_at) throw new Error(`${s.name} is already archived`);
@@ -99,6 +116,9 @@ export async function archiveChecked(id: string): Promise<Session> {
     throw new Error(
       `${s.name} is still working: wait for it, or stop it first`
     );
+  const open = openChildren(s.id).length;
+  if (open && !opts.children) throw new ForkChildrenOpen(s.name, open);
+  if (open && opts.children === "stop") await cancelChildren(s.id);
   archiveSession(s.id);
   return queries.getSession(db).get(id) as Session;
 }
