@@ -1953,6 +1953,22 @@
       "area": "AgentOS",
       "text": "Select text in a chat reply and tap Fork to hand it to a background copy of the session; its result comes back as a card.",
       "url": "https://github.com/saadnvd1/agent-os/pull/558"
+    },
+    {
+      "id": 560,
+      "date": "2026-11-02",
+      "kind": "fixed",
+      "area": "Chat",
+      "text": "You can ask follow-up questions in a task's chat after its work has merged, with a note that changes need a new task.",
+      "url": "https://github.com/saadnvd1/agent-os/pull/560"
+    },
+    {
+      "id": 561,
+      "date": "2026-11-02",
+      "kind": "improved",
+      "area": "AgentOS",
+      "text": "Forking from a selection is tidier: the fork pill can be dismissed while keeping your quote and text, and started forks show a one-line marker and what they're doing.",
+      "url": "https://github.com/saadnvd1/agent-os/pull/561"
     }
   ]
 }
