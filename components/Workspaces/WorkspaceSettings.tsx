@@ -1,31 +1,55 @@
 "use client";
 
+import { useContext, useState } from "react";
 import { settingsUiActions } from "@/stores/settingsUi";
-import { useUpdateWorkspace, useWorkspacesQuery } from "@/data/workspaces";
-import { RulesForm } from "./RulesForm";
-import { McpServersForm } from "./McpServersForm";
-import { HqFolderForm } from "./HqFolderForm";
-import { ProjectTiersForm } from "./ProjectTiersForm";
-import { WorkspaceModeForm } from "./WorkspaceModeForm";
-import { WorkspaceModelsForm } from "./WorkspaceModelsForm";
+import { useWorkspacesQuery } from "@/data/workspaces";
+import { useProjectsQuery } from "@/data/projects";
 import { AppWideLimits } from "@/components/Settings/AppWideLimits";
 import {
-  NumberSetting,
-  SwitchSetting,
-} from "@/components/Settings/settings-fields";
-import { SettingSection } from "@/components/Settings/SettingRow";
-import { SETTING_DEFAULTS } from "@/lib/settings/defaults";
+  matchesQuery,
+  SettingsQueryContext,
+} from "@/components/Settings/SettingRow";
+import { WorkspacePanel } from "./WorkspacePanel";
+import { WorkspacePicker } from "./WorkspacePicker";
+import { useSettingsWorkspace } from "./useSettingsWorkspace";
 
-// Settings > Workspaces: each workspace's own settings.
+// What every workspace's page has, for the search box to find.
+const SHARED_ROWS =
+  "tasks at a time limit operating mode orchestrator full access wake ci failures reviews models hq folder session logs rules mcp servers projects production fast merge tier";
+
+// Settings > Workspaces: one workspace's settings at a time.
 export function WorkspaceSettings() {
   const { data: workspaces, isPending, isError, error } = useWorkspacesQuery();
-  const update = useUpdateWorkspace();
+  const { data: projects } = useProjectsQuery();
+  const query = useContext(SettingsQueryContext);
+  const { current, choose } = useSettingsWorkspace(workspaces ?? []);
+  // The search a hand-picked workspace overrides.
+  const [pinnedFor, setPinnedFor] = useState<string | null>(null);
+
+  // A search that matches only another workspace (its name, a project) shows
+  // that workspace; the shared rows are on every page, so they never move it.
+  const searchHit =
+    query.trim() &&
+    workspaces &&
+    current &&
+    pinnedFor !== query &&
+    !matchesQuery(query, SHARED_ROWS)
+      ? workspaces.find((w) =>
+          matchesQuery(
+            query,
+            w.name,
+            ...(projects ?? [])
+              .filter((p) => p.workspace_id === w.id)
+              .map((p) => p.name)
+          )
+        )
+      : undefined;
 
   if (isPending)
     return <div className="bg-muted/40 h-32 animate-pulse rounded-lg" />;
   if (isError)
     return <p className="text-destructive text-sm">{error.message}</p>;
-  if (!workspaces.length)
+  if (!workspaces.length || !current)
     return (
       <p className="text-muted-foreground text-sm">
         No workspaces yet. Make one from the workspace menu at the top of the
@@ -33,74 +57,24 @@ export function WorkspaceSettings() {
       </p>
     );
 
+  const shown = searchHit ?? current;
   return (
-    <div className="space-y-4">
-      <p className="text-muted-foreground text-sm">
-        Running task limit: tasks over it wait in the Queued list and start by
-        themselves, in order, when a running one finishes.
-      </p>
-      {workspaces.map((w) => (
-        <section
-          key={w.id}
-          aria-label={w.name}
-          className="bg-muted/40 space-y-3 rounded-lg px-3 py-3"
-        >
-          <h3 className="truncate text-sm font-medium">{w.name}</h3>
-          <SettingSection>
-            <NumberSetting
-              id={`task-limit-${w.id}`}
-              label="Tasks at a time"
-              help="Cap on tasks running at once. The rest wait in Queued and start in order."
-              value={w.max_running_tasks ?? 0}
-              defaultValue={0}
-              onSave={(n) =>
-                update.mutateAsync({
-                  id: w.id,
-                  maxRunningTasks: n === 0 ? null : n,
-                })
-              }
-              min={1}
-              integer
-              unit="at a time"
-              optional={{ off: 0, on: SETTING_DEFAULTS.taskLimitOn }}
-            />
-          </SettingSection>
-          <WorkspaceModeForm workspaceId={w.id} />
-          <RulesForm workspaceId={w.id} />
-          <WorkspaceModelsForm workspaceId={w.id} />
-          <McpServersForm workspace={w} />
-          <HqFolderForm workspaceId={w.id} />
-          <ProjectTiersForm workspaceId={w.id} />
-          <SettingSection>
-            <SwitchSetting
-              id={`wake-${w.id}`}
-              label="Wake tasks on CI failures and reviews"
-              help="A task's agent is messaged once when a check fails on its PR, and when someone reviews or comments."
-              checked={w.wake_tasks_on_pr}
-              onSave={(on) =>
-                update.mutateAsync({ id: w.id, wakeTasksOnPR: on })
-              }
-            />
-            <SwitchSetting
-              id={`full-access-${w.id}`}
-              label="Orchestrator full access"
-              help="Its shell and file writes aren't checked. Applies when its conversation next restarts."
-              checked={w.orch_full_access}
-              confirm="Let this orchestrator act without approval? It can push, commit, edit any repository or file on this machine, merge a PR directly, and edit .claude files. Off: the deny list, write limits and merge-only-through-the-gates apply."
-              confirmLabel="Turn on full access"
-              onSave={(on) =>
-                update.mutateAsync({ id: w.id, orchFullAccess: on })
-              }
-            />
-          </SettingSection>
-        </section>
-      ))}
+    <div>
+      <WorkspacePicker
+        workspaces={workspaces}
+        value={shown.id}
+        onChange={(id) => {
+          setPinnedFor(query);
+          choose(id);
+        }}
+      />
+      <WorkspacePanel key={shown.id} workspace={shown} />
       <AppWideLimits />
       <p className="text-muted-foreground text-sm">
         Fresh starts and compaction are app-wide:{" "}
         <button
           type="button"
-          className="text-primary underline-offset-2 hover:underline"
+          className="text-primary -my-3 min-h-11 underline-offset-2 hover:underline"
           onClick={() => settingsUiActions.show("context")}
         >
           open Context

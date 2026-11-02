@@ -1,8 +1,16 @@
 "use client";
 
+import { PickerSetting } from "@/components/Settings/PickerSetting";
 import { SettingSection } from "@/components/Settings/SettingRow";
-import { SwitchSetting } from "@/components/Settings/settings-fields";
+import { Segmented } from "@/components/ui/segmented";
 import { useProjectsQuery, useUpdateProject } from "@/data/projects";
+
+type Tier = "production" | "fast";
+
+const TIERS: { value: Tier; label: string }[] = [
+  { value: "production", label: "Production" },
+  { value: "fast", label: "Fast" },
+];
 
 // A workspace's projects, each switched between production (every merge gate)
 // and fast (a task's PR merges as soon as it opens).
@@ -14,20 +22,25 @@ export function ProjectTiersForm({ workspaceId }: { workspaceId: string }) {
   );
   if (!mine.length) return null;
   return (
-    <SettingSection>
+    <SettingSection
+      title="Projects"
+      help="Production: CI, the independent review and the scope gate every merge. Fast: a task's PR merges as soon as it opens."
+    >
       {mine.map((p) => (
-        <SwitchSetting
+        <PickerSetting<Tier>
           key={p.id}
           id={`tier-${p.id}`}
-          label={`${p.name}: production`}
-          help="On: CI, the independent review and scope gate its merges. Off (fast): a task's PR merges as soon as it opens."
-          checked={p.tier === "production"}
-          onSave={(on) =>
-            update.mutateAsync({
-              projectId: p.id,
-              tier: on ? "production" : "fast",
-            })
-          }
+          label={p.name}
+          value={p.tier === "production" ? "production" : "fast"}
+          onSave={(tier) => update.mutateAsync({ projectId: p.id, tier })}
+          render={({ value, commit }) => (
+            <Segmented
+              label={`${p.name} merge tier`}
+              value={value}
+              options={TIERS}
+              onChange={commit}
+            />
+          )}
         />
       ))}
     </SettingSection>

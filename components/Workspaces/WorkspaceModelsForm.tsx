@@ -2,7 +2,7 @@
 
 import { useState } from "react";
 import { PickerSetting } from "@/components/Settings/PickerSetting";
-import { SettingSection } from "@/components/Settings/SettingRow";
+import { SettingBlock } from "@/components/Settings/SettingRow";
 import { ModelSelect } from "@/components/Models/ModelSelect";
 import {
   useModelsQuery,
@@ -28,45 +28,44 @@ export function WorkspaceModelsForm({ workspaceId }: { workspaceId: string }) {
   const set = Object.keys(roles).length;
 
   return (
-    <div className="space-y-2">
-      <button
-        type="button"
-        className="text-muted-foreground hover:text-foreground h-11 text-left text-xs md:h-auto"
-        onClick={() => setOpen((o) => !o)}
-        aria-expanded={open}
-      >
-        Models: {set ? `${set} set for this workspace` : "as Settings › Models"}{" "}
-        {open ? "▴" : "▾"}
-      </button>
-      {open && (
-        <SettingSection>
-          {WORKSPACE_ROLES.map((role) => (
-            <PickerSetting<string | null>
-              key={role}
-              id={`ws-${workspaceId}-${role}`}
-              label={ROLE_LABELS[role].label}
-              value={roles[role] ?? null}
-              defaultValue={null}
-              onSave={(ref) => {
-                const next = { ...roles };
-                if (ref) next[role] = ref;
-                else delete next[role];
-                return update.mutateAsync({ roles: next });
-              }}
-              render={({ value, commit }) => (
-                <ModelSelect
-                  id={`ws-${workspaceId}-${role}`}
-                  value={value}
-                  effective={models.data?.effective}
-                  inheritLabel={`As Settings (${models.data?.effective.roles[role] ?? "…"})`}
-                  disabled={!models.data}
-                  onChange={commit}
-                />
-              )}
-            />
-          ))}
-        </SettingSection>
-      )}
-    </div>
+    <>
+      <SettingBlock id={`models-${workspaceId}`} label="Models">
+        <button
+          type="button"
+          className="text-muted-foreground hover:text-foreground flex min-h-11 w-full items-center text-left text-xs md:min-h-0"
+          onClick={() => setOpen((o) => !o)}
+          aria-expanded={open}
+        >
+          {set ? `${set} set for this workspace` : "As Settings › Models"}{" "}
+          {open ? "▴" : "▾"}
+        </button>
+      </SettingBlock>
+      {open &&
+        WORKSPACE_ROLES.map((role) => (
+          <PickerSetting<string | null>
+            key={role}
+            id={`ws-${workspaceId}-${role}`}
+            label={ROLE_LABELS[role].label}
+            value={roles[role] ?? null}
+            defaultValue={null}
+            onSave={(ref) => {
+              const next = { ...roles };
+              if (ref) next[role] = ref;
+              else delete next[role];
+              return update.mutateAsync({ roles: next });
+            }}
+            render={({ value, commit }) => (
+              <ModelSelect
+                id={`ws-${workspaceId}-${role}`}
+                value={value}
+                effective={models.data?.effective}
+                inheritLabel={`As Settings (${models.data?.effective.roles[role] ?? "…"})`}
+                disabled={!models.data}
+                onChange={commit}
+              />
+            )}
+          />
+        ))}
+    </>
   );
 }
