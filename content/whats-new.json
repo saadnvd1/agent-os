@@ -1921,6 +1921,22 @@
       "area": "AgentOS",
       "text": "You can set your name in Settings, and AgentOS uses it in chats and notes instead of a fixed name.",
       "url": "https://github.com/saadnvd1/agent-os/pull/550"
+    },
+    {
+      "id": 551,
+      "date": "2026-11-01",
+      "kind": "fixed",
+      "area": "Chat",
+      "text": "Questions from GitHub Copilot chats now always show up at the latest message after the chat restarts, instead of going missing.",
+      "url": "https://github.com/saadnvd1/agent-os/pull/551"
+    },
+    {
+      "id": 552,
+      "date": "2026-11-01",
+      "kind": "fixed",
+      "area": "Chat",
+      "text": "Cancelled questions from GitHub Copilot chats now clear right away instead of staying on screen.",
+      "url": "https://github.com/saadnvd1/agent-os/pull/552"
     }
   ]
 }
