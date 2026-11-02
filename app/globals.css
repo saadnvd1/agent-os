@@ -334,3 +334,17 @@ body {
 ::highlight(conv-search) {
   background-color: hsl(var(--find-match));
 }
+
+/* Toast close button inside the toast's right edge, not half outside the left. */
+[data-sonner-toaster]
+  [data-sonner-toast][data-styled="true"]
+  [data-close-button] {
+  left: auto;
+  right: 6px;
+  top: 50%;
+  margin-top: -10px;
+  transform: none;
+  background: transparent;
+  border-color: transparent;
+  color: hsl(var(--muted-foreground));
+}

@@ -18,6 +18,7 @@ import { getProject } from "../projects";
 import { limitOf, runningIn, startingIn } from "../tasks/queue-rows";
 import { currentLevel, loadEnabled } from "../load/monitor";
 import { childFirstMessage } from "./brief";
+import { FORK_NOTE_PREFIX, startedText } from "./note";
 import { ForkError, forkConversation } from "./conversation";
 import {
   childrenOf,
@@ -120,7 +121,7 @@ export function startFork(req: ForkRequest): ForkStarted {
     instruction,
     worktree,
   }));
-  const noteId = `fork-${groupId}`;
+  const noteId = `${FORK_NOTE_PREFIX}${groupId}`;
   insertGroup({
     id: groupId,
     parentId: parent.id,
@@ -136,7 +137,10 @@ export function startFork(req: ForkRequest): ForkStarted {
     kind: "note" as const,
     tone: "note" as const,
     createdAt: Date.now(),
-    text: `Forked ${children.length === 1 ? "1 copy" : `${children.length} copies`}: ${children.map((c) => c.label).join(" · ")}`,
+    text: startedText(
+      children.map((c) => numberOf(parent.id, c.childId)),
+      children.map((c) => c.label)
+    ),
   };
   saveItem(parent.id, item);
   emit(parent.id, { type: "item", item });

@@ -8,7 +8,7 @@ import {
   useRef,
   useState,
 } from "react";
-import { ArrowDown, Loader2 } from "lucide-react";
+import { ArrowDown, GitFork, Loader2 } from "lucide-react";
 import type { ClipboardEvent } from "react";
 import { useChat } from "@/data/chat/useChat";
 import { PausedBanner } from "./PausedBanner";
@@ -19,7 +19,13 @@ import { isFreshCommand, withFresh } from "@/lib/chat/commands";
 import { useExperiment } from "@/data/experiments";
 import { useStartForks } from "@/data/fork";
 import { toast } from "sonner";
-import { ForksStrip, forkLabel } from "./Forks";
+import {
+  leaveForkMode,
+  placeholderFor,
+  suggestionFor,
+  type ForkDraft,
+} from "./fork-draft";
+import { ForksStrip, forkLabel, startedToast } from "./Forks";
 import { ReplyingTo } from "./ReplyingTo";
 import { compactsFirst } from "@/lib/chat/pending";
 import { useFreshStart } from "@/data/sessions";
@@ -107,12 +113,11 @@ export function ChatPanel({
   const forksOn = useExperiment("forks");
   const startFork = useStartForks(sessionId);
   // Set while a selection is being forked; per session, like asIs below.
-  const [forkDraft, setForkDraft] = useState<{
-    sessionId: string;
-    quote: string;
-    own: boolean;
-  } | null>(null);
-  const fork = forksOn && forkDraft?.sessionId === sessionId ? forkDraft : null;
+  const [forkDraft, setForkDraft] = useState<ForkDraft | null>(null);
+  const draftHere = forkDraft?.sessionId === sessionId ? forkDraft : null;
+  const fork = forksOn && draftHere?.mode ? draftHere : null;
+  const quoteChip =
+    draftHere && !draftHere.mode && draftHere.quote ? draftHere : null;
   const {
     items,
     hasMore,
@@ -182,7 +187,7 @@ export function ChatPanel({
 
   // The suggestion the reader set aside (typed over it, or Esc) stays hidden.
   const [dismissed, setDismissed] = useState<string | null>(null);
-  const shownSuggestion = suggestion === dismissed ? null : suggestion;
+  const shownSuggestion = suggestionFor(suggestion, dismissed, !!fork);
   const dismissSuggestion = useCallback((s: string) => setDismissed(s), []);
   const history = useMemo(() => sentPrompts(items), [items]);
   const [insert, setInsert] = useState<{
@@ -191,15 +196,13 @@ export function ChatPanel({
     append?: boolean;
   }>();
 
-  // Leaving Fork mode keeps the selection as a normal quote in the draft.
+  // Leaving Fork mode keeps the selection as a quote chip and the typed text.
   const leaveFork = () => {
-    if (fork?.quote)
-      setInsert({
-        text: quoteMarkdown(fork.quote),
-        at: Date.now(),
-        append: true,
-      });
-    setForkDraft(null);
+    if (!fork) return;
+    setForkDraft(leaveForkMode(fork));
+    toast("Fork mode off · your text is kept", {
+      icon: <GitFork aria-hidden className="size-4" />,
+    });
   };
 
   // Esc sets the composer's ghost text aside, or else stops the turn
@@ -270,7 +273,7 @@ export function ChatPanel({
       focusComposer
     );
   const forkQuote = (text: string) => {
-    setForkDraft({ sessionId, quote: text, own: false });
+    setForkDraft({ sessionId, quote: text, own: false, mode: true });
     focusComposer();
   };
   const togglePlan = plan === null ? undefined : () => setPlan(!plan);
@@ -727,13 +730,7 @@ export function ChatPanel({
           insert={insert}
           running={running}
           disabled={!connected}
-          placeholder={
-            !connected
-              ? "Reconnecting…"
-              : fork
-                ? "What should the fork do?"
-                : `Message ${sessionName}`
-          }
+          placeholder={placeholderFor(connected, !!fork, sessionName)}
           fork={
             fork
               ? {
@@ -742,6 +739,14 @@ export function ChatPanel({
                   onOwn: () => setForkDraft({ ...fork, own: !fork.own }),
                   onLeave: leaveFork,
                   onDropQuote: () => setForkDraft({ ...fork, quote: "" }),
+                }
+              : undefined
+          }
+          quoteChip={
+            quoteChip
+              ? {
+                  text: quoteChip.quote,
+                  onDrop: () => setForkDraft(null),
                 }
               : undefined
           }
@@ -760,8 +765,8 @@ export function ChatPanel({
                   labels: [forkLabel(text, fork.quote)],
                 },
                 {
-                  onSuccess: () => {
-                    toast.success("Started fork");
+                  onSuccess: (res) => {
+                    toast.success(startedToast(res.children.map((c) => c.n)));
                     setForkDraft(null);
                   },
                   onError: (e) => {
@@ -773,14 +778,19 @@ export function ChatPanel({
               return;
             }
             toEnd();
-            const compact = composerCompacts(text, context, {
+            // A quote kept from Fork mode goes out ahead of what was typed.
+            const body = quoteChip
+              ? (quoteMarkdown(quoteChip.quote) + text).trim()
+              : text;
+            if (quoteChip) setForkDraft(null);
+            const compact = composerCompacts(body, context, {
               state,
               thresholdTokens: compactTokens,
               asIs,
             });
             setAsIs(false);
             send(
-              text,
+              body,
               images.length ? images : undefined,
               compact,
               files.length ? files : undefined

@@ -9,6 +9,7 @@ import {
   Check,
   ChevronRight,
   Download,
+  GitFork,
   Circle,
   CircleDot,
   Quote,
@@ -41,6 +42,7 @@ import {
 } from "@/components/Bookmarks/BookmarkButton";
 import { useOwnerName } from "@/data/client-config/queries";
 import { ownerVerb } from "@/lib/owner-label";
+import { FORK_NOTE_PREFIX } from "@/lib/fork/note";
 
 type Of<K extends ChatItem["kind"]> = Extract<ChatItem, { kind: K }>;
 
@@ -481,12 +483,24 @@ const NOTE_LABEL = {
   away: "Away",
 } as const;
 
+// Where forks were started: one quiet line, not a boxed note.
+function ForkMarker({ item }: { item: Of<"note"> }) {
+  return (
+    <div className="text-muted-foreground flex min-w-0 items-center gap-2 text-xs">
+      <GitFork aria-hidden className="size-3.5 shrink-0" />
+      <span className="truncate">{item.text}</span>
+      <i className="bg-border h-px w-3 shrink-0" />
+    </div>
+  );
+}
+
 export function NoteLine({ item }: { item: Of<"note"> }) {
   const name = useOwnerName();
   const label =
     item.tone === "escalation"
       ? ownerVerb(name, "decides", "decide")
       : NOTE_LABEL[item.tone];
+  if (item.id.startsWith(FORK_NOTE_PREFIX)) return <ForkMarker item={item} />;
   return (
     <div
       className={cn(

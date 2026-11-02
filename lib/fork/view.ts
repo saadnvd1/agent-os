@@ -1,5 +1,6 @@
 /** What clients and `aos children` show, and the numbers behind them. */
 
+import { lastItems } from "../chat/store";
 import { childrenOf, getGroup } from "./ledger";
 import type { ChildRow, ChildView, GroupView } from "./types";
 
@@ -21,7 +22,15 @@ export const childView = (c: ChildRow): ChildView => ({
   settledAt: c.settled_at,
   delivered: c.delivered_at != null,
   asks: c.state === "needs_input" ? c.hold : null,
+  activity: null,
 });
+
+// The title of the latest tool a running child used, to say what it is doing.
+const activityOf = (c: ChildRow): string | null => {
+  if (c.state !== "running") return null;
+  const tool = lastItems(c.child_session_id, 1, "tool")[0];
+  return tool && tool.kind === "tool" ? tool.title : null;
+};
 
 export function childrenView(parentId: string): {
   children: ChildView[];
@@ -45,7 +54,11 @@ export function childrenView(parentId: string): {
       });
   }
   return {
-    children: rows.map((c, i) => ({ ...childView(c), n: i + 1 })),
+    children: rows.map((c, i) => ({
+      ...childView(c),
+      n: i + 1,
+      activity: activityOf(c),
+    })),
     groups,
   };
 }
