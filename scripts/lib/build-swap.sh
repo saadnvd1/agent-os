@@ -8,7 +8,7 @@
 # Sourced by scripts/redeploy; run from the repository root.
 
 # shellcheck source=generated.sh
-source scripts/lib/generated.sh
+source "$(dirname "${BASH_SOURCE[0]}")/generated.sh"
 
 LIVE=.next
 NEXT_BUILD=.next-build
