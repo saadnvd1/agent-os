@@ -83,6 +83,7 @@ export async function updateView(
   const pending = readPending(deps);
   const active = isActivePhase(run?.phase);
   const refusal = mayUpdate ? await preflight(check, deps) : null;
+  const managed = deps.managed();
   const canRestart = !!(await deps.restartCommand());
   const wantsWorking = !active && !!(check?.available || pending);
   return {
@@ -103,8 +104,9 @@ export async function updateView(
         : { ok: true },
     run,
     pending,
-    managed: deps.managed(),
-    queued: readQueued(deps),
+    managed,
+    // A request file left where autodeploy doesn't run never deploys.
+    queued: managed ? readQueued(deps) : null,
     auto: await autoView(deps, check, refusal).then((auto) =>
       mayUpdate
         ? auto
