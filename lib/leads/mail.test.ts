@@ -27,7 +27,8 @@ const { setExperiment } = await import("@/lib/experiments");
 const { seedSession, seedWorkspace } =
   await import("@/lib/orchestrator/testing");
 const { getOrchestrator } = await import("@/lib/orchestrator/home");
-const { openAsks } = await import("@/lib/orchestrator/asks");
+const { openAsks, answerAsk } = await import("@/lib/orchestrator/asks");
+const { settleHeldAsk } = await import("./held");
 const { machineId } = await import("@/lib/claims/machine");
 const { recordStart } = await import("@/lib/tasks/starter");
 const home = await import("./home");
@@ -203,6 +204,74 @@ describe("message_lead", () => {
       b: "tech",
     });
     expect(view?.state).toEqual({ kind: "held", askId: asks[0].id });
+  });
+
+  async function heldAsk() {
+    const { w, tech, marketing } = team();
+    const now = new Date().toISOString().replace("T", " ").slice(0, 19);
+    // The 100th message passes (checked below); the 101st is held.
+    for (let i = 0; i < MAIL_PER_HOUR; i++)
+      db.prepare(
+        `INSERT INTO lead_messages (workspace_id, from_kind, to_kind, thread, text, created_at)
+         VALUES (?, 'marketing', 'tech', 'loop', 'x', ?)`
+      ).run(w, now);
+    const out = await mail(w, marketing, {
+      to: "tech",
+      thread: "loop",
+      text: "the held one",
+    });
+    expect(out).toMatch(/^Held, not sent/);
+    const ask = openAsks(w).find((a) => a.subject.startsWith("lead-thread:"))!;
+    return { w, tech, marketing, ask };
+  }
+  const settled = () => new Promise((r) => setTimeout(r, 50));
+
+  it("passes 100 an hour and holds the 101st", async () => {
+    expect(MAIL_PER_HOUR).toBe(100);
+    const { w, marketing } = team();
+    const now = new Date().toISOString().replace("T", " ").slice(0, 19);
+    for (let i = 0; i < MAIL_PER_HOUR - 1; i++)
+      db.prepare(
+        `INSERT INTO lead_messages (workspace_id, from_kind, to_kind, thread, text, created_at)
+         VALUES (?, 'marketing', 'tech', 'loop', 'x', ?)`
+      ).run(w, now);
+    const args = { to: "tech", thread: "loop", text: "n" };
+    expect(await mail(w, marketing, args)).toMatch(/^Sent to/);
+    expect(await mail(w, marketing, args)).toMatch(/^Held, not sent/);
+  });
+
+  it("delivers a held message once when the ask is approved", async () => {
+    const { w, tech, marketing, ask } = await heldAsk();
+    expect(sent).toHaveLength(0);
+    answerAsk(w, ask.id, { action: "approve" });
+    await settled();
+    const mails = sent.filter((m) => m.id === tech.id && m.origin?.mail);
+    expect(mails).toHaveLength(1);
+    expect(mails[0].text).toContain("the held one");
+    expect(mails[0].origin?.mail).toMatchObject({ thread: "loop", to: "tech" });
+    // The answer firing again, or the settle hook run again, sends nothing.
+    expect(() => answerAsk(w, ask.id, { action: "approve" })).toThrow();
+    await settleHeldAsk(ask, "approve");
+    expect(sent.filter((m) => m.origin?.mail)).toHaveLength(1);
+    // The limit stays full for the next message.
+    const again = await mail(w, marketing, {
+      to: "tech",
+      thread: "loop",
+      text: "next",
+    });
+    expect(again).toMatch(/^Held, not sent/);
+  });
+
+  it("drops a declined held message and tells the sender", async () => {
+    const { w, marketing, ask } = await heldAsk();
+    answerAsk(w, ask.id, { action: "decline" });
+    await settled();
+    expect(sent.filter((m) => m.origin?.mail)).toHaveLength(0);
+    const told = (id: string) =>
+      sent.filter((m) => m.id === id && m.text.includes("wasn't delivered"));
+    expect(told(marketing.id)).toHaveLength(1);
+    await settleHeldAsk(ask, "decline");
+    expect(told(marketing.id)).toHaveLength(1);
   });
 });
 

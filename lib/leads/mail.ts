@@ -10,6 +10,7 @@ import { AskRefused, raiseAsk } from "../orchestrator/asks";
 import { untrusted } from "../orchestrator/untrusted";
 import { deliverToLead } from "./deliver";
 import { currentDirection } from "./direction";
+import { discardHeld, heldSubject, storeHeld } from "./held";
 import { getLead, leadTitle } from "./home";
 import {
   addLeadMessage,
@@ -20,7 +21,7 @@ import {
 import type { DirectionPin, LeadKind, LeadMessage } from "./types";
 
 // At most this many messages an hour on one thread between one pair.
-export const MAIL_PER_HOUR = 4;
+export const MAIL_PER_HOUR = 100;
 const HOUR_MS = 60 * 60 * 1000;
 const THREAD_MAX = 80;
 const QUOTE_CAP = 300;
@@ -111,30 +112,84 @@ function checkPins(
   return [...new Set(ids)].map((id) => inForce.find((p) => p.id === id)!);
 }
 
-// The loop guard tripped: the owner gets one ask for the thread.
+// The loop guard tripped: the message is kept with an ask for the owner.
+// Approving the ask delivers it once; declining drops it (held.ts).
 function holdThread(
   workspaceId: string,
+  caller: Session,
   from: { kind: LeadKind; title: string },
   to: { kind: LeadKind; title: string },
   thread: string,
-  text: string
+  text: string,
+  pins: number[]
 ): string {
+  const heldId = storeHeld({
+    workspaceId,
+    fromKind: from.kind,
+    toKind: to.kind,
+    thread,
+    text,
+    pins,
+    senderSessionId: caller.id,
+  });
   let asked = "";
   try {
     const { ask } = raiseAsk({
       workspaceId,
-      subject: threadAskSubject(from.kind, to.kind, thread),
+      subject: heldSubject(
+        threadAskSubject(from.kind, to.kind, thread),
+        heldId
+      ),
       kind: "decision",
       title: `The ${from.title} and the ${to.title} keep going back and forth on "${thread}"`,
-      detail: `They sent ${MAIL_PER_HOUR} messages on this thread within an hour, so AgentOS held the next one rather than let them loop. Settle it, or tell one of them to stop.\n\nThe held message, from the ${from.title}:\n${text.slice(0, 1200)}`,
+      detail: `They sent ${MAIL_PER_HOUR} messages on this thread within an hour, so AgentOS held the next one rather than let them loop. Approve to deliver this one message; decline to drop it.\n\nThe held message, from the ${from.title}:\n${text.slice(0, 1200)}`,
       leadKind: from.kind,
     });
     asked = ` It's on ${owner()}'s asks list as ask ${ask.id}.`;
   } catch (e) {
     if (!(e instanceof AskRefused)) throw e;
-    asked = ` ${e.message}`;
+    discardHeld(heldId);
+    return `Not delivered: ${e.message} Don't send it again.`;
   }
-  return `Held, not sent: you and the ${to.title} have sent ${MAIL_PER_HOUR} messages on "${thread}" in the last hour.${asked} Don't send it again; carry on with other work until ${owner()} answers.`;
+  return `Held, not sent: you and the ${to.title} have sent ${MAIL_PER_HOUR} messages on "${thread}" in the last hour.${asked} Don't send it again; if ${owner()} approves, AgentOS delivers it once, and if declined you'll be told.`;
+}
+
+// Records a lead message and delivers it, fenced, into the other lead's chat.
+export async function sendMail(
+  workspaceId: string,
+  callerSessionId: string,
+  fromKind: LeadKind,
+  toKind: LeadKind,
+  thread: string,
+  text: string,
+  pinIds: number[]
+): Promise<{ mail: LeadMessage; pins: DirectionPin[] }> {
+  const target = getLead(workspaceId, toKind);
+  if (!target) throw new Error(`This workspace has no ${toKind} lead`);
+  // A pin withdrawn while the message was held is no longer cited.
+  const inForce = currentDirection(workspaceId, fromKind);
+  const cited = inForce.filter((p) => pinIds.includes(p.id));
+  const fromTitle = leadTitle(workspaceId, fromKind);
+  const m = addLeadMessage({
+    workspaceId,
+    fromKind,
+    toKind,
+    thread,
+    text,
+    pins: cited.map((p) => p.id),
+  });
+  await deliverToLead(target.id, mailLine(m, fromTitle, cited), {
+    id: `lead-mail-${m.id}`,
+    origin: {
+      kind: "peer",
+      label: fromTitle,
+      sessionId: callerSessionId,
+      body: m.text,
+      mail: { id: m.id, thread, from: fromKind, to: toKind },
+    },
+  });
+  markOneRead(m.id);
+  return { mail: m, pins: cited };
 }
 
 export async function messageLead(
@@ -164,26 +219,24 @@ export async function messageLead(
     sqliteTime(now - HOUR_MS)
   );
   if (sent >= MAIL_PER_HOUR)
-    return holdThread(workspaceId, from, to, thread, args.text);
-  const m = addLeadMessage({
+    return holdThread(
+      workspaceId,
+      caller,
+      from,
+      to,
+      thread,
+      args.text,
+      cited.map((p) => p.id)
+    );
+  const { mail: m } = await sendMail(
     workspaceId,
+    caller.id,
     fromKind,
     toKind,
     thread,
-    text: args.text,
-    pins: cited.map((p) => p.id),
-  });
-  await deliverToLead(target.id, mailLine(m, from.title, cited), {
-    id: `lead-mail-${m.id}`,
-    origin: {
-      kind: "peer",
-      label: from.title,
-      sessionId: caller.id,
-      body: m.text,
-      mail: { id: m.id, thread, from: fromKind, to: toKind },
-    },
-  });
-  markOneRead(m.id);
+    args.text,
+    cited.map((p) => p.id)
+  );
   const pins = cited.length
     ? `, citing pin ${cited.map((p) => p.id).join(", ")}`
     : "";
