@@ -66,6 +66,8 @@ export function askUserQuestion(a: AskArgs): ChatQuestion {
   };
 }
 
+const requestKey = (id: string | number) => `${typeof id}:${id}`;
+
 const text = (t: string, isError = false): CallToolResult => ({
   content: [{ type: "text", text: t }],
   ...(isError ? { isError } : {}),
@@ -106,6 +108,9 @@ export class CopilotAskServer {
   private http?: http.Server;
   private secret = crypto.randomBytes(32).toString("hex");
   private live = new Set<{ close(): Promise<void> }>();
+  // Waiting ask_user calls by JSON-RPC request id. A cancel arrives as its
+  // own POST, on a fresh MCP server, so only this map can match it.
+  private waiting = new Map<string, string>();
 
   constructor(private pending: PendingApprovals) {}
 
@@ -136,10 +141,29 @@ export class CopilotAskServer {
         const expire = () => this.pending.respond(id, { decision: "expired" });
         if (extra.signal.aborted) expire();
         else extra.signal.addEventListener("abort", expire, { once: true });
-        return askUserResult(q, await asked);
+        const key = requestKey(extra.requestId);
+        this.waiting.set(key, id);
+        try {
+          return askUserResult(q, await asked);
+        } finally {
+          if (this.waiting.get(key) === id) this.waiting.delete(key);
+        }
       }
     );
     return server;
+  }
+
+  // notifications/cancelled names the request to give up on. An id with no
+  // waiting call (answered already, or never ours) is ignored.
+  private cancelWaiting(body: unknown): void {
+    for (const m of Array.isArray(body) ? body : [body]) {
+      const msg = m as { method?: unknown; params?: { requestId?: unknown } };
+      const rid = msg?.params?.requestId;
+      if (msg?.method !== "notifications/cancelled") continue;
+      if (typeof rid !== "string" && typeof rid !== "number") continue;
+      const card = this.waiting.get(requestKey(rid));
+      if (card) this.pending.respond(card, { decision: "expired" });
+    }
   }
 
   private allowed(req: http.IncomingMessage): number {
@@ -183,6 +207,7 @@ export class CopilotAskServer {
       res.writeHead(400).end();
       return;
     }
+    this.cancelWaiting(body);
     const server = this.build();
     const transport = new StreamableHTTPServerTransport({
       sessionIdGenerator: undefined,
@@ -229,6 +254,7 @@ export class CopilotAskServer {
   // and stops listening.
   close(): void {
     this.pending.expireAll();
+    this.waiting.clear();
     const server = this.http;
     this.http = undefined;
     server?.close();
