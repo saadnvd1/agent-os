@@ -5,6 +5,7 @@ import type { ArchivedView } from "@/lib/done/archive";
 import type { ResurrectOutcome } from "@/lib/resurrect";
 import { sessionKeys } from "../sessions/keys";
 import { taskKeys } from "../tasks";
+import { forkKeys } from "../fork";
 
 export const archivedKeys = {
   all: ["archived-sessions"] as const,
@@ -52,7 +53,12 @@ function useDoneMutation<V, R>(fn: (v: V) => Promise<R>) {
   return useMutation({
     mutationFn: fn,
     onSettled: () => {
-      for (const queryKey of [sessionKeys.all, taskKeys.all, archivedKeys.all])
+      for (const queryKey of [
+        sessionKeys.all,
+        taskKeys.all,
+        archivedKeys.all,
+        forkKeys.all,
+      ])
         queryClient.invalidateQueries({ queryKey });
     },
   });

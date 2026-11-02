@@ -9,12 +9,18 @@ import {
 } from "@/data/done";
 import { useSettleSession } from "@/data/sessions/shelf";
 
+export type DoneTarget = Pick<
+  Session,
+  "id" | "name" | "task_status" | "pr_status"
+> &
+  Partial<Pick<Session, "settled_at">>;
+
 // Done from a session's menu: an open PR merges through the gates, after an
 // in-app confirmation; a failing gate comes back as an error toast naming it.
 export function useDoneAction() {
   const done = useDoneSession();
   const settle = useSettleSession();
-  const run = (session: Session, merges: boolean) => {
+  const run = (session: DoneTarget, merges: boolean) => {
     const id = toast.loading(
       merges ? `Merging ${session.name}…` : `Finishing ${session.name}…`
     );
@@ -38,7 +44,7 @@ export function useDoneAction() {
       onError: (e) => toast.error(e.message, { id, duration: 12000 }),
     });
   };
-  return (session: Session) => {
+  return (session: DoneTarget) => {
     const merges =
       session.task_status === "running" && session.pr_status === "open";
     if (!merges) return run(session, false);

@@ -1,6 +1,7 @@
 /** What clients and `aos children` show, and the numbers behind them. */
 
 import { lastItems } from "../chat/store";
+import { db } from "../db";
 import { childrenOf, getGroup } from "./ledger";
 import type { ChildRow, ChildView, GroupView } from "./types";
 
@@ -17,6 +18,7 @@ export const childView = (c: ChildRow): ChildView => ({
   excerpt: c.result ? c.result.slice(0, 600) : null,
   resultKind: c.result_kind,
   worktree: !!c.worktree,
+  done: false,
   fellBack: !!c.fell_back,
   startedAt: c.started_at,
   settledAt: c.settled_at,
@@ -31,6 +33,13 @@ const activityOf = (c: ChildRow): string | null => {
   const tool = lastItems(c.child_session_id, 1, "tool")[0];
   return tool && tool.kind === "tool" ? tool.title : null;
 };
+
+const isDone = (id: string): boolean =>
+  !!db
+    .prepare(
+      `SELECT 1 FROM sessions WHERE id = ? AND (settled_at IS NOT NULL OR archived_at IS NOT NULL)`
+    )
+    .get(id);
 
 export function childrenView(parentId: string): {
   children: ChildView[];
@@ -57,6 +66,7 @@ export function childrenView(parentId: string): {
     children: rows.map((c, i) => ({
       ...childView(c),
       n: i + 1,
+      done: isDone(c.child_session_id),
       activity: activityOf(c),
     })),
     groups,

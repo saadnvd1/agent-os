@@ -65,6 +65,8 @@ export interface ChildView {
   excerpt: string | null;
   resultKind: ResultKind | null;
   worktree: boolean;
+  // Marked done or archived as a session: it leaves the strip.
+  done: boolean;
   fellBack: boolean;
   startedAt: number | null;
   settledAt: number | null;
