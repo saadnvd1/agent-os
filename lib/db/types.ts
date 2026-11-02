@@ -1,6 +1,9 @@
 import type { AgentType } from "../providers";
 import type { ChatAccess } from "../chat/events";
 
+// The standing chats a workspace can have (lib/leads/roles.ts).
+export type SessionRole = "orchestrator" | "lead" | "chief";
+
 export interface Session {
   id: string;
   name: string;
@@ -118,8 +121,13 @@ export interface Session {
   // The agent role it was started in (lib/models/agent-roles) and its crew.
   agent_role?: string | null;
   crew_id?: string | null;
-  // A workspace's standing orchestrator chat (and that workspace), or null.
-  role: "orchestrator" | null;
+  // A workspace's standing chat (and that workspace), or null: its
+  // orchestrator, and with Leads its other leads and chief (lib/leads).
+  role: SessionRole | null;
+  // A lead's department ('tech' for the orchestrator once leads are added)
+  // and when it became one.
+  lead_kind?: string | null;
+  lead_since?: string | null;
   // An orchestrator's tool-call secret.
   orch_token?: string | null;
   workspace_id: string | null;

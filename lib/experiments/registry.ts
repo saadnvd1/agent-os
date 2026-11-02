@@ -14,6 +14,8 @@ export interface Experiment {
   status: ExperimentStatus;
   // It shows suggestions, so an accept rate means something for it.
   suggests?: boolean;
+  // Built but not offered in Settings yet: it can be set, nothing lists it.
+  unlisted?: boolean;
 }
 
 export const EXPERIMENTS = [
@@ -33,6 +35,15 @@ export const EXPERIMENTS = [
       "A session can start several children that know what it knows, work in the background on independent questions, and report back, so the main session isn't blocked.",
     area: "sessions",
     status: "experimental",
+  },
+  {
+    id: "leads",
+    name: "Leads",
+    description:
+      "Department heads and a chief of staff, per workspace. Off, nothing changes. On, you choose which workspaces get leads; each gets its own chief.",
+    area: "orchestrator",
+    status: "experimental",
+    unlisted: true,
   },
 ] as const satisfies readonly Experiment[];
 

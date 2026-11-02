@@ -186,4 +186,6 @@ export const SESSION_ROW_COLUMNS: readonly string[] = [
   "session_group_id",
   "agent_role",
   "crew_id",
+  "lead_kind",
+  "lead_since",
 ];
