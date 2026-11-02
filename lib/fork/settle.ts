@@ -26,7 +26,15 @@ import {
   markDeliveredIds,
 } from "./ledger";
 import { FORK_LIMITS } from "./options";
-import { forksRoot, removeFork, worktreeOf } from "./scratch";
+import {
+  baseOf,
+  forkLosses,
+  forksRoot,
+  scratchOf,
+  snapshotTree,
+  tidyFork,
+  worktreeOf,
+} from "./scratch";
 import type { ChildOutcome, ChildRow, ResultKind } from "./types";
 
 const sessionOf = (id: string) =>
@@ -53,14 +61,17 @@ function tokensOf(childId: string) {
 export const patchPath = (childId: string) =>
   path.join(forksRoot(), `${childId}.patch`);
 
-// What a child changed in its own checkout, kept as a patch the parent can
-// apply: its checkout goes with it.
+// What a child changed in its own checkout (not what the parent had when it
+// started), kept as a patch the parent can apply.
 async function keepPatch(childId: string): Promise<string | null> {
   const wt = worktreeOf(childId);
   if (!fs.existsSync(wt)) return null;
   try {
-    await git(wt, ["add", "-A"]);
-    const diff = await git(wt, ["diff", "--cached", "HEAD", "--binary"], {
+    const base = (
+      await fs.promises.readFile(baseOf(childId), "utf8").catch(() => "")
+    ).trim();
+    const now = await snapshotTree(wt, childId);
+    const diff = await git(wt, ["diff", base || "HEAD", now, "--binary"], {
       maxBuffer: 64 * 1024 * 1024,
     });
     if (!diff.trim()) return null;
@@ -89,12 +100,19 @@ export async function settleAndDeliver(
   const row = getChild(childId);
   if (!row || row.state === "settled") return false;
   let result = s.result ?? null;
-  if (row.worktree && s.outcome !== "cancelled") {
+  if (row.worktree) {
     const patch = await keepPatch(childId);
     if (patch)
       result =
         `${result ?? ""}\n\nIts changes are in ${patch} (apply with \`git apply ${patch}\`).`.trim();
   }
+  if (
+    (await forkLosses(childId).catch(() => null))?.some((f) =>
+      f.startsWith("scratch/")
+    )
+  )
+    result =
+      `${result ?? ""}\n\nIts scratch files are in ${scratchOf(childId)}.`.trim();
   const changed = settleChild(childId, {
     ...s,
     result,
@@ -103,7 +121,11 @@ export async function settleAndDeliver(
   if (!changed) return false;
   // Cancelled by its parent or the user: they know, so nothing is sent.
   if (s.outcome === "cancelled") markDeliveredIds([childId]);
-  await removeFork(childId).catch(() => undefined);
+  // Its folders stay while its session is open; a closed one's go only
+  // when nothing in them would be lost.
+  const session = sessionOf(childId);
+  if (!session || session.archived_at)
+    await tidyFork(childId).catch(() => undefined);
   const { admitQueued } = await import("./start");
   await admitQueued(row.parent_session_id).catch(() => undefined);
   const { kickForks } = await import("./tick");
@@ -175,6 +197,8 @@ const lastReply = (childId: string): string => {
 export async function lookAtChild(row: ChildRow, now: number): Promise<void> {
   if (row.state === "queued" || row.state === "settled") return;
   const session = sessionOf(row.child_session_id);
+  // Its checkout is still being made: no session row yet.
+  if (!session && row.state === "starting") return;
   if (!session || session.archived_at) {
     await settleAndDeliver(row.child_session_id, {
       outcome: "failed",

@@ -1,3 +1,4 @@
+import { removeFork } from "@/lib/fork/scratch";
 import { removeSessionAttachments } from "@/lib/attachments/store";
 import { NextRequest, NextResponse } from "next/server";
 import { deletionRefusal } from "@/lib/orchestrator/home";
@@ -306,6 +307,12 @@ export async function DELETE(request: NextRequest, { params }: RouteParams) {
         }
       }, `cleanup-worktree-${id}`);
     }
+
+    // A fork child's own folders go with it: deleting it is the ask.
+    runInBackground(async () => {
+      await agentEnded;
+      await removeFork(id);
+    }, `cleanup-fork-${id}`);
 
     // Also cleanup worker worktrees in background
     if (workers.length > 0) {

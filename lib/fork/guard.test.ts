@@ -13,10 +13,23 @@ beforeAll(() => {
   const parent = path.join(root, "parent");
   const scratch = path.join(root, "scratch");
   const wt = path.join(root, "wt");
-  for (const d of [parent, scratch, wt]) fs.mkdirSync(d);
+  for (const d of [parent, scratch, wt, path.join(root, "forks")])
+    fs.mkdirSync(d);
   fs.mkdirSync(path.join(wt, "node_modules"));
-  shared = { parentCheckout: parent, scratch, ownCheckout: null, cwd: parent };
-  own = { parentCheckout: parent, scratch, ownCheckout: wt, cwd: wt };
+  shared = {
+    parentCheckout: parent,
+    scratch,
+    forksRoot: path.join(root, "forks"),
+    ownCheckout: null,
+    cwd: parent,
+  };
+  own = {
+    parentCheckout: parent,
+    scratch,
+    forksRoot: path.join(root, "forks"),
+    ownCheckout: wt,
+    cwd: wt,
+  };
 });
 
 const bash = (c: ForkGuardContext, command: string) =>
@@ -194,5 +207,40 @@ describe("a fork child with its own checkout", () => {
     );
     await refused(own, "npm install");
     await allowed(own, "aos heavy -- npm test");
+  });
+});
+
+describe("two writers to one file", () => {
+  it("refuses the parent's files and another fork's folder up front", async () => {
+    const parentFile = path.join(shared.parentCheckout, "f.txt");
+    const sibling = path.join(shared.forksRoot, "other", "scratch");
+    fs.mkdirSync(sibling, { recursive: true });
+    const siblingFile = path.join(sibling, "g.txt");
+    fs.writeFileSync(parentFile, "p");
+    fs.writeFileSync(siblingFile, "s");
+    for (const [file, c] of [
+      [parentFile, shared],
+      [siblingFile, shared],
+      [siblingFile, own],
+    ] as const) {
+      expect(await forkToolGuard(c)("Write", { file_path: file })).toMatch(
+        /^Refused/
+      );
+      await refused(c, `echo x > ${file}`);
+      await refused(c, `rm ${file}`);
+      await refused(c, `sed -i s/./x/ ${file}`);
+    }
+    await refused(own, `git -C ${path.dirname(sibling)} checkout -- .`);
+    expect(fs.readFileSync(parentFile, "utf8")).toBe("p");
+    expect(fs.readFileSync(siblingFile, "utf8")).toBe("s");
+  });
+
+  it("lets a fork write in its own scratch and checkout", async () => {
+    await allowed(own, `echo x > ${own.scratch}/a.txt`);
+    expect(
+      await forkToolGuard(own)("Write", {
+        file_path: path.join(own.ownCheckout!, "a.txt"),
+      })
+    ).toBeNull();
   });
 });

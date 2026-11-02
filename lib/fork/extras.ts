@@ -7,7 +7,7 @@ import { CHILD_BRIEF, PARENT_BRIEF } from "./brief";
 import { forkToolGuard } from "./guard";
 import { getChild } from "./ledger";
 import { forksOn } from "./options";
-import { scratchOf, worktreeOf } from "./scratch";
+import { forksRoot, scratchOf, worktreeOf } from "./scratch";
 import { db } from "../db";
 
 const expand = (p: string) => p.replace(/^~(?=$|\/)/, os.homedir());
@@ -46,6 +46,7 @@ export function childExtras(
         parent?.working_directory ?? session.working_directory
       ),
       scratch,
+      forksRoot: forksRoot(),
       ownCheckout: child.worktree ? worktreeOf(session.id) : null,
       cwd: expand(session.working_directory),
     }),
