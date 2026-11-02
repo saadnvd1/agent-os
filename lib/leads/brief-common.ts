@@ -7,6 +7,18 @@ import { getDefaultBranch } from "../git";
 import { brakesEnabled } from "../orchestrator/brakes";
 import { noApprovalsOn } from "../approvals/no-approvals";
 import { ORCHESTRATOR_SERVER } from "../orchestrator/tool-names";
+import { getCharter } from "./charters";
+import type { LeadKind } from "./types";
+
+export function charterSection(w: string, kind: LeadKind): string {
+  const c = getCharter(w, kind);
+  const parts = [
+    c?.charterMd.trim(),
+    c?.goal.trim() ? `Goal: ${c.goal.trim()}` : "",
+    c?.areaText.trim() ? `Area: ${c.areaText.trim()}` : "",
+  ].filter(Boolean);
+  return `## Your charter\n\n${parts.length ? parts.join("\n\n") : "None written yet."}`;
+}
 
 export const up = (s: string) => s.charAt(0).toUpperCase() + s.slice(1);
 

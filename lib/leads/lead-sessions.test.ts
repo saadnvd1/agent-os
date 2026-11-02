@@ -40,6 +40,7 @@ const { buildLeadDigest } = await import("./digest");
 const { adoptLead, confirmPins } = await import("./adopt");
 const { asActor } = await import("./actor");
 const { setLeadAreas } = await import("./charters");
+const { editCharter, deliverCharter } = await import("./edit-charter");
 const { hasLeads } = await import("./settings");
 const { latestMemo, writeMemo } = await import("./memos");
 const { currentDirection, openProposals } = await import("./direction");
@@ -238,6 +239,59 @@ describe("a lead's brief and digest", () => {
     expect(brief).not.toMatch(/sign_off`|__arm`|__land`|quick_pr/);
     expect(brief).not.toContain("### Tiers");
     expect(brief).toContain("## Your charter");
+  });
+
+  it("tells a running lead its edited charter, and skips one that isn't running", async () => {
+    const { w, marketing } = withLeads();
+    const saved = editCharter({
+      workspaceId: w,
+      kind: "marketing",
+      title: "Growth lead",
+      area: "SEO",
+      goal: "Slow growth",
+      charter_md: "Publish weekly guides.",
+    })!;
+    sent.length = 0;
+    state = null;
+    expect(await deliverCharter(saved)).toBe(false);
+    expect(sent).toEqual([]);
+    state = "idle";
+    expect(await deliverCharter(saved)).toBe(true);
+    expect(sent).toHaveLength(1);
+    expect(sent[0].id).toBe(marketing.id);
+    expect(sent[0].text).toContain("this replaces the previous one");
+    for (const part of [
+      "Growth lead",
+      "SEO",
+      "Slow growth",
+      "Publish weekly guides.",
+    ])
+      expect(sent[0].text).toContain(part);
+    state = null;
+  });
+
+  it("picks up an edited charter the next time the brief is built", () => {
+    const { w, workspace, marketing } = withLeads();
+    const build = () =>
+      leadBrief({
+        workspace: workspace.name,
+        workspaceId: w,
+        kind: "marketing",
+        profile: profileFor(marketing, true)!,
+        projects: [],
+      });
+    expect(build()).not.toContain("Publish weekly guides");
+    editCharter({
+      workspaceId: w,
+      kind: "marketing",
+      title: "Growth lead",
+      area: "",
+      goal: "Slow organic growth",
+      charter_md: "Publish weekly guides.",
+    });
+    const brief = build();
+    expect(brief).toContain("Publish weekly guides.");
+    expect(brief).toContain("Goal: Slow organic growth");
   });
 
   it("adds a lead section to Tech's brief only when there are leads", () => {

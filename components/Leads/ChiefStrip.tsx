@@ -1,9 +1,11 @@
 "use client";
 
-import { memo } from "react";
+import { memo, useState } from "react";
+import { Button } from "@/components/ui/button";
 import { useChiefView } from "@/data/leads";
 import { LeadAvatar } from "@/components/SessionList/RowParts";
 import { CHIEF, memberLetter } from "@/lib/leads/order";
+import { CharterSheet } from "./CharterSheet";
 
 // The row above a chief of staff's messages: whose chief it is, what it
 // reads (the leads' records, never their chats), and when it acts. Null in
@@ -16,6 +18,7 @@ export const ChiefStrip = memo(function ChiefStrip({
   standing: boolean;
 }) {
   const { data: chief } = useChiefView(sessionId, standing);
+  const [editing, setEditing] = useState(false);
   if (!chief) return null;
   const acts =
     chief.autonomy === "acts"
@@ -50,7 +53,22 @@ export const ChiefStrip = memo(function ChiefStrip({
             Reads records, not chats. {acts}.{sweep && ` ${sweep}.`}
           </p>
         </div>
+        <Button
+          size="sm"
+          variant="ghost"
+          className="h-11 shrink-0 md:h-8"
+          onClick={() => setEditing(true)}
+        >
+          Charter
+        </Button>
       </div>
+      <CharterSheet
+        workspaceId={chief.workspaceId}
+        kind={CHIEF}
+        name="Chief of staff"
+        open={editing}
+        onOpenChange={setEditing}
+      />
     </div>
   );
 });
