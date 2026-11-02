@@ -1,6 +1,6 @@
 "use client";
 
-import { SettingSection } from "@/components/Settings/SettingRow";
+import { SettingBlock } from "@/components/Settings/SettingRow";
 import { TextSetting } from "@/components/Settings/settings-fields";
 import { useSetWorkspaceHq, useWorkspaceHqQuery } from "@/data/session-logs";
 
@@ -13,26 +13,28 @@ export function HqFolderForm({ workspaceId }: { workspaceId: string }) {
   const save = useSetWorkspaceHq(workspaceId);
 
   if (isPending)
-    return <div className="bg-muted/60 h-11 animate-pulse rounded-md" />;
+    return <div className="bg-muted/60 m-3 h-11 animate-pulse rounded-md" />;
   if (isError)
-    return <p className="text-destructive text-xs">{error.message}</p>;
+    return (
+      <SettingBlock id={`hq-folder-${workspaceId}`} label="HQ folder">
+        <p className="text-destructive text-xs">{error.message}</p>
+      </SettingBlock>
+    );
 
   return (
-    <SettingSection>
-      <TextSetting
-        id={`hq-folder-${workspaceId}`}
-        label="HQ folder"
-        help={`Session logs go to docs/sessions/<project>/ in this repo, one commit per file. ${
-          data.hq?.visibility === "private"
-            ? "The repo is private, so each commit is pushed."
-            : data.hq
-              ? "Commits stay local: the repo isn't a private GitHub repository."
-              : "It must be a private git repo outside the workspace's projects."
-        }`}
-        placeholder="~/path/to/a/private/git/repo"
-        value={data.hq?.folder ?? ""}
-        onSave={(folder) => save.mutateAsync(folder)}
-      />
-    </SettingSection>
+    <TextSetting
+      id={`hq-folder-${workspaceId}`}
+      label="HQ folder"
+      help={`Session logs go to docs/sessions/<project>/ in this repo, one commit per file. ${
+        data.hq?.visibility === "private"
+          ? "The repo is private, so each commit is pushed."
+          : data.hq
+            ? "Commits stay local: the repo isn't a private GitHub repository."
+            : "It must be a private git repo outside the workspace's projects."
+      }`}
+      placeholder="~/path/to/a/private/git/repo"
+      value={data.hq?.folder ?? ""}
+      onSave={(folder) => save.mutateAsync(folder)}
+    />
   );
 }

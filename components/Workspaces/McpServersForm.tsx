@@ -1,6 +1,6 @@
 "use client";
 
-import { SettingSection } from "@/components/Settings/SettingRow";
+import { SettingBlock, SettingSection } from "@/components/Settings/SettingRow";
 import { SwitchSetting } from "@/components/Settings/settings-fields";
 import { useMcpServersQuery, useUpdateWorkspace } from "@/data/workspaces";
 import type { Workspace } from "@/lib/db";
@@ -21,35 +21,27 @@ export function McpServersForm({ workspace }: { workspace: Workspace }) {
     });
 
   return (
-    <div className="space-y-2">
-      <div>
-        <p className="text-sm font-semibold">
-          MCP servers its orchestrator may use
-        </p>
-        <p className="text-muted-foreground text-xs">
-          All of a server&apos;s tools are allowed once it&apos;s on. Sending a
-          message, email or post through one still goes to you as an ask. Takes
-          effect at its next turn.
-        </p>
-      </div>
+    <SettingSection
+      title="MCP servers"
+      help="One switch per server; all its tools are allowed once it's on. Sending a message, email or post through one still asks you. Takes effect at the orchestrator's next turn."
+    >
       {names.length === 0 ? (
-        <p className="text-muted-foreground text-xs">
-          No MCP servers are configured on this machine.
-        </p>
+        <SettingBlock id={`mcp-none-${workspace.id}`} label="MCP servers">
+          <p className="text-muted-foreground text-xs">
+            No MCP servers are configured on this machine.
+          </p>
+        </SettingBlock>
       ) : (
-        <SettingSection>
-          {names.map((name) => (
-            <SwitchSetting
-              key={name}
-              id={`mcp-${workspace.id}-${name}`}
-              label={name}
-              checked={allowed.includes(name)}
-              defaultValue={false}
-              onSave={(on) => toggle(name, on)}
-            />
-          ))}
-        </SettingSection>
+        names.map((name) => (
+          <SwitchSetting
+            key={name}
+            id={`mcp-${workspace.id}-${name}`}
+            label={name}
+            checked={allowed.includes(name)}
+            onSave={(on) => toggle(name, on)}
+          />
+        ))
       )}
-    </div>
+    </SettingSection>
   );
 }

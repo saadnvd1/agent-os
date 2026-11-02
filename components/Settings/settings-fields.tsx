@@ -58,16 +58,16 @@ export function SwitchSetting({
       status={auto.status}
       onUndo={auto.undo}
       hint={
-        defaultValue === undefined
+        defaultValue === undefined || auto.value === defaultValue
           ? undefined
-          : `default ${defaultValue ? "on" : "off"}`
+          : `Default: ${defaultValue ? "on" : "off"}`
       }
       onReset={
         defaultValue !== undefined && auto.value !== defaultValue
           ? () => void auto.commit(defaultValue, { undoable: true })
           : undefined
       }
-      controlClassName="max-sm:col-span-1 max-sm:row-start-1 max-sm:mt-0"
+      controlClassName="max-sm:col-span-1 max-sm:col-start-2 max-sm:row-start-1 max-sm:mt-0 max-sm:justify-end"
       control={
         <Switch
           id={id}
@@ -150,12 +150,8 @@ export function NumberSetting({
   const shown = (off ? optional!.on : auto.value) / scale;
   const defOff = optional ? defaultValue === optional.off : false;
   const hint =
-    error === null
-      ? `default ${defOff ? "off" : `${defaultValue / scale}${short}`} · ${
-          max === undefined
-            ? `${min / scale}${short}+`
-            : `${min / scale}–${max / scale}${short}`
-        }`
+    error === null && auto.value !== defaultValue
+      ? `Default: ${defOff ? "off" : `${defaultValue / scale}${short}`}`
       : undefined;
 
   const finish = () => {
@@ -277,7 +273,12 @@ export function SelectSetting({
       help={help}
       status={auto.status}
       onUndo={auto.undo}
-      hint={hint ?? (def ? `default ${def.label}` : undefined)}
+      hint={
+        hint ??
+        (def && auto.value !== defaultValue
+          ? `Default: ${def.label}`
+          : undefined)
+      }
       onReset={
         defaultValue !== undefined && auto.value !== defaultValue
           ? () => void auto.commit(defaultValue, { undoable: true })

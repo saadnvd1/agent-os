@@ -8,6 +8,14 @@ import { cn } from "@/lib/utils";
 // What the Settings search box holds; a row that doesn't match hides.
 export const SettingsQueryContext = createContext("");
 
+/** Whether a row with this text shows for the search box's words. */
+export function matchesQuery(query: string, ...text: (string | undefined)[]) {
+  const q = query.trim().toLowerCase();
+  if (!q) return true;
+  const haystack = text.join(" ").toLowerCase();
+  return q.split(/\s+/).every((w) => haystack.includes(w));
+}
+
 /**
  * One setting on a Settings page, 44px at least: label and one-line help on
  * the left, the control on the right (below the label on a phone), and a meta
@@ -40,10 +48,8 @@ export function SettingRow({
   onReset?: () => void;
   below?: ReactNode;
 }) {
-  const query = useContext(SettingsQueryContext).trim().toLowerCase();
-  const haystack = `${label} ${help ?? ""}`.toLowerCase();
-  if (query && !query.split(/\s+/).every((w) => haystack.includes(w)))
-    return null;
+  const query = useContext(SettingsQueryContext);
+  if (!matchesQuery(query, label, help)) return null;
   return (
     <div
       data-setting={id}
@@ -65,47 +71,49 @@ export function SettingRow({
       >
         {control}
       </div>
-      <div className="text-muted-foreground col-span-2 flex min-h-5 items-center justify-between gap-2 text-xs">
-        <span
-          id={`${id}-hint`}
-          className={cn("min-w-0", error && "text-destructive")}
-          role={error ? "alert" : undefined}
-        >
-          {error ?? hint}
-        </span>
-        <span className="flex shrink-0 items-center gap-3" aria-live="polite">
-          {status === "saving" && (
-            <span className="inline-flex items-center gap-1">
-              <Loader2 className="size-3 animate-spin" />
-              Saving…
-            </span>
-          )}
-          {(status === "saved" || status === "undo") && (
-            <span className="inline-flex items-center gap-1 text-emerald-600 dark:text-emerald-400">
-              <Check className="size-3" />
-              Saved
-            </span>
-          )}
-          {status === "undo" && onUndo && (
-            <button
-              type="button"
-              onClick={onUndo}
-              className="text-primary -my-3 -mr-1 min-h-11 px-1 hover:underline"
-            >
-              Undo
-            </button>
-          )}
-          {onReset && status !== "undo" && (
-            <button
-              type="button"
-              onClick={onReset}
-              className="text-primary -my-3 -mr-1 min-h-11 px-1 hover:underline"
-            >
-              Reset
-            </button>
-          )}
-        </span>
-      </div>
+      {(error || hint || onReset || status !== "idle") && (
+        <div className="text-muted-foreground col-span-2 flex min-h-5 items-center justify-end gap-3 text-xs">
+          <span
+            id={`${id}-hint`}
+            className={cn("min-w-0 flex-1", error && "text-destructive")}
+            role={error ? "alert" : undefined}
+          >
+            {error ?? hint}
+          </span>
+          <span className="flex shrink-0 items-center gap-3" aria-live="polite">
+            {status === "saving" && (
+              <span className="inline-flex items-center gap-1">
+                <Loader2 className="size-3 animate-spin" />
+                Saving…
+              </span>
+            )}
+            {(status === "saved" || status === "undo") && (
+              <span className="inline-flex items-center gap-1 text-emerald-600 dark:text-emerald-400">
+                <Check className="size-3" />
+                Saved
+              </span>
+            )}
+            {status === "undo" && onUndo && (
+              <button
+                type="button"
+                onClick={onUndo}
+                className="text-primary -my-3 -mr-1 min-h-11 px-1 hover:underline"
+              >
+                Undo
+              </button>
+            )}
+            {onReset && status !== "undo" && (
+              <button
+                type="button"
+                onClick={onReset}
+                className="text-primary -my-3 -mr-1 min-h-11 px-1 hover:underline"
+              >
+                Reset
+              </button>
+            )}
+          </span>
+        </div>
+      )}
       {below && <div className="col-span-2">{below}</div>}
     </div>
   );
@@ -127,5 +135,34 @@ export function SettingSection({
       {help && <p className="text-muted-foreground mb-2 text-xs">{help}</p>}
       <div className="bg-muted/40 overflow-hidden rounded-xl">{children}</div>
     </section>
+  );
+}
+
+/**
+ * A row whose control is a block of its own (a list, a segmented control):
+ * the label sits above it, and the search box filters it like any row.
+ */
+export function SettingBlock({
+  id,
+  label,
+  help,
+  children,
+}: {
+  id: string;
+  label?: string;
+  help?: string;
+  children: ReactNode;
+}) {
+  const query = useContext(SettingsQueryContext);
+  if (!matchesQuery(query, label, help)) return null;
+  return (
+    <div
+      data-setting={id}
+      className="border-foreground/5 space-y-1.5 border-t px-3 py-2 first:border-t-0"
+    >
+      {label && <p className="text-sm font-medium">{label}</p>}
+      {children}
+      {help && <p className="text-muted-foreground text-xs">{help}</p>}
+    </div>
   );
 }

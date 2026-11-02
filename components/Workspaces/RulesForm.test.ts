@@ -49,9 +49,9 @@ afterEach(async () => {
   host.remove();
 });
 
-const type = async (input: HTMLInputElement, text: string) => {
+const type = async (input: HTMLTextAreaElement, text: string) => {
   const set = Object.getOwnPropertyDescriptor(
-    HTMLInputElement.prototype,
+    window.HTMLTextAreaElement.prototype,
     "value"
   )!.set!;
   await act(async () => {
@@ -59,13 +59,14 @@ const type = async (input: HTMLInputElement, text: string) => {
     input.dispatchEvent(new Event("input", { bubbles: true }));
   });
 };
-const rule = () => host.querySelector<HTMLInputElement>("#rule-4")!;
+const editor = (id: string) => host.querySelector<HTMLTextAreaElement>(id)!;
 const click = (el: Element | null | undefined) =>
   act(async () => {
     el?.dispatchEvent(new window.MouseEvent("click", { bubbles: true }));
   });
 const button = (name: string) =>
   [...host.querySelectorAll("button")].find((b) => b.textContent === name);
+const edit = () => click(host.querySelector('button[aria-label^="Edit rule"]'));
 
 describe("RulesForm", () => {
   beforeEach(async () => {
@@ -74,54 +75,80 @@ describe("RulesForm", () => {
     );
   });
 
+  it("lists the rule as text with a You badge, and no editor or Save", () => {
+    expect(host.textContent).toContain("Never merge #12");
+    expect(host.textContent).toContain("You");
+    expect(host.querySelector("textarea")).toBeNull();
+    expect(button("Save")).toBeUndefined();
+  });
+
+  it("opens a multi-line editor on a click of the rule or its edit icon", async () => {
+    await edit();
+    expect(editor("#rule-4").value).toBe("Never merge #12");
+    await click(button("Cancel"));
+    await click(host.querySelector("li, [data-setting='rule-4'] button"));
+    expect(editor("#rule-4")).not.toBeNull();
+  });
+
+  it("only enables Save once the text has changed", async () => {
+    await edit();
+    expect(button("Save")!.disabled).toBe(true);
+    await type(editor("#rule-4"), "Never merge #13");
+    expect(button("Save")!.disabled).toBe(false);
+    await type(editor("#rule-4"), "Never merge #12");
+    expect(button("Save")!.disabled).toBe(true);
+    await type(editor("#rule-4"), "   ");
+    expect(button("Save")!.disabled).toBe(true);
+  });
+
   it("never asks for a passkey on blur", async () => {
-    await type(rule(), "Never merge #13");
+    await edit();
+    await type(editor("#rule-4"), "Never merge #13");
     await act(async () => {
-      rule().dispatchEvent(new FocusEvent("focusout", { bubbles: true }));
+      editor("#rule-4").dispatchEvent(
+        new FocusEvent("focusout", { bubbles: true })
+      );
     });
     expect(state.update).not.toHaveBeenCalled();
   });
 
-  it("saves through the passkey step on the Save button, and says Saved", async () => {
-    await type(rule(), "Never merge #13");
+  it("saves through the passkey step on Save and closes the editor", async () => {
+    await edit();
+    await type(editor("#rule-4"), "Never merge #13");
     await click(button("Save"));
     expect(state.update).toHaveBeenCalledWith({
       id: 4,
       text: "Never merge #13",
     });
-    expect(host.textContent).toContain("Saved");
+    expect(host.querySelector("textarea")).toBeNull();
   });
 
-  it("saves on Enter", async () => {
-    await type(rule(), "Never merge #13");
-    await act(async () => {
-      rule().dispatchEvent(
-        new KeyboardEvent("keydown", { key: "Enter", bubbles: true })
-      );
-    });
-    expect(state.update).toHaveBeenCalledOnce();
-  });
-
-  it("rolls back and toasts when the passkey is cancelled", async () => {
-    state.update.mockRejectedValue(new Error("Passkey cancelled"));
-    await type(rule(), "Never merge #13");
-    await click(button("Save"));
-    expect(rule().value).toBe("Never merge #12");
-    expect(state.toast).toHaveBeenCalledWith("Passkey cancelled");
-    expect(host.textContent).not.toContain("Saved");
-  });
-
-  it("won't save an empty rule", async () => {
-    await type(rule(), "  ");
-    await click(button("Save"));
+  it("cancel closes the editor and drops what was typed", async () => {
+    await edit();
+    await type(editor("#rule-4"), "Never merge #13");
+    await click(button("Cancel"));
     expect(state.update).not.toHaveBeenCalled();
-    expect(host.textContent).toContain("A rule can't be empty");
+    expect(host.querySelector("textarea")).toBeNull();
+    expect(host.textContent).toContain("Never merge #12");
+    await edit();
+    expect(editor("#rule-4").value).toBe("Never merge #12");
   });
 
-  it("adds a rule through the same step", async () => {
-    const input = host.querySelector<HTMLInputElement>("#rule-new-w1")!;
-    await type(input, "House rule");
-    await click(button("Add"));
+  it("keeps the editor open and toasts when the passkey is cancelled", async () => {
+    state.update.mockRejectedValue(new Error("Passkey cancelled"));
+    await edit();
+    await type(editor("#rule-4"), "Never merge #13");
+    await click(button("Save"));
+    expect(editor("#rule-4").value).toBe("Never merge #13");
+    expect(state.toast).toHaveBeenCalledWith("Passkey cancelled");
+  });
+
+  it("adds a rule from the same editor, through the same step", async () => {
+    await click(button("Add rule"));
+    expect(button("Add rule")!.disabled).toBe(true);
+    await type(editor("#rule-new-w1"), "House rule");
+    await click(button("Add rule"));
     expect(state.add).toHaveBeenCalledWith("House rule");
+    expect(host.querySelector("textarea")).toBeNull();
   });
 });

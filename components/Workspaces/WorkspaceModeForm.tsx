@@ -1,5 +1,6 @@
 "use client";
 
+import { SettingBlock } from "@/components/Settings/SettingRow";
 import { ModeChooser } from "@/components/Report/ModeChooser";
 import { useSetWorkspaceMode, useWorkspaceMode } from "@/data/reports";
 
@@ -9,14 +10,13 @@ export function WorkspaceModeForm({ workspaceId }: { workspaceId: string }) {
   const set = useSetWorkspaceMode(workspaceId);
   if (!mode) return null;
   return (
-    <div className="space-y-1.5">
-      <h4 className="text-sm font-medium">Operating mode</h4>
+    <SettingBlock id={`mode-${workspaceId}`} label="Operating mode">
       <ModeChooser
         mode={mode}
         onChange={(m) => set.mutate(m)}
         disabled={set.isPending}
         note="New tasks start in this mode; any task can change its own."
       />
-    </div>
+    </SettingBlock>
   );
 }
