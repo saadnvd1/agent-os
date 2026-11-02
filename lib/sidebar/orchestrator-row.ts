@@ -8,7 +8,7 @@ import type {
   TeamMemberView,
 } from "../orchestrator/ask-view";
 import { TECH } from "../leads/types";
-import { CHIEF, leadRank } from "../leads/order";
+import { CHIEF, leadRank, memberLetter } from "../leads/order";
 import type { SidebarRow } from "./shelves";
 
 export interface OrchestratorRowCounts {
@@ -100,7 +100,7 @@ export function teamMembers(
         ...m,
         workspaceId: o.workspaceId,
         rank: leadRank(m.kind),
-        letter: m.kind === CHIEF ? "C" : (m.kind[0] ?? "?").toUpperCase(),
+        letter: memberLetter(m.kind),
       });
   return members;
 }

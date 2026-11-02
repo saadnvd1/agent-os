@@ -1,7 +1,7 @@
 import type { ChatItem, TurnEndReason } from "./events";
 import { readingOrder } from "./reading-order";
 import { stepCounts, type StepCounts } from "./tool-outcome";
-import { eventTurnAt, type EventTurn } from "./turns";
+import { eventTurnAt, isMailTool, type EventTurn } from "./turns";
 
 // Ends that stop a turn mid-task: they show how many steps got done.
 const CUT_SHORT = new Set<TurnEndReason>([
@@ -84,7 +84,10 @@ export function groupTimeline(
         items: items.slice(i, end),
       });
       i = end;
-    } else if (item.kind === "tool" && STANDALONE_TOOLS.has(item.name)) {
+    } else if (
+      item.kind === "tool" &&
+      (STANDALONE_TOOLS.has(item.name) || isMailTool(item.name))
+    ) {
       flush();
       turnTools.push(item);
       blocks.push({ type: "item", item });

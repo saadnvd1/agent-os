@@ -161,6 +161,7 @@ const sinceSplit = (rows: Row[]) =>
       crew_id: _c,
       lead_kind: _k,
       lead_since: _s,
+      started_by_lead: _l,
       ...rest
     } = r;
     return rest;

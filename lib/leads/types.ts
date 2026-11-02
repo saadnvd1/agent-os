@@ -75,6 +75,8 @@ export interface LeadMessage {
   text: string;
   createdAt: string;
   readAt: string | null;
+  // The sender's direction pins it relies on, checked when it was sent.
+  pins: number[];
 }
 
 export interface LeadUsage {

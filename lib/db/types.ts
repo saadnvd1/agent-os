@@ -128,6 +128,8 @@ export interface Session {
   // and when it became one.
   lead_kind?: string | null;
   lead_since?: string | null;
+  // The lead (or "chief") whose call started this session.
+  started_by_lead?: string | null;
   // An orchestrator's tool-call secret.
   orch_token?: string | null;
   workspace_id: string | null;

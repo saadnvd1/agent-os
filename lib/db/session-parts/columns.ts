@@ -188,4 +188,5 @@ export const SESSION_ROW_COLUMNS: readonly string[] = [
   "crew_id",
   "lead_kind",
   "lead_since",
+  "started_by_lead",
 ];

@@ -70,6 +70,7 @@ export function listLeads(workspaceId: string): Session[] {
 }
 
 export function leadTitle(workspaceId: string, kind: LeadKind): string {
+  if (kind === CHIEF) return "Chief of staff";
   return getCharter(workspaceId, kind)?.title || charterTemplate(kind).title;
 }
 

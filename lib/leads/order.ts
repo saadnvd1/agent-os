@@ -13,3 +13,7 @@ export const leadRank = (kind: string): number => {
 
 export const byLeadOrder = (a: string, b: string) =>
   leadRank(a) - leadRank(b) || a.localeCompare(b);
+
+// What a member's avatar says: C, T, M, P, or a custom kind's first letter.
+export const memberLetter = (kind: string): string =>
+  kind === CHIEF ? "C" : (kind[0] ?? "?").toUpperCase();

@@ -2,7 +2,9 @@
 // calling task, chat or orchestrator; null for a person), parent_session_id
 // the session it came from, started_via how it began.
 
-import { isStandingRole } from "../leads/roles";
+import { isStandingRole, memberKind } from "../leads/roles";
+import { hasLeads } from "../leads/settings";
+import type { Session } from "../db/types";
 import path from "path";
 import { db } from "../db";
 import { setPlacement } from "../db/session-parts";
@@ -111,11 +113,31 @@ export function orchestratorOf(startedBy: string | null | undefined) {
   return null;
 }
 
+// The team member whose call started it, in a workspace with leads.
+function starterLead(
+  startedBy: string | null
+): { kind: string; workspaceId: string } | null {
+  if (!startedBy) return null;
+  const row = db
+    .prepare(`SELECT role, lead_kind, workspace_id FROM sessions WHERE id = ?`)
+    .get(startedBy) as
+    Pick<Session, "role" | "lead_kind" | "workspace_id"> | undefined;
+  const kind = row ? memberKind(row) : null;
+  if (!kind || !row?.workspace_id || !hasLeads(row.workspace_id)) return null;
+  return { kind, workspaceId: row.workspace_id };
+}
+
 export function recordStart(id: string, s: Starter): void {
+  const lead = starterLead(s.startedBy);
   db.transaction(() => {
     db.prepare(
-      `UPDATE sessions SET started_by = ?, parent_session_id = (SELECT id FROM sessions WHERE id = ?), started_via = ? WHERE id = ?`
-    ).run(s.startedBy, s.parentSessionId, s.startedVia, id);
+      `UPDATE sessions SET started_by = ?, parent_session_id = (SELECT id FROM sessions WHERE id = ?), started_via = ?, started_by_lead = ? WHERE id = ?`
+    ).run(s.startedBy, s.parentSessionId, s.startedVia, lead?.kind ?? null, id);
     setPlacement(db, id, { started_by_device: s.startedByDevice ?? undefined });
   })();
+  // Another lead whose area this is hears of it from the server.
+  if (lead)
+    void import("../leads/area-notify")
+      .then((m) => m.notifyAreaStart(lead.workspaceId, id))
+      .catch((e) => console.error("[leads] area notify:", e));
 }

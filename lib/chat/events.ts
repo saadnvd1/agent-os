@@ -109,6 +109,8 @@ export interface ChatOrigin {
   // A fork delivery: the parent and the children it carries, shown as result
   // cards (lib/fork/deliver).
   forks?: { parent: string; ids: string[] };
+  // Mail from another lead (lib/leads/mail), drawn as its thread's card.
+  mail?: { id: number; thread: string; from: string; to: string };
   // The tasks it is about, by name, set where the event is delivered.
   subjects?: { id: string; name: string }[];
   // Only Away mode's own lines: the turn it starts isn't anyone's activity
