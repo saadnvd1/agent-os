@@ -68,6 +68,8 @@ It ends by offering `agent-os setup`. If another device can't reach the machine 
 
 Then open AgentOS, add a project from ⌘K, and press ⌥N. The [install guide](docs/guides/install.md) covers Windows (WSL2), the supported agents, first run and the `agent-os` commands. To use it from your phone, see the [phone guide](docs/guides/phone.md).
 
+AgentOS keeps itself up to date: once a release is two hours old and nothing has been working for 10 minutes, it installs it, and puts the previous version back if the new one doesn't come up healthy. Turn it off or change the idle time in **Settings → Updates**, or pin it with `AGENTOS_AUTO_UPDATE=off` and `AGENTOS_AUTO_UPDATE_IDLE_MIN`. Details are in [Automatic updates](docs/guides/install.md#automatic-updates).
+
 ## Connect
 
 AgentOS Connect is live. It gives your machine a private address at runagentos.com, so your phone reaches it from any network with nothing to open on your router and no VPN.
