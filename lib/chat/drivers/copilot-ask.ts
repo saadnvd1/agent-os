@@ -105,7 +105,6 @@ export function isAskUserCall(call: P): boolean {
 export class CopilotAskServer {
   private http?: http.Server;
   private secret = crypto.randomBytes(32).toString("hex");
-  private next = 0;
   private live = new Set<{ close(): Promise<void> }>();
 
   constructor(private pending: PendingApprovals) {}
@@ -119,17 +118,25 @@ export class CopilotAskServer {
           "Ask the user a question and wait for the answer. Use it when you need a decision or missing information instead of asking in plain text. Offer options for a choice (multiSelect to allow several); with no options the user types an answer. Blocks until they answer.",
         inputSchema: askInput,
       },
-      async (args) => {
+      async (args, extra) => {
         const q = askUserQuestion(args);
-        const o = await this.pending.ask({
-          id: `approval-ask-${++this.next}`,
+        // Unique across worker restarts: a card's id is its chat row, so a
+        // reused id would rewrite an old card up the history instead.
+        const id = `approval-ask-${crypto.randomUUID()}`;
+        const asked = this.pending.ask({
+          id,
           toolName: "AskUserQuestion",
           title: "Questions",
           input: { questions: [q] },
           questions: [q],
           canAlways: false,
         });
-        return askUserResult(q, o);
+        // Copilot gave up on the call (its timeout, or the connection went):
+        // nobody is waiting for this answer any more.
+        const expire = () => this.pending.respond(id, { decision: "expired" });
+        if (extra.signal.aborted) expire();
+        else extra.signal.addEventListener("abort", expire, { once: true });
+        return askUserResult(q, await asked);
       }
     );
     return server;
