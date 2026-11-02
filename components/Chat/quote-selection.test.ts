@@ -244,6 +244,12 @@ describe("Enter quotes", () => {
     expect(press(true, key(button)).handled).toBe(false);
   });
 
+  it("fires when the selection ends on the button row below a reply", () => {
+    const button = document.querySelector("#a2 button")!;
+    select([reply(), 4], [button, 0]);
+    expect(press(true, key(root)).handled).toBe(true);
+  });
+
   it.each(["shiftKey", "metaKey", "ctrlKey", "altKey"])(
     "ignores Enter with %s",
     (mod) => {

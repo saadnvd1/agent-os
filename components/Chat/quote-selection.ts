@@ -120,18 +120,21 @@ export function placeQuote(
   };
 }
 
-const TYPES_OR_ACTS =
-  'input, textarea, select, button, a[href], summary, [contenteditable]:not([contenteditable="false"])';
+const TYPES =
+  'input, textarea, select, [contenteditable]:not([contenteditable="false"])';
+const TYPES_OR_ACTS = `${TYPES}, button, a[href], summary`;
 
-function inTypingOrAction(node: Node | null): boolean {
+function inside(node: Node | null, selector: string): boolean {
   const el =
     node && (node.nodeType === 1 ? (node as Element) : node.parentElement);
-  return !!el?.closest(TYPES_OR_ACTS);
+  return !!el?.closest(selector);
 }
 
-// Whether Enter quotes: the button is showing for a live selection, and
-// neither the key's target nor the selection sits in the composer or any
-// other field, where Enter keeps its own meaning.
+// Whether Enter quotes: the button is showing for a live selection, the key
+// isn't aimed at a field or a focused button, and the selection doesn't sit
+// in the composer or any other field, where Enter keeps its own meaning. A
+// selection may end on a button: triple-clicking a reply's last line ends it
+// at the start of the copy/quote row below.
 export function enterQuotes(
   visible: boolean,
   target: EventTarget | null,
@@ -140,9 +143,9 @@ export function enterQuotes(
   if (!visible || !sel || sel.isCollapsed || !sel.rangeCount) return false;
   if (!sel.toString().trim()) return false;
   return (
-    !inTypingOrAction(target as Node | null) &&
-    !inTypingOrAction(sel.anchorNode) &&
-    !inTypingOrAction(sel.focusNode)
+    !inside(target as Node | null, TYPES_OR_ACTS) &&
+    !inside(sel.anchorNode, TYPES) &&
+    !inside(sel.focusNode, TYPES)
   );
 }
 
