@@ -15,6 +15,7 @@ import { resolveRoleOrDefault } from "../models/resolve";
 import {
   ensureOrchestrator,
   getOrchestrator,
+  listOrchestrators,
   orchestratorDir,
 } from "../orchestrator/home";
 import {
@@ -26,7 +27,8 @@ import {
 } from "./roles";
 import { byLeadOrder, CHIEF } from "./order";
 import { TECH, type LeadKind } from "./types";
-import { markLeadsEnabled } from "./settings";
+import { hasLeads, markLeadsEnabled } from "./settings";
+import { recordPreviousName } from "../session-names";
 import { getCharter, leadAreas, putCharter } from "./charters";
 import { charterTemplate } from "./templates";
 import { addChiefSweep } from "./sweep";
@@ -96,6 +98,32 @@ export function seedCharter(workspaceId: string, kind: LeadKind): void {
   putCharter({ workspaceId, leadKind: kind, ...t });
 }
 
+// What a standing lead's session is called: "<workspace> <title>".
+const leadSessionName = (workspaceId: string, kind: LeadKind) =>
+  `${getWorkspace(workspaceId)?.name ?? ""} ${leadTitle(workspaceId, kind)}`;
+
+// The orchestrator shows as the Tech lead while the workspace has leads, and
+// as "<workspace> orchestrator" otherwise. Idempotent; call it after leads
+// are enabled or disabled and whenever the tech charter's title changes.
+// Everything addresses the orchestrator by role, so the name is display only.
+export function syncTechName(workspaceId: string): void {
+  const tech = getOrchestrator(workspaceId);
+  const workspace = getWorkspace(workspaceId);
+  if (!tech || !workspace) return;
+  const name = hasLeads(workspaceId)
+    ? leadSessionName(workspaceId, TECH)
+    : `${workspace.name} orchestrator`;
+  if (tech.name === name) return;
+  recordPreviousName(tech.id, tech.name);
+  db.prepare(`UPDATE sessions SET name = ? WHERE id = ?`).run(name, tech.id);
+}
+
+// Startup: brings every orchestrator's name in line with its workspace.
+export function syncAllTechNames(): void {
+  for (const o of listOrchestrators())
+    if (o.workspace_id) syncTechName(o.workspace_id);
+}
+
 // Marks the orchestrator as the Tech lead, once.
 function claimTech(workspaceId: string): Session {
   const tech = ensureOrchestrator(workspaceId);
@@ -104,6 +132,7 @@ function claimTech(workspaceId: string): Session {
      WHERE id = ?`
   ).run(tech.id);
   seedCharter(workspaceId, TECH);
+  syncTechName(workspaceId);
   return getOrchestrator(workspaceId)!;
 }
 
@@ -116,7 +145,6 @@ function insertStanding(
   kind: LeadKind,
   department: LeadKind | null
 ): void {
-  const workspace = getWorkspace(workspaceId)!;
   const dir = leadDir(workspaceId, kind);
   fs.mkdirSync(dir, { recursive: true });
   const id = randomUUID();
@@ -128,7 +156,7 @@ function insertStanding(
        ?, ?, datetime('now'), ?, 1)`
   ).run(
     id,
-    `${workspace.name} ${leadTitle(workspaceId, kind)}`,
+    leadSessionName(workspaceId, kind),
     `claude-${id}`,
     dir,
     resolveRoleOrDefault("orchestrator", { workspaceId }).model,
