@@ -97,6 +97,9 @@ export default function RootLayout({
         </SerwistProvider>
         <Toaster
           position="top-center"
+          // Below the header, not over its title.
+          offset={{ top: 56 }}
+          mobileOffset={{ top: 64 }}
           closeButton
           toastOptions={{
             className: "!bg-card !border-border !text-foreground !shadow-lg",

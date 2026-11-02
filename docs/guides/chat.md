@@ -80,7 +80,12 @@ Type `@` for files and folders, matched the way Claude Code matches them
 shows in the empty composer: **Tab** or **→** takes it, typing or **Esc** sets
 it aside; on a phone it's a chip to tap. **↑** and **↓** in an empty composer
 walk back through what you've sent. Select text in a reply and **Quote** puts
-it in the composer as a blockquote.
+it in the composer as a blockquote. With Forks turned on (Settings → Experimental),
+**Fork** sits beside it: the composer switches to Fork mode, and Enter starts a
+background copy with the quote and what you typed as its instruction; its result
+comes back as a card in the chat (Esc or the
+x on the Fork pill keeps your text as a normal message). You can also just ask a
+session to fork or to do things in parallel.
 
 A message sent while the agent is working waits in a queue above the
 composer, kept on the server so a reload doesn't lose it, and goes when the

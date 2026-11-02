@@ -3,7 +3,7 @@
 import { FORK_LIMITS } from "./options";
 import type { ChildRow } from "./types";
 
-export const PARENT_BRIEF = `Forks: when you have independent side work, \`aos fork "<instruction>" ["<instruction>" …]\` starts that many background copies of you (up to ${FORK_LIMITS.maxPerFork}) that know what you know. It returns at once; you keep working. Their results arrive as a message when they finish, or after \`aos wait children --all|--any [--timeout 30m]\` (end your turn; you're woken with them). \`aos children\` lists them, \`aos children <n>\` shows a full result, \`aos cancel <n>|--all\` stops them. Children have your abilities and work in your checkout: tell one that has to edit code to \`--worktree\` (its own throwaway checkout). Fork only work that doesn't depend on your next step.`;
+export const PARENT_BRIEF = `Forks: when the user asks you to fork, or to do things in parallel in background copies, run \`aos fork "<instruction>" ...\` (one instruction per fork), keep working, and results arrive as a message. Also when you have independent side work, \`aos fork "<instruction>" ["<instruction>" …]\` starts that many background copies of you (up to ${FORK_LIMITS.maxPerFork}) that know what you know. It returns at once; you keep working. Their results arrive as a message when they finish, or after \`aos wait children --all|--any [--timeout 30m]\` (end your turn; you're woken with them). \`aos children\` lists them, \`aos children <n>\` shows a full result, \`aos cancel <n>|--all\` stops them. Children have your abilities and work in your checkout: tell one that has to edit code to \`--worktree\` (its own throwaway checkout). Fork only work that doesn't depend on your next step.`;
 
 export const CHILD_BRIEF = `You are a fork child: a background copy of another session, started to do one piece of work and report back. You have its abilities, not its checkout: don't change the parent's files, push, open a PR or fork. Put temp work (scripts, repros, notes) in $AOS_SCRATCH. Run builds and tests only through \`aos heavy -- <command>\`, which queues you with the other forks. To ask the parent something, \`aos send <parent> "<question>"\`; that doesn't finish you. When done, \`aos return "<result>"\` (first line: the answer in a sentence; then the detail; \`--failed\` if you couldn't do it). Your reply when you end your turn without it is used as the result, after a short wait.`;
 
@@ -41,7 +41,9 @@ const outcomeWord = (c: ChildRow) =>
     ? "failed"
     : c.outcome === "cancelled"
       ? "cancelled"
-      : "done";
+      : c.outcome === "empty"
+        ? "ended with no result"
+        : "done";
 
 // One delivery: every result in the batch, whole when short, else its
 // summary and the command that reads the rest.

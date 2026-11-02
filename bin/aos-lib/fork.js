@@ -4,7 +4,36 @@ module.exports = function makeFork({ call, post, fail, needMe, me, stdin }) {
   const when = (deadline) =>
     `up to ${Math.max(1, Math.round((deadline - Date.now()) / 60000))}m`;
 
+  const USAGE = {
+    fork: 'aos fork [--worktree] [--label name] "<instruction>" ["<instruction>" ...]',
+    children: "aos children [--stats] [<n>]",
+    return: 'aos return [--failed] "<result>"',
+    cancel: "aos cancel <n>|--all",
+    wait: "aos wait children [--all|--any] [--timeout 30m]",
+  };
+  const FLAGS = {
+    fork: ["--worktree", "--label"],
+    children: ["--stats"],
+    return: ["--failed"],
+    cancel: ["--all"],
+    wait: ["--all", "--any", "--timeout"],
+  };
+
+  // True when --help was asked for (usage printed, nothing else to do).
+  function help(cmd, words) {
+    if (words.includes("--help") || words.includes("-h")) {
+      console.log(`usage: ${USAGE[cmd]}`);
+      return true;
+    }
+    const bad = words.find(
+      (w) => /^--?[a-z][a-z-]*$/i.test(w) && !FLAGS[cmd].includes(w)
+    );
+    if (bad) fail(`unknown option ${bad}\nusage: ${USAGE[cmd]}`);
+    return false;
+  }
+
   async function fork(words) {
+    if (help("fork", words)) return;
     needMe();
     const instructions = [];
     const labels = [];
@@ -19,10 +48,7 @@ module.exports = function makeFork({ call, post, fail, needMe, me, stdin }) {
         labels[instructions.length] = label;
       } else instructions.push(w);
     }
-    if (!instructions.length)
-      fail(
-        'usage: aos fork [--worktree] [--label name] "<instruction>" ["<instruction>" ...]'
-      );
+    if (!instructions.length) fail(`usage: ${USAGE.fork}`);
     const r = await post("/api/fork", {
       from: me,
       instructions,
@@ -37,6 +63,7 @@ module.exports = function makeFork({ call, post, fail, needMe, me, stdin }) {
   }
 
   async function children(words) {
+    if (help("children", words)) return;
     needMe();
     const stats = words.includes("--stats");
     const ref = words.find((w) => !w.startsWith("--"));
@@ -62,11 +89,12 @@ module.exports = function makeFork({ call, post, fail, needMe, me, stdin }) {
   }
 
   async function ret(words) {
+    if (help("return", words)) return;
     needMe();
     const failed = words.includes("--failed");
     let text = words.filter((w) => w !== "--failed").join(" ");
     if (!text.trim()) text = await stdin();
-    if (!text.trim()) fail('usage: aos return [--failed] "<result>"');
+    if (!text.trim()) fail(`usage: ${USAGE.return}`);
     const r = await post("/api/fork/return", { from: me, text, failed });
     console.log(
       r.state === "updated"
@@ -76,10 +104,11 @@ module.exports = function makeFork({ call, post, fail, needMe, me, stdin }) {
   }
 
   async function cancel(words) {
+    if (help("cancel", words)) return;
     needMe();
     const all = words.includes("--all");
     const ref = words.find((w) => !w.startsWith("--"));
-    if (!all && !ref) fail("usage: aos cancel <n>|--all");
+    if (!all && !ref) fail(`usage: ${USAGE.cancel}`);
     const r = await post("/api/fork/cancel", { from: me, ref, all });
     console.log(
       r.cancelled.length
@@ -89,6 +118,7 @@ module.exports = function makeFork({ call, post, fail, needMe, me, stdin }) {
   }
 
   async function wait(words) {
+    if (help("wait", words)) return;
     needMe();
     const mode = words.includes("--any") ? "any" : "all";
     const i = words.indexOf("--timeout");

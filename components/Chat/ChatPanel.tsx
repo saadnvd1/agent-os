@@ -14,14 +14,11 @@ import { useChat } from "@/data/chat/useChat";
 import { PausedBanner } from "./PausedBanner";
 import { groupTimeline } from "@/lib/chat/group";
 import type { ChatItem } from "@/lib/chat/events";
-import {
-  isForkCommand,
-  isFreshCommand,
-  withFork,
-  withFresh,
-} from "@/lib/chat/commands";
+import { isFreshCommand, withFresh } from "@/lib/chat/commands";
 import { useExperiment } from "@/data/experiments";
-import { ForkDialog, ForksStrip } from "./Forks";
+import { useStartForks } from "@/data/fork";
+import { toast } from "sonner";
+import { ForksStrip, forkLabel } from "./Forks";
 import { ReplyingTo } from "./ReplyingTo";
 import { compactsFirst } from "@/lib/chat/pending";
 import { useFreshStart } from "@/data/sessions";
@@ -107,8 +104,14 @@ export function ChatPanel({
     append?: boolean;
   }>();
   const forksOn = useExperiment("forks");
-  const [forkOpen, setForkOpen] = useState(false);
-  const withForkIf = (c: typeof commands) => (forksOn ? withFork(c) : c);
+  const startFork = useStartForks(sessionId);
+  // Set while a selection is being forked; per session, like asIs below.
+  const [forkDraft, setForkDraft] = useState<{
+    sessionId: string;
+    quote: string;
+    own: boolean;
+  } | null>(null);
+  const fork = forksOn && forkDraft?.sessionId === sessionId ? forkDraft : null;
   const {
     items,
     hasMore,
@@ -187,12 +190,33 @@ export function ChatPanel({
     append?: boolean;
   }>();
 
+  // Leaving Fork mode keeps the selection as a normal quote in the draft.
+  const leaveFork = () => {
+    if (fork?.quote)
+      setInsert({
+        text: quoteMarkdown(fork.quote),
+        at: Date.now(),
+        append: true,
+      });
+    setForkDraft(null);
+  };
+
   // Esc sets the composer's ghost text aside, or else stops the turn
   // (lib/chat/escape), from anywhere in this panel.
   const rootRef = useRef<HTMLDivElement>(null);
-  const escape = useRef({ running, interrupt, suggestion });
+  const escape = useRef({
+    running,
+    interrupt,
+    suggestion,
+    leaveFork: null as (() => void) | null,
+  });
   useEffect(() => {
-    escape.current = { running, interrupt, suggestion };
+    escape.current = {
+      running,
+      interrupt,
+      suggestion,
+      leaveFork: fork ? leaveFork : null,
+    };
   });
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
@@ -203,6 +227,17 @@ export function ChatPanel({
       const overlay = !!document.querySelector(OVERLAY_SELECTOR);
       const ghost = !!root.querySelector(GHOST_SELECTOR);
       const composer = (e.target as Element).closest?.(".chat-composer");
+      // Fork mode ends first; the typed text stays as a normal draft.
+      if (
+        e.key === "Escape" &&
+        escape.current.leaveFork &&
+        composer &&
+        !overlay
+      ) {
+        e.preventDefault();
+        escape.current.leaveFork();
+        return;
+      }
       const action = escapeAction(
         e,
         escape.current.running,
@@ -233,6 +268,10 @@ export function ChatPanel({
         setInsert({ text: quoteMarkdown(t), at: Date.now(), append: true }),
       focusComposer
     );
+  const forkQuote = (text: string) => {
+    setForkDraft({ sessionId, quote: text, own: false });
+    focusComposer();
+  };
   const togglePlan = plan === null ? undefined : () => setPlan(!plan);
   const sendText = (text: string) => {
     toEnd();
@@ -643,7 +682,11 @@ export function ChatPanel({
           onStop={stopTask}
           onLoadOutput={loadTaskOutput}
         />
-        <QuoteButton rootRef={scrollRef} onQuote={quote} />
+        <QuoteButton
+          rootRef={scrollRef}
+          onQuote={quote}
+          onFork={forksOn ? forkQuote : undefined}
+        />
         <PausedBanner sessionId={sessionId} />
         <ForksStrip sessionId={sessionId} />
         <Queue
@@ -682,14 +725,49 @@ export function ChatPanel({
           insert={insert}
           running={running}
           disabled={!connected}
-          placeholder={connected ? `Message ${sessionName}` : "Reconnecting…"}
+          placeholder={
+            !connected
+              ? "Reconnecting…"
+              : fork
+                ? "What should the fork do?"
+                : `Message ${sessionName}`
+          }
+          fork={
+            fork
+              ? {
+                  quote: fork.quote,
+                  own: fork.own,
+                  onOwn: () => setForkDraft({ ...fork, own: !fork.own }),
+                  onLeave: leaveFork,
+                  onDropQuote: () => setForkDraft({ ...fork, quote: "" }),
+                }
+              : undefined
+          }
           onSend={(text, images, files) => {
             if (freshStart && isFreshCommand(text)) {
               startFresh.mutate(sessionId);
               return;
             }
-            if (forksOn && isForkCommand(text)) {
-              setForkOpen(true);
+            if (fork) {
+              startFork.mutate(
+                {
+                  instructions: [(quoteMarkdown(fork.quote) + text).trim()],
+                  worktree: fork.own,
+                  // The result comes back by itself, as a card, without a message from the reader.
+                  delivery: "wake",
+                  labels: [forkLabel(text, fork.quote)],
+                },
+                {
+                  onSuccess: () => {
+                    toast.success("Started fork");
+                    setForkDraft(null);
+                  },
+                  onError: (e) => {
+                    toast.error(e.message);
+                    setInsert({ text, at: Date.now() });
+                  },
+                }
+              );
               return;
             }
             toEnd();
@@ -711,7 +789,7 @@ export function ChatPanel({
             }
           }}
           onStop={interrupt}
-          commands={withForkIf(freshStart ? withFresh(commands) : commands)}
+          commands={freshStart ? withFresh(commands) : commands}
           onRefreshCommands={refreshCommands}
           refreshingCommands={refreshingCommands}
           models={models}
@@ -731,13 +809,6 @@ export function ChatPanel({
           focusKey={active ? sessionId : null}
         />
       </div>
-      {forksOn && (
-        <ForkDialog
-          sessionId={sessionId}
-          open={forkOpen}
-          onOpenChange={setForkOpen}
-        />
-      )}
       {undoPreview && (
         <UndoDialog
           preview={undoPreview.preview}

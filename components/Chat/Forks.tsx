@@ -1,10 +1,9 @@
 "use client";
 
 import { useState } from "react";
-import { GitFork, Plus, Square } from "lucide-react";
+import { GitFork, Square } from "lucide-react";
 import { toast } from "sonner";
 import { useExperiment } from "@/data/experiments";
-import { useClientConfig } from "@/data/client-config/queries";
 import {
   useCancelForks,
   useForkChildren,
@@ -12,17 +11,7 @@ import {
   type ChildView,
 } from "@/data/fork";
 import { Button } from "@/components/ui/button";
-import {
-  Dialog,
-  DialogContent,
-  DialogDescription,
-  DialogFooter,
-  DialogHeader,
-  DialogTitle,
-} from "@/components/ui/dialog";
 import { StatusPill } from "@/components/ui/status-pill";
-import { Switch } from "@/components/ui/switch";
-import { Textarea } from "@/components/ui/textarea";
 import { SessionAnchor } from "./SessionAnchor";
 
 type Tone = "amber" | "muted" | "green" | "primary" | "red";
@@ -34,22 +23,55 @@ export function stateLabel(c: ChildView): { text: string; tone: Tone } {
   if (c.state === "needs_input") return { text: "Needs you", tone: "amber" };
   if (c.outcome === "failed") return { text: "Failed", tone: "red" };
   if (c.outcome === "cancelled") return { text: "Stopped", tone: "muted" };
+  if (c.outcome === "empty") return { text: "No result", tone: "amber" };
   return { text: "Done", tone: "green" };
+}
+
+// The strip's name for a fork: what was asked, else what was quoted, so a
+// quote-first instruction isn't labelled with its "> ".
+export const forkLabel = (typed: string, quote: string): string => {
+  const line = (typed.trim() || quote.trim()).split("\n")[0].trim();
+  return line.length > 60 ? `${line.slice(0, 59)}…` : line;
+};
+
+// What a fork that ended with nothing to read says in place of a result.
+export const emptyNote = (c: ChildView) =>
+  c.summary && c.summary !== "ended without a result"
+    ? `Ended with “${c.summary}”, not an answer`
+    : "Ended without a result";
+
+// Starts the same instruction again, for a fork that came back with nothing.
+export function useRunAgain(sessionId: string) {
+  const start = useStartForks(sessionId);
+  return {
+    pending: start.isPending,
+    run: (c: ChildView) =>
+      start.mutate(
+        { instructions: [c.instruction], worktree: c.worktree },
+        {
+          onSuccess: () => toast.success("Started fork"),
+          onError: (e) => toast.error(e.message),
+        }
+      ),
+  };
 }
 
 function Row({
   c,
   onStop,
   stopping,
+  again,
 }: {
   c: ChildView;
+  again: ReturnType<typeof useRunAgain>;
   onStop: () => void;
   stopping: boolean;
 }) {
   const { text, tone } = stateLabel(c);
   const open = c.state !== "settled";
+  const empty = c.outcome === "empty";
   const note =
-    c.summary ??
+    (empty ? emptyNote(c) : c.summary) ??
     (c.asks
       ? `Asks: ${c.asks}`
       : c.state === "queued"
@@ -65,7 +87,13 @@ function Row({
           {c.n}. {c.label.replace(/^\d+\.\s*/, "")}
         </p>
         {note && (
-          <p className="text-muted-foreground truncate text-xs">
+          <p
+            className={
+              empty
+                ? "truncate text-xs text-amber-600 dark:text-amber-400"
+                : "text-muted-foreground truncate text-xs"
+            }
+          >
             {note}
             {c.resultKind === "implicit" && c.outcome === "ok"
               ? " · ended without reporting"
@@ -73,6 +101,16 @@ function Row({
           </p>
         )}
       </div>
+      {empty && (
+        <button
+          type="button"
+          disabled={again.pending}
+          onClick={() => again.run(c)}
+          className="text-primary flex min-h-11 shrink-0 items-center px-2 text-sm"
+        >
+          Run again
+        </button>
+      )}
       <SessionAnchor
         sessionId={c.id}
         className="text-primary flex min-h-11 shrink-0 items-center px-2 text-sm"
@@ -100,6 +138,7 @@ export function ForksStrip({ sessionId }: { sessionId: string }) {
   const on = useExperiment("forks");
   const { data } = useForkChildren(sessionId, on);
   const cancel = useCancelForks(sessionId);
+  const again = useRunAgain(sessionId);
   const [collapsed, setCollapsed] = useState(false);
   if (!on || !data) return null;
   if (data.asChild) return <ForkOfBanner info={data.asChild} />;
@@ -150,6 +189,7 @@ export function ForksStrip({ sessionId }: { sessionId: string }) {
               key={c.id}
               c={c}
               stopping={cancel.isPending}
+              again={again}
               onStop={() => stop(String(c.n))}
             />
           ))}
@@ -185,94 +225,5 @@ function ForkOfBanner({
         </span>
       </p>
     </section>
-  );
-}
-
-// "/fork": instructions for N copies of this session.
-export function ForkDialog({
-  sessionId,
-  open,
-  onOpenChange,
-}: {
-  sessionId: string;
-  open: boolean;
-  onOpenChange: (open: boolean) => void;
-}) {
-  const start = useStartForks(sessionId);
-  const max = useClientConfig().data?.forks?.maxPerFork ?? 8;
-  const [texts, setTexts] = useState<string[]>([""]);
-  const [worktree, setWorktree] = useState(false);
-  const filled = texts.map((t) => t.trim()).filter(Boolean);
-  const submit = () =>
-    start.mutate(
-      { instructions: filled, worktree },
-      {
-        onSuccess: (r) => {
-          toast.success(
-            `Started ${r.children.length} ${r.children.length === 1 ? "fork" : "forks"}`
-          );
-          setTexts([""]);
-          setWorktree(false);
-          onOpenChange(false);
-        },
-        onError: (e) => toast.error(e.message),
-      }
-    );
-  return (
-    <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="max-h-[90dvh] overflow-y-auto sm:max-w-lg">
-        <DialogHeader>
-          <DialogTitle>Fork this session</DialogTitle>
-          <DialogDescription>
-            Each copy knows what this session knows and works in the background.
-            You keep going; results are added to your next message.
-          </DialogDescription>
-        </DialogHeader>
-        <div className="space-y-2">
-          {texts.map((t, i) => (
-            <Textarea
-              key={i}
-              value={t}
-              rows={2}
-              aria-label={`Fork ${i + 1}`}
-              placeholder={`What should fork ${i + 1} do?`}
-              onChange={(e) =>
-                setTexts(texts.map((x, j) => (j === i ? e.target.value : x)))
-              }
-            />
-          ))}
-          {texts.length < max && (
-            <Button
-              type="button"
-              variant="ghost"
-              size="sm"
-              className="min-h-11"
-              onClick={() => setTexts([...texts, ""])}
-            >
-              <Plus aria-hidden className="size-4" /> Another
-            </Button>
-          )}
-          <label className="flex min-h-11 items-center justify-between gap-3 text-sm">
-            <span>
-              Own checkout
-              <span className="text-muted-foreground block text-xs">
-                For forks that edit code. Off: they read this checkout and leave
-                it alone.
-              </span>
-            </span>
-            <Switch checked={worktree} onCheckedChange={setWorktree} />
-          </label>
-        </div>
-        <DialogFooter>
-          <Button
-            className="min-h-11"
-            disabled={!filled.length || start.isPending}
-            onClick={submit}
-          >
-            {filled.length > 1 ? `Start ${filled.length} forks` : "Start fork"}
-          </Button>
-        </DialogFooter>
-      </DialogContent>
-    </Dialog>
   );
 }

@@ -53,7 +53,12 @@ export function useForkChildren(sessionId: string, enabled: boolean) {
 export function useStartForks(sessionId: string) {
   const queryClient = useQueryClient();
   return useMutation({
-    mutationFn: async (input: { instructions: string[]; worktree: boolean }) =>
+    mutationFn: async (input: {
+      instructions: string[];
+      worktree: boolean;
+      labels?: string[];
+      delivery?: "wake" | "next";
+    }) =>
       json<{ children: { id: string; n: number; label: string }[] }>(
         await fetch("/api/fork", {
           method: "POST",
