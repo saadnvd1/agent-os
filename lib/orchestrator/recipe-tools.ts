@@ -8,6 +8,7 @@
 import { formatRunTime } from "../schedules/cron";
 import { workspaceProject } from "./targets";
 import { getOrchestrator } from "./home";
+import { actorIn } from "../leads/actor";
 import { untrusted } from "./untrusted";
 import {
   AlreadyRunning,
@@ -85,7 +86,7 @@ export async function runRecipe(
   note?: string
 ): Promise<string> {
   const recipe = findRecipe(w, name);
-  const orchestrator = getOrchestrator(w);
+  const orchestrator = actorIn(w) ?? getOrchestrator(w);
   try {
     const { run, queued } = await startRun(recipe.id, {
       trigger: "tool",

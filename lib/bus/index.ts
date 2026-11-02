@@ -64,6 +64,8 @@ export interface Peer {
   orchestratorOf: string | null;
   // The asking session's own workspace orchestrator.
   yours?: boolean;
+  // A lead's address, "<workspace>/<kind>", once its workspace has leads.
+  lead?: string;
   // Names of the sessions it waits on, and of those waiting on it.
   waitingOn: string[];
   waitedBy: string[];
@@ -122,6 +124,10 @@ export async function listPeers(callerId?: string): Promise<Peer[]> {
         running: info.running,
         doing: info.subtitle,
         orchestratorOf: orchestratorOf(s),
+        ...(named[i].leadKind &&
+          named[i].workspaceName && {
+            lead: `${named[i].workspaceName}/${named[i].leadKind}`,
+          }),
         waitingOn: badges.get(s.id)?.on.map((w) => w.name) ?? [],
         waitedBy: badges.get(s.id)?.by.map((w) => w.name) ?? [],
         ...(s.agent_role && { agentRole: s.agent_role }),

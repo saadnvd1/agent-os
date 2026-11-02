@@ -44,6 +44,7 @@ import { findPiece, pieceLabel, workspacePieces } from "../plans/claim";
 import { approvePlanNow } from "../models/plan-step";
 import { braked } from "./brakes";
 import { getOrchestrator } from "./home";
+import { actorIn } from "../leads/actor";
 import { addNote } from "./notes";
 import { findWorkspaceSession } from "./read";
 import { assignSessions, resolveGroup } from "../session-groups";
@@ -64,8 +65,9 @@ import {
 import { pauseUntil, type PausePreset } from "../sidebar/snooze";
 import type { Priority } from "../tasks/schedule-types";
 
+// Who is acting: the lead whose tool call this is, else the orchestrator.
 function orchestratorId(workspaceId: string): string {
-  const o = getOrchestrator(workspaceId);
+  const o = actorIn(workspaceId) ?? getOrchestrator(workspaceId);
   if (!o) throw new Error("This workspace has no orchestrator yet");
   return o.id;
 }

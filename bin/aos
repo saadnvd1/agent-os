@@ -23,9 +23,12 @@ const usage = `aos: talk to other agent sessions in AgentOS
                                      a free one in its place (exit 3 when it moved one
                                      or the port you named is someone else's)
   aos send <session> <message...>    message a session (name, old name, project/name,
-                                     <workspace>/<name>, <workspace>/orchestrator, id or
+                                     <workspace>/<name>, <workspace>/orchestrator,
+                                     <workspace>/<lead> such as acme/marketing, id or
                                      id prefix; "orchestrator" is yours); says delivered,
                                      queued or FAILED (exit 2: it waits in their inbox)
+  aos leads [--all] [--json]         your workspace's leads (department heads), their
+                                     areas and the address each takes in aos send
   aos send <session> --await [--timeout 30m] <message...>
                                      the same, and record that you wait for the reply:
                                      end your turn, you're woken with it (it says which
@@ -165,7 +168,7 @@ const dropped = (err) =>
 // GETs that change nothing, so a lost response can be fetched again. Other GETs
 // (the inbox marks what it returns as read) are retried only on a refusal.
 const PURE_READS =
-  /^\/api\/(bus\/(peers|messages|docs|read)|claims|tasks\/queue|tasks\/[^/]+\/loop|stacks|schedules)(\/|\?|$)/;
+  /^\/api\/(bus\/(peers|messages|docs|read)|claims|leads|tasks\/queue|tasks\/[^/]+\/loop|stacks|schedules)(\/|\?|$)/;
 
 async function call(path, init = {}) {
   const reads =
@@ -237,6 +240,7 @@ const claimCmd = (words) =>
   require("./aos-lib/claim.js")({ url, token, fail })(words);
 const claimsCmd = (words) =>
   require("./aos-lib/claims.js")({ call, me })(words);
+const leadsCmd = (words) => require("./aos-lib/leads.js")({ call, me })(words);
 const loopCmd = (words) =>
   require("./aos-lib/loop.js")({ call, post, fail, me })(words);
 
@@ -415,6 +419,8 @@ async function main() {
       return heavy(args);
     case "claims":
       return claimsCmd(args);
+    case "leads":
+      return leadsCmd(args);
     case "loop":
       return loopCmd(args);
     case "claim":
@@ -442,6 +448,7 @@ async function main() {
           : p.orchestratorOf
             ? `  ·  orchestrator of ${p.orchestratorOf}`
             : "";
+        const lead = p.lead ? `  ·  lead (aos send ${p.lead} "...")` : "";
         const crew = p.agentRole
           ? `  ·  @${p.agentRole}${p.model ? ` (${p.model})` : ""}`
           : "";
@@ -452,7 +459,7 @@ async function main() {
           p.waitedBy?.length ? `${p.waitedBy.join(", ")} waiting on it` : "",
         ].filter(Boolean);
         console.log(
-          `${p.id.slice(0, 8)}  ${where}${p.name}${filed}${was}  ·  ${state}${role}${crew}${waits.length ? `  ·  ${waits.join("  ·  ")}` : ""}`
+          `${p.id.slice(0, 8)}  ${where}${p.name}${filed}${was}  ·  ${state}${role}${lead}${crew}${waits.length ? `  ·  ${waits.join("  ·  ")}` : ""}`
         );
       }
       return;

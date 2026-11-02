@@ -1,3 +1,6 @@
+import { actorIn } from "../leads/actor";
+import { leadKindOf } from "../leads/roles";
+import { TECH } from "../leads/types";
 import type { Session } from "../db";
 import { prFor } from "../tasks/session";
 import {
@@ -90,6 +93,12 @@ export async function askSaad(
     sha?: string;
   }
 ): Promise<string> {
+  const actor = actorIn(workspaceId);
+  const leadKind = (actor && leadKindOf(actor)) ?? TECH;
+  if (a.task && leadKind !== TECH)
+    throw new Error(
+      "Only the Tech lead asks to merge a PR; hand it over with send"
+    );
   if (!a.task !== !a.sha)
     throw new Error(
       "Give both task and sha to ask about merging a PR at a commit, or neither"
@@ -116,6 +125,7 @@ export async function askSaad(
       link: merge ? merge.url : (a.link ?? null),
       sha: merge?.sha ?? null,
       raisedBy: merge ? "orchestrator" : null,
+      leadKind,
     });
   } catch (error) {
     if (error instanceof AskRefused) return `Not asked: ${error.message}.`;

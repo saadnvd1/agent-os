@@ -24,7 +24,7 @@ import type { ToolGuardResult } from "../chat/driver";
 import { git, GitError } from "../git-exec";
 import { isOrchestratorSecretPath as isSecretPath } from "../secret-paths";
 import { WORKTREES_DIR } from "../worktrees";
-import { orchestratorDir } from "./home";
+import { standingDir } from "../leads/home";
 import { LIMITS_FILE } from "./usage";
 import { quickWorktrees } from "./quick-store";
 import { shellRefusal, shellWarning, type ShellContext } from "./shell-guard";
@@ -297,7 +297,7 @@ export async function orchestratorWriteBounds(
       ...(process.env.XDG_CONFIG_HOME ? [process.env.XDG_CONFIG_HOME] : []),
       ...(process.env.PATH ?? "").split(":").filter((d) => d.startsWith("/")),
     ],
-    ownDir: orchestratorDir(session.workspace_id ?? ""),
+    ownDir: standingDir(session),
     memory: [...new Set([cwd, await physicalPath(cwd)])].map((c) =>
       path.join(os.homedir(), ".claude", "projects", mangleCwd(c), "memory")
     ),

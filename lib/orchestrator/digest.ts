@@ -42,7 +42,7 @@ export const clip = (text: string, cap = LINE_CAP) => {
 
 const sha7 = (sha: string | null) => (sha ? sha.slice(0, 7) : "?");
 
-interface Section {
+export interface Section {
   title: string;
   lines: string[];
   // Shown when the section is empty; omitted otherwise.

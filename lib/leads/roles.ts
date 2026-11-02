@@ -87,6 +87,10 @@ const SQL_ROLES = STANDING_ROLES.map((r) => `'${r}'`).join(", ");
 export const sqlStanding = (col = "role") => `${col} IN (${SQL_ROLES})`;
 export const sqlNoRole = (col = "role") => `${col} IS NULL`;
 export const sqlTech = (col = "role") => `${col} = 'orchestrator'`;
+const SQL_LEADS = STANDING_ROLES.filter((r) => LEAD[r])
+  .map((r) => `'${r}'`)
+  .join(", ");
+export const sqlLead = (col = "role") => `${col} IN (${SQL_LEADS})`;
 
 // The department a standing session heads: the orchestrator is always Tech,
 // even before its workspace adds leads; the chief heads none.

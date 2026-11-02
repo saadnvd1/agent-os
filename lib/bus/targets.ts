@@ -2,7 +2,8 @@
  * Which live session a name someone typed reaches, across workspaces.
  */
 
-import { isTechRole } from "../leads/roles";
+import { isTechRole, leadKindOf } from "../leads/roles";
+import { hasLeads } from "../leads/settings";
 import { db, type Session } from "../db";
 import { getProject } from "../projects";
 import { getWorkspace } from "../workspaces";
@@ -39,6 +40,9 @@ export function candidates(sessions: Session[]): Candidate[] {
     previousNames: old.get(s.id) ?? [],
     workspaceName: workspaceName(s),
     orchestrator: isTechRole(s.role),
+    // The orchestrator answers to "tech" only once its workspace has leads.
+    leadKind:
+      isTechRole(s.role) && !hasLeads(s.workspace_id) ? null : leadKindOf(s),
   }));
 }
 

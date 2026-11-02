@@ -22,6 +22,11 @@ import { TECH, type LeadKind } from "../leads/types";
 import { leadKindOf } from "../leads/roles";
 import { owner, ownerUi } from "../owner";
 
+const tellLead = (workspaceId: string, kind: LeadKind, line: string) =>
+  import("../leads/deliver")
+    .then((m) => m.tellLead(workspaceId, kind, line))
+    .catch((e) => console.error(`Ask answer for the ${kind} lead:`, e));
+
 export { ASK_KINDS, type AskKind } from "./ask-view";
 
 // The kinds the orchestrator raises itself; gate and brake asks come from
@@ -344,6 +349,10 @@ export function answerAsk(
   const text =
     answer.action === "reply" ? cap(answer.text, 4000) : answer.action;
   if (answer.action === "reply" && !text) throw new Error("The reply is empty");
+  // Another lead's ask is answered in its own chat; Tech's events stay
+  // exactly as they were.
+  const ownLead =
+    ask.lead_kind && ask.lead_kind !== TECH ? ask.lead_kind : null;
   const line = answerLine(
     ask,
     answer.action === "reply" ? { action: "reply", text } : answer,
@@ -354,11 +363,18 @@ export function answerAsk(
       `UPDATE orchestrator_asks SET status = ?, answer = ?, resolved_at = datetime('now') WHERE id = ?`
     ).run(STATUS_OF[answer.action], text, id);
     if (ask.kind === "passkey") settlePasskeyAsk(ask, answer.action);
-    else queueEvent(workspaceId, answerKey(id), null, line);
+    else if (!ownLead) queueEvent(workspaceId, answerKey(id), null, line);
   })();
+  if (ownLead && ask.kind !== "passkey")
+    void tellLead(workspaceId, ownLead, line);
   // An auto-approval is noted once, by recordAutoApproval.
   if (by === "saad")
-    addNote(workspaceId, `${ownerUi(true)} answered ${line}`, "ask");
+    addNote(
+      workspaceId,
+      `${ownerUi(true)} answered ${line}`,
+      "ask",
+      ownLead ?? undefined
+    );
   return getAsk(workspaceId, id)!;
 }
 
