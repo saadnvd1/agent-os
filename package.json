@@ -130,7 +130,7 @@
     "hast-util-to-mdast": "^10.1.2",
     "highlight.js": "^11.11.1",
     "lowlight": "^3.3.0",
-    "lucide-react": "^0.556.0",
+    "lucide-react": "^1.61.0",
     "mdast-util-from-markdown": "^2.1.0",
     "mdast-util-gfm": "^3.1.0",
     "mdast-util-to-markdown": "^2.2.0",
