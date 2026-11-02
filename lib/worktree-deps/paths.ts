@@ -22,13 +22,16 @@ export async function realExisting(p: string): Promise<string> {
 
 export const STAGING_SUFFIX = ".aos-partial";
 
-const EXCLUDE_LINE = `*${STAGING_SUFFIX}`;
+const STAGING_LINE = `*${STAGING_SUFFIX}`;
 
 // Staging dirs (`node_modules.aos-partial`) sit beside their target, where git
 // would list them as untracked work. Written once to the repo's shared
 // info/exclude, so it covers every worktree and no .gitignore is touched.
 // Best effort: outside a repository there is nothing to ignore it in.
-export async function ignoreStaging(dir: string): Promise<void> {
+export const ignoreStaging = (dir: string) => addExcludes(dir, [STAGING_LINE]);
+
+// Lines written once to the shared info/exclude of the repo `dir` is in.
+export async function addExcludes(dir: string, lines: string[]): Promise<void> {
   try {
     const common = (
       await git(dir, ["rev-parse", "--git-common-dir"], { timeout: 5000 })
@@ -36,10 +39,12 @@ export async function ignoreStaging(dir: string): Promise<void> {
     if (!common) return;
     const file = path.join(path.resolve(dir, common), "info", "exclude");
     const current = await fs.promises.readFile(file, "utf8").catch(() => "");
-    if (current.split(/\r?\n/).some((l) => l.trim() === EXCLUDE_LINE)) return;
+    const have = new Set(current.split(/\r?\n/).map((l) => l.trim()));
+    const missing = lines.filter((l) => !have.has(l));
+    if (!missing.length) return;
     await fs.promises.mkdir(path.dirname(file), { recursive: true });
     const lead = current && !current.endsWith("\n") ? "\n" : "";
-    await fs.promises.appendFile(file, `${lead}${EXCLUDE_LINE}\n`);
+    await fs.promises.appendFile(file, `${lead}${missing.join("\n")}\n`);
   } catch {
     // never fails a setup
   }

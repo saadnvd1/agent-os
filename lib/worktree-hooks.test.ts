@@ -188,6 +188,22 @@ describe("installWorktreeHooks", () => {
     );
     expect(commitWith(wt.worktreePath, MESSAGE)).not.toMatch(/claude/i);
   });
+
+  it("makes createWorktree exclude .agentos/ once", async () => {
+    process.env.HOME = path.join(root, "home");
+    fs.mkdirSync(process.env.HOME, { recursive: true });
+    vi.resetModules();
+    const { createWorktree } = await import("./worktrees");
+    const a = await createWorktree({ projectPath: repo, featureName: "ex-a" });
+    await createWorktree({ projectPath: repo, featureName: "ex-b" });
+    const lines = fs
+      .readFileSync(path.join(repo, ".git", "info", "exclude"), "utf-8")
+      .split("\n");
+    expect(lines.filter((l) => l === ".agentos/")).toHaveLength(1);
+    fs.mkdirSync(path.join(a.worktreePath, ".agentos"));
+    fs.writeFileSync(path.join(a.worktreePath, ".agentos", "plan.md"), "x");
+    expect(run(a.worktreePath, "status", "--porcelain")).toBe("");
+  });
 });
 
 describe("the attribution rule", () => {

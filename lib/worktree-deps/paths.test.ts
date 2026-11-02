@@ -3,7 +3,7 @@ import * as fs from "fs";
 import * as path from "path";
 import { describe, expect, it } from "vitest";
 import { tempDir } from "@/lib/test-temp";
-import { ignoreStaging } from "./paths";
+import { addExcludes, ignoreStaging } from "./paths";
 
 const sh = (cwd: string, ...args: string[]) =>
   execFileSync("git", args, { cwd, stdio: "pipe" }).toString();
@@ -33,5 +33,20 @@ describe("ignoreStaging", () => {
   it("does nothing outside a repository", async () => {
     const dir = tempDir("ig-none-");
     await expect(ignoreStaging(dir)).resolves.toBeUndefined();
+  });
+});
+
+describe("addExcludes", () => {
+  it("writes each line once and keeps existing ones", async () => {
+    const dir = tempDir("ex-");
+    sh(dir, "init", "-q", "-b", "main");
+    await addExcludes(dir, [".agentos/"]);
+    await addExcludes(dir, [".agentos/", "*.aos-partial"]);
+    await addExcludes(dir, [".agentos/"]);
+    const lines = fs
+      .readFileSync(path.join(dir, ".git", "info", "exclude"), "utf8")
+      .split("\n");
+    expect(lines.filter((l) => l === ".agentos/")).toHaveLength(1);
+    expect(lines.filter((l) => l === "*.aos-partial")).toHaveLength(1);
   });
 });

@@ -17,6 +17,7 @@ import { refuseRealStateUnderTest } from "./test-home-guard";
 import { installWorktreeHooks } from "./worktree-hooks";
 import { gitResult, isGitError, worktreeList } from "./git-exec";
 import { addWorktree } from "./worktree-add";
+import { addExcludes } from "./worktree-deps/paths";
 import {
   markRemoving,
   removalKey,
@@ -172,6 +173,8 @@ export async function createWorktree(
           err
         )
       );
+      // Task state (the plan) must never be committed from a worktree.
+      await addExcludes(worktreePath, [".agentos/"]);
       return {
         worktreePath,
         branchName,

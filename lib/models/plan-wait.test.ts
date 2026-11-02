@@ -1,5 +1,6 @@
 import fs from "fs";
 import path from "path";
+import { execFileSync } from "child_process";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 const { retireChat } = vi.hoisted(() => ({
@@ -266,5 +267,31 @@ describe("planning prompt", () => {
     expect(planPrompt("X")).toContain(
       "Don't end your turn while subagents or background commands you started are still running"
     );
+  });
+});
+
+describe("a plan file left over from the base branch", () => {
+  it("is refused, asked for once, then never read as the plan", async () => {
+    const { id, worktree } = task(false);
+    const git = (...a: string[]) =>
+      execFileSync("git", a, { cwd: worktree, stdio: "pipe" });
+    git("init", "-q", "-b", "main");
+    git("config", "user.email", "t@example.test");
+    git("config", "user.name", "t");
+    writePlan(worktree);
+    git("add", "-f", "-A");
+    git("commit", "-q", "-m", "old plan");
+    const send = vi.fn(async () => {});
+    await handoffAfterPlan(id, send);
+    expect(phase(id)).toBe("planning");
+    expect(send).toHaveBeenCalledTimes(1);
+    await handoffAfterPlan(id, send);
+    expect(phase(id)).toBe("implementing");
+    const line = eventLines(id)[0];
+    expect(line).toContain("no usable plan");
+    expect(line).toContain("stale");
+    expect(line).not.toContain("a.ts");
+    const queued = listQueue(id).find((m) => m.id === implementMessageId(id));
+    expect(queued?.text).toContain("No plan was written");
   });
 });
