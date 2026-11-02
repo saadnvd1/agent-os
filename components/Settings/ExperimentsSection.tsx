@@ -1,10 +1,10 @@
 "use client";
 
 import { useState } from "react";
-import { toast } from "sonner";
 import { ArrowLeft } from "lucide-react";
 import { Button } from "@/components/ui/button";
-import { SettingToggle } from "@/components/Settings/SettingToggle";
+import { SettingSection } from "@/components/Settings/SettingRow";
+import { SwitchSetting } from "@/components/Settings/settings-fields";
 import { formatTokens } from "@/lib/chat/context";
 import {
   useExperimentDetailQuery,
@@ -194,31 +194,30 @@ export function ExperimentsSection() {
         work while off, and shows what it costs here.
       </p>
       {data.experiments.map((e) => (
-        <div key={e.id} className="space-y-2">
-          <SettingToggle
-            title={`${e.name} · ${e.status === "beta" ? "Beta" : "Experimental"}`}
-            detail={e.description}
+        <SettingSection key={e.id}>
+          <SwitchSetting
+            id={`experiment-${e.id}`}
+            label={`${e.name} · ${e.status === "beta" ? "Beta" : "Experimental"}`}
+            help={e.description}
             checked={e.on}
             locked={data.locked}
-            onChange={(on) =>
-              set.mutate(
-                { id: e.id, on },
-                { onError: (err) => toast.error(err.message) }
-              )
+            defaultValue={false}
+            onSave={(on) => set.mutateAsync({ id: e.id, on })}
+            extra={
+              <div className="px-1 pb-1">
+                <Usage e={e} />
+                <Button
+                  variant="link"
+                  size="sm"
+                  className="min-h-11 px-0 md:min-h-0"
+                  onClick={() => setOpen(e.id)}
+                >
+                  Details
+                </Button>
+              </div>
             }
           />
-          <div className="px-3">
-            <Usage e={e} />
-            <Button
-              variant="link"
-              size="sm"
-              className="min-h-11 px-0 md:min-h-0"
-              onClick={() => setOpen(e.id)}
-            >
-              Details
-            </Button>
-          </div>
-        </div>
+        </SettingSection>
       ))}
     </div>
   );

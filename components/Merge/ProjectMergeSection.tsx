@@ -35,14 +35,10 @@ export function ProjectMergeSection({
           inherited={data.inherited}
           from={data.inherited.from}
           allowed={data.allowed}
-          disabled={update.isPending}
-          onChange={(s) => update.mutate(s)}
+          idPrefix={`merge-${projectId}`}
+          onSave={(s) => update.mutateAsync(s)}
         />
       )}
-      {update.isError && (
-        <p className="text-destructive text-sm">{update.error.message}</p>
-      )}
-      <p className="text-muted-foreground text-xs">Saved as you change them.</p>
       <ProjectSweepSection projectId={projectId} />
     </div>
   );

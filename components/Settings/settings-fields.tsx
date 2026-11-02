@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useState, type ReactNode } from "react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import {
@@ -13,6 +13,7 @@ import {
 import { Switch } from "@/components/ui/switch";
 import { useAutoSave } from "@/hooks/useAutoSave";
 import { parseSettingNumber } from "@/lib/settings/parse";
+import { InlineConfirm } from "./InlineConfirm";
 import { SettingRow } from "./SettingRow";
 
 type Save<T> = (next: T) => Promise<unknown>;
@@ -30,6 +31,8 @@ export function SwitchSetting({
   confirm,
   confirmLabel = "Turn on",
   undoable,
+  locked,
+  extra,
 }: {
   id: string;
   label: string;
@@ -40,6 +43,10 @@ export function SwitchSetting({
   confirm?: string;
   confirmLabel?: string;
   undoable?: boolean;
+  // Can't be changed from here.
+  locked?: boolean;
+  // Shown under the row (usage, links).
+  extra?: ReactNode;
 }) {
   const auto = useAutoSave({ saved: checked, save: onSave });
   const [asking, setAsking] = useState(false);
@@ -47,7 +54,7 @@ export function SwitchSetting({
     <SettingRow
       id={id}
       label={label}
-      help={help}
+      help={locked ? `${help ?? ""} Can't be changed from here.`.trim() : help}
       status={auto.status}
       onUndo={auto.undo}
       hint={
@@ -65,6 +72,7 @@ export function SwitchSetting({
         <Switch
           id={id}
           checked={auto.value}
+          disabled={locked}
           aria-describedby={`${id}-hint`}
           className="data-[state=checked]:bg-primary"
           onCheckedChange={(on) => {
@@ -74,35 +82,22 @@ export function SwitchSetting({
         />
       }
       below={
-        asking && (
-          <div
-            role="alertdialog"
-            aria-label={`Turn on ${label}`}
-            className="bg-destructive/10 my-1 space-y-2 rounded-lg px-3 py-2 text-sm"
-          >
-            <p>{confirm}</p>
-            <div className="flex gap-2">
-              <Button
-                size="sm"
-                variant="destructive"
-                className="h-11 sm:h-9"
-                onClick={() => {
+        (asking || extra) && (
+          <>
+            {extra}
+            {asking && confirm && (
+              <InlineConfirm
+                label={`Turn on ${label}`}
+                message={confirm}
+                confirmLabel={confirmLabel}
+                onConfirm={() => {
                   setAsking(false);
                   void auto.commit(true, { undoable: true });
                 }}
-              >
-                {confirmLabel}
-              </Button>
-              <Button
-                size="sm"
-                variant="ghost"
-                className="h-11 sm:h-9"
-                onClick={() => setAsking(false)}
-              >
-                Cancel
-              </Button>
-            </div>
-          </div>
+                onCancel={() => setAsking(false)}
+              />
+            )}
+          </>
         )
       }
     />
@@ -261,6 +256,7 @@ export function SelectSetting({
   options,
   onSave,
   defaultValue,
+  hint,
 }: {
   id: string;
   label: string;
@@ -269,6 +265,8 @@ export function SelectSetting({
   options: { value: string; label: string }[];
   onSave: Save<string>;
   defaultValue?: string;
+  // Replaces "default <label>" (an empty string for none).
+  hint?: string;
 }) {
   const auto = useAutoSave({ saved: value, save: onSave });
   const def = options.find((o) => o.value === defaultValue);
@@ -279,7 +277,7 @@ export function SelectSetting({
       help={help}
       status={auto.status}
       onUndo={auto.undo}
-      hint={def ? `default ${def.label}` : undefined}
+      hint={hint ?? (def ? `default ${def.label}` : undefined)}
       onReset={
         defaultValue !== undefined && auto.value !== defaultValue
           ? () => void auto.commit(defaultValue, { undoable: true })
@@ -305,7 +303,9 @@ export function SelectSetting({
 
 /**
  * Text, saved on blur or Enter after `validate` (sync or async) says it's
- * fine. With `secret`, nothing saves on blur: an explicit button does.
+ * fine. With `secret` or `explicit`, nothing saves on blur: Enter or the
+ * button does (a save that asks for a passkey must be deliberate). `secret`
+ * also hides what's typed.
  */
 export function TextSetting({
   id,
@@ -319,6 +319,9 @@ export function TextSetting({
   buttonLabel = "Save",
   defaultValue = "",
   maxLength,
+  explicit,
+  resettable = true,
+  after,
 }: {
   id: string;
   label: string;
@@ -331,7 +334,13 @@ export function TextSetting({
   buttonLabel?: string;
   defaultValue?: string;
   maxLength?: number;
+  explicit?: boolean;
+  // Offer Reset while the value differs from `defaultValue`.
+  resettable?: boolean;
+  // Extra controls beside the input, such as a delete button.
+  after?: ReactNode;
 }) {
+  const deliberate = secret || explicit;
   const auto = useAutoSave({ saved: value, save: onSave });
   const [text, setText] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -360,7 +369,7 @@ export function TextSetting({
       error={error}
       onUndo={auto.undo}
       onReset={
-        !secret && auto.value !== defaultValue
+        resettable && !secret && auto.value !== defaultValue
           ? () => {
               setText(null);
               setError(null);
@@ -384,11 +393,11 @@ export function TextSetting({
               if (error) setError(null);
             }}
             onBlur={() => {
-              if (!secret) void finish();
+              if (!deliberate) void finish();
             }}
             onKeyDown={(e) => {
               if (e.key === "Enter") {
-                if (secret) void finish();
+                if (deliberate) void finish();
                 else e.currentTarget.blur();
               }
               if (e.key === "Escape") {
@@ -399,7 +408,7 @@ export function TextSetting({
             }}
             className={`${FIELD} w-full sm:w-64`}
           />
-          {secret && (
+          {deliberate && (
             <Button
               type="button"
               size="sm"
@@ -410,6 +419,7 @@ export function TextSetting({
               {buttonLabel}
             </Button>
           )}
+          {after}
         </>
       }
     />

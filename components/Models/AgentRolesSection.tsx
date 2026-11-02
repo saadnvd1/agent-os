@@ -7,6 +7,7 @@ import { useWorkspacesQuery } from "@/data/workspaces";
 import type { RoleMap } from "@/lib/models/config";
 import type { RoleScope } from "@/lib/models/agent-roles-view";
 import { cn } from "@/lib/utils";
+import { SettingSection } from "@/components/Settings/SettingRow";
 import { AgentRoleCard } from "./AgentRoleCard";
 
 const SCOPES: { id: RoleScope; label: string }[] = [
@@ -44,13 +45,13 @@ export function AgentRolesSection() {
     const roles: RoleMap = { ...saved("value") };
     if (ref) roles[modelRole as keyof RoleMap] = ref;
     else delete roles[modelRole as keyof RoleMap];
-    save.mutate({ roles });
+    return save.mutateAsync({ roles });
   };
   const setFallback = (modelRole: string, ref: string | null) => {
     const fallbacks: RoleMap = { ...saved("fallback") };
     if (ref) fallbacks[modelRole as keyof RoleMap] = ref;
     else delete fallbacks[modelRole as keyof RoleMap];
-    save.mutate({ roles: saved("value"), fallbacks });
+    return save.mutateAsync({ roles: saved("value"), fallbacks });
   };
 
   return (
@@ -111,22 +112,18 @@ export function AgentRolesSection() {
       ) : isError ? (
         <p className="text-destructive text-sm">{error.message}</p>
       ) : data ? (
-        <ul className="space-y-2.5">
+        <SettingSection>
           {data.roles.map((r) => (
             <AgentRoleCard
               key={r.id}
               role={r}
               scope={scope}
-              pending={save.isPending}
               onChange={(ref) => setRole(r.modelRole, ref)}
               onFallback={(ref) => setFallback(r.modelRole, ref)}
             />
           ))}
-        </ul>
+        </SettingSection>
       ) : null}
-      {save.isError && (
-        <p className="text-destructive text-xs">{save.error.message}</p>
-      )}
     </div>
   );
 }

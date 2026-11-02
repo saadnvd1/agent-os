@@ -1,6 +1,7 @@
 "use client";
 
-import { SettingToggle } from "@/components/Settings/SettingToggle";
+import { SettingSection } from "@/components/Settings/SettingRow";
+import { SwitchSetting } from "@/components/Settings/settings-fields";
 import { useProjectsQuery, useUpdateProject } from "@/data/projects";
 
 // A workspace's projects, each switched between production (every merge gate)
@@ -13,21 +14,22 @@ export function ProjectTiersForm({ workspaceId }: { workspaceId: string }) {
   );
   if (!mine.length) return null;
   return (
-    <div className="space-y-2">
+    <SettingSection>
       {mine.map((p) => (
-        <SettingToggle
+        <SwitchSetting
           key={p.id}
-          title={`${p.name}: production`}
-          detail="On: CI, the independent review and scope gate its merges. Off (fast): a task's PR merges as soon as it opens."
+          id={`tier-${p.id}`}
+          label={`${p.name}: production`}
+          help="On: CI, the independent review and scope gate its merges. Off (fast): a task's PR merges as soon as it opens."
           checked={p.tier === "production"}
-          onChange={(on) =>
-            update.mutate({
+          onSave={(on) =>
+            update.mutateAsync({
               projectId: p.id,
               tier: on ? "production" : "fast",
             })
           }
         />
       ))}
-    </div>
+    </SettingSection>
   );
 }

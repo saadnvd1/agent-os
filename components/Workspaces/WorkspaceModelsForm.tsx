@@ -1,6 +1,8 @@
 "use client";
 
 import { useState } from "react";
+import { PickerSetting } from "@/components/Settings/PickerSetting";
+import { SettingSection } from "@/components/Settings/SettingRow";
 import { ModelSelect } from "@/components/Models/ModelSelect";
 import {
   useModelsQuery,
@@ -37,34 +39,33 @@ export function WorkspaceModelsForm({ workspaceId }: { workspaceId: string }) {
         {open ? "▴" : "▾"}
       </button>
       {open && (
-        <ul className="space-y-2">
+        <SettingSection>
           {WORKSPACE_ROLES.map((role) => (
-            <li key={role} className="space-y-1">
-              <label
-                htmlFor={`ws-${workspaceId}-${role}`}
-                className="text-muted-foreground block text-xs"
-              >
-                {ROLE_LABELS[role].label}
-              </label>
-              <ModelSelect
-                id={`ws-${workspaceId}-${role}`}
-                value={roles[role] ?? null}
-                effective={models.data?.effective}
-                inheritLabel={`As Settings (${models.data?.effective.roles[role] ?? "…"})`}
-                disabled={update.isPending || !models.data}
-                onChange={(ref) => {
-                  const next = { ...roles };
-                  if (ref) next[role] = ref;
-                  else delete next[role];
-                  update.mutate({ roles: next });
-                }}
-              />
-            </li>
+            <PickerSetting<string | null>
+              key={role}
+              id={`ws-${workspaceId}-${role}`}
+              label={ROLE_LABELS[role].label}
+              value={roles[role] ?? null}
+              defaultValue={null}
+              onSave={(ref) => {
+                const next = { ...roles };
+                if (ref) next[role] = ref;
+                else delete next[role];
+                return update.mutateAsync({ roles: next });
+              }}
+              render={({ value, commit }) => (
+                <ModelSelect
+                  id={`ws-${workspaceId}-${role}`}
+                  value={value}
+                  effective={models.data?.effective}
+                  inheritLabel={`As Settings (${models.data?.effective.roles[role] ?? "…"})`}
+                  disabled={!models.data}
+                  onChange={commit}
+                />
+              )}
+            />
           ))}
-        </ul>
-      )}
-      {update.isError && (
-        <p className="text-destructive text-xs">{update.error.message}</p>
+        </SettingSection>
       )}
     </div>
   );

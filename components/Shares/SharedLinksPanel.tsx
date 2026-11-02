@@ -1,5 +1,6 @@
 "use client";
 
+import { useState } from "react";
 import { toast } from "sonner";
 import { Copy, Link2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
@@ -11,6 +12,7 @@ import {
 } from "@/data/shares";
 import { useAllLiveShares, useEndLive, type LiveView } from "@/data/live";
 import { cn } from "@/lib/utils";
+import { InlineConfirm } from "@/components/Settings/InlineConfirm";
 import { SessionAnchor } from "@/components/Chat/SessionAnchor";
 
 const when = (iso: string) =>
@@ -23,6 +25,7 @@ const when = (iso: string) =>
 function Row({ share }: { share: SharedLinkRow }) {
   const revoke = useRevokeShare();
   const live = share.status === "active";
+  const [revoking, setRevoking] = useState(false);
 
   const copy = async () => {
     try {
@@ -33,12 +36,7 @@ function Row({ share }: { share: SharedLinkRow }) {
     }
   };
   const onRevoke = () => {
-    if (
-      !window.confirm(
-        "Revoke this link? The page is deleted from Connect and the link stops working."
-      )
-    )
-      return;
+    setRevoking(false);
     revoke.mutate(share.id, {
       onError: (err) => toast.error((err as Error).message),
     });
@@ -54,57 +52,68 @@ function Row({ share }: { share: SharedLinkRow }) {
     );
 
   return (
-    <li className="bg-muted/40 flex flex-col gap-2 rounded-lg px-3 py-2.5 sm:flex-row sm:items-center">
-      <div className="min-w-0 flex-1">
-        <div className="truncate text-sm font-medium">{title}</div>
-        <div className="text-muted-foreground flex flex-wrap gap-x-3 text-xs">
-          <span>{share.kind === "chat" ? "Chat" : "Page"}</span>
-          {share.kind === "artifact" && (
+    <li className="bg-muted/40 rounded-lg px-3 py-2.5">
+      <div className="flex flex-col gap-2 sm:flex-row sm:items-center">
+        <div className="min-w-0 flex-1">
+          <div className="truncate text-sm font-medium">{title}</div>
+          <div className="text-muted-foreground flex flex-wrap gap-x-3 text-xs">
+            <span>{share.kind === "chat" ? "Chat" : "Page"}</span>
+            {share.kind === "artifact" && (
+              <span>
+                {share.follow
+                  ? `Follows latest${share.version ? ` · now v${share.version}` : ""}`
+                  : `pinned${share.version ? ` v${share.version}` : ""}`}
+              </span>
+            )}
+            <span>Created {when(share.createdAt)}</span>
             <span>
-              {share.follow
-                ? `Follows latest${share.version ? ` · now v${share.version}` : ""}`
-                : `pinned${share.version ? ` v${share.version}` : ""}`}
+              {share.status === "revoked"
+                ? "Revoked"
+                : share.status === "expired"
+                  ? "Expired"
+                  : share.expiresAt
+                    ? `Expires ${when(share.expiresAt)}`
+                    : "Never expires"}
             </span>
-          )}
-          <span>Created {when(share.createdAt)}</span>
-          <span>
-            {share.status === "revoked"
-              ? "Revoked"
-              : share.status === "expired"
-                ? "Expired"
-                : share.expiresAt
-                  ? `Expires ${when(share.expiresAt)}`
-                  : "Never expires"}
-          </span>
-          <span>
-            {share.views === null
-              ? "Views unavailable"
-              : `${share.views} ${share.views === 1 ? "view" : "views"}`}
-          </span>
+            <span>
+              {share.views === null
+                ? "Views unavailable"
+                : `${share.views} ${share.views === 1 ? "view" : "views"}`}
+            </span>
+          </div>
+        </div>
+        <div className="flex shrink-0 gap-2">
+          <Button
+            variant="outline"
+            className={cn("min-h-11 sm:min-h-8", !live && "invisible")}
+            onClick={copy}
+            disabled={!live}
+          >
+            <Copy className="h-4 w-4" />
+            Copy link
+          </Button>
+          <Button
+            variant="outline"
+            className={cn(
+              "text-destructive min-h-11 sm:min-h-8",
+              !live && "invisible"
+            )}
+            onClick={() => setRevoking(true)}
+            disabled={!live || revoke.isPending}
+          >
+            Revoke
+          </Button>
         </div>
       </div>
-      <div className="flex shrink-0 gap-2">
-        <Button
-          variant="outline"
-          className={cn("min-h-11 sm:min-h-8", !live && "invisible")}
-          onClick={copy}
-          disabled={!live}
-        >
-          <Copy className="h-4 w-4" />
-          Copy link
-        </Button>
-        <Button
-          variant="outline"
-          className={cn(
-            "text-destructive min-h-11 sm:min-h-8",
-            !live && "invisible"
-          )}
-          onClick={onRevoke}
-          disabled={!live || revoke.isPending}
-        >
-          Revoke
-        </Button>
-      </div>
+      {revoking && (
+        <InlineConfirm
+          label="Revoke link"
+          message="Revoke this link? The page is deleted from Connect and the link stops working."
+          confirmLabel="Revoke"
+          onConfirm={onRevoke}
+          onCancel={() => setRevoking(false)}
+        />
+      )}
     </li>
   );
 }
