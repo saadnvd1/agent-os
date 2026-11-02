@@ -5,6 +5,8 @@ import { Input } from "@/components/ui/input";
 import { useSetSweepDays, useWorktreeSweep } from "@/data/worktree-sweep";
 import { compactTimeAgo, fromSqliteTime } from "@/lib/session-meta";
 import { formatBytes } from "@/lib/share/view";
+import { parseSettingNumber } from "@/lib/settings/parse";
+import { MAX_SWEEP_DAYS } from "@/lib/worktree-sweep/limits";
 
 // Days as the box shows them; empty means "inherit".
 function DaysInput({
@@ -19,24 +21,48 @@ function DaysInput({
   onSave: (days: number | null) => void;
 }) {
   const [text, setText] = useState(value === null ? "" : String(value));
+  const [error, setError] = useState<string | null>(null);
   const commit = () => {
     const raw = text.trim();
-    const next = raw === "" ? null : Number(raw);
-    if (next === value || (next !== null && !Number.isInteger(next))) return;
-    onSave(next);
+    let next: number | null = null;
+    if (raw !== "") {
+      const parsed = parseSettingNumber(raw, { min: 0, max: MAX_SWEEP_DAYS });
+      if ("error" in parsed) return setError(parsed.error);
+      next = parsed.value;
+    }
+    setError(null);
+    if (next !== value) onSave(next);
   };
   return (
-    <Input
-      aria-label="Days before a settled worktree is removed"
-      inputMode="numeric"
-      value={text}
-      placeholder={placeholder}
-      disabled={disabled}
-      onChange={(e) => setText(e.target.value)}
-      onBlur={commit}
-      onKeyDown={(e) => e.key === "Enter" && e.currentTarget.blur()}
-      className="h-11 w-24 text-right tabular-nums md:h-9"
-    />
+    <span className="flex flex-col gap-1">
+      <Input
+        aria-label="Days before a settled worktree is removed"
+        aria-invalid={!!error}
+        inputMode="numeric"
+        value={text}
+        placeholder={placeholder}
+        disabled={disabled}
+        onChange={(e) => {
+          setText(e.target.value);
+          setError(null);
+        }}
+        onBlur={commit}
+        onKeyDown={(e) => {
+          if (e.key === "Enter") e.currentTarget.blur();
+          if (e.key === "Escape") {
+            setText(value === null ? "" : String(value));
+            setError(null);
+            e.currentTarget.blur();
+          }
+        }}
+        className="h-11 w-24 text-right tabular-nums md:h-9"
+      />
+      {error && (
+        <span role="alert" className="text-destructive text-xs">
+          {error}
+        </span>
+      )}
+    </span>
   );
 }
 

@@ -87,6 +87,9 @@ export function useUpdateWorkspace() {
       ...updates
     }) => {
       await queryClient.cancelQueries({ queryKey: workspaceKeys.list() });
+      const previous = queryClient.getQueryData<Workspace[]>(
+        workspaceKeys.list()
+      );
       queryClient.setQueryData<Workspace[]>(workspaceKeys.list(), (prev) =>
         prev?.map((w) =>
           w.id === id
@@ -109,6 +112,12 @@ export function useUpdateWorkspace() {
             : w
         )
       );
+      return { previous };
+    },
+    // A rejected change rolls back to what the server holds.
+    onError: (_err, _vars, context) => {
+      if (context?.previous)
+        queryClient.setQueryData(workspaceKeys.list(), context.previous);
     },
     onSettled: () =>
       queryClient.invalidateQueries({ queryKey: workspaceKeys.all }),

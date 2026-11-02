@@ -1,6 +1,8 @@
+import { SETTING_DEFAULTS } from "../settings/defaults";
+
 // The Away window's bounds, in minutes, for the server (./activity) and
 // the Settings form alike. Client-safe: no database.
-export const DEFAULT_WINDOW_MINUTES = 60;
+export const DEFAULT_WINDOW_MINUTES = SETTING_DEFAULTS.awayWindowMinutes;
 export const MIN_WINDOW_MINUTES = 10;
 export const MAX_WINDOW_MINUTES = 24 * 60;
 

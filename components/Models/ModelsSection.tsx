@@ -1,7 +1,7 @@
 "use client";
 
 import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
+import { PriceInput } from "./PriceInput";
 import { SettingToggle } from "@/components/Settings/SettingToggle";
 import { useModelsQuery, useUpdateModels } from "@/data/models";
 import type { ModelSettings } from "@/lib/models/config";
@@ -169,28 +169,17 @@ export function ModelsSection() {
                   <td className="py-1 pr-2 font-mono">{ref}</td>
                   {PRICE_FIELDS.map((f) => (
                     <td key={f.key} className="py-1 pr-2">
-                      <Input
-                        type="number"
-                        min={0}
-                        step="0.001"
-                        defaultValue={price[f.key]}
-                        aria-label={`${ref} ${f.label}`}
-                        className="h-11 w-20 tabular-nums md:h-8"
-                        onBlur={(e) => {
-                          const v = Number(e.target.value);
-                          if (
-                            !Number.isFinite(v) ||
-                            v < 0 ||
-                            v === price[f.key]
-                          )
-                            return;
+                      <PriceInput
+                        label={`${ref} ${f.label}`}
+                        value={price[f.key]}
+                        onSave={(v) =>
                           save({
                             prices: {
                               ...saved.prices,
                               [ref]: { ...price, [f.key]: v },
                             },
-                          });
-                        }}
+                          })
+                        }
                       />
                     </td>
                   ))}

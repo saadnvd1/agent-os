@@ -10,6 +10,9 @@ export async function GET() {
   return NextResponse.json(refreshSettings());
 }
 
+// One field at a time, or several: only those named change.
+export const PATCH = PUT;
+
 export async function PUT(request: NextRequest) {
   try {
     const body = await request.json();

@@ -6,7 +6,7 @@
  * default: its state is in the database and its brief carries it
  * (lib/orchestrator/digest). A task keeps its progress only in its
  * conversation and its branch, so for tasks it's off unless switched on.
- * App-wide, in Settings → Workspaces, with the two sizes at which chats and
+ * App-wide, in Settings → Context, with the two sizes at which chats and
  * tasks compact: mid-turn (Claude Code itself, high so a job keeps its
  * files) and between turns (lib/chat/stale, earlier, nothing in flight).
  */
@@ -15,24 +15,28 @@ import { db } from "../db";
 import { effectiveModels } from "../models/config";
 import { type ModelRole } from "../models/roles";
 import { sessionRole } from "../models/session-role";
+import { SETTING_DEFAULTS } from "../settings/defaults";
 import { MAX_REFRESH_TOKENS, MIN_REFRESH_TOKENS } from "./refresh-limits";
 
 export const ORCHESTRATOR_KEY = "orchestrator.refresh_tokens";
 export const TASK_KEY = "chat.task_refresh_tokens";
 // Named for what it first did: compact chats idle past their cache.
 export const COMPACT_KEY = "chat.stale_compact_tokens";
-export const DEFAULT_ORCHESTRATOR_TOKENS = 200_000;
-export const DEFAULT_COMPACT_TOKENS = 150_000;
+export const DEFAULT_ORCHESTRATOR_TOKENS =
+  SETTING_DEFAULTS.fresh.orchestratorTokens;
+export const DEFAULT_COMPACT_TOKENS = SETTING_DEFAULTS.fresh.compactTokens;
 // Claude Code's own mid-turn auto-compact window: high, because a summary
 // mid-job costs the agent its files and its place.
 export const AUTO_COMPACT_KEY = "chat.auto_compact_tokens";
-export const DEFAULT_AUTO_COMPACT_TOKENS = 300_000;
+export const DEFAULT_AUTO_COMPACT_TOKENS =
+  SETTING_DEFAULTS.fresh.autoCompactTokens;
 // The same window for a person's own (interactive) sessions, which run long
 // on the biggest model. 300k (DEFAULT_AUTO_COMPACT_TOKENS) was its value
 // before it had its own setting: set it back to restore that.
 export const INTERACTIVE_AUTO_COMPACT_KEY =
   "chat.interactive_auto_compact_tokens";
-export const DEFAULT_INTERACTIVE_AUTO_COMPACT_TOKENS = 300_000;
+export const DEFAULT_INTERACTIVE_AUTO_COMPACT_TOKENS =
+  SETTING_DEFAULTS.fresh.interactiveAutoCompactTokens;
 export { MIN_REFRESH_TOKENS, MAX_REFRESH_TOKENS } from "./refresh-limits";
 
 export interface RefreshSettings {
@@ -60,7 +64,7 @@ function read(key: string, fallback: number): number {
 export function refreshSettings(): RefreshSettings {
   return {
     orchestratorTokens: read(ORCHESTRATOR_KEY, DEFAULT_ORCHESTRATOR_TOKENS),
-    taskTokens: read(TASK_KEY, 0),
+    taskTokens: read(TASK_KEY, SETTING_DEFAULTS.fresh.taskTokens),
     compactTokens: read(COMPACT_KEY, DEFAULT_COMPACT_TOKENS),
     autoCompactTokens: read(AUTO_COMPACT_KEY, DEFAULT_AUTO_COMPACT_TOKENS),
     interactiveAutoCompactTokens: read(

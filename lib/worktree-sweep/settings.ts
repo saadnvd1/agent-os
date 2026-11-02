@@ -5,10 +5,12 @@
 
 import { z } from "zod";
 import { db } from "../db";
+import { SETTING_DEFAULTS } from "../settings/defaults";
+import { MAX_SWEEP_DAYS } from "./limits";
 import type { ResolvedDays } from "./types";
 
-export const DEFAULT_SWEEP_DAYS = 7;
-export const MAX_SWEEP_DAYS = 365;
+export const DEFAULT_SWEEP_DAYS = SETTING_DEFAULTS.sweepDays;
+export { MAX_SWEEP_DAYS } from "./limits";
 
 const GLOBAL_KEY = "worktree_sweep";
 const projectKey = (projectId: string) => `worktree_sweep.project.${projectId}`;
