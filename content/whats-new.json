@@ -2135,6 +2135,14 @@
       "area": "AgentOS",
       "text": "You can now pick the agent and model when starting a session or task from the command line.",
       "url": "https://github.com/saadnvd1/agent-os/pull/598"
+    },
+    {
+      "id": 599,
+      "date": "2026-11-03",
+      "kind": "fixed",
+      "area": "Done shelf",
+      "text": "Sessions you mark done no longer show up as available to other sessions or keep sending messages.",
+      "url": "https://github.com/saadnvd1/agent-os/pull/599"
     }
   ]
 }
