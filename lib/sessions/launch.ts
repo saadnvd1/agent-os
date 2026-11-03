@@ -63,6 +63,8 @@ export interface LaunchInput {
   workingDirectory?: string | null;
   agentType: AgentType;
   model?: string | null;
+  // Reasoning effort, for an agent that takes one.
+  effort?: string | null;
   // What a chat may do without asking; "full" also starts a terminal
   // agent with its own skip-permissions flag.
   access?: ChatAccess;
@@ -378,6 +380,11 @@ async function launch(input: LaunchInput, id: string): Promise<Launched> {
       parent: input.parentSessionId,
     });
   if (input.groupId) fileInGroup(id, input.groupId);
+  if (input.effort)
+    db.prepare(`UPDATE sessions SET effort = ? WHERE id = ?`).run(
+      input.effort,
+      id
+    );
   if (interactive) setSessionModel(id, interactive);
   if (input.access)
     db.prepare(`UPDATE sessions SET chat_access = ? WHERE id = ?`).run(

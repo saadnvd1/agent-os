@@ -162,6 +162,8 @@ export async function createTask(opts: {
   // default model unless `model` names one, without plan-first or role
   // models: those are Claude Code's.
   agent?: AgentType;
+  // Reasoning effort for that agent, when it takes one.
+  effort?: string;
   // Called once the session row exists, before the agent launches.
   onCreated?: (sessionId: string) => void;
   // Run it on this machine (another one's own AgentOS); default: the project's.
@@ -377,13 +379,14 @@ async function startTask(
       .run(wt.worktreePath, wt.branchName, baseBranch, null, id);
     // Everything the launch needs is on the row, so a restart can resume it.
     db.prepare(
-      `UPDATE sessions SET setup_status = 'running', name_source = ?, view = ?, model_provider = ? WHERE id = ?`
+      `UPDATE sessions SET setup_status = 'running', name_source = ?, view = ?, model_provider = ?, effort = ? WHERE id = ?`
     ).run(
       naming.source,
       view,
       routing.first.provider.id === ANTHROPIC
         ? null
         : routing.first.provider.id,
+      agent === "claude" ? null : (opts.effort ?? null),
       id
     );
     setTask(db, id, {

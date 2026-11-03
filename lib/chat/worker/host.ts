@@ -243,6 +243,7 @@ export class ChatHost {
       cwd,
       model:
         session.model?.trim() || resolveModelForAgent(session.agent_type, null),
+      effort: session.effort,
       resumeId: session.claude_session_id,
       resumeAt: session.chat_resume_at,
       access: effectiveChatAccess(session.chat_access ?? "full"),

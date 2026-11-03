@@ -9,6 +9,7 @@ interface Opts {
   agentType?: string;
   model?: unknown;
   agentRole?: string;
+  effort?: string;
 }
 const tasks: Opts[] = [];
 const chats: Opts[] = [];
@@ -91,5 +92,37 @@ describe("/api/bus/spawn agent", () => {
     const terminal = await post({ agent: "codex", view: "terminal" });
     expect((await terminal.json()).error).toMatch(/--terminal/);
     expect(chats).toHaveLength(0);
+  });
+
+  it("passes a level the agent lists to a chat and a task", async () => {
+    const res = await post({ agent: "copilot", effort: "xhigh" });
+    expect(res.status).toBe(201);
+    await post({ mode: "task", agent: "copilot", effort: "low" });
+    expect(chats[0].effort).toBe("xhigh");
+    expect(tasks[0].effort).toBe("low");
+  });
+
+  it("sends no effort when none is given", async () => {
+    await post({ agent: "copilot" });
+    expect(chats[0].effort).toBeUndefined();
+  });
+
+  it("refuses effort with a role, a plain claude, codex or a bad level", async () => {
+    const msg = async (b: object) => (await post(b)).json();
+    expect((await msg({ effort: "high", agentRole: "analyst" })).error).toMatch(
+      /--effort doesn't work with --role/
+    );
+    expect((await msg({ effort: "high" })).error).toMatch(/no effort levels/);
+    expect((await msg({ agent: "codex", effort: "high" })).error).toMatch(
+      /no effort levels/
+    );
+    expect((await msg({ agent: "copilot", effort: "ultra" })).error).toMatch(
+      /minimal, low, medium/
+    );
+    expect(
+      (await msg({ mode: "task", agent: "codex", effort: "high" })).error
+    ).toMatch(/no effort levels/);
+    expect(chats).toHaveLength(0);
+    expect(tasks).toHaveLength(0);
   });
 });

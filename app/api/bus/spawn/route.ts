@@ -6,6 +6,7 @@ import { isPriority } from "@/lib/tasks/schedule-types";
 import { hostIdNamed } from "@/lib/hosts";
 import { resolveGroup } from "@/lib/session-groups";
 import { launchSession, startView } from "@/lib/sessions/launch";
+import { effortRefusal } from "@/lib/providers/effort";
 import { isValidAgentType } from "@/lib/providers";
 import { isAgentRole } from "@/lib/models/agent-roles";
 import { callerSession, starterOf } from "@/lib/tasks/starter";
@@ -39,6 +40,7 @@ export async function POST(request: NextRequest) {
       group,
       agentRole,
       agent,
+      effort,
     } = await request.json();
     // Whoever called: a session (by `from`, else the worktree it runs in) or a person.
     const starter = starterOf(
@@ -65,6 +67,10 @@ export async function POST(request: NextRequest) {
       throw new Error("--agent doesn't work with --role");
     if (agent !== undefined && startView(view) === "terminal")
       throw new Error("--agent doesn't work with --terminal");
+    if (effort !== undefined && agentRole !== undefined)
+      throw new Error("--effort doesn't work with --role");
+    const refused = effortRefusal(agent ?? "claude", effort);
+    if (refused) throw new Error(refused);
     const target = findProject(String(project ?? ""));
     if (group !== undefined && (typeof group !== "string" || !group.trim()))
       throw new Error("--group needs a group name");
@@ -91,6 +97,7 @@ export async function POST(request: NextRequest) {
         name: given,
         agent: agent && agent !== "claude" ? agent : undefined,
         model,
+        effort,
         hostId: on ? hostIdNamed(String(on)) : undefined,
         view: startView(view),
         groupId,
@@ -143,6 +150,7 @@ export async function POST(request: NextRequest) {
       prompt,
       name: given,
       model: typeof model === "string" ? model : null,
+      effort,
       autoApprove: true,
       startedBy,
       startedVia: starter.startedVia,

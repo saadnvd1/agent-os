@@ -29,6 +29,7 @@ export interface QueueRow {
   // The user's group it joins when it starts (lib/session-groups).
   session_group_id: string | null;
   agent_type: string | null;
+  effort: string | null;
   base_branch: string | null;
   host_id: string | null;
   // A task (or queued task) it waits on, by id.
@@ -110,6 +111,7 @@ export interface QueueRequest {
   // The user's group it joins when it starts: a live group of its workspace.
   groupId?: string;
   agent?: AgentType;
+  effort?: string;
   baseBranch?: string;
   hostId?: string;
   // A task's id or name, "any" for whichever running task finishes first, or

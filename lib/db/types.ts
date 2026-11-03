@@ -120,6 +120,8 @@ export interface Session {
   crew_id?: string | null;
   // When done ended its agent (any session; a task also has task_status).
   finished_at?: string | null;
+  // Reasoning effort it was started at, or null for the agent's default.
+  effort?: string | null;
   // A workspace's standing orchestrator chat (and that workspace), or null.
   role: "orchestrator" | null;
   // An orchestrator's tool-call secret.

@@ -7,6 +7,22 @@ import { getProviderDefinition, type ProviderId } from "./registry";
 const args = (id: ProviderId, o: Parameters<typeof buildArgs>[1]) =>
   buildArgs(getProviderDefinition(id), o);
 
+describe("buildArgs effort", () => {
+  it("adds the provider's effort flag after the model, only when set", () => {
+    expect(args("copilot", { model: "m", effort: "xhigh" })).toEqual([
+      "--model",
+      "m",
+      "--reasoning-effort",
+      "xhigh",
+    ]);
+    expect(args("copilot", { model: "m" })).toEqual(["--model", "m"]);
+  });
+
+  it("ignores effort for an agent with no effort flag", () => {
+    expect(args("codex", { effort: "high" })).toEqual([]);
+  });
+});
+
 describe("buildArgs", () => {
   it("puts Codex's resume and fork subcommands first", () => {
     expect(

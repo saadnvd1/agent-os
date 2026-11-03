@@ -5,13 +5,19 @@ import { sessionBaseEnv } from "../../agents/server-env";
 import type { ChatConversation, ChatDriver, ChatStartOptions } from "../driver";
 import type { ChatImage, ChatModel, DriverEvent } from "../events";
 import { InputQueue } from "../queue";
-import { AGENT_DEFAULT_MODEL } from "../../providers/registry";
+import {
+  AGENT_DEFAULT_MODEL,
+  getProviderDefinition,
+} from "../../providers/registry";
 import { ASK_SERVER, ASK_TOOL, CopilotAskServer } from "./copilot-ask";
 import { CopilotApprovals } from "./copilot-approvals";
 import { CopilotMapper } from "./copilot-mapper";
 import { CopilotRpc } from "./copilot-rpc";
 
 type P = Record<string, unknown>;
+
+const COPILOT_EFFORT_FLAG =
+  getProviderDefinition("copilot").effortFlag ?? "--reasoning-effort";
 
 // `copilot --acp` ignores the user's default model (COPILOT_MODEL and
 // ~/.copilot/settings.json) and only honours --model, so we pass it on.
@@ -36,6 +42,7 @@ export function copilotArgs(
   const model = o.model && o.model !== AGENT_DEFAULT_MODEL ? o.model : fallback;
   return [
     ...(model ? ["--model", model] : []),
+    ...(o.effort ? [COPILOT_EFFORT_FLAG, o.effort] : []),
     `--allow-tool=${ASK_SERVER}(${ASK_TOOL})`,
   ];
 }

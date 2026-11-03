@@ -60,7 +60,9 @@ const usage = `aos: talk to other agent sessions in AgentOS
   aos spawn <project> <prompt...>    start a new chat session in a project (--terminal for tmux;
                                      --agent <agent> and --model <model>: pick the agent and its
                                      model, "aos models" lists them; --agent cannot join --role
-                                     or --terminal)
+                                     or --terminal; --effort <level>: reasoning effort, for an
+                                     agent that has levels, e.g. copilot: none, minimal, low,
+                                     medium, high, xhigh, max)
   aos models [--agent <agent>]       the models each agent offers (what --model takes)
   aos task <project> <prompt...>     start a background task that ends in a PR
                                      (--after <task|any>: queue it until that task finishes;
@@ -68,7 +70,7 @@ const usage = `aos: talk to other agent sessions in AgentOS
                                       needed while your plan has pieces waiting in that project;
                                       --plan-only: stop after the plan and wait for approval)
                                      (--on <machine>: on a linked machine's AgentOS)
-                                     (--agent <agent>, --model <model>: as for spawn)
+                                     (--agent <agent>, --model <model>, --effort <level>: as for spawn)
                                      (--name "<name>": name it; otherwise it's
                                      named from the prompt)
                                      (--terminal: run it in a terminal, not a chat)
@@ -499,12 +501,13 @@ async function main() {
         role,
         model,
         agent,
+        effort,
         project,
         prompt: words,
       } = parseSpawnArgs(args, fail);
       if (!project || !words.length)
         fail(
-          `usage: aos ${cmd} <project> [--name "<name>"]${cmd === "task" ? " [--on <machine>] [--after <task|any>] [--terminal] [--plan-only] [--piece <name>] [--priority urgent|blocking|normal|background] [--on-mac]" : ""} [--group "<name>"]${cmd === "spawn" ? " [--terminal] [--role developer|analyst|reviewer|supervisor]" : ""} [--agent <agent>] [--model <model>] <prompt...>`
+          `usage: aos ${cmd} <project> [--name "<name>"]${cmd === "task" ? " [--on <machine>] [--after <task|any>] [--terminal] [--plan-only] [--piece <name>] [--priority urgent|blocking|normal|background] [--on-mac]" : ""} [--group "<name>"]${cmd === "spawn" ? " [--terminal] [--role developer|analyst|reviewer|supervisor]" : ""} [--agent <agent>] [--model <model>] [--effort <level>] <prompt...>`
         );
       if ((priority || onMac) && cmd !== "task")
         fail("--priority and --on-mac work for tasks only");
@@ -516,6 +519,7 @@ async function main() {
       if (role && cmd !== "spawn") fail("--role works for spawn only");
       if (agent && role) fail("--agent doesn't work with --role");
       if (agent && terminal) fail("--agent doesn't work with --terminal");
+      if (effort && role) fail("--effort doesn't work with --role");
       if (planOnly && terminal)
         fail("--plan-only needs a chat task, not --terminal");
       const { session, queued, builds } = await post("/api/bus/spawn", {
@@ -536,6 +540,7 @@ async function main() {
         ...(role && { agentRole: role }),
         ...(model && { model }),
         ...(agent && { agent }),
+        ...(effort && { effort }),
       });
       if (queued) {
         console.log(

@@ -175,6 +175,7 @@ const sinceSplit = (rows: Row[]) =>
       agent_role: _a,
       crew_id: _c,
       finished_at: _f,
+      effort: _e,
       ...rest
     } = r;
     return rest;
