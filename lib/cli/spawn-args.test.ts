@@ -57,6 +57,24 @@ describe("aos --agent and --model without a role", () => {
   });
 });
 
+describe("parseSpawnArgs --effort", () => {
+  it("reads --effort and --effort= before the prompt, lowercased", () => {
+    expect(parse(["app", "--effort", "XHigh", "go"], fail).effort).toBe(
+      "xhigh"
+    );
+    expect(parse(["--effort=low", "app", "go"], fail).effort).toBe("low");
+    expect(parse(["app", "go"], fail).effort).toBeUndefined();
+  });
+  it("leaves --effort in the prompt once it starts", () => {
+    const a = parse(["app", "go", "--effort", "high"], fail);
+    expect(a.effort).toBeUndefined();
+    expect(a.prompt).toEqual(["go", "--effort", "high"]);
+  });
+  it("needs a value", () => {
+    expect(() => parse(["app", "--effort"], fail)).toThrow(/--effort needs/);
+  });
+});
+
 describe("bin/aos spawn and task flags", () => {
   const run = (...args: string[]) =>
     spawnSync(process.execPath, ["bin/aos", ...args], {
@@ -77,5 +95,19 @@ describe("bin/aos spawn and task flags", () => {
     expect(run("task", "app", "--model", "m", "x").stderr).not.toMatch(
       /works with --role/
     );
+  });
+});
+
+describe("bin/aos --effort", () => {
+  const run = (...args: string[]) =>
+    spawnSync(process.execPath, ["bin/aos", ...args], {
+      encoding: "utf8",
+      env: { ...process.env, AGENTOS_URL: "http://127.0.0.1:1" },
+    });
+
+  it("refuses --effort with --role", () => {
+    expect(
+      run("spawn", "app", "--effort", "high", "--role", "analyst", "x").stderr
+    ).toMatch(/--effort doesn't work with --role/);
   });
 });

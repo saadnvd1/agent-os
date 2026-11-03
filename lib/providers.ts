@@ -38,6 +38,7 @@ export interface BuildFlagsOptions {
   skipPermissions?: boolean;
   autoApprove?: boolean; // Use auto-approve flag from registry
   model?: string | null;
+  effort?: string | null;
   initialPrompt?: string; // Initial prompt to send to agent
 }
 
@@ -59,6 +60,8 @@ export function buildArgs(
   const model = options.model?.trim();
   if (model && model !== AGENT_DEFAULT_MODEL && def.modelFlag)
     args.push(def.modelFlag, model);
+  if (options.effort && def.effortFlag && def.effortLevels)
+    args.push(def.effortFlag, options.effort);
   const prompt = options.initialPrompt?.trim();
   if (prompt && def.initialPromptFlag !== undefined) {
     if (def.initialPromptFlag) args.push(def.initialPromptFlag);

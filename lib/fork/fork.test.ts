@@ -2,6 +2,7 @@ import { randomUUID } from "crypto";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
 const status = new Map<string, "running" | "idle" | "waiting" | "dead">();
+const launched: { effort?: string | null }[] = [];
 const sent: { sessionId: string; input: Record<string, unknown> }[] = [];
 
 vi.mock("@/lib/chat/runner", async (importOriginal) => ({
@@ -29,7 +30,9 @@ vi.mock("@/lib/sessions/launch", async () => {
       name: string;
       parentSessionId: string;
       workingDirectory: string;
+      effort?: string | null;
     }) => {
+      launched.push(input);
       insertSessionRow(db, {
         id: input.id,
         name: input.name,
@@ -134,6 +137,20 @@ describe("starting forks", () => {
         startedBy: "agent",
       })
     ).toThrow(/off/);
+  });
+
+  it("starts a fork at its parent's effort", async () => {
+    const p = parent();
+    db.prepare(`UPDATE sessions SET effort = 'xhigh' WHERE id = ?`).run(p);
+    launched.length = 0;
+    startFork({
+      parentId: p,
+      requestId: "effort",
+      instructions: ["one"],
+      startedBy: "agent",
+    });
+    await flush();
+    expect(launched.map((l) => l.effort)).toEqual(["xhigh"]);
   });
 
   it("makes one row per instruction, once per request", async () => {

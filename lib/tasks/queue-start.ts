@@ -140,6 +140,7 @@ export async function startRow(
     view: r.view ?? undefined,
     groupId: r.session_group_id ?? undefined,
     agent: (r.agent_type as AgentType | null) ?? undefined,
+    effort: r.effort ?? undefined,
     baseBranch: r.base_branch ?? undefined,
     hostId: placed?.hostId ?? r.host_id ?? undefined,
     reclaim: true,

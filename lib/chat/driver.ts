@@ -36,6 +36,8 @@ export interface McpAuth {
 export interface ChatStartOptions {
   cwd: string;
   model: string;
+  // Reasoning effort, for an agent that takes one; unset leaves its default.
+  effort?: string | null;
   // The provider's id for an existing conversation, to continue it.
   resumeId?: string | null;
   // Continue the conversation only up to this entry (after an undo).

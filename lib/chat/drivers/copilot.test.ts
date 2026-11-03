@@ -4,7 +4,8 @@ import type { ChatStartOptions } from "../driver";
 import { copilotArgs, copilotDefaultModel, copilotModels } from "./copilot";
 
 const ALLOW = "--allow-tool=agentos(ask_user)";
-const start = (model?: string) => ({ model }) as unknown as ChatStartOptions;
+const start = (model?: string, effort?: string) =>
+  ({ model, effort }) as unknown as ChatStartOptions;
 
 describe("copilotDefaultModel", () => {
   it("prefers COPILOT_MODEL over the settings file", () => {
@@ -49,6 +50,21 @@ describe("copilotArgs", () => {
 
   it("passes nothing with no model anywhere", () => {
     expect(copilotArgs(start(), undefined)).toEqual([ALLOW]);
+  });
+
+  it("adds --reasoning-effort only when an effort is set", () => {
+    expect(copilotArgs(start("gpt-6", "xhigh"), "haiku")).toEqual([
+      "--model",
+      "gpt-6",
+      "--reasoning-effort",
+      "xhigh",
+      ALLOW,
+    ]);
+    expect(copilotArgs(start(undefined, "low"), undefined)).toEqual([
+      "--reasoning-effort",
+      "low",
+      ALLOW,
+    ]);
   });
 });
 

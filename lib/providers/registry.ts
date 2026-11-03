@@ -49,6 +49,11 @@ export interface ProviderDefinition {
   // Model configuration
   modelFlag?: string; // Flag for specifying model
 
+  // Reasoning effort: the levels the CLI takes and the flag that sets one.
+  // An agent with neither takes no --effort.
+  effortLevels?: readonly string[];
+  effortFlag?: string;
+
   // Initial prompt configuration
   // undefined = no support, '' = positional arg, string = flag (e.g., '--prompt')
   initialPromptFlag?: string;
@@ -250,6 +255,8 @@ export const PROVIDERS: ProviderDefinition[] = [
     supportsFork: false,
     resumeArgs: (id) => [`--resume=${id}`],
     modelFlag: "--model",
+    effortLevels: ["none", "minimal", "low", "medium", "high", "xhigh", "max"],
+    effortFlag: "--reasoning-effort",
     initialPromptFlag: "-i",
   },
   KIRO,

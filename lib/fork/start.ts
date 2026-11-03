@@ -213,6 +213,7 @@ async function startChild(childId: string): Promise<void> {
       workingDirectory: checkout?.cwd ?? parent.working_directory,
       agentType: parent.agent_type as AgentType,
       model: parent.model,
+      effort: parent.effort,
       access: parent.chat_access,
       autoApprove: !!parent.auto_approve,
       name: `${parent.name} · fork ${n}`,

@@ -13,6 +13,7 @@ function parseSpawnArgs(words, fail) {
   let role;
   let model;
   let agent;
+  let effort;
   let project;
   let i = 0;
   for (; i < words.length; i++) {
@@ -57,6 +58,10 @@ function parseSpawnArgs(words, fail) {
       agent = words[++i];
       if (agent === undefined) fail("--agent needs an agent name");
     } else if (w.startsWith("--agent=")) agent = w.slice(8);
+    else if (w === "--effort") {
+      effort = words[++i];
+      if (effort === undefined) fail("--effort needs a level");
+    } else if (w.startsWith("--effort=")) effort = w.slice(9);
     else if (project === undefined) project = w;
     else break;
   }
@@ -73,6 +78,7 @@ function parseSpawnArgs(words, fail) {
     role: role?.trim().toLowerCase() || undefined,
     model: model?.trim() || undefined,
     agent: agent?.trim().toLowerCase() || undefined,
+    effort: effort?.trim().toLowerCase() || undefined,
     project,
     prompt: words.slice(i),
   };
