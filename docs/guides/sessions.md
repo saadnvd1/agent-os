@@ -205,16 +205,18 @@ numbers and the sessions using the most CPU; a busy session's row shows its
 own share ("3.1 cores · 4.2 GB"), summed over its terminal's process tree
 from one `ps` every 30 seconds.
 
-Nothing is ever stopped, paused or queued. Instead, before an agent starts a
+Nothing running is ever stopped or paused. Before an agent starts a
 whole test suite, type check, build, repo-wide lint, `xcodebuild` or
 `pytest`, the Claude hook AgentOS installs tells it what heavy commands are
 already running and how loaded the machine is, so it can narrow the run or
 wait. Targeted runs (`vitest run lib/x.test.ts`) are left alone. `aos heavy
--- <cmd>` does the same for anything else. On Linux with systemd it also
-runs the command in a capped scope (memory 40% of RAM, 512 tasks; set
-`AOS_HEAVY_MEMORY_MAX`, e.g. `8G`, and `AOS_HEAVY_TASKS_MAX`), so a runaway
-build is stopped instead of freezing the machine; it says so when the cap
-kills it. macOS has no cgroups and runs uncapped. When the load stays red for two
+-- <cmd>` is how a heavy command takes its turn: it asks the AgentOS on its own
+machine for a slot, prints `waiting for a heavy slot (N ahead)` while others
+hold them, and starts when one frees. A machine has 2 slots while it reads
+green and 1 otherwise (`AGENTOS_HEAVY_SLOTS` and `AGENTOS_HEAVY_SLOTS_CALM`
+change them). The slot comes back when the command exits or its `aos`
+process dies; if AgentOS can't answer, the command just runs. Machines don't
+share slots. When the load stays red for two
 minutes, one message goes to your phone and to each workspace orchestrator,
 naming the top sessions and their heavy commands; the next one waits until
 it has been green for ten minutes. `AGENTOS_LOAD=off` turns it all off.

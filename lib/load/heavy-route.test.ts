@@ -53,14 +53,21 @@ describe("POST /api/load/heavy", () => {
 });
 
 // bin/aos heavy against a server that may be down or slow.
-function aosHeavy(args: string[], url: string) {
+function aosHeavy(args: string[], url: string, held = true) {
   return new Promise<{ code: number | null; stderr: string; ms: number }>(
     (resolve) => {
       const start = Date.now();
       execFile(
         process.execPath,
         [path.join(process.cwd(), "bin/aos"), "heavy", "--", ...args],
-        { env: { ...process.env, AGENTOS_URL: url } },
+        {
+          env: {
+            ...process.env,
+            AGENTOS_URL: url,
+            // These tests are about registering; the lease has its own file.
+            ...(held && { AOS_HEAVY_HELD: "1" }),
+          },
+        },
         (err, _stdout, stderr) =>
           resolve({
             code: err ? ((err as { code?: number }).code ?? null) : 0,

@@ -59,7 +59,7 @@ aos schedule run <name>           # run a schedule now
 aos schedule add --session <s> --every 30m "prompt"  # check in on a session
 aos notify "text"                 # push a message to your phone
 aos push test                     # a real test push to the paired phones, and the result
-aos heavy -- npm test             # run it now; says first what else heavy is running (capped on Linux)
+aos heavy -- npm test             # take a heavy slot (waits its turn while others run), then run it; says what else is running (capped on Linux)
 aos stop <session>                # stop its turn now; the next message runs as a new turn
 aos done <session>                # finished: merge through the gates, archive
 aos done --all-idle               # the same for every idle session around you

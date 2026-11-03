@@ -138,12 +138,27 @@ function seed(db: Database.Database) {
   }
 }
 
+// Running every migration up to BEFORE costs seconds, so it runs once and
+// each test copies the file.
+let template: string | null = null;
 function migrated(upTo?: string) {
   const dir = tempDir("split-sessions-");
-  const db = new Database(path.join(dir, "old.db"));
-  createSchema(db);
-  runMigrations(db, upTo ?? BEFORE);
-  return db;
+  const file = path.join(dir, "old.db");
+  if (upTo) {
+    const db = new Database(file);
+    createSchema(db);
+    runMigrations(db, upTo);
+    return db;
+  }
+  if (!template) {
+    template = path.join(tempDir("split-sessions-template-"), "old.db");
+    const db = new Database(template);
+    createSchema(db);
+    runMigrations(db, BEFORE);
+    db.close();
+  }
+  fs.copyFileSync(template, file);
+  return new Database(file);
 }
 
 const columnsOf = (db: Database.Database, table: string) =>

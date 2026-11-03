@@ -1,17 +1,26 @@
 /**
- * Slots for the builds and test runs of fork children. `aos heavy` from a
- * fork child asks for one and waits its turn, so N children never run N
- * suites at once, and none start while the machine's load reads red.
- * First come, first served; a lease the child's CLI stopped renewing (or
- * whose process is gone) is taken back.
+ * Slots for the builds and test runs on this machine. Every `aos heavy`
+ * (a task, a session, a fork child) asks the AgentOS on its own machine for
+ * one and waits its turn, so N sessions never run N suites at once. The slot
+ * count follows this machine's load: HEAVY_SLOTS_CALM while it reads green,
+ * HEAVY_SLOTS otherwise. First come, first served; a lease whose CLI stopped
+ * renewing (or whose process is gone) is taken back.
  */
 
-import { currentLevel, loadEnabled } from "../load/monitor";
-import { bumpHeavy } from "./ledger";
-import { FORK_LIMITS } from "./options";
+import { bumpHeavy } from "../fork/ledger";
+import { currentLevel, loadEnabled } from "./monitor";
+
+// Overridable with AGENTOS_HEAVY_SLOTS / AGENTOS_HEAVY_SLOTS_CALM.
+export const HEAVY_SLOTS = 1;
+export const HEAVY_SLOTS_CALM = 2;
+
+const positive = (raw: string | undefined, fallback: number) => {
+  const n = Number(raw);
+  return Number.isInteger(n) && n > 0 ? n : fallback;
+};
 
 interface Lease {
-  sessionId: string;
+  sessionId: string | null;
   pid: number;
   askedAt: number;
   seen: number;
@@ -34,10 +43,13 @@ const alive = (pid: number) => {
 };
 
 export function slotsNow(): number {
-  if (!loadEnabled()) return FORK_LIMITS.heavySlotsCalm;
-  return currentLevel() === "green" || currentLevel() === null
-    ? FORK_LIMITS.heavySlotsCalm
-    : FORK_LIMITS.heavySlots;
+  const busy = positive(process.env.AGENTOS_HEAVY_SLOTS, HEAVY_SLOTS);
+  const calm = Math.max(
+    busy,
+    positive(process.env.AGENTOS_HEAVY_SLOTS_CALM, HEAVY_SLOTS_CALM)
+  );
+  if (!loadEnabled()) return calm;
+  return currentLevel() === "green" || currentLevel() === null ? calm : busy;
 }
 
 function reap(now: number) {
@@ -51,15 +63,13 @@ function grant(now: number) {
   const held = leases.filter((l) => l.grantedAt !== null).length;
   const room = Math.max(0, slotsNow() - held);
   if (!room) return;
-  // No new run while the machine is loaded; what already runs finishes.
-  if (loadEnabled() && currentLevel() === "red") return;
   let n = room;
   for (const l of leases) {
     if (n === 0) break;
     if (l.grantedAt === null) {
       l.grantedAt = now;
       n--;
-      bumpHeavy(l.sessionId);
+      if (l.sessionId) bumpHeavy(l.sessionId);
     }
   }
 }
@@ -71,18 +81,27 @@ export interface LeaseState {
 }
 
 // Asks for a slot, or renews the one held; the same caller asks again until
-// it is granted.
+// it is granted. `held` is a holder the server doesn't know (it restarted
+// since): its run is already going, so it takes a slot at once rather than
+// letting a second run start on top of it.
 export function requestLease(
-  sessionId: string,
+  sessionId: string | null,
   pid: number,
-  now = Date.now()
+  now = Date.now(),
+  held = false
 ): LeaseState {
   reap(now);
   let mine = leases.find((l) => l.sessionId === sessionId && l.pid === pid);
   if (mine) mine.seen = now;
   else
     leases.push(
-      (mine = { sessionId, pid, askedAt: now, seen: now, grantedAt: null })
+      (mine = {
+        sessionId,
+        pid,
+        askedAt: now,
+        seen: now,
+        grantedAt: held ? now : null,
+      })
     );
   grant(now);
   if (mine.grantedAt !== null) return { granted: true, ahead: 0 };
@@ -94,7 +113,7 @@ export function requestLease(
   };
 }
 
-export function releaseLease(sessionId: string, pid: number): void {
+export function releaseLease(sessionId: string | null, pid: number): void {
   const i = leases.findIndex((l) => l.sessionId === sessionId && l.pid === pid);
   if (i >= 0) leases.splice(i, 1);
   grant(Date.now());

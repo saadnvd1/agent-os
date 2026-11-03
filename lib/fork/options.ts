@@ -22,10 +22,6 @@ export const FORK_LIMITS = {
   // A child idle this long with no `aos return` settles with its final
   // answer, so one about to return gets there first.
   implicitGraceMs: 45_000,
-  // Fork children's builds and test runs at once on this machine
-  // (lib/fork/heavy-lease); 2 while the machine reads green.
-  heavySlots: 1,
-  heavySlotsCalm: 2,
 } as const;
 
 export const DELIVERY_MODES = ["wake", "next"] as const;

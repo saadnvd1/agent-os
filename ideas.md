@@ -2,6 +2,7 @@
 
 ## Features
 
+- [ ] Seed a warm type-check cache into new worktrees: the main checkout's `tsconfig.tsbuildinfo` goes stale, so a task's first type check runs cold (57s vs 11s warm on a quiet box). Refresh it in the background after each deploy
 - [ ] Notifications - Alert when session needs attention (waiting state, errors, completed tasks)
 - [ ] MCP server integration - Toggle AI capabilities (web search, GitHub) per session
 - [ ] Session templates - Pre-configured sessions for common tasks
