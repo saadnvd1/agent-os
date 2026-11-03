@@ -1,3 +1,4 @@
+/* eslint-disable @typescript-eslint/no-require-imports */
 // `aos heavy -- <cmd>`: waits for a heavy slot on this machine, starts the
 // command, then registers it and prints the server's note, if any. A server
 // that's down says nothing and the command runs at once.

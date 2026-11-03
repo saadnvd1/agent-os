@@ -39,7 +39,7 @@
     "prestart": "node scripts/update-recover.mjs && node scripts/check-native.mjs --rebuild && node scripts/gen-migrations-index.mjs",
     "start": "NODE_ENV=production AGENTOS_SERVER=live node --import tsx server.ts",
     "pretypecheck": "node scripts/gen-migrations-index.mjs",
-    "typecheck": "tsc --noEmit",
+    "typecheck": "node --max-old-space-size=4096 node_modules/typescript/lib/tsc.js --noEmit",
     "setup": "bash scripts/setup.sh",
     "postinstall": "chmod +x node_modules/node-pty/prebuilds/*/spawn-helper 2>/dev/null || true",
     "prepare": "husky",
