@@ -84,6 +84,34 @@ const positives: [string, ToolResult, string][] = [
     "not found",
   ],
   [
+    "python-not-found",
+    bash("python3 x.py", "zsh: command not found: python3"),
+    "not found",
+  ],
+  [
+    "python-not-found",
+    bash("python3 x.py", "/bin/bash: line 1: python3: command not found"),
+    "not found",
+  ],
+  [
+    "shell-var-not-split",
+    bash(
+      'B="python3 box.py budget_edit.py"; $B show --month 2026-12',
+      "zsh: command not found: python3 box.py budget_edit.py"
+    ),
+    "not found",
+  ],
+  [
+    "shell-var-not-split",
+    bash('C="ls -la"; $C', "zsh: command not found: ls -la"),
+    "not found",
+  ],
+  [
+    "shell-var-not-split",
+    bash('C="ls -la"; $C', "bash: line 1: ls -la: command not found"),
+    "not found",
+  ],
+  [
     "local-permission",
     bash("mkdir /x/y", "mkdir: /x/y: Permission denied"),
     "Permission",

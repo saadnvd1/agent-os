@@ -54,12 +54,23 @@ export const ENV_CLASSES: readonly EnvClass[] = [
     fix: `Each Python on this machine has different packages: ${USE_ENV}.`,
   },
   {
+    id: "shell-var-not-split",
+    label: "Unquoted variable not word-split (zsh)",
+    scope: "shell",
+    // The "command" it looked for has spaces: a string variable used as a command.
+    match: [
+      /command not found: \S+(?: +\S+)+\s*$/,
+      /^(?:\S+: )?(?:line \d+: )?[^\s:]+(?: +[^\s:]+)+: (?:command )?not found/,
+    ],
+    fix: 'zsh doesn\'t split an unquoted variable into words, so `$B` with `B="python3 box.py"` runs one command named `python3 box.py`. Use an array (`B=(python3 box.py)`, then `"${B[@]}"`) or a function, not a string variable.',
+  },
+  {
     id: "python-not-found",
     label: "python not found",
     scope: "shell",
     match: [
-      /command not found: python/,
-      /^(?:\S+: )?(?:line \d+: )?python[0-9.]*: (?:command )?not found/,
+      /command not found: (?:\S*\/)?python3?\s*$/,
+      /^(?:\S+: )?(?:line \d+: )?(?:\S*\/)?python3?: (?:command )?not found/,
     ],
     fix: "There is no bare `python` here: call `python3`, or better `uv run` in the repo.",
   },
