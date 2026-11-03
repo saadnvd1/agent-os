@@ -8,7 +8,15 @@ import type { ReachReport } from "./types";
 const servers: (http.Server | net.Server)[] = [];
 afterEach(async () => {
   await Promise.all(
-    servers.splice(0).map((s) => new Promise((r) => s.close(r)))
+    servers.splice(0).map(
+      (s) =>
+        new Promise((r) => {
+          s.close(r);
+          // A server that never answered still holds the client's socket;
+          // waiting for that to time out took 4.5s per test.
+          if (s instanceof http.Server) s.closeAllConnections();
+        })
+    )
   );
 });
 

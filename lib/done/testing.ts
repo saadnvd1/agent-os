@@ -23,8 +23,12 @@ export function commitFile(cwd: string, file: string, text: string): string {
 // Worktrees live under a folder whose name marks them as AgentOS's.
 export const WORKTREE_MARK = "aos-done-wt";
 
-export function makeRepo() {
-  const root = tempDir("aos-done-repo-");
+// The bare remote and its clone, built once per process and copied for each
+// test: ten git calls a test, in dozens of tests, were most of makeRepo.
+let template: string | null = null;
+function templateRoot(): string {
+  if (template) return template;
+  const root = tempDir("aos-done-template-");
   const remote = path.join(root, "remote.git");
   const repo = path.join(root, "repo");
   git(root, "init", "-q", "--bare", "-b", "main", remote);
@@ -33,6 +37,15 @@ export function makeRepo() {
   git(repo, "config", "user.name", "T");
   commitFile(repo, "README.md", "hello\n");
   git(repo, "push", "-q", "origin", "HEAD");
+  return (template = root);
+}
+
+export function makeRepo() {
+  const root = tempDir("aos-done-repo-");
+  fs.cpSync(templateRoot(), root, { recursive: true });
+  const remote = path.join(root, "remote.git");
+  const repo = path.join(root, "repo");
+  git(repo, "remote", "set-url", "origin", remote);
   const trees = path.join(root, WORKTREE_MARK);
   fs.mkdirSync(trees);
   let n = 0;
