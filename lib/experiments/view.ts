@@ -15,7 +15,5 @@ export const experimentView = (id: ExperimentId): ExperimentView => ({
 
 export const experimentsView = () => ({
   locked: experimentsLocked(),
-  experiments: EXPERIMENTS.filter((e: Experiment) => !e.unlisted).map((e) =>
-    experimentView(e.id)
-  ),
+  experiments: EXPERIMENTS.map((e) => experimentView(e.id)),
 });

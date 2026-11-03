@@ -4,7 +4,6 @@ import { createContext, useContext } from "react";
 import type { ProjectWithRepositories } from "@/lib/projects";
 import type { Rollup } from "@/lib/sidebar/rollup";
 import type { OrchestratorOverview } from "@/lib/orchestrator/overview";
-import type { TeamMember } from "@/lib/sidebar/orchestrator-row";
 
 // What every row needs from the list, so shelves don't pass it along.
 export interface RowContextValue {
@@ -19,8 +18,6 @@ export interface RowContextValue {
   // What each orchestrator session started, and its name (its workspace's).
   rollups: Map<string, Rollup>;
   orchestratorNames: Map<string, string>;
-  // Session id -> the chief or lead it is; empty while Leads is off.
-  team: Map<string, TeamMember>;
   // Render order, for shift-click range selection.
   orderedIds: () => string[];
   cardUrl: (sessionId: string) => string | null | undefined;

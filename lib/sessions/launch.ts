@@ -3,7 +3,6 @@
  * then (for a worktree) the setup in the background, then the first message.
  */
 
-import { sqlStanding } from "../leads/roles";
 import { fileInGroup } from "../session-groups/assignSessions";
 import { agentosHome } from "../agentos-home";
 import type { StartVia } from "../tasks/starter";
@@ -204,7 +203,7 @@ function homeWorkspace(input: LaunchInput): string | null {
   if (!input.startedBy) return null;
   const by = db
     .prepare(
-      `SELECT workspace_id FROM sessions WHERE id = ? AND ${sqlStanding()}`
+      `SELECT workspace_id FROM sessions WHERE id = ? AND role = 'orchestrator'`
     )
     .get(input.startedBy) as { workspace_id: string | null } | undefined;
   return by?.workspace_id ?? null;

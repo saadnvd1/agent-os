@@ -5,7 +5,6 @@
  * Sessions inherit settings from their parent project.
  */
 
-import { sqlNoRole } from "./leads/roles";
 import fs from "fs";
 import path from "path";
 import { exec } from "child_process";
@@ -283,7 +282,7 @@ export function deleteProject(id: string): boolean {
   // Its sessions go to Uncategorized, staying in the project's workspace.
   db.prepare(
     `UPDATE sessions SET project_id = 'uncategorized', updated_at = datetime('now'),
-       workspace_id = CASE WHEN ${sqlNoRole()} THEN ? ELSE workspace_id END
+       workspace_id = CASE WHEN role IS NULL THEN ? ELSE workspace_id END
      WHERE project_id = ?`
   ).run(project.workspace_id ?? null, id);
 
@@ -329,7 +328,7 @@ export function moveSessionToProject(
     // A project's session follows the project; one left in none keeps the
     // workspace it was in.
     db.prepare(
-      `UPDATE sessions SET workspace_id = ? WHERE id = ? AND ${sqlNoRole()}`
+      `UPDATE sessions SET workspace_id = ? WHERE id = ? AND role IS NULL`
     ).run(
       to && !to.is_uncategorized
         ? null

@@ -9,7 +9,6 @@
  * started: a chat resumes on its next message, so a restore costs no tokens.
  */
 
-import { isStandingRole, roleLabel } from "../leads/roles";
 import fs from "fs";
 import path from "path";
 import { db, queries, type Session } from "../db";
@@ -104,8 +103,8 @@ export async function resurrectSession(
 ): Promise<ResurrectOutcome> {
   const s = row(id);
   if (!s) throw new Error("Session not found");
-  if (isStandingRole(s.role))
-    throw new Error(`${s.name} is ${roleLabel(s.role)}; it isn't ended.`);
+  if (s.role === "orchestrator")
+    throw new Error(`${s.name} is an orchestrator; it isn't ended.`);
   const held = opts.device !== undefined && heldRefusal(id, opts.device);
   if (held) throw new Error(held);
   const peer = peerSessionLink(s);

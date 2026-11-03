@@ -13,8 +13,6 @@ export interface Candidate {
   previousNames: string[];
   workspaceName?: string | null;
   orchestrator?: boolean;
-  // The department it heads, when its workspace has leads: "<workspace>/<kind>".
-  leadKind?: string | null;
 }
 
 export type Resolution =
@@ -25,7 +23,7 @@ export const MIN_ID_PREFIX = 4;
 
 const label = (c: Candidate) =>
   `${
-    (c.orchestrator || c.leadKind) && c.workspaceName
+    c.orchestrator && c.workspaceName
       ? `${c.workspaceName}/`
       : c.projectName
         ? `${c.projectName}/`
@@ -48,7 +46,6 @@ const matchesOld = (r: string, c: Candidate) =>
       tmuxName: "",
       name: old,
       orchestrator: false,
-      leadKind: null,
     })
   );
 

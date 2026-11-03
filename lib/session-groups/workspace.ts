@@ -1,4 +1,3 @@
-import { isStandingRole } from "../leads/roles";
 import { getDb } from "@/lib/db";
 
 // The workspace a session belongs to: its project's, else the one kept on the
@@ -17,6 +16,6 @@ export function sessionWorkspaceId(
     | { role: string | null; own: string | null; byProject: string | null }
     | undefined;
   if (!row) return undefined;
-  if (isStandingRole(row.role)) return row.own;
+  if (row.role === "orchestrator") return row.own;
   return row.byProject ?? row.own;
 }

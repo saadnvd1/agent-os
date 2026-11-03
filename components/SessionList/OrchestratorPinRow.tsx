@@ -9,28 +9,19 @@ import { sameRow, type SidebarRow } from "@/lib/sidebar/shelves";
 import { visibleChips } from "@/lib/sidebar/rollup";
 import { sidebarUi, sidebarUiActions } from "@/stores/sidebarUi";
 import { useSnapshot } from "valtio";
-import {
-  memberCounts,
-  memberDot,
-  memberIdleText,
-  orchestratorRowText,
-} from "@/lib/sidebar/orchestrator-row";
+import { orchestratorRowText } from "@/lib/sidebar/orchestrator-row";
 import { cn } from "@/lib/utils";
 import { orchestratorOpenActions } from "@/stores/orchestratorOpen";
-import { leadsUiActions } from "@/stores/leadsUi";
-import { memberLetter } from "@/lib/leads/order";
-import { charterTemplate } from "@/lib/leads/templates";
 import { useRowContext } from "./RowContext";
 import { SessionRowMenu } from "./SessionRowMenu";
 import { ActiveTick, ROW_MENU_CONTENT } from "./RowShell";
-import { keepRenameFocus, LeadAvatar, RowRename, UnreadDot } from "./RowParts";
+import { keepRenameFocus, RowRename, UnreadDot } from "./RowParts";
 import { QuickChangeRow } from "./QuickChangeRow";
 import { NestRail } from "./RowParts";
 
 // A workspace's orchestrator, pinned above its sessions and titled with the
 // workspace's name: what it's doing and how many asks wait on you, on a line
-// of their own. Unpinning drops it back among the others. With Leads on, each
-// of the workspace's chief and leads is this card, with its avatar and title.
+// of their own. Unpinning drops it back among the others.
 export const OrchestratorPinRow = memo(function OrchestratorPinRow({
   row,
 }: {
@@ -43,28 +34,17 @@ export const OrchestratorPinRow = memo(function OrchestratorPinRow({
   const overview = ctx.orchestrators.find((o) => o.workspaceId === ws);
   const paused = !!overview?.paused;
   const active = session.id === ctx.activeSessionId;
-  const member = ctx.team.get(session.id);
-  const workspace = {
+  const { state, status, asks } = orchestratorRowText(row, {
+    asks: overview?.asks.length ?? 0,
+    paused,
     running: ctx.runningByWorkspace.get(ws) ?? 0,
+    inReview: overview?.inReview ?? 0,
     queued: ctx.queuedByWorkspace.get(ws) ?? 0,
-  };
-  const counts = member
-    ? memberCounts(member, overview, workspace)
-    : {
-        asks: overview?.asks.length ?? 0,
-        paused,
-        running: workspace.running,
-        inReview: overview?.inReview ?? 0,
-        queued: workspace.queued,
-      };
-  const text = orchestratorRowText(row, counts);
-  const { state, asks } = text;
-  const status =
-    (member && memberIdleText(member, state, counts.asks)) ?? text.status;
+  });
   const chips = visibleChips(ctx.rollups.get(session.id));
   const { orchestratorId } = useSnapshot(sidebarUi);
   const filtering = orchestratorId === session.id;
-  const label = member?.title ?? ctx.workspaceNames.get(ws) ?? "Orchestrator";
+  const label = ctx.workspaceNames.get(ws) ?? "Orchestrator";
   const summary = asks ? `${status} · ${asks}` : status;
   const menu = (kind: "dropdown" | "context") => (
     <SessionRowMenu
@@ -86,28 +66,20 @@ export const OrchestratorPinRow = memo(function OrchestratorPinRow({
       }
     >
       {active && <ActiveTick />}
-      {member ? (
-        <LeadAvatar
-          member={member}
-          size="md"
-          dot={memberDot(row, counts.asks)}
-        />
-      ) : (
-        <Workflow
-          aria-hidden
-          className={cn(
-            "h-4 w-4 shrink-0",
-            {
-              Paused: "text-amber-500",
-              Failed: "text-red-500",
-              Working: "text-green-600 dark:text-green-500",
-              Replied: "text-primary",
-              Waiting: "text-muted-foreground",
-              Idle: "text-muted-foreground",
-            }[state]
-          )}
-        />
-      )}
+      <Workflow
+        aria-hidden
+        className={cn(
+          "h-4 w-4 shrink-0",
+          {
+            Paused: "text-amber-500",
+            Failed: "text-red-500",
+            Working: "text-green-600 dark:text-green-500",
+            Replied: "text-primary",
+            Waiting: "text-muted-foreground",
+            Idle: "text-muted-foreground",
+          }[state]
+        )}
+      />
       <span className="flex min-w-0 flex-1 flex-col leading-tight">
         {renaming ? (
           <RowRename
@@ -179,7 +151,7 @@ export const OrchestratorPinRow = memo(function OrchestratorPinRow({
           <Button
             variant="ghost"
             size="icon-sm"
-            aria-label={member ? `${label} actions` : "Orchestrator actions"}
+            aria-label="Orchestrator actions"
             className="-mr-2.5 h-11 w-11 shrink-0 md:-mr-1.5 md:h-7 md:w-7 [@media(hover:none)]:md:-mr-2.5 [@media(hover:none)]:md:h-11 [@media(hover:none)]:md:w-11"
           >
             <MoreHorizontal className="h-4 w-4" />
@@ -250,44 +222,9 @@ export function OrchestratorStartRow({
   );
 }
 
-// A shipped lead the team doesn't have yet, dashed and faded: a tap opens
-// "Add leads" with it ticked.
-export function TeamAddRow({
-  workspaceId,
-  kind,
-}: {
-  workspaceId: string;
-  kind: string;
-}) {
-  const title = charterTemplate(kind).title;
-  return (
-    <RowFrame
-      data-tip={`${title}\nAdd lead`}
-      aria-label={`Add a ${title}`}
-      onActivate={() => leadsUiActions.openAdd(workspaceId, kind)}
-      className="hover:bg-muted/50 border-dashed"
-    >
-      <span className="opacity-50">
-        <LeadAvatar
-          member={{ kind, letter: memberLetter(kind), title }}
-          size="md"
-        />
-      </span>
-      <span className="flex min-w-0 flex-1 flex-col leading-tight">
-        <span className="text-muted-foreground min-w-0 truncate text-[13px] font-medium">
-          {title}
-        </span>
-        <span className="text-muted-foreground/70 mt-0.5 truncate text-xs">
-          Add lead
-        </span>
-      </span>
-    </RowFrame>
-  );
-}
-
 // The orchestrator rows' shared shape: a bordered card a tap or Enter opens.
 // The rest goes on the div, for the context menu trigger's props and ref.
-export function RowFrame({
+function RowFrame({
   onActivate,
   className,
   ...rest

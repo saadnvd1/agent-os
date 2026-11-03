@@ -14,7 +14,6 @@ import {
 import type { ChatItem, ChatOrigin, ChatOriginKind } from "@/lib/chat/events";
 import { eventParts, originOf } from "@/lib/chat/origin";
 import { ForkResults } from "./ForkResults";
-import { ThreadCard } from "@/components/Leads/ThreadCard";
 import { SessionAnchor } from "./SessionAnchor";
 import { cn } from "@/lib/utils";
 import { UserMessage } from "./Messages";
@@ -166,13 +165,6 @@ export function EventRow({
   const { body, decided } = eventParts(item, origin);
   const decidedLabel = `${ownerInUi(useOwnerName(), true)} decided`;
   const decision = origin.kind === "decision";
-  if (origin.mail)
-    return (
-      <ThreadCard
-        mail={origin.mail}
-        fallback={<EventLine item={item} origin={origin} body={body} />}
-      />
-    );
   if (origin.forks)
     return (
       <ForkResults
@@ -220,26 +212,6 @@ export function EventRow({
         />
       )}
     </div>
-  );
-}
-
-function EventLine({
-  item,
-  origin,
-  body,
-}: {
-  item: UserItem;
-  origin: ChatOrigin;
-  body: string;
-}) {
-  return (
-    <Row
-      id={item.id}
-      kind={origin.kind}
-      head={<Source origin={origin} />}
-      body={body}
-      at={item.createdAt}
-    />
   );
 }
 

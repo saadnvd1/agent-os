@@ -7,7 +7,6 @@
  * other machines' callers are never loosened.
  */
 
-import { isTechRole } from "../leads/roles";
 import { getWorkspace } from "../workspaces";
 import type { Session } from "../db";
 
@@ -18,5 +17,5 @@ export function fullAccessOn(workspaceId: string | null | undefined): boolean {
 export function orchestratorFullAccess(
   session: Pick<Session, "role" | "workspace_id">
 ): boolean {
-  return isTechRole(session.role) && fullAccessOn(session.workspace_id);
+  return session.role === "orchestrator" && fullAccessOn(session.workspace_id);
 }

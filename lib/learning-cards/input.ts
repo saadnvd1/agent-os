@@ -2,7 +2,6 @@
 // brief, the final report and the tool and user steps, each cut down.
 // Never the transcript.
 
-import { isStandingRole, roleNoun } from "../leads/roles";
 import { db, queries, type Session } from "../db";
 import { itemsOfKind, itemsOfKinds } from "../chat/store";
 import { isGitRepo } from "../git";
@@ -62,7 +61,7 @@ export async function readSession(id: string): Promise<SessionInput | null> {
     BRIEF
   );
   let skip: string | null = null;
-  if (isStandingRole(s.role)) skip = roleNoun(s.role);
+  if (s.role === "orchestrator") skip = "orchestrator";
   else if (s.quick_of) skip = "quick change";
   else if (!steps.length && !final) skip = "no conversation";
 

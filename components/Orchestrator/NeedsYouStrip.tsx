@@ -40,16 +40,11 @@ export interface NeedsYouActions {
 // it is resolved. Dismissing an item only hides it; an ask stays open.
 export const NeedsYouStrip = memo(function NeedsYouStrip({
   workspaceId,
-  sessionId,
   chatWaiting,
   onGo,
   onReply,
-}: NeedsYouActions & {
-  workspaceId: string;
-  sessionId: string;
-  chatWaiting: boolean;
-}) {
-  const items = useNeedsYou(workspaceId, sessionId, chatWaiting);
+}: NeedsYouActions & { workspaceId: string; chatWaiting: boolean }) {
+  const items = useNeedsYou(workspaceId, chatWaiting);
   const dismiss = useDismissNeedsYou(workspaceId);
   const cards = useApplyCard();
   // The learning card opened in place.

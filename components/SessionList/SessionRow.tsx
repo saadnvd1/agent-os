@@ -1,6 +1,5 @@
 "use client";
 
-import { isTechRole } from "@/lib/leads/roles";
 import { AGENT_ROLE_DEFS, isAgentRole } from "@/lib/models/agent-roles";
 import { isFork } from "@/lib/sessions/fork";
 import { memo, useState } from "react";
@@ -24,14 +23,7 @@ import { QuickChangeRow } from "./QuickChangeRow";
 import { useRowContext } from "./RowContext";
 import { SessionRowMenu } from "./SessionRowMenu";
 import { RowShell, type RowMenuKind } from "./RowShell";
-import {
-  CardBadge,
-  LeadAvatar,
-  NestRail,
-  RowDot,
-  RowRename,
-  UnreadDot,
-} from "./RowParts";
+import { CardBadge, NestRail, RowDot, RowRename, UnreadDot } from "./RowParts";
 import { RowSubtitle } from "./RowSubtitle";
 import { OrchestratorAsks } from "./OrchestratorAsks";
 import { useRowDrag } from "./useGroupDrag";
@@ -56,10 +48,6 @@ export const SessionRow = memo(function SessionRow({
   const active = session.id === ctx.activeSessionId;
   const viaName = session.started_by
     ? ctx.orchestratorNames.get(session.started_by)
-    : undefined;
-  // Started by a chief or lead: its avatar instead of the orchestrator mark.
-  const viaLead = session.started_by
-    ? ctx.team.get(session.started_by)
     : undefined;
   const selecting = selectedIds.size > 0;
   const selected = selectedIds.has(session.id);
@@ -120,22 +108,13 @@ export const SessionRow = memo(function SessionRow({
         }
         aside={
           <>
-            {viaLead ? (
-              <span
-                data-tip={`Started by ${viaLead.title}`}
-                className="shrink-0"
-              >
-                <LeadAvatar member={viaLead} label={`Via ${viaLead.title}`} />
+            {viaName && (
+              <span data-tip={`Started by ${viaName}`} className="shrink-0">
+                <Workflow
+                  aria-label={`Via orchestrator: ${viaName}`}
+                  className="text-muted-foreground/60 h-3 w-3"
+                />
               </span>
-            ) : (
-              viaName && (
-                <span data-tip={`Started by ${viaName}`} className="shrink-0">
-                  <Workflow
-                    aria-label={`Via orchestrator: ${viaName}`}
-                    className="text-muted-foreground/60 h-3 w-3"
-                  />
-                </span>
-              )
             )}
             {cardCount > 0 && <CardBadge count={cardCount} />}
             {row.unread && !badge && <UnreadDot />}
@@ -194,7 +173,7 @@ export const SessionRow = memo(function SessionRow({
           }
         />
       </RowShell>
-      {isTechRole(session.role) && row.need && (
+      {session.role === "orchestrator" && row.need && (
         <OrchestratorAsks workspaceId={session.workspace_id} />
       )}
       {(row.workers.length > 0 || !!row.quick?.length) && (

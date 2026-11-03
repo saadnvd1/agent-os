@@ -8,7 +8,6 @@
  * its own action, archive.ts). What it will do is decided first (plan.ts).
  */
 
-import { isStandingRole, RoleLabel } from "../leads/roles";
 import { endPauseOnFinish } from "../tasks/pause-hold";
 import { db, queries, type Session } from "../db";
 import { endSessionAgent } from "../sessions/end";
@@ -133,8 +132,8 @@ export async function doneSession(
   // A demo archives and nothing more: no merge, no agent to stop, no
   // worktree to touch.
   if (demoMode()) {
-    if (isStandingRole(s.role))
-      throw new Error(`${RoleLabel(s.role)} isn't marked done.`);
+    if (s.role === "orchestrator")
+      throw new Error("An orchestrator isn't marked done.");
     if (s.archived_at) throw new Error(`${s.name} is already archived.`);
     if (s.task_prompt) setTask(db, s.id, { task_status: "done" });
     archiveSession(s.id);

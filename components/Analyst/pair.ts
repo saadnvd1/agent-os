@@ -1,6 +1,5 @@
 "use client";
 
-import { isStandingRole } from "@/lib/leads/roles";
 import { useCallback } from "react";
 import { toast } from "sonner";
 import { usePanes } from "@/contexts/PaneContext";
@@ -73,7 +72,7 @@ export function useCanAddAnalyst(session: Session | null | undefined) {
   const paired = useSessionAnalyst(chat?.id).data;
   return (
     !!chat &&
-    !isStandingRole(chat.role) &&
+    !chat.role &&
     !chat.archived_at &&
     (chat.host_id || "local") === "local" &&
     chat.agent_role !== "analyst" &&

@@ -157,20 +157,6 @@ const StartAnalystSheet = dynamic(
     ),
   { ssr: false }
 );
-const AddLeadsSheet = dynamic(
-  () =>
-    import("@/components/Leads/AddLeads/AddLeadsSheet").then(
-      (m) => m.AddLeadsSheet
-    ),
-  { ssr: false }
-);
-const AdoptLeadSheet = dynamic(
-  () =>
-    import("@/components/Leads/AddLeads/AdoptLeadSheet").then(
-      (m) => m.AdoptLeadSheet
-    ),
-  { ssr: false }
-);
 const CommandPalette = dynamic(
   () =>
     import("@/components/CommandPalette/CommandPalette").then(
@@ -202,8 +188,6 @@ const AppDialogs = memo(function AppDialogs({
       <InviteDialog />
       <ExportSheet />
       <StartAnalystSheet />
-      <AddLeadsSheet />
-      <AdoptLeadSheet />
       <AwayReport />
       <IncomingLinks />
       <CommandPalette />

@@ -5,7 +5,6 @@
  * events to whoever is watching. Restarting the server leaves turns running.
  */
 
-import { isStandingRole } from "../leads/roles";
 import { pushPlanReady } from "../notify/push/events";
 import {
   handoffAfterPlan,
@@ -639,7 +638,7 @@ async function resumeCutOff(sessionId: string): Promise<void> {
   const task =
     row.workspace_id &&
     row.task_status === "running" &&
-    !isStandingRole(row.role)
+    row.role !== "orchestrator"
       ? row.workspace_id
       : null;
   try {
@@ -924,7 +923,7 @@ export async function freshStartChat(
     id: `note-refresh-${Date.now()}`,
     kind: "note",
     tone: "note",
-    text: `Fresh start: the agent starts a new conversation with its brief${isStandingRole(session.role) ? " and the current state from AgentOS" : ""} at its next message.`,
+    text: `Fresh start: the agent starts a new conversation with its brief${session.role === "orchestrator" ? " and the current state from AgentOS" : ""} at its next message.`,
     createdAt: Date.now(),
   };
   saveItem(sessionId, item);

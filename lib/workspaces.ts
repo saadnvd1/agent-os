@@ -3,7 +3,6 @@
  * presentation only: deleting one leaves its projects ungrouped.
  */
 
-import { sqlNoRole, sqlStanding } from "./leads/roles";
 import { randomUUID } from "crypto";
 import { db, type Workspace } from "./db";
 import { clearForeignGroup } from "./session-groups/assignSessions";
@@ -120,11 +119,11 @@ export function deleteWorkspace(id: string): void {
     // Sessions filed here by being started here go back to "All workspaces".
     db.prepare(
       `UPDATE sessions SET workspace_id = NULL
-       WHERE ${sqlNoRole()} AND workspace_id = ?`
+       WHERE role IS NULL AND workspace_id = ?`
     ).run(id);
-    // Its orchestrator, leads and chief go with it; a running worker idles out on its own.
+    // Its orchestrator goes with it; a running worker idles out on its own.
     db.prepare(
-      `DELETE FROM sessions WHERE ${sqlStanding()} AND workspace_id = ?`
+      `DELETE FROM sessions WHERE role = 'orchestrator' AND workspace_id = ?`
     ).run(id);
     for (const table of [
       "orchestrator_events",

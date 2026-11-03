@@ -5,7 +5,6 @@
  * sessions.
  */
 
-import { isStandingRole, isTechRole, roleNoun, sqlTech } from "../leads/roles";
 import { agentosHome } from "../agentos-home";
 import { resolveRoleOrDefault } from "../models/resolve";
 import fs from "fs";
@@ -22,7 +21,7 @@ export function getOrchestrator(workspaceId: string): Session | null {
   return (
     (db
       .prepare(
-        `SELECT * FROM session_rows WHERE ${sqlTech()} AND workspace_id = ?`
+        `SELECT * FROM session_rows WHERE role = 'orchestrator' AND workspace_id = ?`
       )
       .get(workspaceId) as Session | undefined) ?? null
   );
@@ -30,7 +29,7 @@ export function getOrchestrator(workspaceId: string): Session | null {
 
 export function listOrchestrators(): Session[] {
   return db
-    .prepare(`SELECT * FROM session_rows WHERE ${sqlTech()}`)
+    .prepare(`SELECT * FROM session_rows WHERE role = 'orchestrator'`)
     .all() as Session[];
 }
 
@@ -38,7 +37,7 @@ export function isOrchestrator(sessionId: string): boolean {
   const row = db
     .prepare(`SELECT role FROM sessions WHERE id = ?`)
     .get(sessionId) as { role: string | null } | undefined;
-  return isTechRole(row?.role);
+  return row?.role === "orchestrator";
 }
 
 // The workspace's orchestrator, made the first time it's opened. Opening it
@@ -93,10 +92,10 @@ export function isOrchestratorToken(
   return a.length === b.length && timingSafeEqual(a, b);
 }
 
-// Why a session can't be deleted on its own, or null. A standing session
-// (the orchestrator, a lead, the chief) goes only with its workspace.
+// Why a session can't be deleted on its own, or null. An orchestrator goes
+// only with its workspace.
 export function deletionRefusal(session: Pick<Session, "role">): string | null {
-  return isStandingRole(session.role)
-    ? `A workspace's ${roleNoun(session.role)} can't be deleted; it goes with its workspace`
+  return session.role === "orchestrator"
+    ? "A workspace's orchestrator can't be deleted; it goes with its workspace"
     : null;
 }

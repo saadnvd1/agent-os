@@ -15,6 +15,5 @@ How-to guides for using AgentOS, in reading order.
 11. [Tips and What's New](tips.md): the lightbulb and sparkle in the sidebar, what a tip is, and how to turn tips off.
 12. [Getting around](navigation.md): each chat reopens where you left it, what is new since, and back and forward between chats.
 13. [Can't reach your machine](reachability.md): one check that names why another device can't reach AgentOS, and the fix for each cause.
-14. [Leads](leads.md): department heads and a chief of staff for a workspace, pinned direction, and adopting a chat you already have.
 
 How each part works in detail is in [the reference docs](https://github.com/saadnvd1/agent-os/tree/main/docs/reference).

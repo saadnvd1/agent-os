@@ -26,10 +26,7 @@ aos peers                         # sessions, their project, what each is doing
 aos send <session> "message"      # wakes the other session with the message
                                   # (`aos send orchestrator "..."` reaches your workspace's own)
                                   # also <workspace>/orchestrator and <workspace>/<session>,
-                                  # across workspaces (ambiguous: it refuses and lists);
-                                  # in a workspace with leads, <workspace>/<lead> and <workspace>/chief too
-                                  # (acme/marketing; acme/tech is its orchestrator)
-aos leads [--all]                 # your workspace's leads, their areas and addresses
+                                  # across workspaces (ambiguous: it refuses and lists)
 aos send <session> --await [--timeout 30m] "message"
                                   # and wait for the reply: end your turn, you're woken
 aos send <session> --reply <id> "message"   # answer message #id

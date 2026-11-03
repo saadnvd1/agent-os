@@ -1,4 +1,3 @@
-import { isStandingRole, RoleLabel } from "../leads/roles";
 import { db, type Session } from "../db";
 import { lastItems } from "../chat/store";
 import { launchSession } from "../sessions/launch";
@@ -19,8 +18,7 @@ const sessionRow = (id: string) =>
 export function coderRefusal(s: Session | undefined): string | null {
   if (!s) return "Session not found";
   if (s.archived_at) return `${s.name} is archived`;
-  if (isStandingRole(s.role))
-    return `${RoleLabel(s.role)} can't have an analyst`;
+  if (s.role === "orchestrator") return "An orchestrator can't have an analyst";
   if (s.view !== "chat")
     return "Only a chat session can have an analyst: a terminal has no turns to review";
   if ((s.host_id || "local") !== "local")

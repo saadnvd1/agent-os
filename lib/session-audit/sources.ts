@@ -4,7 +4,6 @@
  * asks, messages, chat cost). Reads the database read-only.
  */
 
-import { isStandingRole } from "../leads/roles";
 import Database from "better-sqlite3";
 import fs from "fs";
 import os from "os";
@@ -54,7 +53,7 @@ function ownsFolder(cwd: string, home: string): boolean {
 }
 
 function kindOf(row: SessionRow): SessionKind {
-  if (isStandingRole(row.role)) return "orchestrator";
+  if (row.role === "orchestrator") return "orchestrator";
   if (row.task_prompt) return "task";
   return row.view === "chat" ? "chat" : "terminal";
 }
@@ -308,9 +307,9 @@ export function loadSignals(
   let fromOrchestrator = 0;
   let toTasks = 0;
   for (const m of msgs) {
-    if (isStandingRole(m.from_role)) fromOrchestrator++;
+    if (m.from_role === "orchestrator") fromOrchestrator++;
     if (m.to_task) toTasks++;
-    if (!isStandingRole(m.from_role)) continue;
+    if (m.from_role !== "orchestrator") continue;
     const text = normalizeError(m.body).slice(0, 90);
     const t = texts.get(text) ?? { count: 0, sessions: new Set<string>() };
     t.count++;

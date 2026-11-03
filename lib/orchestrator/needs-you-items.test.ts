@@ -14,7 +14,6 @@ const ask = (id: number, over: Partial<AskView> = {}): AskView => ({
   binding: "",
   presence: false,
   createdAt: `2026-10-13 0${id}:00:00`,
-  leadKind: "tech",
   ...over,
 });
 const question = (

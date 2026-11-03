@@ -2,7 +2,6 @@
 // program's own reports (OSC 7501) or, failing that, their screen; chats
 // from their live conversation. Shared by GET /api/sessions/status and the
 // pushed /ws/status stream.
-import { isStandingRole } from "../leads/roles";
 import { controlManager } from "../tmux/control";
 import { managedPanes } from "./managed";
 import { findResumeId } from "../providers/resume-ids";
@@ -39,7 +38,7 @@ import type { SessionNeed } from "../sidebar/shelves";
 import type { PrStage } from "../tasks/pr-stage";
 import { addPrStages } from "./pr-stages";
 import type { Compacting } from "../chat/events";
-import { standingAskCount } from "../orchestrator/asks";
+import { openAskCount } from "../orchestrator/asks";
 import { lastUserTask } from "../chat/store";
 import { hostExecFile, isRemoteHost } from "../hosts";
 import { linkedHostIds } from "../hosts/remote-api";
@@ -479,10 +478,10 @@ async function collect(full = false): Promise<StatusSnapshot> {
   )) {
     const state = chatState(session.id);
     const background = chatActivity(session.id)?.background;
-    const orchestrator = isStandingRole(session.role);
+    const orchestrator = session.role === "orchestrator";
     // What the database says; the rest below moves with time or the process.
     const base = chatMemo(pass, session.id, orchestrator, state ?? "", () => {
-      const asks = orchestrator ? standingAskCount(session) : 0;
+      const asks = orchestrator ? openAskCount(session.workspace_id) : 0;
       return {
         asks,
         waiting: needsYou(session, state),

@@ -7,7 +7,6 @@
  * is by id, so the same database gives the same text.
  */
 
-import { sqlNoRole } from "../leads/roles";
 import { loopDigestNote } from "../loops/summary";
 import { db } from "../db";
 import { openAsks } from "./asks";
@@ -42,7 +41,7 @@ export const clip = (text: string, cap = LINE_CAP) => {
 
 const sha7 = (sha: string | null) => (sha ? sha.slice(0, 7) : "?");
 
-export interface Section {
+interface Section {
   title: string;
   lines: string[];
   // Shown when the section is empty; omitted otherwise.
@@ -171,7 +170,7 @@ function tasksSection(
       `SELECT s.id, s.name, p.name AS project, s.pr_number, s.pr_status, s.view,
          s.merge_armed_at AS armed_at, s.pause_state, s.paused_until, s.pause_note, s.placed_note
        FROM session_rows s JOIN projects p ON p.id = s.project_id
-       WHERE p.workspace_id = ? AND ${sqlNoRole("s.role")} AND s.archived_at IS NULL
+       WHERE p.workspace_id = ? AND s.role IS NULL AND s.archived_at IS NULL
          AND s.task_status = 'running'
        ORDER BY s.created_at, s.id`
     )

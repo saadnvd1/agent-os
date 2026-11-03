@@ -14,7 +14,7 @@ import type { PermissionMode } from "@anthropic-ai/claude-agent-sdk";
 import os from "os";
 import path from "path";
 import { ORCHESTRATOR_PERMISSIONS } from "./tool-names";
-import { listLeads } from "../leads/home";
+import { getOrchestrator } from "./home";
 import { getWorkspace } from "../workspaces";
 import { retireChat } from "../chat/runner";
 
@@ -92,11 +92,10 @@ export function configuredMcpServers(): string[] {
   return [...names].sort((a, b) => a.localeCompare(b));
 }
 
-// A workspace's allowed servers changed: its orchestrator's worker, and each
-// lead's, ends at its next turn boundary and the next one starts with the
-// new permissions.
+// A workspace's allowed servers changed: its orchestrator's worker ends at its
+// next turn boundary and the next one starts with the new permissions.
 export async function applyMcpServers(workspaceId: string): Promise<void> {
-  if (!getWorkspace(workspaceId)) return;
-  for (const lead of listLeads(workspaceId))
-    await retireChat(lead.id).catch(() => {});
+  const orchestrator = getOrchestrator(workspaceId);
+  if (orchestrator && getWorkspace(workspaceId))
+    await retireChat(orchestrator.id).catch(() => {});
 }
