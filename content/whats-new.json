@@ -2127,6 +2127,14 @@
       "text": "The chief of staff now carries out your requests itself, including adding leads and rewriting their charters.",
       "url": "https://github.com/saadnvd1/agent-os/pull/589",
       "hidden": true
+    },
+    {
+      "id": 598,
+      "date": "2026-11-03",
+      "kind": "new",
+      "area": "AgentOS",
+      "text": "You can now pick the agent and model when starting a session or task from the command line.",
+      "url": "https://github.com/saadnvd1/agent-os/pull/598"
     }
   ]
 }
