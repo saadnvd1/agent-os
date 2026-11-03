@@ -6,6 +6,7 @@ import { isPriority } from "@/lib/tasks/schedule-types";
 import { hostIdNamed } from "@/lib/hosts";
 import { resolveGroup } from "@/lib/session-groups";
 import { launchSession, startView } from "@/lib/sessions/launch";
+import { isValidAgentType } from "@/lib/providers";
 import { isAgentRole } from "@/lib/models/agent-roles";
 import { callerSession, starterOf } from "@/lib/tasks/starter";
 import { callingDevice } from "@/lib/security/device-me";
@@ -37,6 +38,7 @@ export async function POST(request: NextRequest) {
       piece,
       group,
       agentRole,
+      agent,
     } = await request.json();
     // Whoever called: a session (by `from`, else the worktree it runs in) or a person.
     const starter = starterOf(
@@ -57,6 +59,12 @@ export async function POST(request: NextRequest) {
       throw new Error('machine is "mac" or "any"');
     if (piece !== undefined && mode !== "task")
       throw new Error("--piece works for tasks only");
+    if (agent !== undefined && !isValidAgentType(agent))
+      throw new Error("Unknown agent");
+    if (agent !== undefined && agentRole !== undefined)
+      throw new Error("--agent doesn't work with --role");
+    if (agent !== undefined && startView(view) === "terminal")
+      throw new Error("--agent doesn't work with --terminal");
     const target = findProject(String(project ?? ""));
     if (group !== undefined && (typeof group !== "string" || !group.trim()))
       throw new Error("--group needs a group name");
@@ -81,6 +89,7 @@ export async function POST(request: NextRequest) {
         pieceId,
         prompt: String(prompt ?? ""),
         name: given,
+        agent: agent && agent !== "claude" ? agent : undefined,
         model,
         hostId: on ? hostIdNamed(String(on)) : undefined,
         view: startView(view),
@@ -130,7 +139,7 @@ export async function POST(request: NextRequest) {
     if (target.is_uncategorized) throw new Error("Pick a real project");
     const { session } = await launchSession({
       projectId: target.id,
-      agentType: "claude",
+      agentType: agent ?? "claude",
       prompt,
       name: given,
       model: typeof model === "string" ? model : null,

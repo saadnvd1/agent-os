@@ -39,6 +39,9 @@ aos read <session>                # what a session in your workspace said and di
 aos spawn <project> "prompt"      # start a new chat session in a project (--terminal: tmux)
 aos task <project> "prompt"       # start a background task that ends in a PR
                                   # (both take --group <name>: file it in a group)
+                                  # (both take --agent <agent> and --model <model> to pick the
+                                  # agent and its model; --agent can't join --role or --terminal)
+aos models [--agent <agent>]      # the models each agent offers (what --model takes)
 aos group                         # your workspace's groups and their sizes
 aos group new "<name>" | rename "<group>" "<name>"
 aos group add "<group>" <session...>   # file sessions (`me` is you)
