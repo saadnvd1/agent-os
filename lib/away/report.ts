@@ -4,7 +4,6 @@
  * as Away ends and kept with the period, so it reads the same later.
  */
 
-import { sqlNoRole } from "../leads/roles";
 import { db } from "../db";
 import { listWorkspaces } from "../workspaces";
 import { HARD_LINES, openAsks } from "../orchestrator/asks";
@@ -179,7 +178,7 @@ function inFlight(workspaceId: string, awayId: number): InFlightItem[] {
       `SELECT s.id, s.name, p.name AS project, s.pr_number, s.pr_url,
          s.merge_armed_at AS armed_at
        FROM session_rows s JOIN projects p ON p.id = s.project_id
-       WHERE p.workspace_id = ? AND ${sqlNoRole("s.role")} AND s.archived_at IS NULL
+       WHERE p.workspace_id = ? AND s.role IS NULL AND s.archived_at IS NULL
          AND s.task_status = 'running'
          AND EXISTS (SELECT 1 FROM away_actions a WHERE a.away_id = ?
            AND a.subject = s.id AND a.kind IN (${TOUCHED}))

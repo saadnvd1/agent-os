@@ -2,8 +2,6 @@
  * Which live session a name someone typed reaches, across workspaces.
  */
 
-import { isTechRole, memberKind } from "../leads/roles";
-import { hasLeads } from "../leads/settings";
 import { db, type Session } from "../db";
 import { getProject } from "../projects";
 import { getWorkspace } from "../workspaces";
@@ -39,11 +37,7 @@ export function candidates(sessions: Session[]): Candidate[] {
     tmuxName: s.tmux_name,
     previousNames: old.get(s.id) ?? [],
     workspaceName: workspaceName(s),
-    orchestrator: isTechRole(s.role),
-    // The orchestrator answers to "tech" only once its workspace has leads;
-    // the chief to "chief".
-    leadKind:
-      isTechRole(s.role) && !hasLeads(s.workspace_id) ? null : memberKind(s),
+    orchestrator: s.role === "orchestrator",
   }));
 }
 
@@ -83,7 +77,7 @@ function ownOrchestrator(
   const workspace = caller ? sessionWorkspace(caller) : null;
   if (!workspace) return undefined;
   return sessions.find(
-    (s) => isTechRole(s.role) && s.workspace_id === workspace
+    (s) => s.role === "orchestrator" && s.workspace_id === workspace
   );
 }
 
@@ -101,7 +95,7 @@ export function tryResolveTarget(
   const r = resolveRef(ref, candidates(sessions));
   if (!r.ok) {
     const orchestrators = /^(my )?orchestrator$/i.test(ref.trim())
-      ? sessions.filter((s) => isTechRole(s.role))
+      ? sessions.filter((s) => s.role === "orchestrator")
       : [];
     if (orchestrators.length)
       return {

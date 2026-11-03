@@ -2072,7 +2072,8 @@
       "kind": "new",
       "area": "AgentOS",
       "text": "Turn on Leads in Settings → Experiments to give a workspace a team of leads and a chief of staff, or make an existing chat a lead without losing its history.",
-      "url": "https://github.com/saadnvd1/agent-os/pull/584"
+      "url": "https://github.com/saadnvd1/agent-os/pull/584",
+      "hidden": true
     },
     {
       "id": 585,
@@ -2088,7 +2089,8 @@
       "kind": "improved",
       "area": "Sidebar",
       "text": "In All workspaces, clicking a workspace opens its Chief of Staff chat, and clicking a lead's icon opens that lead, without leaving the view.",
-      "url": "https://github.com/saadnvd1/agent-os/pull/586"
+      "url": "https://github.com/saadnvd1/agent-os/pull/586",
+      "hidden": true
     },
     {
       "id": 587,
@@ -2096,7 +2098,8 @@
       "kind": "new",
       "area": "AgentOS",
       "text": "You can now edit a lead's charter, and a running lead is told about the change right away.",
-      "url": "https://github.com/saadnvd1/agent-os/pull/587"
+      "url": "https://github.com/saadnvd1/agent-os/pull/587",
+      "hidden": true
     },
     {
       "id": 588,
@@ -2104,7 +2107,8 @@
       "kind": "fixed",
       "area": "AgentOS",
       "text": "With leads turned on, the workspace's main assistant now shows as the Tech lead everywhere instead of \"orchestrator\".",
-      "url": "https://github.com/saadnvd1/agent-os/pull/588"
+      "url": "https://github.com/saadnvd1/agent-os/pull/588",
+      "hidden": true
     },
     {
       "id": 591,
@@ -2112,7 +2116,8 @@
       "kind": "fixed",
       "area": "AgentOS",
       "text": "Messages between leads that were held back for going back and forth too often are now delivered once you approve them.",
-      "url": "https://github.com/saadnvd1/agent-os/pull/591"
+      "url": "https://github.com/saadnvd1/agent-os/pull/591",
+      "hidden": true
     },
     {
       "id": 589,
@@ -2120,7 +2125,8 @@
       "kind": "improved",
       "area": "AgentOS",
       "text": "The chief of staff now carries out your requests itself, including adding leads and rewriting their charters.",
-      "url": "https://github.com/saadnvd1/agent-os/pull/589"
+      "url": "https://github.com/saadnvd1/agent-os/pull/589",
+      "hidden": true
     }
   ]
 }

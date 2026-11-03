@@ -18,20 +18,7 @@ import { addNote } from "./notes";
 import { cleanTitle, classifyKind, titleSubject } from "./ask-text";
 import { revokePasskey } from "../security/passkeys";
 import type { AskKind } from "./ask-view";
-import { TECH, type LeadKind } from "../leads/types";
-import { leadKindOf } from "../leads/roles";
 import { owner, ownerUi } from "../owner";
-
-const tellLead = (workspaceId: string, kind: LeadKind, line: string) =>
-  import("../leads/deliver")
-    .then((m) => m.tellLead(workspaceId, kind, line))
-    .catch((e) => console.error(`Ask answer for the ${kind} lead:`, e));
-
-// A lead-thread ask holds a lead's message; the answer settles it.
-const settleHeld = (ask: AskRow, action: AskAnswer["action"]) =>
-  import("../leads/held")
-    .then((m) => m.settleHeldAsk(ask, action))
-    .catch((e) => console.error("Held lead mail:", e));
 
 export { ASK_KINDS, type AskKind } from "./ask-view";
 
@@ -92,9 +79,6 @@ export interface AskRow {
   // "orchestrator" for a merge ask it raised with ask_owner; null when the
   // gates, the brakes or AgentOS raised or last wrote it.
   raised_by: string | null;
-  // The lead it is for (lib/leads): "tech", the orchestrator, unless a lead
-  // raised it. Two leads on one subject share the first one's ask.
-  lead_kind: LeadKind;
 }
 
 export type AskAnswer =
@@ -181,7 +165,6 @@ export function raiseAsk(input: {
   sha?: string | null;
   brakeKey?: string | null;
   raisedBy?: "orchestrator" | null;
-  leadKind?: LeadKind;
 }): { ask: AskRow; created: boolean } {
   const title = cleanTitle(input.title);
   if (!title) throw new Error("An ask needs a title");
@@ -214,8 +197,8 @@ export function raiseAsk(input: {
     if (refused) throw new AskRefused(refused);
     const { lastInsertRowid } = db
       .prepare(
-        `INSERT INTO orchestrator_asks (workspace_id, subject, kind, title, detail, link, sha, brake_key, raised_by, lead_kind)
-         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
+        `INSERT INTO orchestrator_asks (workspace_id, subject, kind, title, detail, link, sha, brake_key, raised_by)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`
       )
       .run(
         input.workspaceId,
@@ -226,8 +209,7 @@ export function raiseAsk(input: {
         link,
         sha,
         brakeKey,
-        raisedBy,
-        input.leadKind ?? TECH
+        raisedBy
       );
     return {
       ask: getAsk(input.workspaceId, Number(lastInsertRowid))!,
@@ -272,32 +254,15 @@ export function openAsks(workspaceId: string): AskRow[] {
     .all(workspaceId) as AskRow[];
 }
 
-export function openAskCount(
-  workspaceId: string | null | undefined,
-  leadKind?: LeadKind
-): number {
+export function openAskCount(workspaceId: string | null | undefined): number {
   if (!workspaceId) return 0;
-  const lead = leadKind === undefined ? "" : " AND lead_kind = ?";
   return (
     db
       .prepare(
-        `SELECT COUNT(*) AS n FROM orchestrator_asks WHERE workspace_id = ? AND status = 'open'${lead}`
+        `SELECT COUNT(*) AS n FROM orchestrator_asks WHERE workspace_id = ? AND status = 'open'`
       )
-      .get(workspaceId, ...(leadKind === undefined ? [] : [leadKind])) as {
-      n: number;
-    }
+      .get(workspaceId) as { n: number }
   ).n;
-}
-
-// The open asks a standing session answers for: its own lead's. The chief
-// heads no department, so none are its.
-export function standingAskCount(s: {
-  role: string | null;
-  lead_kind?: string | null;
-  workspace_id?: string | null;
-}): number {
-  const kind = leadKindOf(s);
-  return kind ? openAskCount(s.workspace_id, kind) : 0;
 }
 
 const short = (sha: string | null) => (sha ? sha.slice(0, 7) : "its head");
@@ -355,10 +320,6 @@ export function answerAsk(
   const text =
     answer.action === "reply" ? cap(answer.text, 4000) : answer.action;
   if (answer.action === "reply" && !text) throw new Error("The reply is empty");
-  // Another lead's ask is answered in its own chat; Tech's events stay
-  // exactly as they were.
-  const ownLead =
-    ask.lead_kind && ask.lead_kind !== TECH ? ask.lead_kind : null;
   const line = answerLine(
     ask,
     answer.action === "reply" ? { action: "reply", text } : answer,
@@ -369,20 +330,11 @@ export function answerAsk(
       `UPDATE orchestrator_asks SET status = ?, answer = ?, resolved_at = datetime('now') WHERE id = ?`
     ).run(STATUS_OF[answer.action], text, id);
     if (ask.kind === "passkey") settlePasskeyAsk(ask, answer.action);
-    else if (!ownLead) queueEvent(workspaceId, answerKey(id), null, line);
+    else queueEvent(workspaceId, answerKey(id), null, line);
   })();
-  if (ask.subject.startsWith("lead-thread:"))
-    void settleHeld(ask, answer.action);
-  if (ownLead && ask.kind !== "passkey")
-    void tellLead(workspaceId, ownLead, line);
   // An auto-approval is noted once, by recordAutoApproval.
   if (by === "saad")
-    addNote(
-      workspaceId,
-      `${ownerUi(true)} answered ${line}`,
-      "ask",
-      ownLead ?? undefined
-    );
+    addNote(workspaceId, `${ownerUi(true)} answered ${line}`, "ask");
   return getAsk(workspaceId, id)!;
 }
 

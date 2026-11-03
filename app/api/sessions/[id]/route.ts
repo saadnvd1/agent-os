@@ -1,4 +1,3 @@
-import { isStandingRole } from "@/lib/leads/roles";
 import { removeFork } from "@/lib/fork/scratch";
 import { removeSessionAttachments } from "@/lib/attachments/store";
 import { NextRequest, NextResponse } from "next/server";
@@ -210,7 +209,7 @@ export async function PATCH(request: NextRequest, { params }: RouteParams) {
     }
 
     let clearedGroup: string | null = null;
-    if (typeof body.projectId === "string" && !isStandingRole(existing.role)) {
+    if (typeof body.projectId === "string" && !existing.role) {
       if (!getProject(body.projectId))
         return NextResponse.json(
           { error: "Project not found" },

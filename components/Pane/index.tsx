@@ -1,6 +1,5 @@
 "use client";
 
-import { isStandingRole, isTechRole } from "@/lib/leads/roles";
 import { hasPrompt } from "@/lib/sessions/has-prompt";
 import { useTaskLogQuery } from "@/data/session-logs";
 import { SetupCard } from "@/components/Chat/SetupCard";
@@ -184,7 +183,7 @@ export const Pane = memo(function Pane({
   );
   const showGit = showGitToggle(isLocalSession, isGitRepo);
   const showGitDrawer =
-    gitDrawerOpen && showGit && !isStandingRole(session?.role);
+    gitDrawerOpen && showGit && session?.role !== "orchestrator";
   // The folder turned out not to be a repo: don't leave its git view open.
   useEffect(() => {
     if (isGitRepo !== false) return;
@@ -340,12 +339,14 @@ export const Pane = memo(function Pane({
         <ChatPanel
           sessionId={chat.id}
           sessionName={chat.name}
-          accessLocked={isStandingRole(chat.role)}
+          accessLocked={chat.role === "orchestrator"}
           freshStart={
-            (isStandingRole(chat.role) || !!chat.has_brief) && !chat.archived_at
+            (chat.role === "orchestrator" || !!chat.has_brief) &&
+            !chat.archived_at
           }
-          orchestratorOf={isTechRole(chat.role) ? chat.workspace_id : null}
-          standing={isStandingRole(chat.role)}
+          orchestratorOf={
+            chat.role === "orchestrator" ? chat.workspace_id : null
+          }
           active={isActive && isFocused}
         />
       );

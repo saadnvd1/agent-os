@@ -170,15 +170,7 @@ const all = (db: Database.Database, from: string) =>
 // Columns added by migrations after the split these tests seed an old database for.
 const sinceSplit = (rows: Row[]) =>
   rows.map((r) => {
-    const {
-      session_group_id: _g,
-      agent_role: _a,
-      crew_id: _c,
-      lead_kind: _k,
-      lead_since: _s,
-      started_by_lead: _l,
-      ...rest
-    } = r;
+    const { session_group_id: _g, agent_role: _a, crew_id: _c, ...rest } = r;
     return rest;
   });
 const backups = () => {

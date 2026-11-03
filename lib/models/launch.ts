@@ -3,7 +3,6 @@
  * name for its CLI, and the provider's endpoint and key in its environment.
  */
 
-import { isStandingRole } from "../leads/roles";
 import type { Session } from "../db";
 import {
   defaultRoute,
@@ -73,7 +72,7 @@ export async function routeOrchestrator(
   session: Session,
   exec?: SecretCommand
 ): Promise<Session> {
-  if (!isStandingRole(session.role)) return session;
+  if (session.role !== "orchestrator") return session;
   let routed;
   try {
     routed = resolveRole("orchestrator", { workspaceId: session.workspace_id });

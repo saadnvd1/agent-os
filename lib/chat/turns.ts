@@ -31,17 +31,11 @@ export function activityOrigin(item: UserItem): ChatOrigin | null {
   if (!origin || !FOLDED_KINDS.has(origin.kind)) return null;
   // A batch carrying the reader's own answers: the reply is to them.
   if (origin.decided?.length) return null;
-  // Another lead's mail shows as its thread's card, never folded away.
-  if (origin.mail) return null;
   return origin;
 }
 
 export const isQuestionTool = (item: ChatItem): boolean =>
   item.kind === "tool" && /(^|__)question$/.test(item.name);
-
-// A lead's own mail to another lead: drawn as the thread's card.
-export const isMailTool = (name: string): boolean =>
-  /(^|__)message_lead$/.test(name);
 
 export const isAskTool = (item: ChatItem): boolean =>
   item.kind === "tool" && /(^|__)ask_(owner|saad)$/.test(item.name);

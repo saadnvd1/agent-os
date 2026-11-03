@@ -1,7 +1,6 @@
 // The sidebar's one flat list, sorted onto shelves: the workspace's pinned
 // orchestrator, Pinned, the user's groups, Needs you, Working, In review,
 // Ongoing, Snoozed, then Done. Client-safe: no database.
-import { isStandingRole } from "../leads/roles";
 import type { Session } from "@/lib/db/types";
 import { fromSqliteTime } from "@/lib/session-meta";
 import { isFork } from "@/lib/sessions/fork";
@@ -97,8 +96,7 @@ export interface SidebarRow {
 }
 
 export interface Shelves {
-  // Each shown workspace's current orchestrator, while it's pinned; with
-  // Leads on, its chief and leads too, each team together and in order.
+  // Each shown workspace's current orchestrator, while it's pinned.
   orchestrators: SidebarRow[];
   pinned: SidebarRow[];
   // The shown groups in order, empty ones too.
@@ -170,9 +168,6 @@ export interface ShelfInput {
   // Each workspace's current orchestrator (its overview's sessionId). Any
   // other orchestrator session is an ordinary row, pinned or not.
   currentOrchestrators?: ReadonlySet<string>;
-  // With Leads on: each team member's place in its workspace's team (chief,
-  // Tech, Marketing, Product). Its ids are in currentOrchestrators too.
-  leadRanks?: ReadonlyMap<string, number>;
   // Only the sessions this orchestrator session started.
   startedBy?: string | null;
   // The live groups to show, in the order to draw them. A session in any
@@ -186,21 +181,6 @@ const newestFirst = (a: SidebarRow, b: SidebarRow) =>
   b.session.updated_at.localeCompare(a.session.updated_at);
 const oldestFirst = (a: SidebarRow, b: SidebarRow) =>
   a.session.created_at.localeCompare(b.session.created_at);
-
-// Workspaces in the order of their oldest member, each team together in
-// team order. One row per workspace (no leads) is simply oldest first.
-function teamOrder(rows: SidebarRow[], ranks?: ReadonlyMap<string, number>) {
-  rows.sort(oldestFirst);
-  if (!ranks?.size) return;
-  const ws = (r: SidebarRow) => r.session.workspace_id ?? "";
-  const first = new Map<string, number>();
-  rows.forEach((r, i) => first.has(ws(r)) || first.set(ws(r), i));
-  const rank = (r: SidebarRow) =>
-    ranks.get(r.session.id) ?? Number.MAX_SAFE_INTEGER;
-  rows.sort(
-    (a, b) => first.get(ws(a))! - first.get(ws(b))! || rank(a) - rank(b)
-  );
-}
 
 const ms = (t: string | null | undefined) =>
   t ? fromSqliteTime(t).getTime() : 0;
@@ -408,7 +388,7 @@ export function buildShelves(input: ShelfInput): Shelves {
     // Named on a row outside its group (Pinned, Done); inside, the header says it.
     if (mine) row.groupName = mine.group.name;
     if (pinned && current) shelves.orchestrators.push(row);
-    else if (pinned && !isStandingRole(role)) shelves.pinned.push(row);
+    else if (pinned && role !== "orchestrator") shelves.pinned.push(row);
     else {
       const shelf = statusShelf(row, now);
       // Membership beats status. Only finished work goes on to Done (it keeps
@@ -424,7 +404,7 @@ export function buildShelves(input: ShelfInput): Shelves {
     shelf.rows.sort((a, b) => b.activeAt - a.activeAt);
     if (!filtered || shelf.rows.length > 0) shelves.groups.push(shelf);
   }
-  teamOrder(shelves.orchestrators, input.leadRanks);
+  shelves.orchestrators.sort(oldestFirst);
   shelves.pinned.sort(oldestFirst);
   shelves.needsYou.sort(newestFirst);
   shelves.working.sort(newestFirst);
@@ -492,7 +472,8 @@ export function inWorkspace(
   workspaceId: string | null
 ): boolean {
   if (!workspaceId) return true;
-  if (isStandingRole(session.role)) return session.workspace_id === workspaceId;
+  if (session.role === "orchestrator")
+    return session.workspace_id === workspaceId;
   const byProject = session.project_id ? workspaceOf(session.project_id) : null;
   return (byProject ?? session.workspace_id) === workspaceId;
 }

@@ -1,4 +1,3 @@
-import { isStandingRole } from "../leads/roles";
 import type { Session } from "@/lib/db/types";
 import { isOverTask, isRestorableTask } from "@/lib/tasks/restorable";
 import type { TaskState } from "@/lib/tasks/state";
@@ -16,7 +15,7 @@ export function finishActions(
   plain: boolean,
   derived?: TaskState
 ): FinishAction[] {
-  if (isStandingRole(session.role)) return [];
+  if (session.role === "orchestrator") return [];
   if (plain) return ["archive"];
   if (isRestorableTask(session.task_status)) return ["restore", "archive"];
   // The PR can merge before the status catches up.

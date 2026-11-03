@@ -1,7 +1,6 @@
 // The plan badge a row shows: writing its plan, or a plan
 // waiting for approval. A need or a stall says more and wins; finished,
 // snoozed and quick-change rows show none. Client-safe.
-import { isStandingRole } from "../leads/roles";
 import { NEED_LABEL, type SidebarRow } from "./shelves";
 
 export type RowKindBadge = {
@@ -19,8 +18,7 @@ export function rowKindBadge(
 ): RowKindBadge | null {
   const s = row.session;
   if (row.need || row.status?.stalled) return null;
-  if (row.settled || row.wakesAt || s.quick_of || isStandingRole(s.role))
-    return null;
+  if (row.settled || row.wakesAt || s.quick_of || s.role) return null;
   if (s.task_status && s.task_status !== "running") return null;
   if (row.task === "plan-ready" || s.plan_phase === "awaiting")
     return {

@@ -1,8 +1,7 @@
 import { getDb, type Session } from "./db";
 import type { ChatItem, ChatState } from "./chat/events";
 import { originOf } from "./chat/origin";
-import { standingAskCount } from "./orchestrator/asks";
-import { isStandingRole } from "./leads/roles";
+import { openAskCount } from "./orchestrator/asks";
 import { notifyStatusChanged } from "./status/hub";
 import type { SessionNeed } from "./sidebar/shelves";
 import type { ProgramSummary } from "./program-status/records";
@@ -37,12 +36,7 @@ export function needsYou(
     Partial<
       Pick<
         Session,
-        | "role"
-        | "lead_kind"
-        | "workspace_id"
-        | "task_status"
-        | "settled_at"
-        | "archived_at"
+        "role" | "workspace_id" | "task_status" | "settled_at" | "archived_at"
       >
     >,
   chatState: ChatState | null
@@ -52,8 +46,8 @@ export function needsYou(
     // A finished task's agent is stopped: its last turn is history, not news.
     if (session.task_status && session.task_status !== "running") return false;
     if (chatState === "waiting") return true;
-    if (isStandingRole(session.role))
-      return standingAskCount({ ...session, role: session.role }) > 0;
+    if (session.role === "orchestrator")
+      return openAskCount(session.workspace_id) > 0;
     if (session.archived_at) return false;
     const latest = latestChatItem(session.id);
     // Put on the Done shelf after its last turn: that turn is history, not
@@ -95,7 +89,7 @@ export function chatNeed(
   state: ChatState | null,
   asks = 0
 ): SessionNeed | null {
-  if (isStandingRole(session.role))
+  if (session.role === "orchestrator")
     return asks > 0 || state === "waiting" ? "answer" : null;
   if (state === "waiting")
     return pendingApproval(session.id)?.questions?.length
@@ -141,7 +135,7 @@ export function isUnread(
   const seen = sqliteMs(session.last_seen_at);
   if (session.view === "chat") {
     if (chatState === "running" || chatState === "waiting") return false;
-    if (isStandingRole(session.role))
+    if (session.role === "orchestrator")
       return orchestratorReplied(session.id, seen);
     const latest = latestChatItem(session.id);
     return latest?.kind === "turn_end" && latest.createdAt > seen;

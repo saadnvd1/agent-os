@@ -30,8 +30,6 @@ export interface AskView {
   binding: string;
   presence: boolean;
   createdAt: string;
-  // The lead it is for: "tech" (the orchestrator) unless a lead raised it.
-  leadKind: string;
 }
 
 // A question the orchestrator put to Saad in chat, open until answered.
@@ -42,16 +40,6 @@ export interface QuestionView {
   task: string | null;
   taskName: string | null;
   createdAt: string;
-}
-
-// One of a workspace's chief and leads, as the sidebar draws it.
-export interface TeamMemberView {
-  // A lead's department, or "chief".
-  kind: string;
-  title: string;
-  sessionId: string;
-  // A lead's pins in force (absent for the chief).
-  pins?: number;
 }
 
 export interface OrchestratorOverview {
@@ -65,7 +53,4 @@ export interface OrchestratorOverview {
   dismissed: string[];
   // Learning cards waiting on him; none while the experiment is off.
   cards: PendingCardView[];
-  // Its chief and leads in order, while Leads is on and it has added them.
-  // Absent otherwise, and the sidebar draws it as before leads.
-  team?: TeamMemberView[];
 }

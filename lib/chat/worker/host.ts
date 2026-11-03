@@ -4,7 +4,6 @@
  * events to whoever is connected.
  */
 
-import { isStandingRole } from "../../leads/roles";
 import os from "os";
 import { db, type Session } from "../../db";
 import { agentEnv } from "../../agents/launch";
@@ -217,7 +216,7 @@ export class ChatHost {
     this.atRest = driver.atRest !== false;
     const cwd = session.working_directory.replace(/^~/, os.homedir());
     const env = { ...agentEnv(session.id), ...extras.env };
-    const orchestrator = isStandingRole(session.role);
+    const orchestrator = session.role === "orchestrator";
     // Every chat can show visuals, asked for like any tool under its access
     // setting (they read files and reach the web). An orchestrator reads
     // other sessions' text, so it gets a shorter brief that says what stays
@@ -290,7 +289,7 @@ export class ChatHost {
     if (session.chat_refreshed)
       this.refreshedNote = refreshedNote(
         extras.refresh?.role ??
-          (isStandingRole(session.role) ? "orchestrator" : "task"),
+          (session.role === "orchestrator" ? "orchestrator" : "task"),
         session.chat_refreshed
       );
     // Told only an orchestrator whose tools changed since its last worker:
@@ -965,7 +964,7 @@ export class ChatHost {
     const stale = this.staleNow(cmd.compact);
     // An orchestrator starts over at its own threshold (lib/chat/refresh);
     // only one gone stale does it early.
-    if (!stale || (isStandingRole(this.session.role) && !stale.stale))
+    if (!stale || (this.session.role === "orchestrator" && !stale.stale))
       return false;
     try {
       enqueue(this.session.id, cmd);
@@ -979,7 +978,7 @@ export class ChatHost {
     // from tasks and CI without its untrusted fence. It starts a fresh
     // conversation from its brief and the database instead, as at its
     // threshold, and the next worker sends the message.
-    if (isStandingRole(this.session.role)) {
+    if (this.session.role === "orchestrator") {
       this.staleRefresh = stale;
       this.refreshAt = stale.tokens;
       this.retiring = true;
@@ -1086,7 +1085,7 @@ export class ChatHost {
   // line saying where it started over.
   private endConversation(): void {
     releaseConversation(this.session.id, this.refreshAt);
-    const brief = `its brief${isStandingRole(this.session.role) ? " and the current state from AgentOS" : ""}`;
+    const brief = `its brief${this.session.role === "orchestrator" ? " and the current state from AgentOS" : ""}`;
     const stale = this.staleRefresh;
     const requested = this.refreshAt === REQUESTED_FRESH;
     this.record({

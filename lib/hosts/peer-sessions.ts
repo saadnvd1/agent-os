@@ -5,7 +5,6 @@
  * used here are kept, checked and cleaned.
  */
 
-import { isPeerStanding } from "../leads/roles";
 import type { TmuxSessionInfo } from "../status-detector";
 import { isValidTmuxName } from "./attach";
 import { syncPeerMirrors } from "./peer-sync";
@@ -114,8 +113,7 @@ export function toPeerSession(
   if (raw.host_id && raw.host_id !== "local") return null;
   // Its orchestrator and its tasks belong to its own workspace and gates:
   // they're not mirrored as plain sessions here.
-  if (isPeerStanding(raw.role) || raw.task_prompt || raw.task_status)
-    return null;
+  if (raw.role || raw.task_prompt || raw.task_status) return null;
   const tmuxName = typeof raw.tmux_name === "string" ? raw.tmux_name : "";
   const view = raw.view === "chat" ? "chat" : "terminal";
   // A terminal is opened by its tmux name; any name it gives must be one.

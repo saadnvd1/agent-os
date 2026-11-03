@@ -1,6 +1,5 @@
 "use client";
 
-import { isStandingRole } from "@/lib/leads/roles";
 import { useMemo } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { useSessionsQuery } from "@/data/sessions/queries";
@@ -16,11 +15,9 @@ import {
 } from "@/lib/orchestrator/needs-you-items";
 
 // Everything waiting on Saad in a workspace: its open asks and questions, the
-// tasks the sidebar marks as needing him, and this chat waiting on an answer
-// (keyed by the chat, so one lead's waiting chat never hides another's).
+// tasks the sidebar marks as needing him, and its chat waiting on an answer.
 export function useNeedsYou(
   workspaceId: string,
-  sessionId: string,
   chatWaiting: boolean
 ): NeedsYouItem[] {
   const overview = useOrchestratorOverview(workspaceId);
@@ -38,10 +35,7 @@ export function useNeedsYou(
     );
     return (sessions?.sessions ?? []).flatMap((s): TaskNeed[] => {
       const need = statuses?.statuses[s.id]?.need;
-      return !isStandingRole(s.role) &&
-        s.project_id &&
-        members.has(s.project_id) &&
-        need
+      return !s.role && s.project_id && members.has(s.project_id) && need
         ? [{ sessionId: s.id, name: s.name, need }]
         : [];
     });
@@ -55,8 +49,8 @@ export function useNeedsYou(
         tasks,
         cards: cardsOn ? (overview?.cards ?? []) : [],
         chatWaiting,
-        chatKey: `approval:${sessionId}`,
+        chatKey: `approval:${workspaceId}`,
       }),
-    [overview, tasks, cardsOn, chatWaiting, sessionId]
+    [overview, tasks, cardsOn, chatWaiting, workspaceId]
   );
 }

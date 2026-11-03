@@ -9,10 +9,6 @@ import { emit } from "../chat/registry";
 import { saveItem } from "../chat/store";
 import type { ChatItem } from "../chat/events";
 import { getOrchestrator } from "./home";
-import { actorIn } from "../leads/actor";
-import { getLead } from "../leads/home";
-import { memberKind } from "../leads/roles";
-import { TECH, type LeadKind } from "../leads/types";
 
 export type NoteKind =
   | "note"
@@ -36,24 +32,16 @@ const NOTE_CAP = 2000;
 export function addNote(
   workspaceId: string,
   text: string,
-  kind: NoteKind = "note",
-  // Whose log it goes in: the lead (or chief) calling, else the one named,
-  // else Tech.
-  lead?: LeadKind
+  kind: NoteKind = "note"
 ): NoteRow {
   const body = text.trim().slice(0, NOTE_CAP);
   if (!body) throw new Error("The note is empty");
-  const actor = actorIn(workspaceId);
-  const leadKind = lead ?? (actor && memberKind(actor)) ?? TECH;
   const { lastInsertRowid } = db
     .prepare(
-      `INSERT INTO orchestrator_notes (workspace_id, kind, text, lead_kind) VALUES (?, ?, ?, ?)`
+      `INSERT INTO orchestrator_notes (workspace_id, kind, text) VALUES (?, ?, ?)`
     )
-    .run(workspaceId, kind, body, leadKind);
-  const orchestrator =
-    leadKind === TECH
-      ? getOrchestrator(workspaceId)
-      : getLead(workspaceId, leadKind);
+    .run(workspaceId, kind, body);
+  const orchestrator = getOrchestrator(workspaceId);
   if (orchestrator) {
     const item: ChatItem = {
       id: `note-${lastInsertRowid}-${randomUUID().slice(0, 5)}`,

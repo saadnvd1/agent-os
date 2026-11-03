@@ -4,7 +4,6 @@
  * the recipient's tmux pane, which works for any agent CLI.
  */
 
-import { isTechRole } from "../leads/roles";
 import { db, type Session } from "../db";
 import { statusDetector } from "../status-detector";
 import { chatState, sendChatConfirmed } from "../chat/runner";
@@ -64,8 +63,6 @@ export interface Peer {
   orchestratorOf: string | null;
   // The asking session's own workspace orchestrator.
   yours?: boolean;
-  // A lead's address, "<workspace>/<kind>", once its workspace has leads.
-  lead?: string;
   // Names of the sessions it waits on, and of those waiting on it.
   waitingOn: string[];
   waitedBy: string[];
@@ -96,7 +93,7 @@ async function peerState(
 }
 
 const orchestratorOf = (s: Session) =>
-  isTechRole(s.role) && s.workspace_id
+  s.role === "orchestrator" && s.workspace_id
     ? (getWorkspace(s.workspace_id)?.name ?? "a workspace")
     : null;
 
@@ -124,10 +121,6 @@ export async function listPeers(callerId?: string): Promise<Peer[]> {
         running: info.running,
         doing: info.subtitle,
         orchestratorOf: orchestratorOf(s),
-        ...(named[i].leadKind &&
-          named[i].workspaceName && {
-            lead: `${named[i].workspaceName}/${named[i].leadKind}`,
-          }),
         waitingOn: badges.get(s.id)?.on.map((w) => w.name) ?? [],
         waitedBy: badges.get(s.id)?.by.map((w) => w.name) ?? [],
         ...(s.agent_role && { agentRole: s.agent_role }),
@@ -137,7 +130,7 @@ export async function listPeers(callerId?: string): Promise<Peer[]> {
             group: groups.get(s.session_group_id),
           }),
         ...(callerWorkspace &&
-          isTechRole(s.role) &&
+          s.role === "orchestrator" &&
           s.workspace_id === callerWorkspace && { yours: true }),
       };
     })

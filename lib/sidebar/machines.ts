@@ -1,7 +1,6 @@
 // A linked machine's sessions are sessions here. One whose folder maps to
 // a project here sits with that project's sessions; the rest are listed
 // under their machine ("devbox · 3"), with the same rows. Client-safe.
-import { isStandingRole } from "../leads/roles";
 import type { Session } from "@/lib/db/types";
 import { buildShelves, type ShelfInput, type SidebarRow } from "./shelves";
 
@@ -21,7 +20,7 @@ export function onMachineOnly(
     !!session.host_id &&
     !!linked[session.host_id] &&
     !session.project_id &&
-    !isStandingRole(session.role)
+    !session.role
   );
 }
 

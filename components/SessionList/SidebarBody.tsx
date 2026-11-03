@@ -141,7 +141,6 @@ export function SidebarBody({
             ? undefined
             : new Map(data.workspaces.map((w) => [w.id, w.name]))
         }
-        foldTeams={!data.workspace}
       />
       <MachineShelves groups={data.machines} />
       <SidebarExtras

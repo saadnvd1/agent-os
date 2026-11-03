@@ -3,7 +3,6 @@
 // session, an orchestrator, one that needs input or is working, or one with
 // an open PR. Mirrors the sidebar's Done placement (lib/sidebar/shelves).
 
-import { sqlNoRole } from "../leads/roles";
 import { db, type Session } from "../db";
 import { fromSqliteTime } from "../session-meta";
 import { statusOf } from "../orchestrator/facts";
@@ -35,7 +34,7 @@ export async function archiveStaleDone(now = Date.now()): Promise<string[]> {
   const rows = db
     .prepare(
       `SELECT * FROM session_rows
-       WHERE archived_at IS NULL AND pinned = 0 AND ${sqlNoRole()}
+       WHERE archived_at IS NULL AND pinned = 0 AND role IS NULL
          AND peer_mirror = 0 AND quick_of IS NULL
          AND (pr_status IS NULL OR pr_status != 'open')`
     )

@@ -29,7 +29,6 @@ import {
   Sparkles,
   Trash2,
   Eye,
-  UserPlus,
 } from "lucide-react";
 import type { Session } from "@/lib/db";
 import { selectionActions } from "@/stores/sessionSelection";
@@ -69,9 +68,6 @@ import {
 } from "@/lib/sidebar/row-menu";
 import { Expander, MenuItem, PARTS, icon, type MenuKind } from "./RowMenuParts";
 import { MoveToGroupMenu } from "./MoveToGroupMenu";
-import { useExperiment } from "@/data/experiments";
-import { adoptRefusal } from "@/lib/leads/adoptable";
-import { leadsUiActions } from "@/stores/leadsUi";
 
 const GROUP_ICON: Record<RowMenuGroup, typeof Copy> = {
   open: ExternalLink,
@@ -122,7 +118,6 @@ export function SessionRowMenu({
     session.workspace_id ??
     null;
 
-  const leadsOn = useExperiment("leads");
   const plan = rowMenu({
     session,
     row,
@@ -133,7 +128,6 @@ export function SessionRowMenu({
     hasWorkspace: !!workspaceId,
     machineTargets: targets.length,
     otherProjects: others.length,
-    canAdopt: leadsOn && !adoptRefusal(session),
   });
 
   const item = (
@@ -274,10 +268,6 @@ export function SessionRowMenu({
       case "save-recipe":
         return item("Save as recipe", ChefHat, () =>
           recipesUiActions.saveSessionAs(session.id, workspaceId)
-        );
-      case "adopt-lead":
-        return item("Adopt as lead…", UserPlus, () =>
-          leadsUiActions.openAdopt(session.id, session.name, workspaceId!)
         );
       case "run-again":
         return item("Run again", Play, () =>

@@ -1,4 +1,3 @@
-import { isStandingRole } from "@/lib/leads/roles";
 import { NextResponse } from "next/server";
 import { queries, db, type Session } from "@/lib/db";
 import { FreshRefusal, freshStartChat } from "@/lib/chat/runner";
@@ -15,7 +14,7 @@ export async function POST(
   const session = queries.getSession(db).get(id) as Session | undefined;
   if (!session)
     return NextResponse.json({ error: "Session not found" }, { status: 404 });
-  if (!isStandingRole(session.role) && !session.task_brief)
+  if (session.role !== "orchestrator" && !session.task_brief)
     return NextResponse.json(
       { error: "Only an orchestrator or a task can start fresh" },
       { status: 400 }

@@ -6,7 +6,6 @@
  * worker's guest gate (lib/chat/worker/guest-gate).
  */
 
-import { isStandingRole, roleLabel } from "../leads/roles";
 import os from "os";
 import path from "path";
 import { randomBytes } from "crypto";
@@ -70,7 +69,7 @@ const home = (p: string) => path.resolve(p.replace(/^~(?=$|\/)/, os.homedir()));
 export function driveRefusal(s: Session): string | null {
   if (s.view !== "chat" || s.agent_type !== "claude")
     return "Claude chat sessions only";
-  if (isStandingRole(s.role)) return `Not for ${roleLabel(s.role)}`;
+  if (s.role) return "Not for an orchestrator";
   if (!s.task_prompt) return "Task sessions only";
   if (!s.worktree_path) return "Task sessions with their own worktree only";
   const project = s.project_id ? getProject(s.project_id) : undefined;

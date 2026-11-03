@@ -1,4 +1,3 @@
-import { isStandingRole, isTechRole } from "../leads/roles";
 import type { Session } from "@/lib/db/types";
 import type { SidebarRow } from "./shelves";
 import { finishActions } from "./row-actions";
@@ -29,7 +28,6 @@ export type RowMenuItem =
   | "check-ins"
   | "save-recipe"
   | "run-again"
-  | "adopt-lead"
   | "snooze"
   | "unsnooze"
   | "pause"
@@ -70,8 +68,6 @@ export interface RowMenuInput {
   hasWorkspace: boolean;
   machineTargets: number;
   otherProjects: number;
-  // Leads is on and this chat could head one of its workspace's departments.
-  canAdopt?: boolean;
 }
 
 export interface RowMenuPlan {
@@ -116,10 +112,8 @@ export function rowMenu(input: RowMenuInput): RowMenuPlan {
     };
   }
 
-  const standing = isStandingRole(s.role);
-  // The orchestrator takes its own schedule kind, not check-ins.
-  const orchestrator = isTechRole(s.role);
-  const agentRow = !standing;
+  const orchestrator = s.role === "orchestrator";
+  const agentRow = !s.role;
   const live = !remote;
 
   sections.push(["rename", s.pinned ? "unpin" : "pin", "select"]);
@@ -140,7 +134,7 @@ export function rowMenu(input: RowMenuInput): RowMenuPlan {
     ...group("restart", [
       s.agent_type === "claude" && agentRow && live && "fork",
       agentRow && live && "fresh-start",
-      (standing || !!s.has_brief) &&
+      (orchestrator || !!s.has_brief) &&
         s.view === "chat" &&
         !s.archived_at &&
         live &&
@@ -165,11 +159,6 @@ export function rowMenu(input: RowMenuInput): RowMenuPlan {
         live &&
         "check-ins",
       input.recipeRun ? "run-again" : agentRow && "save-recipe",
-      !!input.canAdopt &&
-        input.hasWorkspace &&
-        agentRow &&
-        live &&
-        "adopt-lead",
     ]),
   ]);
 

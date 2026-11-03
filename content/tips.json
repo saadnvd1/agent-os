@@ -546,16 +546,6 @@
         "anchor": "run-the-check"
       },
       "added": "2026-10-31"
-    },
-    {
-      "id": "leads-add",
-      "title": "Give a workspace a team of leads",
-      "body": "Turn on Leads in Settings, Experiments, then choose Add leads in the workspace menu. Each lead keeps your pinned direction, and a chat you already have can be adopted as one.",
-      "guide": {
-        "file": "leads",
-        "anchor": "add-leads-to-a-workspace"
-      },
-      "added": "2026-11-02"
     }
   ]
 }

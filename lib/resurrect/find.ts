@@ -1,6 +1,5 @@
 /** Sessions that ended (dropped, done, archived) and can be asked for back. */
 
-import { sqlNoRole } from "../leads/roles";
 import { db } from "../db";
 import { resolveRef } from "../bus/resolve";
 
@@ -41,7 +40,7 @@ function kindOf(r: Row): EndedKind {
 
 function rows(scope: EndedScope, limit: number, kind?: EndedKind): Row[] {
   const where = [
-    sqlNoRole("s.role"),
+    "s.role IS NULL",
     "s.peer_mirror = 0",
     "s.held_by_device IS NULL",
   ];

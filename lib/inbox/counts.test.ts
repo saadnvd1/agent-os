@@ -20,7 +20,6 @@ const ask = (id: number, subject: string): AskView => ({
   binding: subject,
   presence: false,
   createdAt: "2026-01-01 10:00:00",
-  leadKind: "tech",
 });
 const question = (id: number, task: string | null): QuestionView => ({
   id,

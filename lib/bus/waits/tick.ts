@@ -5,7 +5,6 @@
  * reads status through statusOf, the same idle test the orchestrator uses.
  */
 
-import { isStandingRole } from "../../leads/roles";
 import type { Session } from "../../db";
 import { db } from "../../db";
 import { statusDetector } from "../../status-detector";
@@ -129,7 +128,7 @@ async function settle(w: WaitRow, waiter: Session, now: number): Promise<void> {
       timeoutLine(target, w.kind, w.deadline - w.created_at, w.request, is)
     );
     const workspace = sessionWorkspace(waiter);
-    if (workspace && !isStandingRole(waiter.role))
+    if (workspace && waiter.role !== "orchestrator")
       queueEventOnce(
         workspace,
         `wait-timeout:${w.id}`,
