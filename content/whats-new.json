@@ -2143,6 +2143,14 @@
       "area": "Done shelf",
       "text": "Sessions you mark done no longer show up as available to other sessions or keep sending messages.",
       "url": "https://github.com/saadnvd1/agent-os/pull/599"
+    },
+    {
+      "id": 600,
+      "date": "2026-11-03",
+      "kind": "new",
+      "area": "AgentOS",
+      "text": "Start a Copilot session at a chosen reasoning effort with `--effort` on `aos spawn` and `aos task`.",
+      "url": "https://github.com/saadnvd1/agent-os/pull/600"
     }
   ]
 }
