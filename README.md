@@ -16,6 +16,16 @@ and check on all of it from your phone.
   <a href="https://youtu.be/JAukzHLTM5Y">▶ Watch: what AgentOS does, in about a minute</a>
 </p>
 
+## Oversight
+
+Agents do the work; nothing they do lands without a check.
+
+- **Four gates before a merge.** CI green and settled, an independent review of the exact commit (big diffs reviewed in parts), nothing blocked, and the diff in scope. A PR merges only when every gate passes at its head. [More](docs/reference/orchestrator.md)
+- **Some things are always yours.** Publishing, money, anything irreversible and credentials never go through on their own. They wait as an ask with Approve, Decline and Reply, and so do sensitive or large PRs if you turn on _Require my approval_.
+- **A loop guard instead of a retry cap.** An agent can fix a failing gate as many times as it needs. It comes to you only when it's stuck: the same gate failed on four commits in a row, or failed the same way twice. The ask lists the failures, and AgentOS reviews the commit it names so you never approve blind. [Why](docs/decisions/2026-10-15-gate-loop-guard.md)
+- **A second pair of eyes on every turn.** Pair any chat with an analyst that reviews each turn, explains it in plain English, flags issues and drafts the next prompt, which you send, edit or dismiss. [More](docs/decisions/2026-10-21-analyst-sessions.md)
+- **Who gets a terminal as you** is decided before anything else: this machine, your tailnet, and paired devices. [More](docs/reference/security.md)
+
 ## What it does
 
 - **An orchestrator for each workspace.** A chat that starts tasks, answers blocked agents, and merges pull requests only through gates. Anything that is yours to decide waits as an ask. [More](docs/reference/orchestrator.md)
