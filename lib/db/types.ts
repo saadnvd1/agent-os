@@ -118,6 +118,8 @@ export interface Session {
   // The agent role it was started in (lib/models/agent-roles) and its crew.
   agent_role?: string | null;
   crew_id?: string | null;
+  // When done ended its agent (any session; a task also has task_status).
+  finished_at?: string | null;
   // A workspace's standing orchestrator chat (and that workspace), or null.
   role: "orchestrator" | null;
   // An orchestrator's tool-call secret.

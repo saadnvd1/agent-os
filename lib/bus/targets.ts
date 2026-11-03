@@ -15,7 +15,7 @@ export function liveSessions(): Session[] {
   return db
     .prepare(
       `SELECT * FROM session_rows WHERE (task_status IS NULL OR task_status = 'running')
-         AND archived_at IS NULL
+         AND archived_at IS NULL AND finished_at IS NULL
        ORDER BY updated_at DESC`
     )
     .all() as Session[];

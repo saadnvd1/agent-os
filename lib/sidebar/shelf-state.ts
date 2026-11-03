@@ -19,10 +19,22 @@ export function settleSession(id: string): boolean {
   );
 }
 
+// Done: settled, and its agent is ended, so it leaves the peer list and
+// can't send. Reopening clears it.
+export function finishSession(id: string): boolean {
+  return update(
+    `settled_at = datetime('now'), finished_at = datetime('now'),
+       snoozed_until = NULL, snoozed_at = NULL
+     WHERE id = ?`,
+    id
+  );
+}
+
 // Reopening is activity, so an auto-settled row doesn't fall back into Done.
 export function reopenSession(id: string): boolean {
   return update(
-    `settled_at = NULL, active_at = datetime('now') WHERE id = ?`,
+    `settled_at = NULL, finished_at = NULL, active_at = datetime('now')
+     WHERE id = ?`,
     id
   );
 }

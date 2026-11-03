@@ -44,7 +44,9 @@ const SELECT = `SELECT s.*, p.name AS project_name FROM session_rows s
   WHERE s.peer_mirror = 0 AND s.held_by_device IS NULL`;
 
 const isLive = (s: Session) =>
-  !s.archived_at && (!s.task_status || s.task_status === "running");
+  !s.archived_at &&
+  !s.finished_at &&
+  (!s.task_status || s.task_status === "running");
 
 function candidates(rows: ReadableSession[]): Candidate[] {
   const old = previousNames();
