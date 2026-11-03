@@ -12,7 +12,7 @@
     "failed": "~/.agent-os/autodeploy/alerted",
     "health": "/api/health"
   },
-  "test": "npm run typecheck && npx vitest run <the test files you touched>",
+  "test": "scripts/check --changed",
   "browse": {
     "port": "PORT",
     "viewports": ["1440x900", "390x844"],
@@ -24,6 +24,7 @@
     }
   },
   "notes": [
+    "`scripts/check --changed` is the pre-PR check: it waits for a heavy slot, then type checks, lints and formats the changed files and runs only the tests related to them (the whole suite when shared files like lib/db or package.json changed, or with `--full`). CI runs the full suite.",
     "The full suite is `npm test`: it runs through `aos heavy` with a worker cap, and every test temp dir lives under one per-run root that is removed afterwards. A run fails if it leaves anything in $TMPDIR.",
     "Run targeted tests (`npx vitest run path/to/x.test.ts`) while you work; the full suite loads the machine.",
     "The dev command above keeps the dev instance on its own port, database and tmux server: never run one against the real database or tmux.",

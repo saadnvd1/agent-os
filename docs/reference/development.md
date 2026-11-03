@@ -76,7 +76,19 @@ exists, a private list of regexes kept outside the repo in
 path), checked against added lines and file names; `scripts/check` runs the
 same check over every tracked file. It runs in the worktrees AgentOS makes too, which have no `.husky/_`
 until `pnpm install` runs in them. Typecheck, lint and tests are left to CI.
-In an emergency, `git commit --no-verify` skips it. CI runs `scripts/check --build` on every pull request and push to main,
+In an emergency, `git commit --no-verify` skips it.
+
+**Checking before a PR.** `scripts/check --changed` is what a task runs: the
+type check, lint and format on the files changed since main, and only the
+tests related to them (a changed file's importers, found by scanning
+imports, plus tests that name it by path). The whole suite runs instead when
+shared infrastructure changed (`package.json`, the lockfile, tsconfig,
+vitest config, `lib/db` outside migrations, the test helpers, `scripts/check`
+and `scripts/test`) or with `--full`. Outside CI the check holds one `aos
+heavy` slot for the whole run, so checks on a machine take turns. Plain
+`scripts/check` is the full guard CI runs; CI also runs the full suite after
+every merge.
+CI runs `scripts/check --build` on every pull request and push to main,
 which also holds the app's first-load JavaScript to a budget
 (`scripts/check-bundle.mjs`; `npx next experimental-analyze` shows what's in
 it).
