@@ -49,7 +49,7 @@ export function archiveSession(id: string): void {
 export function unarchiveSession(id: string): Session {
   const changed = db
     .prepare(
-      `UPDATE sessions SET archived_at = NULL WHERE id = ? AND archived_at IS NOT NULL`
+      `UPDATE sessions SET archived_at = NULL, finished_at = NULL WHERE id = ? AND archived_at IS NOT NULL`
     )
     .run(id).changes;
   const row = db.prepare(`SELECT * FROM session_rows WHERE id = ?`).get(id) as

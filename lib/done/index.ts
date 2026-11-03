@@ -20,7 +20,7 @@ import { judge, mergeJudged } from "../orchestrator/signoff";
 import { isPaused } from "../orchestrator/pause";
 import { plain } from "../orchestrator/overview";
 import { archiveSession } from "./archive";
-import { settleSession } from "../sidebar/shelf-state";
+import { finishSession } from "../sidebar/shelf-state";
 import { demoMode } from "../security/demo";
 import { planDone } from "./plan";
 import { withTimeout } from "./deadline";
@@ -195,7 +195,7 @@ export async function doneSession(
     await stopAgent(s);
     worktree = await settleWorktree(s, plan.merged);
   }
-  settleSession(s.id);
+  finishSession(s.id);
   const head = merged ?? `Done: ${s.name}.`;
   const extra = notes.length ? `, ${notes.join(", ")}` : "";
   return {

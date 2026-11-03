@@ -299,6 +299,8 @@ export async function sendMessage(opts: {
   if (!body) throw new Error("Message is empty");
   const from = sessionById(opts.fromId);
   if (opts.fromId && !from) throw new Error("Unknown sender session");
+  if (from?.finished_at)
+    throw new Error(`${from.name} is done and can't send messages`);
   // A held task's message to its orchestrator is kept for the holder to pull.
   const held = heldTarget(from, opts.to);
   if (from && held) return storeForHolder(from, held, body);

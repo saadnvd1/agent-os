@@ -623,7 +623,8 @@ const { GET: listSessions } = await import("@/app/api/sessions/route");
 const { sessionFacts } = await import("@/lib/orchestrator/facts");
 const { runTool } = await import("@/lib/orchestrator/serve");
 const { setPaused } = await import("@/lib/orchestrator/pause");
-const { listPeers, resolveSession } = await import("@/lib/bus");
+const { listPeers, resolveSession, sendMessage } = await import("@/lib/bus");
+const { reopenSession } = await import("@/lib/sidebar/shelf-state");
 const { archiveChecked, listArchived, unarchiveSession } =
   await import("./archive");
 const { archiveStaleDone } = await import("./auto-archive");
@@ -965,6 +966,27 @@ describe("archived sessions", () => {
     expect((await sessionFacts(t.w)).map((f) => f.id)).toContain(s.id);
     expect(listArchived(t.w)).toEqual([]);
     expect(() => unarchiveSession(s.id)).toThrow(/isn't archived/);
+  });
+});
+
+describe("a session with no task, once done", () => {
+  it("leaves the peer list, can't send, and comes back on reopen", async () => {
+    const t = setup();
+    const gone = t.session("gone-agent", { worktree: false });
+    const other = t.session("other-agent", { worktree: false });
+    expect((await listPeers()).map((p) => p.id)).toContain(gone.id);
+
+    await doneSession(gone.id, { by: "direct" });
+
+    expect(row(gone.id).archived_at).toBeNull();
+    expect((await listPeers()).map((p) => p.id)).not.toContain(gone.id);
+    expect(() => resolveSession(gone.id)).toThrow(/No session/);
+    await expect(
+      sendMessage({ fromId: gone.id, to: other.id, body: "still here" })
+    ).rejects.toThrow(/is done/);
+
+    reopenSession(gone.id);
+    expect((await listPeers()).map((p) => p.id)).toContain(gone.id);
   });
 });
 
