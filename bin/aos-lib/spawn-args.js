@@ -12,6 +12,7 @@ function parseSpawnArgs(words, fail) {
   let group;
   let role;
   let model;
+  let agent;
   let project;
   let i = 0;
   for (; i < words.length; i++) {
@@ -52,6 +53,10 @@ function parseSpawnArgs(words, fail) {
       model = words[++i];
       if (model === undefined) fail("--model needs a provider/model");
     } else if (w.startsWith("--model=")) model = w.slice(8);
+    else if (w === "--agent") {
+      agent = words[++i];
+      if (agent === undefined) fail("--agent needs an agent name");
+    } else if (w.startsWith("--agent=")) agent = w.slice(8);
     else if (project === undefined) project = w;
     else break;
   }
@@ -67,6 +72,7 @@ function parseSpawnArgs(words, fail) {
     group: group?.trim() || undefined,
     role: role?.trim().toLowerCase() || undefined,
     model: model?.trim() || undefined,
+    agent: agent?.trim().toLowerCase() || undefined,
     project,
     prompt: words.slice(i),
   };
