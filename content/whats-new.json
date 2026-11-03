@@ -2089,6 +2089,38 @@
       "area": "Sidebar",
       "text": "In All workspaces, clicking a workspace opens its Chief of Staff chat, and clicking a lead's icon opens that lead, without leaving the view.",
       "url": "https://github.com/saadnvd1/agent-os/pull/586"
+    },
+    {
+      "id": 587,
+      "date": "2026-11-02",
+      "kind": "new",
+      "area": "AgentOS",
+      "text": "You can now edit a lead's charter, and a running lead is told about the change right away.",
+      "url": "https://github.com/saadnvd1/agent-os/pull/587"
+    },
+    {
+      "id": 588,
+      "date": "2026-11-02",
+      "kind": "fixed",
+      "area": "AgentOS",
+      "text": "With leads turned on, the workspace's main assistant now shows as the Tech lead everywhere instead of \"orchestrator\".",
+      "url": "https://github.com/saadnvd1/agent-os/pull/588"
+    },
+    {
+      "id": 591,
+      "date": "2026-11-02",
+      "kind": "fixed",
+      "area": "AgentOS",
+      "text": "Messages between leads that were held back for going back and forth too often are now delivered once you approve them.",
+      "url": "https://github.com/saadnvd1/agent-os/pull/591"
+    },
+    {
+      "id": 589,
+      "date": "2026-11-02",
+      "kind": "improved",
+      "area": "AgentOS",
+      "text": "The chief of staff now carries out your requests itself, including adding leads and rewriting their charters.",
+      "url": "https://github.com/saadnvd1/agent-os/pull/589"
     }
   ]
 }
