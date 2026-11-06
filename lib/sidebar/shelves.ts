@@ -387,8 +387,12 @@ export function buildShelves(input: ShelfInput): Shelves {
     const mine = grouped.get(row.session.session_group_id ?? "");
     // Named on a row outside its group (Pinned, Done); inside, the header says it.
     if (mine) row.groupName = mine.group.name;
+    // Marked done by hand leaves Pinned like any session (the pin is kept, so
+    // Reopen puts it back); a pin only holds a row that is still in play.
+    const doneByHand = settledHow(row.session, now) === "manual" && !row.need;
     if (pinned && current) shelves.orchestrators.push(row);
-    else if (pinned && role !== "orchestrator") shelves.pinned.push(row);
+    else if (pinned && role !== "orchestrator" && !doneByHand)
+      shelves.pinned.push(row);
     else {
       const shelf = statusShelf(row, now);
       // Membership beats status. Only finished work goes on to Done (it keeps
