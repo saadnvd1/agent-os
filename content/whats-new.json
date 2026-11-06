@@ -2151,6 +2151,14 @@
       "area": "AgentOS",
       "text": "Start a Copilot session at a chosen reasoning effort with `--effort` on `aos spawn` and `aos task`.",
       "url": "https://github.com/saadnvd1/agent-os/pull/600"
+    },
+    {
+      "id": 603,
+      "date": "2026-11-06",
+      "kind": "fixed",
+      "area": "Sidebar",
+      "text": "Marking a pinned session as Done now moves it out of Pinned onto the Done shelf.",
+      "url": "https://github.com/saadnvd1/agent-os/pull/603"
     }
   ]
 }
