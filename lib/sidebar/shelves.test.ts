@@ -806,3 +806,35 @@ describe("inBell", () => {
     expect(inBell(done, { status: "waiting", need: "answer" }, NOW)).toBe(true);
   });
 });
+
+describe("Done on a pinned or forked session", () => {
+  const done = { settled_at: utc(NOW - 1000), active_at: utc(NOW - 5000) };
+
+  it("takes a pinned session off Pinned onto Done, keeping the pin", () => {
+    const p = session("p", { pinned: true, ...done });
+    const out = shelves([p, session("q", { pinned: true })]);
+    expect(out.pinned).toEqual(["q"]);
+    expect(out.done).toEqual(["p"]);
+    expect(out.raw.done[0].session.pinned).toBe(true);
+  });
+
+  it("takes a done fork to Done and leaves its parent and siblings", () => {
+    const parent = session("parent", {
+      settled_at: done.settled_at,
+      active_at: done.active_at,
+    });
+    const fork = session("f1", {
+      parent_session_id: "parent",
+      pinned: true,
+      ...done,
+    });
+    const live = session("f2", {
+      parent_session_id: "parent",
+      active_at: utc(NOW - 1000),
+    });
+    const out = shelves([parent, fork, live]);
+    expect(out.done.sort()).toEqual(["f1", "parent"]);
+    expect(out.ongoing).toEqual(["f2"]);
+    expect(out.pinned).toEqual([]);
+  });
+});
