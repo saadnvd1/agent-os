@@ -24,9 +24,12 @@ export function useDoneAction() {
     const id = toast.loading(
       merges ? `Merging ${session.name}…` : `Finishing ${session.name}…`
     );
-    done.mutate(session.id, {
+    // mutateAsync, not mutate's callbacks: Done moves the row to the Done
+    // shelf, which unmounts this hook's caller, and TanStack drops mutate()'s
+    // callbacks on unmount, leaving the loading toast up for good.
+    done.mutateAsync(session.id).then(
       // Undo only reopens the entry: offered only when that's all done did.
-      onSuccess: (outcome) =>
+      (outcome) =>
         toast.success(outcome.text, {
           id,
           duration: 8000,
@@ -41,8 +44,8 @@ export function useDoneAction() {
               },
             }),
         }),
-      onError: (e) => toast.error(e.message, { id, duration: 12000 }),
-    });
+      (e: Error) => toast.error(e.message, { id, duration: 12000 })
+    );
   };
   return (session: DoneTarget) => {
     const merges =
@@ -64,30 +67,33 @@ export function useDoneAction() {
 export function useArchiveAction() {
   const archive = useArchiveSession();
   const unarchive = useUnarchiveSession();
-  const run = (session: Session, children?: "stop" | "keep") =>
-    archive.mutate(children ? { id: session.id, children } : session.id, {
-      onSuccess: () =>
-        toast.success(`Archived ${session.name}`, {
-          action: {
-            label: "Undo",
-            onClick: () => unarchive.mutate(session.id),
-          },
-        }),
-      onError: (e) =>
-        e instanceof ForkChildrenOpenError
-          ? toast(e.message, {
-              duration: 15000,
-              action: {
-                label: "Stop them",
-                onClick: () => run(session, "stop"),
-              },
-              cancel: {
-                label: "Keep them going",
-                onClick: () => run(session, "keep"),
-              },
-            })
-          : toast.error(e.message, { duration: 12000 }),
-    });
+  const run = (session: Session, children?: "stop" | "keep"): void => {
+    void archive
+      .mutateAsync(children ? { id: session.id, children } : session.id)
+      .then(
+        () =>
+          toast.success(`Archived ${session.name}`, {
+            action: {
+              label: "Undo",
+              onClick: () => unarchive.mutate(session.id),
+            },
+          }),
+        (e: Error) =>
+          e instanceof ForkChildrenOpenError
+            ? toast(e.message, {
+                duration: 15000,
+                action: {
+                  label: "Stop them",
+                  onClick: () => run(session, "stop"),
+                },
+                cancel: {
+                  label: "Keep them going",
+                  onClick: () => run(session, "keep"),
+                },
+              })
+            : toast.error(e.message, { duration: 12000 })
+      );
+  };
   return (session: Session) => run(session);
 }
 
@@ -96,10 +102,9 @@ export function useResurrectAction() {
   const resurrect = useResurrectSession();
   return (session: Session) => {
     const id = toast.loading(`Restoring ${session.name}…`);
-    resurrect.mutate(session.id, {
-      onSuccess: (outcome) =>
-        toast.success(outcome.text, { id, duration: 8000 }),
-      onError: (e) => toast.error(e.message, { id, duration: 12000 }),
-    });
+    resurrect.mutateAsync(session.id).then(
+      (outcome) => toast.success(outcome.text, { id, duration: 8000 }),
+      (e: Error) => toast.error(e.message, { id, duration: 12000 })
+    );
   };
 }
