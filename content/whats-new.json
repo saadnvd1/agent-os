@@ -2159,6 +2159,14 @@
       "area": "Sidebar",
       "text": "Marking a pinned session as Done now moves it out of Pinned onto the Done shelf.",
       "url": "https://github.com/saadnvd1/agent-os/pull/603"
+    },
+    {
+      "id": 605,
+      "date": "2026-11-13",
+      "kind": "fixed",
+      "area": "Done shelf",
+      "text": "Finishing a task in a project with no GitHub remote no longer gets refused.",
+      "url": "https://github.com/saadnvd1/agent-os/pull/605"
     }
   ]
 }
