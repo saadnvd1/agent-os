@@ -7,6 +7,10 @@ overrides:
   zod: ^4.6.6
   "@vitest/mocker": ^4.1.12
   postcss-selector-parser: ^7.1.6
+  hono: ^4.13.16
+  "@hono/node-server": ^2.1.6
+  "glob@>=9 <14.0.2": ^14.0.2
+  "minimatch@>=7 <11.0.1": ^11.0.1
 
 # A version must be at least 7 days old (minutes) to be installed, and a
 # frozen install checks the lockfile against this too. An urgent security fix
