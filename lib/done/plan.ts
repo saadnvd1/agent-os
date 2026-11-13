@@ -6,7 +6,8 @@
 
 import { db, stackQueries as sq, type Session } from "../db";
 import type { TaskPR } from "../tasks";
-import { prFor } from "../tasks/session";
+import { prFor, projectPathFor } from "../tasks/session";
+import { repoSlug } from "../git-remote";
 import { statusOf } from "../orchestrator/facts";
 import { worktreeFate, type FatePreview, type MergedAs } from "./worktree";
 
@@ -51,17 +52,28 @@ async function cleanup(
   };
 }
 
-// The task's PR as GitHub has it now. A lookup that fails, or one that
-// finds nothing for a task known to have had a PR, can't rule out an open
-// PR, so it refuses rather than finishing the task as done.
+// A failed lookup in a repo with no GitHub remote (none, or another host)
+// says nothing about a PR: there can't be one. Only a recorded PR keeps it
+// unknown.
+async function cannotHavePR(s: Session): Promise<boolean> {
+  if (s.pr_number || s.pr_url) return false;
+  const repo = projectPathFor(s);
+  return !!repo && !(await repoSlug(repo));
+}
+
+// The task's PR as GitHub has it now. A lookup that fails on a GitHub repo,
+// or one that finds nothing for a task known to have had a PR, can't rule
+// out an open PR, so it refuses rather than finishing the task as done.
 async function taskPlan(s: Session): Promise<DonePlan> {
   let pr: TaskPR | null;
   try {
     pr = await prFor(s, true, true);
   } catch (e) {
-    return refuse(
-      `${s.name}'s PR couldn't be read from GitHub (${message(e)}), so an open one can't be ruled out`
-    );
+    if (await cannotHavePR(s)) pr = null;
+    else
+      return refuse(
+        `${s.name}'s PR couldn't be read from GitHub (${message(e)}), so an open one can't be ruled out`
+      );
   }
   if (!pr && (s.pr_number || s.pr_url))
     return refuse(
