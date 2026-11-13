@@ -465,8 +465,36 @@ describe("done, by state", () => {
     );
   });
 
+  it("finishes a task whose repo has no GitHub remote, even when the PR lookup fails", async () => {
+    const t = setup();
+    const bare = git(t.repo, "remote", "get-url", "origin");
+    ghDown = true;
+    const other = t.session("non-github", { task: true, live: "idle" });
+    await expect(doneSession(other.id, { by: "direct" })).resolves.toBeTruthy();
+    expect(row(other.id).settled_at).not.toBeNull();
+    git(t.repo, "remote", "remove", "origin");
+    const none = t.session("no-remote", { task: true, live: "idle" });
+    await expect(doneSession(none.id, { by: "direct" })).resolves.toBeTruthy();
+    expect(row(none.id).settled_at).not.toBeNull();
+    git(t.repo, "remote", "add", "origin", bare);
+  });
+
+  it("still refuses on a GitHub remote when the lookup fails, and says why", async () => {
+    const t = setup();
+    const bare = git(t.repo, "remote", "get-url", "origin");
+    git(t.repo, "remote", "set-url", "origin", "git@github.com:o/r.git");
+    const down = t.session("gh-remote-down", { task: true });
+    ghDown = true;
+    await expect(doneSession(down.id, { by: "direct" })).rejects.toThrow(
+      /couldn't be read from GitHub \(HTTP 502/
+    );
+    expect(row(down.id).archived_at).toBeNull();
+    git(t.repo, "remote", "set-url", "origin", bare);
+  });
+
   it("refuses when GitHub can't say whether a PR is open", async () => {
     const t = setup();
+    git(t.repo, "remote", "set-url", "origin", "git@github.com:o/r.git");
     const down = t.session("gh-down", { task: true });
     ghDown = true;
     await expect(doneSession(down.id, { by: "direct" })).rejects.toThrow(
