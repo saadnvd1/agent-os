@@ -546,6 +546,16 @@
         "anchor": "run-the-check"
       },
       "added": "2026-10-31"
+    },
+    {
+      "id": "chat-scratch-notes",
+      "title": "Keep notes beside a chat",
+      "body": "The notebook button in a chat's header opens a scratch note for that session. It saves as you type and is there on every device.",
+      "guide": {
+        "file": "chat",
+        "anchor": "scratch-notes"
+      },
+      "added": "2026-11-20"
     }
   ]
 }

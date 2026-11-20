@@ -13,13 +13,18 @@ import {
   TooltipContent,
   TooltipTrigger,
 } from "@/components/ui/tooltip";
+import { useSnapshot } from "valtio";
 import { cn } from "@/lib/utils";
+import { NotesIcon, useHasNote } from "@/components/Chat/notes";
+import { notesUi, notesUiActions } from "@/stores/notesUi";
 import type { ViewMode } from "@/contexts/PaneContext";
 
 interface PaneViewToggleProps {
   sessionId?: string;
   // The session runs as a chat, so its main view is the chat, not a terminal.
   isChat?: boolean;
+  // The chat on show, whose notes drawer the notebook opens.
+  notesSessionId?: string | null;
   viewMode: ViewMode;
   isLocalSession: boolean;
   // Local, and the folder is not known to be outside a git repository.
@@ -74,11 +79,26 @@ function ToggleButton({
   );
 }
 
+function NotesToggle({ sessionId }: { sessionId: string }) {
+  const { open } = useSnapshot(notesUi);
+  const has = useHasNote(sessionId);
+  return (
+    <ToggleButton
+      label={has ? "Notes (has notes)" : "Notes"}
+      active={open}
+      onClick={() => notesUiActions.toggle(false)}
+    >
+      <NotesIcon has={has} />
+    </ToggleButton>
+  );
+}
+
 // Files, git and the shell drawer read this machine's disk, so a remote
 // session only gets the terminal (and workers).
 export function PaneViewToggle({
   sessionId,
   isChat,
+  notesSessionId,
   viewMode,
   isLocalSession,
   showGit,
@@ -127,6 +147,7 @@ export function PaneViewToggle({
           </ToggleButton>
         </>
       )}
+      {notesSessionId && <NotesToggle sessionId={notesSessionId} />}
       {sessionId && (
         <ToggleButton
           label="Artifacts"

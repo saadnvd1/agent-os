@@ -43,6 +43,7 @@ import { analystUiActions } from "@/stores/analystUi";
 import { useCanAddAnalyst } from "@/components/Analyst/pair";
 import { MoveMenuItems } from "@/components/Tasks/MoveMenuItems";
 import { ChatBookmarksButton } from "@/components/Bookmarks/ChatBookmarksButton";
+import { NotesButton } from "@/components/Chat/notes";
 import type { ViewMode } from "@/contexts/PaneContext";
 import { PhoneBackButton } from "@/components/Nav/HistoryButtons";
 import { MobileViewPicker } from "./MobileViewPicker";
@@ -305,6 +306,12 @@ export function MobileTabBar({
       </div>
 
       <RolePill session={session} compact />
+      {bookmarksSessionId && (
+        <NotesButton
+          sessionId={bookmarksSessionId}
+          className="-my-1.5 h-11 w-11"
+        />
+      )}
       {bookmarksSessionId && (
         <ChatBookmarksButton
           sessionId={bookmarksSessionId}

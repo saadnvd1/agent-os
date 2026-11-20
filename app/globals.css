@@ -2,6 +2,7 @@
 @import "tw-animate-css";
 @import "../styles/themes.css";
 @import "../styles/composer.css";
+@import "../styles/notes.css";
 
 @plugin "@tailwindcss/typography";
 

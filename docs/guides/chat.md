@@ -275,3 +275,16 @@ background after an update, and the search says so while it runs. The API is
 Drivers for other agent CLIs plug into `lib/chat/drivers`; undo, `@file`
 suggestions and visuals are Claude-only for now, and plan mode is Claude and
 OpenCode.
+
+## Scratch notes
+
+Each session has its own scratch note. The notebook button in the chat's
+header opens it in a drawer on the right; on a desktop the chat narrows beside
+it (drag its left edge to resize), and on a phone it takes the screen until you
+close it. The note has headings, lists, task lists, code blocks and links, and
+pasted markdown becomes the same. It saves itself a second after you stop
+typing and again when you leave it, and a dot on the button shows the session
+has a note. Notes are kept on the server, so they follow you to other devices
+(opening the drawer reads the latest copy) and stay when a session is done or
+archived; deleting the session deletes its note. A desktop browser remembers
+whether the drawer was open.
