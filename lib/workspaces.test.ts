@@ -93,6 +93,38 @@ describe("workspaces", () => {
     expect(ws("orch-of-gone")).toBeUndefined();
   });
 
+  it("deletes a workspace whose orchestrator started sessions, keeping them", () => {
+    const w = createWorkspace("Started things");
+    insertSessionRow(db, {
+      id: "orch-started",
+      name: "orch-started",
+      tmux_name: "orch-started",
+      role: "orchestrator",
+      workspace_id: w.id,
+    });
+    insertSessionRow(db, {
+      id: "child-of-orch",
+      name: "child-of-orch",
+      tmux_name: "child-of-orch",
+      workspace_id: w.id,
+      parent_session_id: "orch-started",
+      conductor_session_id: "orch-started",
+    });
+    expect(() => deleteWorkspace(w.id)).not.toThrow();
+    const child = db
+      .prepare(
+        `SELECT parent_session_id, conductor_session_id, workspace_id
+         FROM sessions WHERE id = ?`
+      )
+      .get("child-of-orch");
+    expect(child).toEqual({
+      parent_session_id: null,
+      conductor_session_id: null,
+      workspace_id: null,
+    });
+    expect(listWorkspaces().some((x) => x.id === w.id)).toBe(false);
+  });
+
   it("keeps a session's workspace consistent as it moves between projects", () => {
     const w = createWorkspace("Home");
     const project = createProject({ name: "mv", workingDirectory: "/tmp" });
