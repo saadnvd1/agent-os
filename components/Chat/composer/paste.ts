@@ -31,7 +31,7 @@ function editorMode(data: DataTransfer): string | undefined {
 }
 
 // A paragraph at either end merges into the one the cursor is in.
-function insertDoc(view: EditorView, json: JSONContent): void {
+export function insertDoc(view: EditorView, json: JSONContent): void {
   const { schema } = view.state;
   const content: Fragment = schema.nodeFromJSON(json).content;
   const open = (n: typeof content.firstChild) =>
@@ -44,7 +44,11 @@ function insertDoc(view: EditorView, json: JSONContent): void {
   view.dispatch(view.state.tr.replaceSelection(slice).scrollIntoView());
 }
 
-function insertCode(view: EditorView, code: string, language?: string): void {
+export function insertCode(
+  view: EditorView,
+  code: string,
+  language?: string
+): void {
   const { codeBlock, paragraph } = view.state.schema.nodes;
   const block = codeBlock.create(
     { language: language ?? null },

@@ -22,6 +22,20 @@ const lowlight = createLowlight(common);
 
 type Text = () => string;
 
+const codeBlock = () =>
+  ComposerCodeBlock.configure({
+    lowlight,
+    defaultLanguage: null,
+    exitOnTripleEnter: true,
+    exitOnArrowDown: true,
+    enableTabIndentation: true,
+    HTMLAttributes: {
+      spellcheck: "false",
+      autocorrect: "off",
+      autocapitalize: "off",
+    },
+  });
+
 const placeholder = (text: Text) =>
   Placeholder.configure({ placeholder: text });
 
@@ -55,18 +69,43 @@ export function richExtensions(text: Text): AnyExtension[] {
     ComposerTaskList,
     ComposerTaskItem.configure({ nested: true }),
     TaskShortcut,
-    ComposerCodeBlock.configure({
-      lowlight,
-      defaultLanguage: null,
-      exitOnTripleEnter: true,
-      exitOnArrowDown: true,
-      enableTabIndentation: true,
-      HTMLAttributes: {
-        spellcheck: "false",
-        autocorrect: "off",
-        autocapitalize: "off",
+    codeBlock(),
+    placeholder(text),
+  ];
+}
+
+// Session notes: a document, stored as Tiptap JSON rather than markdown, so
+// headings, quotes, rules and links are kept as well.
+export function notesExtensions(text: Text): AnyExtension[] {
+  return [
+    StarterKit.configure({
+      bold: false,
+      italic: false,
+      strike: false,
+      code: false,
+      bulletList: false,
+      orderedList: false,
+      codeBlock: false,
+      heading: { levels: [1, 2, 3] },
+      link: {
+        openOnClick: false,
+        autolink: true,
+        linkOnPaste: true,
+        defaultProtocol: "https",
+        HTMLAttributes: { rel: "noopener noreferrer", target: "_blank" },
       },
+      underline: false,
     }),
+    ComposerBold,
+    ComposerItalic,
+    ComposerStrike,
+    ComposerCode,
+    ComposerBulletList,
+    ComposerOrderedList,
+    ComposerTaskList,
+    ComposerTaskItem.configure({ nested: true }),
+    TaskShortcut,
+    codeBlock(),
     placeholder(text),
   ];
 }

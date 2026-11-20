@@ -17,6 +17,7 @@ import { supportsChat } from "@/lib/chat/capabilities";
 import { stopChat } from "@/lib/chat/runner";
 import { statusDetector } from "@/lib/status-detector";
 import { deleteItems } from "@/lib/chat/store";
+import { deleteNote } from "@/lib/notes";
 import { clearQueue } from "@/lib/chat/queued";
 import { recordPreviousName } from "@/lib/session-names";
 import { getProject, moveSessionToProject } from "@/lib/projects";
@@ -273,6 +274,7 @@ export async function DELETE(request: NextRequest, { params }: RouteParams) {
         console.error(`Failed to kill worker ${worker.id}:`, error);
       }
       void releaseSessionLeftovers(worker);
+      deleteNote(worker.id);
       queries.deleteSession(db).run(worker.id);
     }
 
@@ -292,6 +294,7 @@ export async function DELETE(request: NextRequest, { params }: RouteParams) {
     );
     deleteItems(id);
     clearQueue(id);
+    deleteNote(id);
     void removeSessionAttachments(id).catch(() => {});
     queries.deleteSession(db).run(id);
 

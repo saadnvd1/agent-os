@@ -19,6 +19,7 @@ import { MobileTabBar } from "./MobileTabBar";
 import { PairSwitch } from "@/components/Analyst/PairSwitch";
 import { openFind } from "@/components/Chat/useFind";
 import { DesktopTabBar } from "./DesktopTabBar";
+import { ChatWithNotes } from "@/components/Chat/notes";
 import {
   TerminalSkeleton,
   FileExplorerSkeleton,
@@ -336,19 +337,21 @@ export const Pane = memo(function Pane({
     const chat = chatSessionFor(tab);
     if (chat)
       return (
-        <ChatPanel
-          sessionId={chat.id}
-          sessionName={chat.name}
-          accessLocked={chat.role === "orchestrator"}
-          freshStart={
-            (chat.role === "orchestrator" || !!chat.has_brief) &&
-            !chat.archived_at
-          }
-          orchestratorOf={
-            chat.role === "orchestrator" ? chat.workspace_id : null
-          }
-          active={isActive && isFocused}
-        />
+        <ChatWithNotes sessionId={chat.id} mobile={isMobile} active={isActive}>
+          <ChatPanel
+            sessionId={chat.id}
+            sessionName={chat.name}
+            accessLocked={chat.role === "orchestrator"}
+            freshStart={
+              (chat.role === "orchestrator" || !!chat.has_brief) &&
+              !chat.archived_at
+            }
+            orchestratorOf={
+              chat.role === "orchestrator" ? chat.workspace_id : null
+            }
+            active={isActive && isFocused}
+          />
+        </ChatWithNotes>
       );
     const own = sessions.find((s) => s.id === tab.sessionId);
     if (own?.setup_status === "running")

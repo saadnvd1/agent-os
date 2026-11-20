@@ -178,6 +178,7 @@ export function DesktopTabBar({
           <PaneViewToggle
             sessionId={session.id}
             isChat={session.view === "chat"}
+            notesSessionId={bookmarksSessionId}
             viewMode={viewMode}
             isLocalSession={isLocalSession}
             hasLog={hasLog}
