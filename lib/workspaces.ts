@@ -122,6 +122,14 @@ export function deleteWorkspace(id: string): void {
        WHERE role IS NULL AND workspace_id = ?`
     ).run(id);
     // Its orchestrator goes with it; a running worker idles out on its own.
+    // Sessions it started still point at it, and those foreign keys don't
+    // cascade, so let them go first.
+    for (const column of ["parent_session_id", "conductor_session_id"])
+      db.prepare(
+        `UPDATE sessions SET ${column} = NULL WHERE ${column} IN (
+           SELECT id FROM sessions
+           WHERE role = 'orchestrator' AND workspace_id = ?)`
+      ).run(id);
     db.prepare(
       `DELETE FROM sessions WHERE role = 'orchestrator' AND workspace_id = ?`
     ).run(id);
