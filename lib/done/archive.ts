@@ -9,6 +9,8 @@ import { peerSessionLink } from "../hosts/peer-actions";
 import { endLinkOf } from "../analyst/endLink";
 import { openChildren } from "../fork/ledger";
 import { cancelChildren } from "../fork/settle";
+import { release as releaseClaim } from "../claims/store";
+import { endedHow } from "../claims/ended";
 
 // Archiving a session whose forks are still running asks first.
 export class ForkChildrenOpen extends Error {
@@ -42,6 +44,11 @@ export function archiveSession(id: string): void {
   db.prepare(
     `UPDATE sessions SET archived_at = datetime('now') WHERE id = ? AND archived_at IS NULL`
   ).run(id);
+  const s = db
+    .prepare(`SELECT task_status, pr_status FROM session_rows WHERE id = ?`)
+    .get(id) as
+    { task_status: string | null; pr_status: string | null } | undefined;
+  releaseClaim(id, endedHow(s ?? {}) ?? "done");
   endLinkOf(id);
   kickWaits();
 }

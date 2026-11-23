@@ -25,6 +25,7 @@ import { startSettling } from "./lib/recipes";
 import { startAutoArchive } from "./lib/done/auto-archive";
 import { startWorktreeSweep } from "./lib/worktree-sweep/start";
 import { startClaimsLoop } from "./lib/claims";
+import { sweepAndLog } from "./lib/stray-processes";
 import { startUsageRollup, usageRollupEnabled } from "./lib/usage/nightly";
 import { resumePhoneOutbox } from "./lib/notify";
 import { resumePushOutbox } from "./lib/notify/push";
@@ -467,6 +468,11 @@ app.prepare().then(async () => {
   };
   void sweepSims();
   setInterval(sweepSims, 5 * 60_000);
+  // Processes left running from a worktree that is already gone.
+  if (!process.env.VITEST) {
+    setTimeout(() => void sweepAndLog(), 2 * 60_000).unref();
+    setInterval(() => void sweepAndLog(), 10 * 60_000).unref();
+  }
   // Chat turns that kept running through a restart.
   void reattachChats().finally(() => {
     startPauseWatcher();
