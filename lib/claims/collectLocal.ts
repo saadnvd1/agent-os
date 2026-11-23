@@ -1,12 +1,15 @@
 // Turns this machine's live sessions into claims: the repo, branch and the
 // paths their diff touches so far. Only paths leave git, never content.
 
+import fs from "fs";
 import { getDb } from "../db";
 import { getCurrentBranch, getDefaultBranch } from "../git";
 import { git } from "../git-exec";
 import { repoKey } from "../git-remote";
 import { IN_FLIGHT } from "../tasks/queue-rows";
 import { expandHome } from "../tasks/session";
+import { statusOf } from "../orchestrator/facts";
+import { endedHow } from "./ended";
 import { isNoise } from "./overlap";
 import { MAX_FILES } from "./types";
 import {
@@ -26,6 +29,8 @@ interface SessionRow {
   pr_url: string | null;
   pr_status: string | null;
   task_status: string | null;
+  archived_at: string | null;
+  settled_at: string | null;
 }
 
 const OPTS = { timeout: 5000 };
@@ -58,12 +63,23 @@ function candidates(): SessionRow[] {
   return getDb()
     .prepare(
       `SELECT id, name, working_directory, worktree_path, branch_name, base_branch,
-              pr_url, pr_status, task_status
+              pr_url, pr_status, task_status, archived_at, settled_at
          FROM session_rows
-        WHERE archived_at IS NULL AND COALESCE(peer_mirror, 0) = 0
+        WHERE COALESCE(peer_mirror, 0) = 0
           AND (host_id IS NULL OR host_id = 'local')`
     )
     .all() as SessionRow[];
+}
+
+// A session on the shared checkout with nothing changed and no agent at work
+// holds nothing worth waiting for.
+async function idleOnCleanCheckout(s: SessionRow, dir: string) {
+  try {
+    if ((await git(dir, ["status", "--porcelain"], OPTS)).trim()) return false;
+    return (await statusOf(s as never)).status !== "running";
+  } catch {
+    return false;
+  }
 }
 
 const last = new Map<string, LocalClaim>();
@@ -77,16 +93,19 @@ export async function collectLocal(origin: {
   const alive = new Set<string>();
   for (const s of candidates()) {
     try {
-      const done = s.pr_status === "merged" || s.pr_status === "closed";
+      const ended = endedHow(s);
       const idleTask =
         s.task_status &&
         !IN_FLIGHT.includes(s.task_status) &&
         s.pr_status !== "open";
-      if (done || idleTask) {
-        if (done) release(s.id, s.pr_status === "merged" ? "merged" : "done");
+      if (ended || idleTask) {
+        if (ended) release(s.id, ended);
         continue;
       }
       const dir = expandHome(s.worktree_path || s.working_directory);
+      // A removed worktree has nothing left to claim; never keep its old paths.
+      if (s.worktree_path && !fs.existsSync(dir)) continue;
+      if (!s.worktree_path && (await idleOnCleanCheckout(s, dir))) continue;
       const repo = await repoKey(dir);
       if (!repo) continue;
       const branch = s.branch_name || (await getCurrentBranch(dir));

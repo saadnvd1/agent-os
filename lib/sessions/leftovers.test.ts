@@ -6,10 +6,19 @@ describe("releasing a session's leftovers", () => {
     const stopDev = vi.fn(async () => {});
     const dropDatabase = vi.fn(async () => {});
     const removeDir = vi.fn(async () => {});
+    const stopProcesses = vi.fn(async () => {});
+    const releaseClaim = vi.fn();
     await releaseSessionLeftovers(
-      { id: "abc12345-6789", worktree_path: "/w/t" },
-      { stopDev, dropDatabase, removeDir }
+      {
+        id: "abc12345-6789",
+        worktree_path: "/w/t",
+        ports: '{"WEB":3105,"VITE":3305}',
+        pr_status: "merged",
+      },
+      { stopDev, dropDatabase, removeDir, stopProcesses, releaseClaim }
     );
+    expect(stopProcesses).toHaveBeenCalledWith("/w/t", [3105, 3305]);
+    expect(releaseClaim).toHaveBeenCalledWith("abc12345-6789", "merged");
     expect(stopDev).toHaveBeenCalledWith("/w/t");
     expect(dropDatabase).toHaveBeenCalledWith("abc12345-6789");
     expect(removeDir).toHaveBeenCalledWith(sessionTmpDir("abc12345-6789"));

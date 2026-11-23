@@ -10,6 +10,11 @@ import os from "os";
 import path from "path";
 import { stopDevServer } from "../dev-instance/stopDevServer";
 import { dropSessionDatabase } from "../project-config/database";
+import { stopWorktreeProcesses } from "../stray-processes";
+import { parsePorts } from "../ports/allocatePorts";
+import { release } from "../claims/store";
+import { endedHow } from "../claims/ended";
+import type { Released } from "../claims/types";
 
 export const SESSION_TMP_PREFIX = "agentos-s-";
 
@@ -21,12 +26,18 @@ export const sessionTmpDir = (sessionId: string) =>
 
 export interface LeftoverDeps {
   stopDev: (worktree: string) => Promise<unknown>;
+  stopProcesses: (worktree: string | null, ports: number[]) => Promise<unknown>;
+  releaseClaim: (sessionId: string, why: Released) => void;
   dropDatabase: (sessionId: string) => Promise<void>;
   removeDir: (dir: string) => Promise<void>;
 }
 
 const realDeps: LeftoverDeps = {
   stopDev: (worktree) => stopDevServer(worktree),
+  stopProcesses: async (worktree, ports) => {
+    if (worktree || ports.length) await stopWorktreeProcesses(worktree, ports);
+  },
+  releaseClaim: (id, why) => release(id, why),
   dropDatabase: dropSessionDatabase,
   removeDir: (dir) => fs.promises.rm(dir, { recursive: true, force: true }),
 };
@@ -36,7 +47,13 @@ const realDeps: LeftoverDeps = {
  * tried on its own. Callers read the session row first and don't await this.
  */
 export async function releaseSessionLeftovers(
-  session: { id: string; worktree_path?: string | null },
+  session: {
+    id: string;
+    worktree_path?: string | null;
+    // The ports it was given, read before they were released.
+    ports?: string | null;
+    pr_status?: string | null;
+  },
   deps: Partial<LeftoverDeps> = {}
 ): Promise<void> {
   const d = { ...realDeps, ...deps };
@@ -44,10 +61,26 @@ export async function releaseSessionLeftovers(
     // First: its row is read before the caller deletes it.
     ["database", () => d.dropDatabase(session.id)],
     [
+      "claims",
+      async () =>
+        d.releaseClaim(
+          session.id,
+          endedHow({ pr_status: session.pr_status }) ?? "done"
+        ),
+    ],
+    [
       "dev server",
       async () => {
         if (session.worktree_path) await d.stopDev(session.worktree_path);
       },
+    ],
+    [
+      "processes",
+      () =>
+        d.stopProcesses(
+          session.worktree_path ?? null,
+          Object.values(parsePorts(session.ports) ?? {})
+        ),
     ],
     ["temp folder", () => d.removeDir(sessionTmpDir(session.id))],
   ];

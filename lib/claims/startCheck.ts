@@ -8,6 +8,7 @@ import { getProject } from "../projects";
 import { untrusted } from "../orchestrator/untrusted";
 import { expandHome } from "../tasks/session";
 import { claimsShared, machineId, machineName } from "./machine";
+import { endedSessions } from "./ended";
 import { overlapBetween } from "./overlap";
 import { liveClaims } from "./store";
 import { MAX_FILES, type Claim, type Overlap } from "./types";
@@ -30,6 +31,17 @@ async function predictedFiles(dir: string, prompt: string): Promise<string[]> {
   return tokens.filter((t) => tracked.has(t)).slice(0, MAX_FILES);
 }
 
+// A claim of a session on this machine that is done, dropped, archived or
+// merged holds nothing, even before the next tick releases it.
+export function withoutEnded(claims: Claim[]): Claim[] {
+  const self = machineId();
+  const local = claims.filter((c) => c.origin === self && c.sessionId);
+  const ended = endedSessions(local.map((c) => c.sessionId!));
+  return claims.filter(
+    (c) => !(c.origin === self && c.sessionId && ended.has(c.sessionId))
+  );
+}
+
 export async function checkStart(opts: {
   projectId: string;
   name?: string;
@@ -45,7 +57,7 @@ export async function checkStart(opts: {
     const dir = expandHome(project.working_directory);
     const repo = await repoKey(dir);
     if (!repo) return none;
-    const live = liveClaims({ repo, now: opts.now });
+    const live = withoutEnded(liveClaims({ repo, now: opts.now }));
     if (!live.length) return none;
     const now = opts.now ?? Date.now();
     const goal = (opts.name?.trim() || opts.prompt.split("\n")[0]).slice(
