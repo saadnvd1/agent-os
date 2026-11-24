@@ -11,6 +11,7 @@ import {
   MAX_QUEUED_TEXT,
   moveQueued,
   moveToFront,
+  takeLastQueued,
 } from "./queued";
 
 const session = () => {
@@ -149,5 +150,49 @@ describe("chat queue", () => {
     enqueue(id, { id: "user-f", text: "see", files: [file] });
     expect(listQueue(id)[0].fileCount).toBe(1);
     expect(claimNext(id)?.files).toEqual([file]);
+  });
+
+  describe("taking the last message", () => {
+    it("takes the newest one out, with its images and files", () => {
+      const id = randomUUID();
+      const images = [{ mediaType: "image/png", data: "AAAA" }];
+      const files = [{ name: "a.txt", path: "/x/a.txt", size: 1 }];
+      enqueue(id, { id: "user-1", text: "first" });
+      enqueue(id, {
+        id: "user-2",
+        text: "second",
+        images,
+        files: files as never,
+      });
+      expect(takeLastQueued(id)).toEqual({
+        id: "user-2",
+        text: "second",
+        images,
+        files,
+      });
+      expect(texts(id)).toEqual(["first"]);
+      expect(takeLastQueued(id)?.text).toBe("first");
+    });
+
+    it("finds nothing once the queue is empty or was already sent", () => {
+      const id = randomUUID();
+      expect(takeLastQueued(id)).toBeNull();
+      enqueue(id, { id: "user-1", text: "a" });
+      expect(claimNext(id)?.id).toBe("user-1");
+      expect(takeLastQueued(id)).toBeNull();
+    });
+
+    it("never takes a guest's prompt", () => {
+      const id = randomUUID();
+      enqueue(id, { id: "user-1", text: "mine" });
+      enqueue(id, {
+        id: "user-2",
+        text: "theirs",
+        origin: { kind: "guest-drive", label: "Sam", share: "s", wheel: "w" },
+      } as never);
+      expect(takeLastQueued(id)?.text).toBe("mine");
+      expect(takeLastQueued(id)).toBeNull();
+      expect(texts(id)).toEqual(["theirs"]);
+    });
   });
 });

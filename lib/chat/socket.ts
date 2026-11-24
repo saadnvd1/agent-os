@@ -18,6 +18,7 @@ import {
   chatToolBody,
   deleteQueuedChat,
   editQueuedChat,
+  takeLastQueuedChat,
   moveQueuedChat,
   refreshCapabilities,
   respondChat,
@@ -170,6 +171,12 @@ function onChatMessage(
     run(titleChatFromMessage(sessionId, send.text));
   } else if (msg.type === "queue_edit" && typeof msg.text === "string")
     editQueuedChat(sessionId, String(msg.id), msg.text);
+  else if (msg.type === "queue_take" && typeof msg.reqId === "string")
+    reply({
+      type: "queue_taken",
+      reqId: msg.reqId,
+      message: takeLastQueuedChat(sessionId),
+    });
   else if (msg.type === "queue_move")
     moveQueuedChat(sessionId, String(msg.id), msg.by === -1 ? -1 : 1);
   else if (msg.type === "queue_delete")

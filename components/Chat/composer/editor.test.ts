@@ -5,7 +5,7 @@ import { docToMarkdown } from "@/lib/chat/markdown/serialize";
 import { markdownToDoc } from "@/lib/chat/markdown/parse";
 import { plainExtensions, richExtensions } from "./extensions";
 import { handlePaste, type PasteHandlers } from "./paste";
-import { handleKeyDown, type KeyHandlers } from "./keys";
+import { canTakeQueued, handleKeyDown, type KeyHandlers } from "./keys";
 import { loadDoc } from "./load";
 
 let editor: Editor;
@@ -49,6 +49,7 @@ const keys = (over: Partial<KeyHandlers> = {}): KeyHandlers => ({
   onPasteAsText: () => {},
   suggestion: false,
   onAcceptSuggestion: () => {},
+  onTakeQueued: () => false,
   onHistory: () => false,
   ...over,
 });
@@ -355,5 +356,85 @@ describe("Enter", () => {
     editor.commands.setTextSelection(2);
     press("ArrowDown", {}, h);
     expect(asked).toEqual(["up:true:true", "up:false:true", "down:true:false"]);
+  });
+
+  describe("↑ taking back a queued message", () => {
+    const taker = () => {
+      const got: string[] = [];
+      return {
+        got,
+        h: keys({
+          onTakeQueued: () => {
+            got.push("take");
+            return true;
+          },
+          onHistory: () => {
+            got.push("history");
+            return true;
+          },
+        }),
+      };
+    };
+
+    it("takes the key before the history", () => {
+      make();
+      const { got, h } = taker();
+      press("ArrowUp", {}, h);
+      expect(got).toEqual(["take"]);
+    });
+
+    it("leaves ↑ to the history when there's nothing to take", () => {
+      make();
+      const got: string[] = [];
+      const h = keys({
+        onTakeQueued: () => false,
+        onHistory: () => {
+          got.push("history");
+          return true;
+        },
+      });
+      press("ArrowUp", {}, h);
+      expect(got).toEqual(["history"]);
+    });
+
+    it("ignores ↑ with a modifier held, and ↓", () => {
+      make();
+      const { got, h } = taker();
+      for (const mod of [
+        { shift: true },
+        { alt: true },
+        { ctrl: true },
+        { meta: true },
+      ])
+        press("ArrowUp", mod, h);
+      press("ArrowDown", {}, h);
+      expect(got).not.toContain("take");
+    });
+
+    it("leaves ↑ to an open menu", () => {
+      make();
+      const { got, h } = taker();
+      const menu: string[] = [];
+      press(
+        "ArrowUp",
+        {},
+        {
+          ...h,
+          menuOpen: true,
+          menuHasMatches: true,
+          onMenuKey: (k) => menu.push(k),
+        }
+      );
+      expect(got).toEqual([]);
+      expect(menu).toEqual(["up"]);
+    });
+
+    it("takes only into an empty composer with something queued", () => {
+      const base = { empty: true, takeable: 1, taking: false };
+      expect(canTakeQueued(base)).toBe(true);
+      expect(canTakeQueued({ ...base, empty: false })).toBe(false);
+      expect(canTakeQueued({ ...base, takeable: 0 })).toBe(false);
+      expect(canTakeQueued({ ...base, taking: true })).toBe(false);
+    });
   });
 });

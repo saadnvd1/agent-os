@@ -50,6 +50,7 @@ import {
   deleteQueued,
   deleteQueuedWhere,
   editQueued,
+  takeLastQueued,
   enqueue,
   listQueue,
   moveQueued,
@@ -536,6 +537,12 @@ export function editQueuedChat(sessionId: string, id: string, text: string) {
   if (text.trim()) editQueued(sessionId, id, text.trim());
   else deleteQueued(sessionId, id);
   emitQueue(sessionId);
+}
+
+export function takeLastQueuedChat(sessionId: string) {
+  const taken = takeLastQueued(sessionId);
+  if (taken) emitQueue(sessionId);
+  return taken;
 }
 
 export function moveQueuedChat(sessionId: string, id: string, by: -1 | 1) {

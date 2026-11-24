@@ -341,6 +341,14 @@ export type ChatItem =
     });
 
 // A message waiting for the running turn to end.
+// A queued message with everything it carried, handed back for editing.
+export interface TakenMessage {
+  id: string;
+  text: string;
+  images?: ChatImage[];
+  files?: ChatFile[];
+}
+
 export interface QueuedMessage {
   id: string;
   text: string;
@@ -446,6 +454,8 @@ export type ChatServerMessage =
   // Find in the conversation: one page of results for the request `reqId`.
   | ({ type: "search"; reqId: string; query: string } & SearchResult)
   | { type: "queue"; queue: QueuedMessage[] }
+  // The answer to queue_take: the message now out of the queue, or null.
+  | { type: "queue_taken"; reqId: string; message: TakenMessage | null }
   | { type: "suggestion"; text: string | null }
   | {
       type: "files";
@@ -506,6 +516,8 @@ export type ChatClientMessage =
   | { type: "queue_edit"; id: string; text: string }
   | { type: "queue_move"; id: string; by: -1 | 1 }
   | { type: "queue_delete"; id: string }
+  // Takes the newest queued message out, to edit it in the composer.
+  | { type: "queue_take"; reqId: string }
   // `during`: the user message whose turn was running when it was tapped.
   | { type: "queue_send_now"; id: string; during?: string }
   | { type: "files"; reqId: string; query: string }
