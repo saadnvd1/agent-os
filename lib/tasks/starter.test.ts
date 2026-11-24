@@ -73,5 +73,17 @@ describe("isFork", () => {
     ).toBe(false);
     expect(isFork({ parent_session_id: "p", started_via: "plan" })).toBe(false);
     expect(isFork({ parent_session_id: "p", task_prompt: "x" })).toBe(false);
+    // How a fork is actually stored.
+    expect(isFork({ parent_session_id: "p", started_via: "session" })).toBe(
+      true
+    );
+    // A session another session started is not a fork.
+    expect(
+      isFork({
+        parent_session_id: "p",
+        started_via: "session",
+        started_by: "o",
+      })
+    ).toBe(false);
   });
 });
