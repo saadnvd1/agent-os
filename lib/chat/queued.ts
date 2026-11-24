@@ -162,6 +162,45 @@ export function claimNext(
   };
 }
 
+// Takes the newest message of the reader's own off the queue, to edit it in
+// the composer (a guest's prompt isn't theirs to take). Null when nothing is
+// left: the worker sent it first, or it was deleted elsewhere. The delete is
+// the claim, so a message is never both taken and sent.
+export function takeLastQueued(sessionId: string): {
+  id: string;
+  text: string;
+  images?: ChatImage[];
+  files?: ChatFile[];
+} | null {
+  return db.transaction(() => {
+    const rows = db
+      .prepare(
+        `SELECT id, sent_by FROM chat_queue WHERE session_id = ?
+         ORDER BY position DESC, created_at DESC`
+      )
+      .all(sessionId) as { id: string; sent_by: string | null }[];
+    const last = rows.find(
+      (r) =>
+        (r.sent_by ? (JSON.parse(r.sent_by) as SentBy).origin?.kind : "") !==
+        "guest-drive"
+    );
+    if (!last) return null;
+    const row = db
+      .prepare(
+        `DELETE FROM chat_queue WHERE session_id = ? AND id = ?
+         RETURNING id, text, images, files`
+      )
+      .get(sessionId, last.id) as Row | undefined;
+    if (!row) return null;
+    return {
+      id: row.id,
+      text: row.text,
+      images: row.images ? (JSON.parse(row.images) as ChatImage[]) : undefined,
+      files: row.files ? (JSON.parse(row.files) as ChatFile[]) : undefined,
+    };
+  })();
+}
+
 // False when it's already gone (sent, or deleted elsewhere).
 export function editQueued(
   sessionId: string,

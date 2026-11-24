@@ -113,6 +113,7 @@ export function ChatPanel({
   const forksOn = useExperiment("forks");
   const startFork = useStartForks(sessionId);
   // Set while a selection is being forked; per session, like asIs below.
+  const [composerEmpty, setComposerEmpty] = useState(true);
   const [forkDraft, setForkDraft] = useState<ForkDraft | null>(null);
   const draftHere = forkDraft?.sessionId === sessionId ? forkDraft : null;
   const fork = forksOn && draftHere?.mode ? draftHere : null;
@@ -162,6 +163,7 @@ export function ChatPanel({
     queueEdit,
     queueMove,
     queueDelete,
+    queueTake,
     queueSendNow,
     suggestion,
     requestFiles,
@@ -170,6 +172,7 @@ export function ChatPanel({
     modelWait,
     loadedFor,
   } = useChat(sessionId, (text) => setPrefill({ text, at: Date.now() }));
+  const takeable = queue.filter((q) => !q.guest).length;
   const startFresh = useFreshStart();
   const { isMobile } = useViewport();
   const scrollRef = useRef<HTMLDivElement>(null);
@@ -700,6 +703,7 @@ export function ChatPanel({
           onEdit={queueEdit}
           onMove={queueMove}
           onDelete={queueDelete}
+          editHint={composerEmpty && takeable > 0}
           onSendNow={(id) =>
             queueSendNow(
               id,
@@ -726,6 +730,9 @@ export function ChatPanel({
           suggestion={shownSuggestion}
           onDismissSuggestion={dismissSuggestion}
           history={history}
+          takeable={takeable}
+          onTakeQueued={queueTake}
+          onEmptyChange={setComposerEmpty}
           requestFiles={requestFiles}
           insert={insert}
           running={running}

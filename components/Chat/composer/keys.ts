@@ -17,12 +17,23 @@ export interface KeyHandlers {
   // Ghost text is showing: Tab or → takes it.
   suggestion: boolean;
   onAcceptSuggestion: () => void;
+  // ↑ on an empty composer: take the last queued message back to edit.
+  // True when it took the key.
+  onTakeQueued: () => boolean;
   // ↑/↓ through sent messages; false when the key isn't the history's.
   onHistory: (
     dir: "up" | "down",
     caret: { firstLine: boolean; lastLine: boolean }
   ) => boolean;
 }
+
+// ↑ takes the last queued message back only into a composer with nothing in
+// it, when a message of the reader's own is queued and no take is running.
+export const canTakeQueued = (c: {
+  empty: boolean;
+  takeable: number;
+  taking: boolean;
+}) => c.empty && c.takeable > 0 && !c.taking;
 
 // Where the caret is among the composer's lines (paragraphs, and lines in
 // a code block or after a break).
@@ -120,6 +131,7 @@ export function handleKeyDown(
       return true;
     }
     const plainKey = !(mod || event.altKey || event.shiftKey);
+    if (plainKey && event.key === "ArrowUp" && h.onTakeQueued()) return true;
     if (
       plainKey &&
       (event.key === "ArrowUp" || event.key === "ArrowDown") &&

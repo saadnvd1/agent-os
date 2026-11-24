@@ -10,6 +10,7 @@ import type {
   ChatImage,
   ChatModel,
   FileSuggestion,
+  TakenMessage,
 } from "@/lib/chat/events";
 import {
   nextAttachment,
@@ -38,7 +39,7 @@ import { useMentions } from "./useMentions";
 import { Attachments } from "./Attachments";
 import { Toolbar } from "./Toolbar";
 import { useAttachFiles } from "./useAttachFiles";
-import type { MenuKey } from "./keys";
+import { canTakeQueued, type MenuKey } from "./keys";
 import { useComposerEditor, type ComposerHandlers } from "./useComposerEditor";
 import { useFocusOnShow } from "./autofocus";
 import { usePhoneLayout } from "./layout";
@@ -85,6 +86,12 @@ export interface ComposerProps {
   onDismissSuggestion?: (suggestion: string) => void;
   // Messages sent in this conversation, newest first, for ↑.
   history?: string[];
+  // ↑ on an empty composer takes the last queued message back: how many
+  // can be taken, and the take itself (null when it was sent first).
+  takeable?: number;
+  onTakeQueued?: () => Promise<TakenMessage | null>;
+  // Whether there's nothing written, for the queue's "↑ to edit" hint.
+  onEmptyChange?: (empty: boolean) => void;
   // Files and folders for an @mention.
   requestFiles?: (query: string) => Promise<FileSuggestion[]>;
   // Markdown to put in at the caret (a quote), once per `at`.
@@ -123,6 +130,9 @@ export function ComposerBody({
   suggestion = null,
   onDismissSuggestion,
   history = [],
+  takeable = 0,
+  onTakeQueued,
+  onEmptyChange,
   requestFiles,
   insert,
   focusKey,
@@ -284,6 +294,30 @@ export function ComposerBody({
     !images.length &&
     !files.length &&
     !attach.uploads.length;
+  useEffect(() => onEmptyChange?.(empty), [empty, onEmptyChange]);
+  const taking = useRef(false);
+  const takeQueued = () => {
+    if (
+      !onTakeQueued ||
+      !editor ||
+      !canTakeQueued({ empty, takeable, taking: taking.current })
+    )
+      return false;
+    taking.current = true;
+    void onTakeQueued()
+      .then((m) => {
+        if (!m) return;
+        // Typed in the meantime: what came back goes after it, never over it.
+        if (editor.isEmpty) setText(m.text, true);
+        else insertMarkdown(editor, markdownParagraphs(m.text), true);
+        setImages((prev) => [...prev, ...(m.images ?? [])]);
+        if (m.files?.length) attach.restore([...attached, ...m.files]);
+      })
+      .finally(() => {
+        taking.current = false;
+      });
+    return true;
+  };
   const submit = () => {
     if (empty || disabled || attach.uploading) return;
     const used = leadingCommand(text)?.slice(1);
@@ -315,6 +349,7 @@ export function ComposerBody({
       onSend: submit,
       suggestion: ghost !== null,
       onAcceptSuggestion: acceptSuggestion,
+      onTakeQueued: takeQueued,
       onHistory: (dir, at) => {
         if (images.length || files.length || attach.uploads.length)
           return false;

@@ -19,6 +19,7 @@ import type {
   ModelWait,
   FileSuggestion,
   QueuedMessage,
+  TakenMessage,
   ToolBody,
   UndoPreview,
 } from "@/lib/chat/events";
@@ -188,6 +189,9 @@ export function useChat(
   const fileRequests = useRef(
     new Map<string, (files: FileSuggestion[]) => void>()
   );
+  const takeRequests = useRef(
+    new Map<string, (message: TakenMessage | null) => void>()
+  );
   const searchRequests = useRef(
     new Map<string, (result: SearchResult) => void>()
   );
@@ -294,6 +298,9 @@ export function useChat(
         } else if (m.type === "files") {
           fileRequests.current.get(m.reqId)?.(m.files);
           fileRequests.current.delete(m.reqId);
+        } else if (m.type === "queue_taken") {
+          takeRequests.current.get(m.reqId)?.(m.message);
+          takeRequests.current.delete(m.reqId);
         } else if (m.type === "search") {
           searchRequests.current.get(m.reqId)?.(m);
           searchRequests.current.delete(m.reqId);
@@ -529,6 +536,25 @@ export function useChat(
   }, []);
   // Stops the turn the reader sees running (its opening message), and only
   // that one: a turn that started since isn't theirs to stop.
+  // The newest queued message, taken out for editing; null when it was sent
+  // first, or the socket is down.
+  const queueTake = useCallback(() => {
+    const ws = wsRef.current;
+    if (!ws || ws.readyState !== WebSocket.OPEN)
+      return Promise.resolve<TakenMessage | null>(null);
+    const reqId = Math.random().toString(36).slice(2);
+    return new Promise<TakenMessage | null>((resolve) => {
+      const timer = setTimeout(() => {
+        takeRequests.current.delete(reqId);
+        resolve(null);
+      }, 8000);
+      takeRequests.current.set(reqId, (message) => {
+        clearTimeout(timer);
+        resolve(message);
+      });
+      ws.send(JSON.stringify({ type: "queue_take", reqId }));
+    });
+  }, []);
   const queueSendNow = useCallback((id: string, during?: string) => {
     wsRef.current?.send(JSON.stringify({ type: "queue_send_now", id, during }));
   }, []);
@@ -641,6 +667,7 @@ export function useChat(
     queueEdit,
     queueMove,
     queueDelete,
+    queueTake,
     queueSendNow,
     suggestion,
     requestFiles,

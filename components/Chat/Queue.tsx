@@ -15,6 +15,7 @@ export function Queue({
   onMove,
   onDelete,
   onSendNow,
+  editHint = false,
 }: {
   queue: QueuedMessage[];
   running: boolean;
@@ -22,6 +23,8 @@ export function Queue({
   onMove: (id: string, by: -1 | 1) => void;
   onDelete: (id: string) => void;
   onSendNow: (id: string) => void;
+  // The composer is empty: ↑ there takes the last message back.
+  editHint?: boolean;
 }) {
   const [editing, setEditing] = useState<{ id: string; text: string } | null>(
     null
@@ -42,6 +45,7 @@ export function Queue({
         {running
           ? `Sends when this turn ends · ${queue.length} queued`
           : `${queue.length} queued`}
+        {editHint ? <span className="max-md:hidden"> · ↑ to edit</span> : null}
       </p>
       <ol className="flex flex-col gap-1">
         {queue.map((m, i) => (
