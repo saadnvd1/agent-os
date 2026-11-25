@@ -31,6 +31,7 @@ import { resolveRole, sessionWorkspace, taskOverride } from "../models/resolve";
 import { sessionRole } from "../models/session-role";
 import { holdingEscalations } from "../orchestrator/gates";
 import { openBySubject, workSubject } from "../orchestrator/asks";
+import { taskHasOpenQuestion } from "../orchestrator/questions";
 import { queueEventOnce } from "../orchestrator/events";
 import { isPaused } from "../orchestrator/pause";
 import { isMerging } from "./finish";
@@ -95,11 +96,6 @@ export const activePause = (sessionId: string): TaskPause | null =>
 function factsOf(s: Session): PauseFacts {
   const project = s.project_id ? getProject(s.project_id) : null;
   const workspaceId = project?.workspace_id ?? s.workspace_id ?? null;
-  const question = db
-    .prepare(
-      `SELECT 1 FROM orchestrator_questions WHERE status = 'open' AND task = ?`
-    )
-    .get(s.id);
   return {
     isTask: !!s.task_status,
     isOrchestrator: s.role === "orchestrator",
@@ -113,7 +109,7 @@ function factsOf(s: Session): PauseFacts {
     chatWaiting: s.view === "chat" && chatState(s.id) === "waiting",
     terminalWaiting: s.view !== "chat" && s.status === "waiting",
     openAsk: !!workspaceId && !!openBySubject(workspaceId, workSubject(s.id)),
-    openQuestion: !!question,
+    openQuestion: taskHasOpenQuestion(s.id),
     escalated: holdingEscalations(s.id).length > 0,
     planAwaiting: s.plan_phase === "awaiting",
     resumable:

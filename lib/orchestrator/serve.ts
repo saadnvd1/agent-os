@@ -36,7 +36,7 @@ import { projectTierTool } from "./project-tier-tool";
 import { addProject } from "./add-project";
 import { addRule, removeRule } from "./rules";
 import { askSaad } from "./ask-tool";
-import { askQuestion, resolveQuestion } from "./questions";
+import { askQuestion, listQuestions, resolveQuestion } from "./questions";
 import { listOrchestratorPeers, messageOrchestrator } from "./cross";
 import { sweepArm, sweepDryRun } from "./sweep-arm";
 import { PAUSED_REFUSAL } from "./pause";
@@ -326,6 +326,8 @@ export async function runTool(
       const a = p(tool, raw);
       return askQuestion(w, a.text, a.task);
     }
+    case "questions":
+      return listQuestions(w, { recent: p(tool, raw).recent });
     case "resolve_question": {
       const id = p(tool, raw).id;
       return resolveQuestion(w, id, "orchestrator")

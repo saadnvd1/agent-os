@@ -10,6 +10,7 @@
 import { loopDigestNote } from "../loops/summary";
 import { db } from "../db";
 import { openAsks } from "./asks";
+import { openQuestionLines } from "./questions";
 import { listRules } from "./rules";
 import { shortId } from "./describe";
 import { untrusted } from "./untrusted";
@@ -157,6 +158,15 @@ function asksSection(workspaceId: string): Section {
     }),
     empty: "- None.",
     more: "",
+  };
+}
+
+function questionsSection(workspaceId: string): Section {
+  return {
+    title: `Open questions (asked ${owner()} in chat; resolve_question once answered, they expire after 3 days)`,
+    lines: openQuestionLines(workspaceId),
+    empty: "- None.",
+    more: "the questions tool",
   };
 }
 
@@ -375,6 +385,7 @@ export function buildDigest(
     [
       rulesSection(workspaceId),
       asksSection(workspaceId),
+      questionsSection(workspaceId),
       tasksSection(workspaceId, checks, failures),
       recipesSection(workspaceId),
       externalSection(workspaceId, checks, failures),

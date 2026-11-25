@@ -25,8 +25,27 @@ const { orchestratorOverview } = await import("./overview");
 const { openAskCount } = await import("./asks");
 const { queueEvent } = await import("./events");
 const { deliverEvents, BATCH_WINDOW_MS } = await import("./deliver");
-const { dismissItem, resolveQuestion, undismissItem, MAX_OPEN_QUESTIONS } =
-  await import("./questions");
+const {
+  dismissItem,
+  resolveQuestion,
+  undismissItem,
+  MAX_OPEN_QUESTIONS,
+  taskHasOpenQuestion,
+} = await import("./questions");
+const { buildDigest } = await import("./digest");
+
+const age = (id: number | bigint, modifier: string) =>
+  db
+    .prepare(
+      `UPDATE orchestrator_questions SET created_at = datetime('now', ?) WHERE id = ?`
+    )
+    .run(modifier, id);
+const rowOf = (id: number) =>
+  db
+    .prepare(
+      `SELECT status, resolved_by FROM orchestrator_questions WHERE id = ?`
+    )
+    .get(id);
 
 beforeAll(() => {
   const home = tempDir("aos-orch-questions-");
@@ -75,6 +94,108 @@ describe("open questions", () => {
     await expect(
       runTool(t.w, "question", { text: "one more" })
     ).resolves.toMatch(/Not opened/);
+  });
+
+  it("refuses at the cap with the open list and evicts nothing", async () => {
+    const t = workspace();
+    for (let i = 0; i < MAX_OPEN_QUESTIONS; i++)
+      await runTool(t.w, "question", { text: `old thing ${i}` });
+    const ids = t.overview().questions.map((q) => q.id);
+    age(ids[0], "-2 days");
+    const out = await runTool(t.w, "question", { text: "one more" });
+    expect(out).toMatch(/Not opened/);
+    expect(out).toContain("resolve_question");
+    for (const id of ids) expect(out).toContain(`[question ${id}]`);
+    expect(out).toContain("old thing 3");
+    expect(out).toContain("2d ago");
+    expect(t.overview().questions).toHaveLength(MAX_OPEN_QUESTIONS);
+    await runTool(t.w, "resolve_question", { id: ids[0] });
+    await expect(
+      runTool(t.w, "question", { text: "one more" })
+    ).resolves.toMatch(/is open/);
+  });
+
+  it("does not count expired questions toward the cap", async () => {
+    const t = workspace();
+    for (let i = 0; i < MAX_OPEN_QUESTIONS; i++)
+      await runTool(t.w, "question", { text: `q${i}` });
+    for (const q of t.overview().questions) age(q.id, "-4 days");
+    await expect(runTool(t.w, "question", { text: "fresh" })).resolves.toMatch(
+      /is open/
+    );
+  });
+
+  it("expires a question after 3 days and not before", async () => {
+    const t = workspace();
+    await runTool(t.w, "question", { text: "Almost stale?" });
+    await runTool(t.w, "question", { text: "Stale?" });
+    const [stale, almost] = t.overview().questions.map((q) => q.id);
+    age(almost, "-71 hours");
+    age(stale, "-4321 minutes");
+    expect(t.overview().questions.map((q) => q.id)).toEqual([almost]);
+    expect(rowOf(stale)).toEqual({ status: "expired", resolved_by: "expired" });
+    expect(rowOf(almost)).toEqual({ status: "open", resolved_by: null });
+  });
+
+  it("expires on brief build too", async () => {
+    const t = workspace();
+    await runTool(t.w, "question", { text: "Ancient question" });
+    const [q] = t.overview().questions;
+    age(q.id, "-5 days");
+    expect(buildDigest(t.w)).not.toContain("Ancient question");
+    expect(rowOf(q.id)).toEqual({ status: "expired", resolved_by: "expired" });
+  });
+
+  it("lists open questions in the brief", async () => {
+    const t = workspace();
+    expect(buildDigest(t.w)).toMatch(/### Open questions[^\n]*\n- None\./);
+    await runTool(t.w, "question", { text: "Ship the beta Friday?" });
+    const [q] = t.overview().questions;
+    expect(buildDigest(t.w)).toContain(
+      `- [question ${q.id}] just now: Ship the beta Friday?`
+    );
+  });
+
+  it("reads open and recently resolved questions with the questions tool", async () => {
+    const t = workspace();
+    const other = workspace();
+    const task = seedSession({
+      projectId: t.app.id,
+      name: "billing",
+      task: true,
+    });
+    expect(await runTool(t.w, "questions", {})).toBe("No open questions.");
+    await runTool(t.w, "question", { text: "Older one", task: "billing" });
+    await runTool(t.w, "question", { text: "Newer one" });
+    await runTool(other.w, "question", { text: "Not mine" });
+    const [newer, older] = t.overview().questions;
+    age(older.id, "-2 days");
+    const out = await runTool(t.w, "questions", {});
+    expect(out).toContain(
+      `[question ${older.id}] 2d ago: Older one | task billing`
+    );
+    expect(out).toContain(`[question ${newer.id}] just now: Newer one`);
+    expect(out.indexOf("Older one")).toBeLessThan(out.indexOf("Newer one"));
+    expect(out).not.toContain("Not mine");
+    expect(out).not.toContain("Resolved in the last");
+    expect(task).toBeTruthy();
+
+    resolveQuestion(t.w, newer.id, "saad");
+    age(older.id, "-4 days");
+    const recent = await runTool(t.w, "questions", { recent: true });
+    expect(recent).toContain(`[question ${newer.id}] answered`);
+    expect(recent).toContain(`[question ${older.id}] expired`);
+    expect(recent).toContain("No open questions.");
+  });
+
+  it("taskHasOpenQuestion ignores a question past expiry", async () => {
+    const t = workspace();
+    const id = seedSession({ projectId: t.app.id, name: "tq", task: true });
+    await runTool(t.w, "question", { text: "About tq?", task: "tq" });
+    expect(taskHasOpenQuestion(id)).toBe(true);
+    const [q] = t.overview().questions;
+    age(q.id, "-4 days");
+    expect(taskHasOpenQuestion(id)).toBe(false);
   });
 
   it("resolves when the owner answers, and not for another workspace", async () => {
