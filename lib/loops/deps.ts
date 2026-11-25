@@ -4,6 +4,7 @@ import { lastItems } from "../chat/store";
 import { statusOf } from "../orchestrator/facts";
 import { amendmentsOf } from "../orchestrator/amendments";
 import { openBySubject, taskSubject, workSubject } from "../orchestrator/asks";
+import { taskHasOpenQuestion } from "../orchestrator/questions";
 import { isPaused } from "../orchestrator/pause";
 import { fetchRefs, repoOf } from "../orchestrator/repo";
 import { readUsage, windowRefusal } from "../orchestrator/usage";
@@ -118,11 +119,8 @@ export const defaultDeps: LoopDeps = {
         openBySubject(ws, taskSubject(task.id)))
     )
       return "an open ask on the task is waiting for you";
-    const q = db
-      .prepare(
-        `SELECT 1 FROM orchestrator_questions WHERE status = 'open' AND task = ?`
-      )
-      .get(task.id);
-    return q ? "the task has an open question for you" : null;
+    return taskHasOpenQuestion(task.id)
+      ? "the task has an open question for you"
+      : null;
   },
 };

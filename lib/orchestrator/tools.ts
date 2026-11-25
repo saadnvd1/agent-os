@@ -197,6 +197,8 @@ const DESCRIPTIONS: Record<ToolName, string> = {
     "Disarm a task armed to merge: it merges only through sign_off again.",
   question:
     "Mark a question you asked the owner in chat as open: it stays pinned on his Needs-you strip until he answers or you clear it. Use it for anything you need from him that isn't an ask_owner item. The same text while open is the same question.",
+  questions:
+    "List this workspace's open questions (id, age, text, task if any), oldest first so stale ones stand out. recent true adds the last week's resolved ones and how each was resolved (answered, cleared or expired). Questions open longer than 3 days expire on their own.",
   resolve_question:
     "Clear an open question once the owner has answered it in chat, or it no longer matters.",
   ask_owner:

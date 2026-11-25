@@ -27,7 +27,7 @@ it may do on its own, and the lines that always come back to you as asks.
   workspace, or the project already at that path moves in from no workspace;
   folders that hold secrets and projects of another workspace are refused),
   `note`,
-  `rule_add`, `rule_remove`, `review`, `sign_off`, `arm`, `disarm`, `remind_me`, `reminders`, `cancel_reminder`, `ask_owner`, `question` and `resolve_question`. All are served in-process to its chat (a call made while AgentOS restarts waits up to two minutes for it; one cut off mid-flight reports that and isn't repeated), refuse
+  `rule_add`, `rule_remove`, `review`, `sign_off`, `arm`, `disarm`, `remind_me`, `reminders`, `cancel_reminder`, `ask_owner`, `question`, `questions` (read-only) and `resolve_question`. All are served in-process to its chat (a call made while AgentOS restarts waits up to two minutes for it; one cut off mid-flight reports that and isn't repeated), refuse
   any target outside its workspace, and validate their arguments. The one
   exception is other orchestrators: `orchestrators` lists every workspace and
   whether it has one, and `message_orchestrator` messages another workspace's
@@ -278,7 +278,10 @@ approved`). An approval covers that one item only: a held task's approval
   it into the composer and resolves it when you send. Dismissing an item
   hides it on all your devices and resolves nothing: an ask stays open on
   its list and in the counts. Questions about a task clear when it is merged
-  or dropped.
+  or dropped, and any question open for 3 days expires (marked `expired`,
+  gone from the strip). The orchestrator's brief lists its open questions,
+  `questions` reads them (and the last week's resolved ones), and at 10 open
+  `question` refuses with the list so it can `resolve_question` and retry.
 - **Proof it's you:** only this machine, the tailnet, or a paired device with
   "Can approve" in Devices (on from pairing for the AgentOS app, off for a
   browser) may answer asks or pause. Approving a

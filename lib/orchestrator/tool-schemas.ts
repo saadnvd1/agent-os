@@ -385,6 +385,12 @@ export const TOOL_SHAPES = {
       .describe("The question as you asked it in chat, one or two sentences"),
     task: ref("The task it is about, when it names one").optional(),
   },
+  questions: {
+    recent: z
+      .boolean()
+      .optional()
+      .describe("Also list questions resolved in the last 7 days, and how"),
+  },
   resolve_question: {
     id: z.number().int().positive().describe("The question's id"),
   },

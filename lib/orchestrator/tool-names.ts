@@ -44,6 +44,7 @@ export const TOOL_NAMES = {
   project_tier: name("project_tier"),
   note: name("note"),
   question: name("question"),
+  questions: name("questions"),
   resolve_question: name("resolve_question"),
   rule_add: name("rule_add"),
   rule_remove: name("rule_remove"),
