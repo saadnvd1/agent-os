@@ -199,8 +199,9 @@ describe("queueMenu", () => {
     ]);
   });
 
-  it("only remove once it failed, nothing while it starts", () => {
+  it("try again or remove once it failed, nothing while it starts", () => {
     expect(queueMenu(row({ status: "failed" })).map((i) => i.action)).toEqual([
+      "start",
       "remove",
     ]);
     expect(queueMenu(row({ status: "starting" }))).toEqual([]);

@@ -28,6 +28,8 @@ import {
   type StartOutcome,
 } from "./queue-types";
 import { setPlacement, setTask } from "../db/session-parts";
+import { isBaseUnresolvable } from "../worktree-base";
+import { forgetBaseMisses, noteBaseMiss } from "./base-misses";
 
 // Tells the orchestrator that queued it that it started.
 export function announce(
@@ -162,6 +164,7 @@ export async function startRow(
         )
       : await createTask(task);
     if (remoteHeld.length) markQueuedHeldDelivered(r.id);
+    forgetBaseMisses(r.id);
     patch(r.id, {
       status: "started",
       started_at: new Date().toISOString(),
@@ -188,6 +191,17 @@ export async function startRow(
       if (origin) recordStart(origin, "task", r.id);
       announce(r, session);
       return "started";
+    }
+    // A linked machine that can't find the base isn't a failed try: the
+    // task goes back in line, and the next look skips that machine.
+    const base = r.base_branch;
+    if (placed && base && isBaseUnresolvable(message)) {
+      noteBaseMiss(r.id, placed.hostId, placed.name, base);
+      patch(r.id, {
+        status: "queued",
+        error: `${placed.name} couldn't find base ${base}; starting it elsewhere`,
+      });
+      return "retry";
     }
     const attempts = r.attempts + 1;
     const retry = attempts < START_ATTEMPTS && !opts.force;

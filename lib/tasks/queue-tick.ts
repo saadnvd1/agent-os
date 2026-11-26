@@ -9,6 +9,7 @@ import { db } from "../db";
 import { localView } from "../load/machines";
 import { claimResume, dueResumes, setPauseNote } from "./pause";
 import { unplaceable } from "./placement";
+import { baseMissText } from "./base-misses";
 import { planStarts, type Candidate } from "./schedule";
 import { placeable, queueNote, resumeNote, type Hold } from "./holds";
 import {
@@ -96,7 +97,7 @@ export async function tickOnce(now = Date.now()): Promise<"stale" | void> {
 // why it waits here instead of starting on a linked machine.
 function stayHeld(r: QueueRow, holds: Hold[] | undefined): Hold[] | undefined {
   const head = holds?.[0];
-  const why = unplaceable(r);
+  const why = unplaceable(r) ?? baseMissText(r.id);
   if (!holds || !head || !why || !placeable(head) || !("machine" in head))
     return holds;
   return [{ ...head, stay: why }, ...holds.slice(1)];

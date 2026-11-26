@@ -23,7 +23,6 @@ import { tmuxPane } from "./tmux-pane";
 import { pauseHoldOf, pausedNote } from "../tasks/pause-hold";
 import { isHeldRemote, relayToHeldTask } from "../tasks/contract/held-calls";
 import {
-  assertTakesMessages,
   findQueuedTarget,
   heldQueuedNote,
   type QueuedTarget,
@@ -493,7 +492,6 @@ function storeForQueued(
   body: string,
   relayKey?: string
 ) {
-  assertTakesMessages(to);
   if (from && overRateLimit(pairTimestamps(from.id, to.id)))
     throw new Error(
       `Too many messages between ${from.name} and ${to.name}; wait a few minutes`
@@ -517,7 +515,7 @@ function storeForQueued(
   return {
     message,
     delivery: { state: "queued" as const },
-    note: heldQueuedNote(to.name),
+    note: heldQueuedNote(to.name, to.status),
     heldForQueued: true,
   };
 }

@@ -24,6 +24,7 @@ import {
 import { scoreParts, type Candidate, type MachineView } from "./schedule";
 import { expandHome } from "./session";
 import { orchestratorOf } from "./starter";
+import { avoidsHost } from "./base-misses";
 import { lineSignature, row } from "./queue-rows";
 import type { QueueRow, QueueRowWithWorkspace } from "./queue-types";
 
@@ -148,6 +149,7 @@ export async function placeCandidates(
     const options = (peers.get(r.project_id) ?? []).filter(
       (p) =>
         !taken.has(p.hostId) &&
+        !avoidsHost(r.id, p.hostId) &&
         (!orchestratorOf(r.started_by) || p.holds !== false) &&
         (!plan || p.plans)
     );

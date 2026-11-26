@@ -48,7 +48,6 @@ import { addNote } from "./notes";
 import { findWorkspaceSession } from "./read";
 import { assignSessions, resolveGroup } from "../session-groups";
 import {
-  assertTakesMessages,
   findQueuedTarget,
   heldQueuedNote,
   type QueuedTarget,
@@ -125,7 +124,6 @@ async function sendToQueued(
   message: string,
   opts: { scopeChange?: boolean }
 ): Promise<string> {
-  assertTakesMessages(queued);
   let amended = "";
   if (opts.scopeChange) {
     amendBrief(workspaceId, queued.id, message);
@@ -139,7 +137,7 @@ async function sendToQueued(
   });
   // It may have started in between: then it was delivered as to any task.
   return sent.heldForQueued
-    ? `${heldQueuedNote(queued.name)}${amended}`
+    ? `${heldQueuedNote(queued.name, queued.status)}${amended}`
     : `Delivered to ${queued.name}.${amended}`;
 }
 

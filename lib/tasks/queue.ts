@@ -204,10 +204,23 @@ export async function startOrQueue<T>(
   }
 }
 
+// A task that failed to start goes back in line with its attempts cleared and
+// the messages sent to it still held. Nothing happens to any other status.
+export function requeueFailed(id: string): boolean {
+  const changed = db
+    .prepare(
+      `UPDATE task_queue SET status = 'queued', attempts = 0, error = NULL, note = NULL, wait_code = NULL
+       WHERE id = ? AND status = 'failed'`
+    )
+    .run(id).changes;
+  return changed > 0;
+}
+
 // A person's "start now": past the limit, its `after` and (for a task a
 // person queued) Pause. The orchestrator's queued tasks still pass its
 // brakes; a refusal is thrown.
 export async function startQueuedNow(id: string): Promise<StartOutcome> {
+  requeueFailed(id);
   const r = row(id);
   if (!r || r.status !== "queued")
     throw new Error("That task isn't waiting in the queue");
@@ -220,8 +233,12 @@ export async function startQueuedForOrchestrator(
   workspaceId: string,
   id: string
 ): Promise<ForcedStart> {
-  const r = row(id);
+  let r = row(id);
   const project = r ? getProject(r.project_id) : null;
+  if (r?.status === "failed" && project?.workspace_id === workspaceId) {
+    requeueFailed(id);
+    r = row(id);
+  }
   if (!r || r.status !== "queued" || project?.workspace_id !== workspaceId)
     throw new Error("That task isn't waiting in the queue");
   const slots = slotState(r.project_id);

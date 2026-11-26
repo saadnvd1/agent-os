@@ -21,7 +21,7 @@ const { ensureOrchestrator } = await import("@/lib/orchestrator/home");
 const { send } = await import("@/lib/orchestrator/act");
 const { amendmentsOf } = await import("@/lib/orchestrator/amendments");
 const { sendMessage } = await import("@/lib/bus");
-const { listQueue, removeQueued } = await import("./queue");
+const { listQueue, removeQueued, requeueFailed } = await import("./queue");
 const { queuedHeldMessages } = await import("./queue-held");
 
 let ws: ReturnType<typeof seedWorkspace>;
@@ -62,17 +62,31 @@ describe("messages to a queued task", () => {
     expect(listQueue().find((q) => q.id === id)?.held).toBe(4);
   });
 
-  it("still fail for a name nothing has, and for a failed start", async () => {
+  it("still fail for a name nothing has", async () => {
     await expect(
       sendMessage({ fromId: null, to: "nobody", body: "hi" })
     ).rejects.toThrow(/No session called "nobody"/);
+  });
+
+  it("are held for a task that failed to start, and kept when it's tried again", async () => {
     const id = queued("broken");
     db.prepare(
-      `UPDATE task_queue SET status = 'failed', error = 'no disk' WHERE id = ?`
+      `UPDATE task_queue SET status = 'failed', error = 'no disk', attempts = 3 WHERE id = ?`
     ).run(id);
-    await expect(
-      sendMessage({ fromId: null, to: "broken", body: "hi" })
-    ).rejects.toThrow(/failed to start/);
+    const sent = await sendMessage({
+      fromId: null,
+      to: "broken",
+      body: "hi",
+    });
+    expect(sent.heldForQueued).toBe(true);
+    expect(sent.note).toMatch(/failed to start/);
+    expect(requeueFailed(id)).toBe(true);
+    expect(
+      db
+        .prepare(`SELECT status, attempts, error FROM task_queue WHERE id = ?`)
+        .get(id)
+    ).toEqual({ status: "queued", attempts: 0, error: null });
+    expect(queuedHeldMessages(id).map((m) => m.text)).toEqual(["hi"]);
   });
 
   it("are dropped with the queued task", async () => {

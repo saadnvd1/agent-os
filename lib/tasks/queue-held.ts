@@ -68,16 +68,12 @@ export function findQueuedTarget(
     : null;
 }
 
-// Refuses a task that failed to start: nothing will ever start it.
-export function assertTakesMessages(q: QueuedTarget): void {
-  if (q.status === "failed")
-    throw new Error(
-      `${q.name} failed to start${q.error ? ` (${q.error})` : ""}; it takes no messages. Remove it and queue it again.`
-    );
-}
-
-export const heldQueuedNote = (name: string) =>
-  `Queued for ${name}: it hasn't started; it gets this when it starts.`;
+// A task that failed to start still takes messages: they stay with it and go
+// in its first prompt when it is started again.
+export const heldQueuedNote = (name: string, status?: string) =>
+  status === "failed"
+    ? `${name} failed to start. This is kept and goes with it when it's started again.`
+    : `Queued for ${name}: it hasn't started; it gets this when it starts.`;
 
 const UNDELIVERED = `held_queued = 1 AND delivered_at IS NULL AND read_at IS NULL`;
 
