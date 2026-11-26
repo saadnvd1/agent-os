@@ -116,13 +116,16 @@ export function priorityRequest(
 export type QueueMenuAction = "start" | "up" | "down" | "remove";
 
 // The row's menu: a waiting task can start now, move or go; a failed one
-// can only go; one starting has none.
+// can try again or go; one starting has none.
 export function queueMenu(
   row: QueuedRow
 ): { action: QueueMenuAction; label: string; disabled: boolean }[] {
   const { status } = row.item;
   if (status === "failed")
-    return [{ action: "remove", label: "Remove", disabled: false }];
+    return [
+      { action: "start", label: "Try again", disabled: false },
+      { action: "remove", label: "Remove", disabled: false },
+    ];
   if (status !== "queued") return [];
   return [
     { action: "start", label: "Start now", disabled: false },

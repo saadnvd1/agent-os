@@ -18,6 +18,7 @@ import { refuseRealStateUnderTest } from "./test-home-guard";
 import { installWorktreeHooks } from "./worktree-hooks";
 import { gitResult, isGitError, worktreeList } from "./git-exec";
 import { addWorktree } from "./worktree-add";
+import { resolveBase } from "./worktree-base";
 import { addExcludes } from "./worktree-deps/paths";
 import {
   markRemoving,
@@ -71,6 +72,10 @@ export interface CreateWorktreeOptions {
   startPoint?: string;
   // How long one `git worktree add` may take; scales with load by default.
   timeoutMs?: number;
+  // "required": a base that can't be fetched fails the call, instead of
+  // falling back to this clone's copy of it.
+  fetch?: "preferred" | "required";
+  onStage?: (stage: "fetch" | "worktree") => void;
 }
 
 /**
@@ -137,15 +142,18 @@ export async function createWorktree(
   // Ensure worktrees directory exists
   await ensureWorktreesDir();
 
-  // Create the worktree with a new branch
-  // Try multiple ref formats to avoid "ambiguous refname" errors
-  const refFormats = startPoint
-    ? [startPoint]
-    : [
-        `origin/${baseBranch}`, // Try remote first (most explicit)
-        `refs/heads/${baseBranch}`, // Then local branch
-        baseBranch, // Finally, bare name as fallback
-      ];
+  // The base's tip on origin, fetched now, else this clone's copy of it.
+  let refFormats: string[];
+  if (startPoint) refFormats = [startPoint];
+  else {
+    options.onStage?.("fetch");
+    refFormats = (
+      await resolveBase(resolvedProjectPath, baseBranch, {
+        require: options.fetch === "required",
+      })
+    ).refs;
+  }
+  options.onStage?.("worktree");
 
   const timeout = options.timeoutMs ?? worktreeAddTimeout();
   const errors: Error[] = [];

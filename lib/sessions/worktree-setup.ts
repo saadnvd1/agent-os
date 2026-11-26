@@ -8,7 +8,6 @@
 
 import { db } from "../db";
 import { createWorktree } from "../worktrees";
-import { git as runGit } from "../git-exec";
 import { setupWorktree } from "../env-setup";
 import {
   generateBranchName,
@@ -46,9 +45,6 @@ export interface WorktreeSetupInput {
   onReady: (note: string) => Promise<void>;
 }
 
-const git = (cwd: string, args: string[], timeout = 60_000) =>
-  runGit(cwd, args, { timeout });
-
 // git's own last line says it best ("not a git repository ..."), without
 // the "git fetch failed: " a GitError puts before a one-line stderr (or
 // createWorktree's "Failed to create worktree: " before that).
@@ -59,23 +55,6 @@ const lastLine = (message: string) =>
       ""
     )
     .replace(/^fatal: /, "");
-
-// No remote: nothing to fetch. A fetch that fails fails the setup: a
-// worktree cut from an old base would start the agent on stale code.
-async function fetchBase(view: SetupView, cwd: string, base: string) {
-  enterStage(view, "fetch");
-  try {
-    await git(cwd, ["remote", "get-url", "origin"], 5_000);
-  } catch {
-    return;
-  }
-  try {
-    await git(cwd, ["fetch", "origin", "--", base]);
-  } catch (error) {
-    const why = lastLine((error as Error).message);
-    throw new Error(`Fetching ${base} failed: ${why}`);
-  }
-}
 
 async function renameFromTitle(
   view: SetupView,
@@ -110,12 +89,14 @@ export async function setUpWorktree(input: WorktreeSetupInput): Promise<void> {
       input.baseBranch ?? (await getDefaultBranch(projectPath));
     if (!isBranchName(baseBranch))
       throw new Error(`"${baseBranch}" isn't a branch name`);
-    await fetchBase(view, projectPath, baseBranch);
-    enterStage(view, "worktree");
+    // A fetch that fails fails the setup: a worktree cut from an old base
+    // would start the agent on stale code.
     const wt = await createWorktree({
       projectPath,
       featureName: feature,
       baseBranch,
+      fetch: "required",
+      onStage: (stage) => enterStage(view, stage),
     });
     db.prepare(
       `UPDATE sessions SET worktree_path = ?, branch_name = ?, base_branch = ? WHERE id = ?`
