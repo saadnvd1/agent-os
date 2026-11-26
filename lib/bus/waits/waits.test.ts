@@ -224,6 +224,55 @@ describe("the sweep", () => {
     expect(open(a)[0].closed_at).toBeNull();
   });
 
+  it("a reply by id clears the wait and no alert fires after it", async () => {
+    const { a, b, sent, wait } = await awaiting();
+    await bus.sendMessage({
+      fromId: b,
+      to: a,
+      body: "done",
+      replyTo: sent.message.id,
+    });
+    await waitsTick(wait.created_at + IDLE_GRACE_MS + 1000);
+    await waitsTick(wait.created_at + IDLE_GRACE_MS + 6000);
+    expect(open(a)[0].outcome).toBe("replied");
+    expect(
+      told(b).filter((m) => m.includes("waiting on your reply"))
+    ).toHaveLength(0);
+  });
+
+  it("a reply that landed before the wait opened still closes it", async () => {
+    const { a, b, sent, wait } = await awaiting();
+    db.prepare(
+      `UPDATE bus_waits SET closed_at = NULL, outcome = NULL, reply_id = NULL WHERE id = ?`
+    ).run(wait.id);
+    db.prepare(
+      `INSERT INTO bus_messages (from_id, from_name, to_id, to_name, body) VALUES (?, 'b', ?, 'a', 'late answer')`
+    ).run(b, a);
+    await waitsTick(wait.created_at + IDLE_GRACE_MS + 1000);
+    expect(open(a)[0].outcome).toBe("replied");
+    expect(
+      told(b).filter((m) => m.includes("waiting on your reply"))
+    ).toHaveLength(0);
+    expect(sent.message.id).toBe(wait.message_id);
+  });
+
+  it("asking again about the same message doesn't spend the nudge twice", async () => {
+    const { a, b, wait } = await awaiting();
+    await waitsTick(wait.created_at + IDLE_GRACE_MS + 1000);
+    store.openWait({
+      waiterId: a,
+      targetId: b,
+      kind: "reply",
+      messageId: wait.message_id,
+      request: "status?",
+      deadline: wait.deadline,
+    });
+    await waitsTick(wait.created_at + IDLE_GRACE_MS + 6000);
+    expect(
+      told(b).filter((m) => m.includes("waiting on your reply"))
+    ).toHaveLength(1);
+  });
+
   it("nudges at once when the target was seen working and then went idle", async () => {
     const { b, tmux, wait } = await awaiting();
     status.set(tmux(b), "running");

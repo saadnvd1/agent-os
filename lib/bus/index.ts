@@ -32,6 +32,7 @@ import { heldOrchestrator, heldTarget } from "./held-reply";
 import {
   cantWaitOn,
   claimClose,
+  openWaitsOnMessage,
   excerpt,
   openWait,
   replyWaitsFor,
@@ -353,6 +354,9 @@ export async function sendMessage(opts: {
   // The reply is stored: whatever it answers is settled, whether or not
   // the wake line gets through.
   if (from) settleReplyWaits(to.id, from.id, id);
+  if (reply)
+    for (const w of openWaitsOnMessage(reply.id))
+      claimClose(w.id, "replied", id);
 
   await statusDetector.refreshCache();
   const delivery = await deliver(

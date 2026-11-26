@@ -57,10 +57,19 @@ export function openWait(w: {
     .get(w.waiterId, w.targetId, w.kind) as { id: number } | undefined;
   let id: number;
   if (open) {
-    // The same wait again: the newer request and deadline stand.
+    // The same wait again: the newer request and deadline stand. The nudge
+    // is spent only again for a different message, never for the same one.
     db.prepare(
-      `UPDATE bus_waits SET message_id = ?, request = ?, deadline = ?, nudged_at = NULL WHERE id = ?`
-    ).run(w.messageId ?? null, w.request ?? null, w.deadline, open.id);
+      `UPDATE bus_waits SET request = ?, deadline = ?,
+         nudged_at = CASE WHEN message_id IS ? THEN nudged_at ELSE NULL END,
+         message_id = ? WHERE id = ?`
+    ).run(
+      w.request ?? null,
+      w.deadline,
+      w.messageId ?? null,
+      w.messageId ?? null,
+      open.id
+    );
     id = open.id;
   } else {
     const count = (
@@ -137,6 +146,28 @@ export const replyWaitsFor = (waiterId: string, targetId: string): WaitRow[] =>
       `SELECT * FROM bus_waits WHERE waiter_id = ? AND target_id = ? AND kind = 'reply' AND closed_at IS NULL ORDER BY id`
     )
     .all(waiterId, targetId) as WaitRow[];
+
+// The first message the target sent the waiter after the awaited one, or
+// that names it as its reply: the wait is answered, whatever path it took.
+export function answerTo(w: WaitRow): number | null {
+  if (w.kind !== "reply" || !w.message_id) return null;
+  const m = db
+    .prepare(
+      `SELECT id FROM bus_messages WHERE from_id = ? AND to_id = ? AND (reply_to = ? OR id > ?) ORDER BY id LIMIT 1`
+    )
+    .get(w.target_id, w.waiter_id, w.message_id, w.message_id) as
+    { id: number } | undefined;
+  return m?.id ?? null;
+}
+
+// A reply naming the awaited message settles its wait, whoever sent it.
+export function openWaitsOnMessage(messageId: number): WaitRow[] {
+  return db
+    .prepare(
+      `SELECT * FROM bus_waits WHERE message_id = ? AND kind = 'reply' AND closed_at IS NULL`
+    )
+    .all(messageId) as WaitRow[];
+}
 
 export interface WaitBadges {
   on: { id: string; name: string; kind: WaitKind; deadline: number }[];
