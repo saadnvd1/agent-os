@@ -2,17 +2,17 @@
 # AI CLI detection and installation for agent-os
 
 detect_ai_clis() {
-    local installed=()
+    # A plain string, not an array: macOS's bash 3.2 treats "${arr[*]}" of an
+    # empty array as unbound under set -u, which crashed setup for a user with
+    # no AI CLI installed yet.
+    local installed="" cli
+    for cli in claude codex opencode kilo gemini aider cursor; do
+        if have_cli "$cli"; then
+            installed="$installed $cli"
+        fi
+    done
 
-    have_cli claude && installed+=("claude")
-    have_cli codex && installed+=("codex")
-    have_cli opencode && installed+=("opencode")
-    have_cli kilo && installed+=("kilo")
-    have_cli gemini && installed+=("gemini")
-    have_cli aider && installed+=("aider")
-    have_cli cursor && installed+=("cursor")
-
-    echo "${installed[*]}"
+    echo "${installed# }"
 }
 
 install_claude_code() {
