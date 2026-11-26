@@ -198,6 +198,28 @@ install_homebrew() {
     fi
 }
 
+# brew_install <command> [formula]: install one core formula without letting
+# the rest of the user's Homebrew break setup. Auto-update, the installed-
+# dependents check and cleanup all load every installed formula, so one bad
+# third-party tap (an untrusted tap, a formula its tap deleted) fails an
+# unrelated install. Success is judged by the command being on PATH after.
+brew_install() {
+    local cmd="$1" formula="${2:-$1}"
+    HOMEBREW_NO_AUTO_UPDATE=1 \
+        HOMEBREW_NO_INSTALLED_DEPENDENTS_CHECK=1 \
+        HOMEBREW_NO_INSTALL_CLEANUP=1 \
+        HOMEBREW_NO_ENV_HINTS=1 \
+        brew install "$formula" || true
+    hash -r 2>/dev/null || true
+    if command -v "$cmd" &> /dev/null; then
+        return 0
+    fi
+    log_error "Homebrew couldn't install $formula."
+    log_error "If brew mentions an untrusted tap, run 'brew trust <tap>' or 'brew untap <tap>',"
+    log_error "then 'brew install $formula' and run setup again."
+    exit 1
+}
+
 install_node() {
     if command -v node &> /dev/null; then
         local version
@@ -249,7 +271,7 @@ install_node() {
             else
                 # Admin user - use Homebrew
                 install_homebrew
-                brew install node
+                brew_install node
             fi
             ;;
         debian)
@@ -310,7 +332,7 @@ install_tmux() {
                 exit 1
             else
                 install_homebrew
-                brew install tmux
+                brew_install tmux
             fi
             ;;
         debian)
@@ -382,7 +404,7 @@ install_ripgrep() {
             else
                 # Admin user - use Homebrew
                 install_homebrew
-                brew install ripgrep
+                brew_install rg ripgrep
             fi
             ;;
         debian)
