@@ -14,6 +14,7 @@ import { sessionWorkspace } from "../../schedules/store";
 import { sendMessage } from "../index";
 import { onKick } from "./kick";
 import {
+  answerTo,
   claimClose,
   claimNudge,
   markSeenBusy,
@@ -67,6 +68,11 @@ async function tell(to: Session, line: string): Promise<void> {
 }
 
 async function settle(w: WaitRow, waiter: Session, now: number): Promise<void> {
+  const answer = answerTo(w);
+  if (answer) {
+    claimClose(w.id, "replied", answer, now);
+    return;
+  }
   const target = row(w.target_id);
   const end = endedHow(target);
   const prMerged =
