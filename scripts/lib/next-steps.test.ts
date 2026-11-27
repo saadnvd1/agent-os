@@ -32,7 +32,6 @@ function agentOs(...args: string[]) {
       NODE_ENV: "test",
     },
   });
-  // eslint-disable-next-line no-control-regex
   return { ...r, stdout: r.stdout.replace(/\x1b\[[0-9;]*m/g, "") };
 }
 
