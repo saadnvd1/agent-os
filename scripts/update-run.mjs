@@ -35,6 +35,12 @@ const script =
 const PHASES = new Set(["pulling", "installing", "building", "restarting"]);
 const STAGES = ["pulled", "deps_swapped", "build_swapped"];
 const KEEP_BACKUPS = 3;
+const STEP_LABEL = {
+  pulling: "downloading the new version",
+  installing: "installing dependencies",
+  building: "building the app",
+  restarting: "restarting",
+};
 
 function read() {
   try {
@@ -188,10 +194,12 @@ async function main() {
     const swapped = up.stage === "build_swapped";
     if (up.code !== 0 && !swapped) {
       if (up.stage) resetSource(from);
+      const step = STEP_LABEL[read()?.phase];
+      write({ failedStep: step ?? null });
       return finish(
         "failed",
         "build_failed",
-        `The update failed (exit ${up.code}). The running server was not changed.`
+        `The update failed${step ? ` while ${step}` : ""} (exit ${up.code}). The running server was not changed.`
       );
     }
     if (!env.AGENTOS_RESTART) return finish("built", "done");

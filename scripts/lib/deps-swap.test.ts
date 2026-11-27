@@ -47,6 +47,17 @@ describe("install_beside", () => {
     expect(existsSync(join(dir, ".deps/stage"))).toBe(false);
   });
 
+  it("stages the postinstall script package.json runs, so the staged install can find it", () => {
+    mkdirSync(join(dir, "scripts"));
+    writeFileSync(join(dir, "scripts/postinstall.mjs"), "// hook\n");
+    const r = run("install_beside", {
+      AGENTOS_INSTALL_CMD:
+        "test -f scripts/postinstall.mjs && mkdir -p node_modules",
+      AGENTOS_NATIVE_CHECK: "true",
+    });
+    expect(r.status).toBe(0);
+  });
+
   it("leaves the live node_modules alone when the native check fails", () => {
     const r = run("install_beside", {
       AGENTOS_INSTALL_CMD: INSTALL,

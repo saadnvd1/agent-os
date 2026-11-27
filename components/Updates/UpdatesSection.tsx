@@ -13,6 +13,7 @@ import {
 } from "@/data/updates";
 import { isActivePhase, MANAGED_NOTE } from "@/lib/updates/banner";
 import { AutoUpdates } from "./AutoUpdates";
+import { FailureDetail } from "./FailureDetail";
 import { UpdateActions } from "./UpdateActions";
 
 function ago(at: number | null): string {
@@ -98,9 +99,15 @@ export function UpdatesSection() {
         </p>
       )}
       {view.run?.phase === "failed" && !view.run.auto && (
-        <p className="text-destructive text-sm" role="alert">
-          The last update failed. {view.run.error}
-        </p>
+        <div role="alert">
+          <p className="text-destructive text-sm">
+            The last update failed. {view.run.error}
+          </p>
+          <FailureDetail
+            lines={view.run.log?.slice(-12) ?? []}
+            logPath={view.run.logPath}
+          />
+        </div>
       )}
       {running && (
         <p className="text-muted-foreground flex items-center gap-2 text-sm">

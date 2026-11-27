@@ -11,6 +11,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
+import { FailureDetail } from "./FailureDetail";
 import { useAutoUpdateSetting } from "@/data/updates";
 import {
   IDLE_MINUTES,
@@ -69,6 +70,7 @@ function Attempt({ a }: { a: UpdateAttempt }) {
         {a.error && a.outcome !== "done" && (
           <p className="text-muted-foreground text-xs break-words">{a.error}</p>
         )}
+        {a.detail && a.outcome !== "done" && <FailureDetail lines={a.detail} />}
       </div>
     </li>
   );

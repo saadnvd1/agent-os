@@ -78,6 +78,7 @@ export async function updateView(
           log: mayUpdate
             ? redact(stored.log?.length ? stored.log : readLog(deps))
             : [],
+          ...(mayUpdate ? { logPath: deps.logFile } : {}),
         }
       : stored;
   const pending = readPending(deps);
@@ -109,8 +110,16 @@ export async function updateView(
     queued: managed ? readQueued(deps) : null,
     auto: await autoView(deps, check, refusal).then((auto) =>
       mayUpdate
-        ? auto
-        : { ...auto, attempts: auto.attempts.map(({ error: _, ...a }) => a) }
+        ? {
+            ...auto,
+            attempts: auto.attempts.map((a) =>
+              a.detail ? { ...a, detail: redact(a.detail) } : a
+            ),
+          }
+        : {
+            ...auto,
+            attempts: auto.attempts.map(({ error: _, detail: __, ...a }) => a),
+          }
     ),
     working: wantsWorking
       ? await deps
