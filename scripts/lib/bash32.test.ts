@@ -106,7 +106,9 @@ describe("the installer under /bin/bash -euo pipefail with no agent CLI", () => 
   });
 
   it("a Homebrew failure names the cause and the command, not a shell error", () => {
-    const r = runInstaller(dir, "brew_install tmux");
+    // brew_install judges success by the command being on PATH, and CI's
+    // /usr/bin has a real tmux, so check for a command that can't exist.
+    const r = runInstaller(dir, "brew_install aos-no-such-cmd tmux");
     expect(r.status).toBe(1);
     expect(r.stdout).toContain("brew trust");
     expect(r.stdout).toContain("brew install tmux");
