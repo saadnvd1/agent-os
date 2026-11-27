@@ -75,7 +75,7 @@ setup_install() {
     if [[ -f "$REPO_DIR/.next/BUILD_ID" ]]; then
         setup_done "AgentOS is installed"
     else
-        cmd_install
+        cmd_install --no-start
     fi
 }
 

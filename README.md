@@ -60,9 +60,10 @@ You need Node.js 22+, git, tmux, and at least one agent CLI (the installer offer
 
 ```bash
 npm install -g @saadnvd1/agent-os
-agent-os install   # checks for tmux and ripgrep, installs what's missing, builds the app
-agent-os setup     # keeps it running, chooses how your phone reaches it, adds the phone
+agent-os install   # installs what's missing, builds the app, starts it and opens it in your browser
 ```
+
+That's enough to start. To keep it running after a restart and use it from your phone, run `agent-os setup` (optional). Run `agent-os` with no arguments any time to see what to do next.
 
 Without Node.js, the install script sets up everything:
 
@@ -70,9 +71,9 @@ Without Node.js, the install script sets up everything:
 curl -fsSL https://raw.githubusercontent.com/saadnvd1/agent-os/main/scripts/install.sh | bash
 ```
 
-It ends by offering `agent-os setup`. If another device can't reach the machine later, `agent-os check` names the cause and the fix ([guide](docs/guides/reachability.md)).
+It starts AgentOS and then offers `agent-os setup`. If another device can't reach the machine later, `agent-os check` names the cause and the fix ([guide](docs/guides/reachability.md)).
 
-Then open AgentOS, add a project from ⌘K, and press ⌥N. The [install guide](docs/guides/install.md) covers Windows (WSL2), the supported agents, first run and the `agent-os` commands. To use it from your phone, see the [phone guide](docs/guides/phone.md).
+AgentOS opens on a short first-run setup (sign in an agent, add a project). Afterwards add a project from ⌘K and press ⌥N for a session. The [install guide](docs/guides/install.md) covers Windows (WSL2), the supported agents, first run and the `agent-os` commands. To use it from your phone, see the [phone guide](docs/guides/phone.md).
 
 AgentOS keeps itself up to date: once a release is two hours old and nothing has been working for 10 minutes, it installs it, and puts the previous version back if the new one doesn't come up healthy. Turn it off or change the idle time in **Settings → Updates**, or pin it with `AGENTOS_AUTO_UPDATE=off` and `AGENTOS_AUTO_UPDATE_IDLE_MIN`. Details are in [Automatic updates](docs/guides/install.md#automatic-updates).
 

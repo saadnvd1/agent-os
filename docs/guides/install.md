@@ -51,13 +51,13 @@ npm install -g @saadnvd1/agent-os
 agent-os install
 ```
 
-Then start it:
+npm prints `Next, run: agent-os install` when it finishes. `agent-os install` does the same checks as the one-line installer, builds the app, **starts it** and opens `http://localhost:3011` in your browser (on a Mac or a desktop; elsewhere it prints the address). The first screen walks you through signing in an agent and adding a project. Pass `--no-start` to only install, or `--no-open` to start without opening the browser.
 
-```bash
-agent-os start
-```
+If you're not sure what to do next, run `agent-os` with no arguments: it says whether to install, start, or open it. `agent-os setup` is the optional next step, to keep it running after a restart and reach it from your phone.
 
-AgentOS runs in the background on `http://localhost:3011`. `agent-os status` shows its addresses, and `agent-os run` starts it and opens the browser. To use another port, set `AGENT_OS_PORT` before you start it.
+`agent-os status` shows its addresses, and `agent-os run` starts it and opens the browser. To use another port, set `AGENT_OS_PORT` before you start it. If the port is taken, the installer says what holds it and how to pick another.
+
+If an install step fails, it says which step and the command to run; run `agent-os install` again and it picks up where it stopped.
 
 Or run it from a source checkout:
 
