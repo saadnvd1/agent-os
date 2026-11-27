@@ -14,6 +14,7 @@ import { useBulkDelete } from "./hooks/useBulkDelete";
 import { useSidebarData } from "./useSidebarData";
 import { useSessionTips } from "./useSessionTips";
 import { useSessionSwitching } from "./useSessionSwitching";
+import { useAgentStatusQuery } from "@/data/agents";
 import { RowProvider, type RowContextValue } from "./RowContext";
 import { SidebarHeader } from "./SidebarHeader";
 import { useAddProject } from "@/components/Projects/AddProject/useAddProject";
@@ -53,6 +54,7 @@ export function SessionList({
   const pin = usePinSession();
   const fresh = useFreshStart();
   const { data: orchestrators = NO_ORCHESTRATORS } = useOrchestratorsQuery();
+  const { data: agentProbes } = useAgentStatusQuery();
   const [dialog, setDialog] = useState<SidebarDialog | null>(null);
   const addProject = useAddProject();
   const docsWorkspace = useDocsWorkspace(
@@ -132,6 +134,7 @@ export function SessionList({
       projectNames: data.projectNames,
       workspaceNames,
       orchestrators,
+      agentProbes,
       runningByWorkspace: data.runningByWorkspace,
       queuedByWorkspace: data.queuedByWorkspace,
       rollups: data.rollupByOrchestrator,
@@ -146,6 +149,7 @@ export function SessionList({
       data.projectNames,
       workspaceNames,
       orchestrators,
+      agentProbes,
       data.runningByWorkspace,
       data.queuedByWorkspace,
       data.rollupByOrchestrator,

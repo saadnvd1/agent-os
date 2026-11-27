@@ -21,8 +21,23 @@ import { onWindowsDrive, WINDOWS_DRIVE_WARNING } from "../wsl";
 
 import { PROJECT_NAME } from "./name";
 import { owner } from "../owner";
+import {
+  afterProjectAdded,
+  workspaceForNewProject,
+} from "../orchestrator/first-project";
 
 export { PROJECT_NAME };
+
+// createProject, in the default workspace on a first install, and with the
+// workspace's orchestrator made when this is its first project.
+export function createIn(opts: Parameters<typeof createProject>[0]) {
+  const project = createProject({
+    ...opts,
+    workspaceId: workspaceForNewProject(opts.workspaceId ?? null),
+  });
+  afterProjectAdded(project.workspace_id);
+  return project;
+}
 // https://host/owner/repo(.git), ssh://…, or git@host:owner/repo(.git).
 const REPO_URL =
   /^(?:https:\/\/[\w.-]+(?::\d+)?\/|ssh:\/\/[\w.@-]+(?::\d+)?\/|[\w.-]+@[\w.-]+:)[\w./~-]+$/;
@@ -156,7 +171,10 @@ export async function addFolder(
       );
     const outcome =
       !workspaceId || from === workspaceId ? "unchanged" : "moved";
-    if (outcome === "moved") setProjectWorkspace(existing.id, workspaceId);
+    if (outcome === "moved") {
+      setProjectWorkspace(existing.id, workspaceId);
+      afterProjectAdded(workspaceId);
+    }
     return {
       project: getProjectWithDevServers(existing.id) as ProjectWithRepositories,
       outcome,
@@ -165,7 +183,7 @@ export async function addFolder(
   }
   const name = opts.name?.trim() || path.posix.basename(abs) || "project";
   return {
-    project: createProject({
+    project: createIn({
       name,
       workingDirectory: abs,
       hostId,
@@ -196,7 +214,7 @@ export async function initProject(
     hostId,
     `cd ${shellPath(parent || "~")} && mkdir ${shellQuote(name)} && cd ${shellQuote(name)} && git init -q && ${IDENTITY} && printf '# %s\\n' ${shellQuote(name)} > README.md && git add README.md && git commit -qm 'Initial commit' && pwd`
   );
-  return createProject({
+  return createIn({
     name,
     workingDirectory: out.trim().split("\n").pop() || name,
     hostId,
@@ -297,7 +315,7 @@ export function startClone(
       return;
     }
     try {
-      const project = createProject({
+      const project = createIn({
         name,
         workingDirectory: stdout.trim().split("\n").pop() || name,
         hostId,

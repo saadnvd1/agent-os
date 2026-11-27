@@ -9,6 +9,8 @@ decide (publishing, money, something irreversible, credentials) waits as an
 ask with Approve, Decline and Reply. Turn on **Require my approval** and
 sensitive or large PRs wait for you too.
 
+You don't have to make it: a workspace's first project gives it its orchestrator, and on a fresh install your first project goes into a "My workspace" workspace. It starts running when you send its first message, so it waits for an agent CLI to be installed and signed in. Set `orchestrators.auto` to `off` in settings, or start AgentOS with `AGENTOS_ORCHESTRATORS=off`, to turn this off; the sidebar's "Start orchestrator" row still makes one by hand.
+
 ![The Work orchestrator's chat, with two asks waiting: a merge gate and a public post](../../screenshots/orchestrator.png)
 
 Each workspace has one standing orchestrator, pinned at the top of its

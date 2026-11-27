@@ -1,9 +1,9 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getHost, hostExec, isRemoteHost } from "@/lib/hosts";
 import { shellPath } from "@/lib/project-add/shell";
+import { createIn } from "@/lib/project-add";
 import {
   getAllProjectsWithDevServers,
-  createProject,
   validateWorkingDirectory,
 } from "@/lib/projects";
 
@@ -63,7 +63,7 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    const project = createProject({
+    const project = createIn({
       name,
       workingDirectory,
       agentType,

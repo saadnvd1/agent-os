@@ -3,6 +3,7 @@
 import { createContext, useContext } from "react";
 import type { ProjectWithRepositories } from "@/lib/projects";
 import type { Rollup } from "@/lib/sidebar/rollup";
+import type { AgentProbe } from "@/lib/agents/probe";
 import type { OrchestratorOverview } from "@/lib/orchestrator/overview";
 
 // What every row needs from the list, so shelves don't pass it along.
@@ -13,6 +14,8 @@ export interface RowContextValue {
   projectNames: Map<string, string>;
   workspaceNames: Map<string, string>;
   orchestrators: OrchestratorOverview[];
+  // Which agent CLIs are installed and signed in, once known.
+  agentProbes?: Record<string, AgentProbe>;
   runningByWorkspace: Map<string, number>;
   queuedByWorkspace: Map<string, number>;
   // What each orchestrator session started, and its name (its workspace's).

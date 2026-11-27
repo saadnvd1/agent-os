@@ -9,7 +9,12 @@ import { sameRow, type SidebarRow } from "@/lib/sidebar/shelves";
 import { visibleChips } from "@/lib/sidebar/rollup";
 import { sidebarUi, sidebarUiActions } from "@/stores/sidebarUi";
 import { useSnapshot } from "valtio";
-import { orchestratorRowText } from "@/lib/sidebar/orchestrator-row";
+import {
+  orchestratorRowText,
+  orchestratorSetupNote,
+} from "@/lib/sidebar/orchestrator-row";
+import { agentState } from "@/lib/agents/setup-commands";
+import { PROVIDER_MAP } from "@/lib/providers/registry";
 import { cn } from "@/lib/utils";
 import { orchestratorOpenActions } from "@/stores/orchestratorOpen";
 import { useRowContext } from "./RowContext";
@@ -34,13 +39,23 @@ export const OrchestratorPinRow = memo(function OrchestratorPinRow({
   const overview = ctx.orchestrators.find((o) => o.workspaceId === ws);
   const paused = !!overview?.paused;
   const active = session.id === ctx.activeSessionId;
-  const { state, status, asks } = orchestratorRowText(row, {
+  const probe = ctx.agentProbes?.[session.agent_type];
+  const setupNote = orchestratorSetupNote(
+    probe ? agentState(probe) : null,
+    PROVIDER_MAP.get(session.agent_type)?.name ?? session.agent_type
+  );
+  const {
+    state,
+    status: rowStatus,
+    asks,
+  } = orchestratorRowText(row, {
     asks: overview?.asks.length ?? 0,
     paused,
     running: ctx.runningByWorkspace.get(ws) ?? 0,
     inReview: overview?.inReview ?? 0,
     queued: ctx.queuedByWorkspace.get(ws) ?? 0,
   });
+  const status = state === "Idle" && setupNote ? setupNote : rowStatus;
   const chips = visibleChips(ctx.rollups.get(session.id));
   const { orchestratorId } = useSnapshot(sidebarUi);
   const filtering = orchestratorId === session.id;
