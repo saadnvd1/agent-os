@@ -45,6 +45,17 @@ export function orchestratorRowText(
   return { state, status, asks: c.asks > 0 ? plural(c.asks, "ask") : null };
 }
 
+// What an orchestrator that can't run yet says in place of "Idle": its agent
+// CLI isn't installed or signed in. Null once it can.
+export function orchestratorSetupNote(
+  agent: "missing" | "needs-login" | "ready" | "installed" | null,
+  name: string
+): string | null {
+  if (agent === "missing") return `Install ${name} to start`;
+  if (agent === "needs-login") return `Sign in to ${name} to start`;
+  return null;
+}
+
 // The workspaces shown that have no orchestrator yet, each offered as a
 // "Start orchestrator" row. One that exists but was unpinned isn't missing.
 // Like the orchestrator row, none show under a chosen project.

@@ -374,3 +374,5 @@
 - Forks that open PRs (V1 children never do).
 
 - Installer: `agent-os install` after `npm install -g` clones GitHub into ~/.agent-os/repo even though the package already carries the same files; reusing the package would skip the download but changes how `agent-os update` works.
+
+- Settings toggle for `orchestrators.auto` (today only the stored setting or AGENTOS_ORCHESTRATORS=off turns the first-project orchestrator off).

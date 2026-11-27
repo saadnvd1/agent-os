@@ -1,5 +1,6 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import type { CloneJob, FolderListing } from "@/lib/project-add";
+import { invalidateAfterProjectAdd } from "./after-add";
 import { projectKeys } from "./keys";
 
 export interface ExistingProject {
@@ -62,8 +63,7 @@ export function useInitProject() {
           await post("/api/projects/init", input)
         )
       ).project,
-    onSuccess: () =>
-      queryClient.invalidateQueries({ queryKey: projectKeys.list() }),
+    onSuccess: () => invalidateAfterProjectAdd(queryClient),
   });
 }
 
@@ -89,8 +89,7 @@ export function useCloneJob(jobId: string | null) {
       const { job } = await json<{ job: CloneJob }>(
         await fetch(`/api/projects/clone/${jobId}`)
       );
-      if (job.status === "done")
-        void queryClient.invalidateQueries({ queryKey: projectKeys.list() });
+      if (job.status === "done") invalidateAfterProjectAdd(queryClient);
       return job;
     },
     refetchInterval: (q) =>

@@ -1,5 +1,9 @@
 import { describe, expect, it } from "vitest";
-import { orchestratorRowText, orchestratorsToStart } from "./orchestrator-row";
+import {
+  orchestratorRowText,
+  orchestratorSetupNote,
+  orchestratorsToStart,
+} from "./orchestrator-row";
 
 const quiet = { asks: 0, paused: false, running: 0, inReview: 0, queued: 0 };
 const idle = { need: null, working: false, unread: false };
@@ -110,5 +114,18 @@ describe("orchestratorsToStart", () => {
 
   it("offers nothing while the overview hasn't loaded", () => {
     expect(orchestratorsToStart([], all)).toEqual([]);
+  });
+});
+
+describe("orchestratorSetupNote", () => {
+  it("says what's missing, and nothing once the agent can run", () => {
+    expect(orchestratorSetupNote("missing", "Claude Code")).toBe(
+      "Install Claude Code to start"
+    );
+    expect(orchestratorSetupNote("needs-login", "Claude Code")).toBe(
+      "Sign in to Claude Code to start"
+    );
+    expect(orchestratorSetupNote("ready", "Claude Code")).toBeNull();
+    expect(orchestratorSetupNote(null, "Claude Code")).toBeNull();
   });
 });

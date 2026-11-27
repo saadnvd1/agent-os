@@ -4,6 +4,7 @@ import type {
   DetectedDevServer,
 } from "@/lib/projects";
 import type { ProjectTier } from "@/lib/db/types";
+import { invalidateAfterProjectAdd } from "./after-add";
 import { projectKeys } from "./keys";
 import { sessionKeys } from "../sessions/keys";
 
@@ -194,7 +195,7 @@ export function useCreateProject() {
       return res.json();
     },
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: projectKeys.list() });
+      invalidateAfterProjectAdd(queryClient);
     },
   });
 }
