@@ -3,11 +3,25 @@
 
 # The background service (launchd/systemd) the start/stop commands go through.
 source "${BASH_SOURCE[0]%/*}/service.sh"
+# What to run next, and the end of install.
+source "${BASH_SOURCE[0]%/*}/next-steps.sh"
 
 cmd_install() {
-    local use_local=false
-    [[ "${1:-}" == "--local" ]] && use_local=true
+    local use_local=false start=true open_browser=true arg
+    for arg in "$@"; do
+        case "$arg" in
+            --local) use_local=true ;;
+            --no-start) start=false ;;
+            --no-open) open_browser=false ;;
+            *)
+                log_error "Unknown option for install: $arg"
+                echo "Usage: agent-os install [--no-start] [--no-open]"
+                exit 2
+                ;;
+        esac
+    done
 
+    guard_begin
     log_info "Installing AgentOS..."
     echo ""
 
@@ -18,7 +32,8 @@ cmd_install() {
     prompt_ai_cli_install
 
     # Create directory structure
-    mkdir -p "$AGENT_OS_HOME"
+    run_step "Creating $AGENT_OS_HOME" "Check that you can write there, or set AGENT_OS_HOME to another folder." \
+        mkdir -p "$AGENT_OS_HOME"
 
     # Clone, copy local, or update repo
     if [[ -d "$REPO_DIR" ]]; then
@@ -28,7 +43,9 @@ cmd_install() {
         else
             log_info "Repository already exists, pulling latest..."
             cd "$REPO_DIR"
-            git pull --ff-only
+            run_step "Updating $REPO_DIR" \
+                "Check your connection. If you changed files in $REPO_DIR, undo that (git -C $REPO_DIR status) and run: agent-os install" \
+                git pull --ff-only
         fi
         cd "$REPO_DIR"
     else
@@ -39,25 +56,31 @@ cmd_install() {
             git init
         else
             log_info "Cloning repository..."
-            git clone "$REPO_URL" "$REPO_DIR"
+            run_step "Downloading AgentOS from $REPO_URL" \
+                "Check your internet connection, then run: agent-os install" \
+                git clone "$REPO_URL" "$REPO_DIR"
             cd "$REPO_DIR"
         fi
     fi
 
     # Install dependencies
     log_info "Installing dependencies..."
-    scripts/install-deps
+    run_step "Installing dependencies" \
+        "The output above names the package that failed. Fix that, then run: agent-os install (it picks up where it stopped)." \
+        scripts/install-deps
 
     # Build for production
     log_info "Building for production..."
-    npm run build
+    run_step "Building the app" \
+        "The output above has the error. Free some disk space or memory if it mentions either, then run: agent-os install" \
+        npm run build
 
     # Create CLI symlink (prefer ~/.local/bin to avoid sudo)
     log_info "Adding agent-os to PATH..."
     local bin_dir="$HOME/.local/bin"
     local needs_path_update=false
 
-    mkdir -p "$bin_dir"
+    run_step "Creating $bin_dir" "Check that you can write to your home folder." mkdir -p "$bin_dir"
     ln -sf "$REPO_DIR/scripts/agent-os" "$bin_dir/agent-os"
     "$REPO_DIR/scripts/sync-cli-links" create
 
@@ -85,18 +108,19 @@ cmd_install() {
 
     echo ""
     log_success "AgentOS installed successfully!"
-    echo ""
 
     if [[ "$needs_path_update" == true ]]; then
-        echo "Note: ~/.local/bin was added to your PATH."
-        echo "Run 'source ~/.zshrc' or restart your terminal, then:"
         echo ""
+        echo "Note: ~/.local/bin was added to your PATH. In a new terminal (or after"
+        echo "'source ~/.zshrc') the agent-os command works without its full path."
     fi
 
-    echo "Next steps:"
-    echo "  agent-os setup     Start it, keep it running, and reach it from your phone"
-    echo "  agent-os check     Can other devices reach this machine? (names the cause if not)"
-    echo "  agent-os status    Show URLs"
+    if [[ "$start" == true ]]; then
+        install_finish "$open_browser"
+    else
+        echo ""
+        echo "Next: $(agent_os_cmd) start"
+    fi
     wsl_next_steps
 }
 
@@ -154,8 +178,14 @@ cmd_start() {
         return 0
     fi
 
-    if [[ ! -d "$REPO_DIR" ]]; then
-        log_error "AgentOS is not installed. Run 'agent-os install' first."
+    require_installed
+
+    local holder
+    holder=$(port_holder)
+    if [[ -n "$holder" ]]; then
+        log_error "Port $PORT is already used by $holder."
+        log_error "If that is AgentOS started another way, open http://localhost:$PORT."
+        log_error "Otherwise stop it, or use another port: AGENT_OS_PORT=3012 agent-os start"
         exit 1
     fi
 
@@ -410,7 +440,7 @@ enable_wsl_logon_task() {
 
 cmd_enable() {
     if [[ ! -d "$REPO_DIR" ]]; then
-        log_error "AgentOS is not installed. Run 'agent-os install' first."
+        log_error "AgentOS is not installed. Run: agent-os install"
         exit 1
     fi
 
@@ -575,7 +605,7 @@ cmd_help() {
     echo "Usage: agent-os <command>"
     echo ""
     echo "Commands:"
-    echo "  install     Install AgentOS (auto-installs dependencies)"
+    echo "  install     Install AgentOS, start it and open it (auto-installs dependencies)"
     echo "  setup       Guided setup: background service, how devices reach it, phone"
     echo "  check       Can other devices reach this machine? Names the cause and the fix"
     echo "  run         Start server and open in browser"
@@ -598,6 +628,7 @@ cmd_help() {
     echo ""
     echo "Environment variables:"
     echo "  AGENT_OS_HOME   Installation directory (default: ~/.agent-os)"
-    echo "  AGENT_OS_PORT   Server port (default: 3011)"
+    echo "  AGENT_OS_PORT   Server port (default: 3011)
+  AGENT_OS_REPO_URL  Where install downloads AgentOS from (default: GitHub)"
     echo ""
 }

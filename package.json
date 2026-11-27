@@ -41,7 +41,7 @@
     "pretypecheck": "node scripts/gen-migrations-index.mjs",
     "typecheck": "node --max-old-space-size=4096 node_modules/typescript/lib/tsc.js --noEmit",
     "setup": "bash scripts/setup.sh",
-    "postinstall": "chmod +x node_modules/node-pty/prebuilds/*/spawn-helper 2>/dev/null || true",
+    "postinstall": "node scripts/postinstall.mjs",
     "prepare": "husky",
     "prelint": "node scripts/gen-migrations-index.mjs",
     "lint": "eslint .",

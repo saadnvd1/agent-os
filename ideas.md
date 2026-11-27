@@ -372,3 +372,5 @@
 - Orchestrator forks (V1 forks only chat sessions and never nests).
 - A real-token check that a mid-turn cut resumes in the SDK; today a failed cut falls back to a brief.
 - Forks that open PRs (V1 children never do).
+
+- Installer: `agent-os install` after `npm install -g` clones GitHub into ~/.agent-os/repo even though the package already carries the same files; reusing the package would skip the download but changes how `agent-os update` works.

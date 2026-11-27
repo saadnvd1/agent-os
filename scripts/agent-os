@@ -9,7 +9,7 @@ set -euo pipefail
 # Configuration
 AGENT_OS_HOME="${AGENT_OS_HOME:-$HOME/.agent-os}"
 PORT="${AGENT_OS_PORT:-3011}"
-REPO_URL="https://github.com/saadnvd1/agent-os.git"
+REPO_URL="${AGENT_OS_REPO_URL:-https://github.com/saadnvd1/agent-os.git}"
 
 # Derived paths
 REPO_DIR="$AGENT_OS_HOME/repo"
@@ -75,7 +75,7 @@ WSL=$(detect_wsl)
 
 # Main
 case "${1:-}" in
-    install)          cmd_install "${2:-}" ;;
+    install)          shift; cmd_install "$@" ;;
     setup)            shift; cmd_setup "$@" ;;
     check)            shift; aos_tsx lib/reach/cli.ts "$PORT" "$@" ;;
     start)            cmd_start ;;
@@ -96,6 +96,7 @@ case "${1:-}" in
     disable)          cmd_disable ;;
     uninstall)        cmd_uninstall ;;
     start-foreground) cmd_start_foreground ;;
+    "")               print_next_step; cmd_help ;;
     help|--help|-h)   cmd_help ;;
     *)
         if [[ -n "${1:-}" ]]; then
