@@ -566,3 +566,35 @@ describe("run heartbeat", () => {
     expect(state().phase).toBe("restarting");
   });
 });
+
+describe("a failed update in the view", () => {
+  it("shows the step, the output and the log path to a device that may update, and none of it to others", async () => {
+    const { updateView } = await import("./view");
+    run.writeRun(deps().stateFile, {
+      id: "f1",
+      phase: "failed",
+      outcome: "build_failed",
+      from: "a",
+      to: "b".repeat(40),
+      fromVersion: "0.3.901",
+      toVersion: "0.3.904",
+      startedAt: now - 5000,
+      finishedAt: now - 1000,
+      error: "The update failed while installing dependencies (exit 1).",
+      failedStep: "installing dependencies",
+      log: ["ERR_PNPM_BOOM something broke"],
+    });
+    const mine = await updateView({ mayUpdate: true }, deps());
+    expect(mine.run?.log).toEqual(["ERR_PNPM_BOOM something broke"]);
+    expect(mine.run?.logPath).toBe(deps().logFile);
+    expect(mine.auto!.attempts[0]).toMatchObject({
+      step: "installing dependencies",
+      detail: ["ERR_PNPM_BOOM something broke"],
+    });
+    const other = await updateView({ mayUpdate: false }, deps());
+    expect(other.run?.log).toEqual([]);
+    expect(other.run?.logPath).toBeUndefined();
+    expect(other.auto!.attempts[0].detail).toBeUndefined();
+    expect(other.auto!.attempts[0].error).toBeUndefined();
+  });
+});

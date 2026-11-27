@@ -48,6 +48,10 @@ export interface UpdateRun {
   /** The commit it updates to. */
   to?: string;
   outcome?: UpdateOutcome;
+  /** What a failed update was doing, in words: "installing dependencies". */
+  failedStep?: string | null;
+  /** Where the full log of the run is (added by the server for a device that may update). */
+  logPath?: string;
   /** How far redeploy got: pulled, deps_swapped, build_swapped. */
   stage?: string;
   /** The runner's heartbeat and pid, so a cut-off run is told from a slow one. */
@@ -67,6 +71,9 @@ export interface UpdateAttempt {
   finishedAt: number;
   outcome: UpdateOutcome;
   error?: string;
+  /** The step that failed and the last lines of its output. */
+  step?: string;
+  detail?: string[];
 }
 
 /** The idle times Settings offers for automatic updates. */

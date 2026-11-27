@@ -5,6 +5,7 @@ import type { UpdateAttempt, UpdateRun } from "./banner";
 
 export const HISTORY_KEY = "updates.attempts";
 const KEEP = 20;
+const DETAIL_LINES = 12;
 /** A version that failed to build is tried again after these waits, then given up on. */
 export const RETRY_AFTER_MS = [60 * 60_000, 6 * 60 * 60_000] as const;
 
@@ -34,6 +35,10 @@ export function attemptOf(run: UpdateRun | null): UpdateAttempt | null {
     finishedAt: run.finishedAt,
     outcome: run.outcome,
     ...(run.error ? { error: run.error } : {}),
+    ...(run.failedStep ? { step: run.failedStep } : {}),
+    ...(run.outcome !== "done" && run.log?.length
+      ? { detail: run.log.slice(-DETAIL_LINES) }
+      : {}),
   };
 }
 

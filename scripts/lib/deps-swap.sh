@@ -38,6 +38,10 @@ install_beside() {
   mkdir -p "$STAGE"
   cp package.json pnpm-lock.yaml pnpm-workspace.yaml "$STAGE/"
   [ -f .npmrc ] && cp .npmrc "$STAGE/"
+  # package.json's postinstall runs scripts/postinstall.mjs, so the staged
+  # copy needs it too or the install dies with "Cannot find module".
+  mkdir -p "$STAGE/scripts"
+  [ -f scripts/postinstall.mjs ] && cp scripts/postinstall.mjs "$STAGE/scripts/"
   # HUSKY=0: the staged copy is not a git checkout.
   if ! (cd "$STAGE" && HUSKY=0 bash -c "${AGENTOS_INSTALL_CMD:-pnpm install --frozen-lockfile}"); then
     rm -rf "$STAGE"

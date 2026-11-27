@@ -69,6 +69,17 @@ describe("scripts/update-run.mjs", () => {
     expect(s.log).toContain("boom");
   });
 
+  it("names the step that failed and keeps its output", async () => {
+    const s = await go(
+      'echo "::phase installing"\necho "ERR_PNPM_BOOM something broke" >&2\nexit 1'
+    );
+    expect(s.failedStep).toBe("installing dependencies");
+    expect(s.error).toBe(
+      "The update failed while installing dependencies (exit 1). The running server was not changed."
+    );
+    expect(s.log).toContain("ERR_PNPM_BOOM something broke");
+  });
+
   it("keeps only the last 30 lines", async () => {
     const s = await go("for i in $(seq 1 50); do echo line$i; done\nexit 1");
     expect(s.log).toHaveLength(30);

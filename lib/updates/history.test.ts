@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import type { UpdateAttempt } from "./banner";
+import type { UpdateAttempt, UpdateRun } from "./banner";
 import {
   RETRY_AFTER_MS,
   attemptOf,
@@ -111,5 +111,36 @@ describe("history", () => {
         a("w", "build_failed"),
       ])
     ).toBe(2);
+  });
+});
+
+describe("attemptOf failure detail", () => {
+  const run = (over: Partial<UpdateRun>): UpdateRun => ({
+    id: "r1",
+    phase: "failed",
+    from: "f",
+    fromVersion: "0.3.901",
+    toVersion: "0.3.904",
+    to: "t",
+    startedAt: 1,
+    finishedAt: 2,
+    outcome: "build_failed",
+    ...over,
+  });
+
+  it("keeps the failed step and the last lines of output", () => {
+    const log = Array.from({ length: 30 }, (_, i) => `line${i}`);
+    const at = attemptOf(
+      run({ failedStep: "installing dependencies", error: "x", log })
+    );
+    expect(at?.step).toBe("installing dependencies");
+    expect(at?.detail).toHaveLength(12);
+    expect(at?.detail?.at(-1)).toBe("line29");
+  });
+
+  it("carries no detail for a success", () => {
+    const at = attemptOf(run({ outcome: "done", log: ["fine"] }));
+    expect(at?.detail).toBeUndefined();
+    expect(at?.step).toBeUndefined();
   });
 });
